@@ -78,6 +78,12 @@ const adminNavItems: NavItem[] = [
     icon: Upload,
     roles: ['superadmin', 'admin'],
   },
+  { 
+    title: 'Manage Payouts', 
+    url: '/dashboard/admin-payouts', 
+    icon: CreditCard,
+    roles: ['superadmin', 'admin'],
+  },
 ];
 
 const labelNavItems: NavItem[] = [
