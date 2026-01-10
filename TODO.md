@@ -59,11 +59,6 @@
   - Auto-generate UPC/ISRC (optional)
 
 ### Low Priority
-- [ ] **Export Royalty to Excel**
-  - Download royalty data ke format Excel/CSV
-  - Filter berdasarkan periode
-  - Filter berdasarkan artist/release
-
 - [ ] **Artist Profile Page**
   - Public profile page untuk artist
   - Statistik singkat
@@ -71,7 +66,55 @@
 
 ---
 
+## 🔮 Future Implementation (Deferred)
+
+### Media Upload
+- [ ] Full audio upload (WAV/FLAC, 120s+)
+- [ ] Music video upload (MP4, 120s+)
+- [ ] Audio clip upload (30-60s)
+
+### Release Metadata
+- [ ] Multiple artists (Main/Featured)
+- [ ] Complete genre list
+- [ ] Explicit lyrics flag
+- [ ] Composer & lyricist fields *(sudah ada di tracks)*
+- [ ] Lyrics text area *(sudah ada di tracks)*
+- [ ] Additional contributors
+- [ ] Metadata versioning
+
+### Release Management
+- [ ] Edit metadata *(sudah bisa edit release)*
+- [ ] Delete/archive releases
+- [ ] Bulk actions
+
+---
+
+## 📊 Export Functionality
+
+### ✅ Completed
+- [x] CSV exports (sudah ada di royalties/reports)
+- [x] PDF reports (browser print available)
+
+### ❌ Future
+- [ ] Excel exports (.xlsx format)
+- [ ] Scheduled reports (email/auto-generate)
+
+---
+
+## 📈 Advanced Analytics (Future)
+
+- [ ] Halaman analytics dedicated
+- [ ] Perbandingan periode (YoY, MoM)
+- [ ] Growth metrics & KPIs
+- [ ] Performance indicators
+- [ ] Custom date ranges
+- [ ] Top performing releases/tracks
+- [ ] Geographic insights
+
+---
+
 ## 📝 Notes
 - Database menggunakan Lovable Cloud (Supabase)
 - RLS policies sudah diimplementasi untuk keamanan data
 - Edge functions untuk create-user dan process-royalty-upload
+- Beberapa fitur metadata (composer, lyricist, lyrics) sudah ada di level track
