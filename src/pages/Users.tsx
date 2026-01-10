@@ -59,16 +59,19 @@ export default function Users() {
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && !isAdmin && user) {
+    // Only redirect non-admin users who are logged in
+    // Don't redirect if user is null (logging out)
+    if (!authLoading && user && !isAdmin) {
       navigate('/dashboard');
     }
   }, [isAdmin, authLoading, navigate, user]);
 
   useEffect(() => {
-    if (isAdmin) {
+    // Only fetch users if user is logged in AND is admin
+    if (user && isAdmin) {
       fetchUsers();
     }
-  }, [isAdmin]);
+  }, [isAdmin, user]);
 
   const fetchUsers = async () => {
     try {
