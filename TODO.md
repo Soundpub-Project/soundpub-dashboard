@@ -59,17 +59,21 @@
 - [x] Daftar payout requests
 - [x] Request payout form
 - [x] Payout history dengan status badges
+- [x] Admin Approve/Reject Payout
+  - [x] Halaman khusus admin untuk melihat semua payout requests
+  - [x] Tombol approve/reject dengan konfirmasi
+  - [x] Update balance setelah payout approved (via trigger)
+  - [x] Statistik payout (pending, approved, paid, rejected)
 
 ---
 
 ## ❌ Belum Dikerjakan
 
-### High Priority
-- [ ] **Admin Approve/Reject Payout**
-  - Halaman khusus admin untuk melihat semua payout requests
-  - Tombol approve/reject dengan konfirmasi
-  - Update balance setelah payout approved
-  - Notifikasi ke user
+### Medium Priority
+- [ ] **Artist Simplified Release Form**
+  - Form yang lebih sederhana untuk artist
+  - Upload cover art langsung
+  - Auto-generate UPC/ISRC (optional)
 
 ### Medium Priority
 - [ ] **Artist Simplified Release Form**
