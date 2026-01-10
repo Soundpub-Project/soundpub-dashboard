@@ -50,7 +50,7 @@ const ROLE_COLORS: Record<AppRole, string> = {
 
 export default function Users() {
   const navigate = useNavigate();
-  const { isAdmin, loading: authLoading } = useAuth();
+  const { isAdmin, loading: authLoading, user } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -59,10 +59,10 @@ export default function Users() {
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && !isAdmin) {
+    if (!authLoading && !isAdmin && user) {
       navigate('/dashboard');
     }
-  }, [isAdmin, authLoading, navigate]);
+  }, [isAdmin, authLoading, navigate, user]);
 
   useEffect(() => {
     if (isAdmin) {
@@ -122,6 +122,16 @@ export default function Users() {
       user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  if (authLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex justify-center items-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   if (!isAdmin) {
     return null;
