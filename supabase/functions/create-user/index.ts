@@ -5,6 +5,7 @@ interface CreateUserRequest {
   email: string
   password: string
   full_name: string
+  phone?: string
   role: 'admin' | 'label' | 'artist' | 'user'
   parent_label_id?: string
 }
@@ -55,7 +56,7 @@ Deno.serve(async (req) => {
 
     // Parse request body
     const body: CreateUserRequest = await req.json()
-    const { email, password, full_name, role, parent_label_id } = body
+    const { email, password, full_name, phone, role, parent_label_id } = body
 
     // Validate role permissions
     if (isLabel && role !== 'artist') {
@@ -109,16 +110,26 @@ Deno.serve(async (req) => {
       console.error('Error updating role:', roleError)
     }
 
-    // Set parent_label_id if provided (for artists under a label)
+    // Set parent_label_id and phone if provided (for artists under a label)
     const labelId = parent_label_id || (isLabel ? currentUser.id : null)
+    
+    // Update profile with additional fields
+    const profileUpdate: Record<string, unknown> = {}
     if (labelId && role === 'artist') {
+      profileUpdate.parent_label_id = labelId
+    }
+    if (phone) {
+      profileUpdate.phone = phone
+    }
+    
+    if (Object.keys(profileUpdate).length > 0) {
       const { error: profileError } = await supabaseAdmin
         .from('profiles')
-        .update({ parent_label_id: labelId })
+        .update(profileUpdate)
         .eq('id', newUser.user.id)
 
       if (profileError) {
-        console.error('Error setting parent label:', profileError)
+        console.error('Error updating profile:', profileError)
       }
     }
 
