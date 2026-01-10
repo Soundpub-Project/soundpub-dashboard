@@ -15,8 +15,9 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { Users as UsersIcon, Search, Loader2, Shield, Music, Building2, User, Edit } from 'lucide-react';
+import { Users as UsersIcon, Search, Loader2, Shield, Music, Building2, User, Edit, UserPlus } from 'lucide-react';
 import { ChangeRoleDialog } from '@/components/users/ChangeRoleDialog';
+import { AddUserDialog } from '@/components/users/AddUserDialog';
 
 type AppRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user';
 
@@ -55,6 +56,7 @@ export default function Users() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -140,14 +142,20 @@ export default function Users() {
                 <CardTitle>Daftar Users</CardTitle>
                 <CardDescription>{users.length} total users</CardDescription>
               </div>
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Cari user..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
-                />
+              <div className="flex items-center gap-3">
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Cari user..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                <Button onClick={() => setAddUserDialogOpen(true)} className="gradient-primary">
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Tambah User
+                </Button>
               </div>
             </div>
           </CardHeader>
@@ -223,6 +231,12 @@ export default function Users() {
         onOpenChange={setDialogOpen}
         user={selectedUser}
         currentRole={selectedUser?.role || 'user'}
+        onSuccess={fetchUsers}
+      />
+
+      <AddUserDialog
+        open={addUserDialogOpen}
+        onOpenChange={setAddUserDialogOpen}
         onSuccess={fetchUsers}
       />
     </DashboardLayout>

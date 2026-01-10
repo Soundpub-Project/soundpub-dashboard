@@ -34,13 +34,9 @@ interface RoyaltyRow {
   label_name: string;
   platform: string;
   country: string;
-  sales_type: string;
   unit_penjualan: number;
-  pendapatan_kotor_dsp: number;
   pendapatan_label_artis: number;
   pendapatan_bersih_soundpub: number;
-  artist_revenue: number;
-  soundpub_revenue: number;
   title?: string;
   artist?: string;
 }
@@ -62,13 +58,9 @@ const REQUIRED_COLUMNS = [
   'label_name',
   'platform',
   'country',
-  'sales_type',
   'unit_penjualan',
-  'pendapatan_kotor_dsp',
   'pendapatan_label_artis',
   'pendapatan_bersih_soundpub',
-  'artist_revenue',
-  'soundpub_revenue',
 ];
 
 export default function UploadRoyalty() {
@@ -171,13 +163,9 @@ export default function UploadRoyalty() {
           label_name: values[getIndex('label_name')] || '',
           platform: values[getIndex('platform')] || '',
           country: values[getIndex('country')] || '',
-          sales_type: values[getIndex('sales_type')] || '',
           unit_penjualan: parseInt(values[getIndex('unit_penjualan')] || '0', 10) || 0,
-          pendapatan_kotor_dsp: parseFloat(values[getIndex('pendapatan_kotor_dsp')] || '0') || 0,
           pendapatan_label_artis: parseFloat(values[getIndex('pendapatan_label_artis')] || '0') || 0,
           pendapatan_bersih_soundpub: parseFloat(values[getIndex('pendapatan_bersih_soundpub')] || '0') || 0,
-          artist_revenue: parseFloat(values[getIndex('artist_revenue')] || '0') || 0,
-          soundpub_revenue: parseFloat(values[getIndex('soundpub_revenue')] || '0') || 0,
           title: headers.includes('title') ? values[getIndex('title')] : undefined,
           artist: headers.includes('artist') ? values[getIndex('artist')] : undefined,
         };
@@ -342,9 +330,9 @@ export default function UploadRoyalty() {
   };
 
   const downloadSampleCSV = () => {
-    const sampleData = `period,isrc,upc,artist_name,label_name,platform,country,sales_type,unit_penjualan,pendapatan_kotor_dsp,pendapatan_label_artis,pendapatan_bersih_soundpub,artist_revenue,soundpub_revenue,title,artist
-2024-01,IDABC123456,123456789012,John Doe,Indie Records,Spotify,ID,streaming,1000,100000,70000,30000,50000,20000,My Song,John Doe
-2024-01,IDABC123457,123456789013,Jane Smith,Indie Records,Apple Music,US,download,500,200000,140000,60000,100000,40000,Another Song,Jane Smith`;
+    const sampleData = `period,isrc,upc,artist_name,label_name,platform,country,unit_penjualan,pendapatan_label_artis,pendapatan_bersih_soundpub,title,artist
+2024-01,IDABC123456,123456789012,John Doe,Indie Records,Spotify,ID,1000,70000,30000,My Song,John Doe
+2024-01,IDABC123457,123456789013,Jane Smith,Indie Records,Apple Music,US,500,140000,60000,Another Song,Jane Smith`;
     
     const blob = new Blob([sampleData], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -494,7 +482,7 @@ export default function UploadRoyalty() {
                                 {row.unit_penjualan.toLocaleString('id-ID')}
                               </TableCell>
                               <TableCell className="text-right text-green-400">
-                                Rp {row.artist_revenue.toLocaleString('id-ID')}
+                                Rp {row.pendapatan_label_artis.toLocaleString('id-ID')}
                               </TableCell>
                             </TableRow>
                           ))}

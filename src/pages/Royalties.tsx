@@ -22,7 +22,8 @@ interface Royalty {
   platform: string;
   country: string;
   unit_penjualan: number;
-  artist_revenue: number;
+  pendapatan_label_artis: number;
+  pendapatan_bersih_soundpub: number;
   created_at: string;
 }
 
@@ -47,7 +48,7 @@ export default function Royalties() {
       
       setRoyalties(data || []);
       
-      const total = data?.reduce((sum, r) => sum + Number(r.artist_revenue || 0), 0) || 0;
+      const total = data?.reduce((sum, r) => sum + Number(r.pendapatan_label_artis || 0), 0) || 0;
       setTotalRevenue(total);
     } catch (error) {
       console.error('Error fetching royalties:', error);
@@ -141,7 +142,7 @@ export default function Royalties() {
                           {royalty.unit_penjualan.toLocaleString('id-ID')}
                         </TableCell>
                         <TableCell className="text-right font-medium text-green-500">
-                          Rp {Number(royalty.artist_revenue).toLocaleString('id-ID')}
+                          Rp {Number(royalty.pendapatan_label_artis).toLocaleString('id-ID')}
                         </TableCell>
                       </TableRow>
                     ))}
