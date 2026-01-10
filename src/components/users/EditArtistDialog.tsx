@@ -150,11 +150,11 @@ export function EditArtistDialog({
 
           <div className="space-y-2">
             <Label>Status</Label>
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger>
+            <Select value={status} onValueChange={(value) => setStatus(value)}>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Pilih status" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" sideOffset={4}>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="inactive">Inactive</SelectItem>
                 <SelectItem value="suspended">Suspended</SelectItem>
