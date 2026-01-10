@@ -6,6 +6,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { 
   Table, 
   TableBody, 
@@ -14,7 +15,10 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { Users as UsersIcon, Search, Loader2 } from 'lucide-react';
+import { Users as UsersIcon, Search, Loader2, Shield, Music, Building2, User, Edit } from 'lucide-react';
+import { ChangeRoleDialog } from '@/components/users/ChangeRoleDialog';
+
+type AppRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user';
 
 interface UserProfile {
   id: string;
@@ -24,7 +28,24 @@ interface UserProfile {
   status: string;
   balance: number;
   created_at: string;
+  role?: AppRole;
 }
+
+const ROLE_ICONS: Record<AppRole, React.ReactNode> = {
+  superadmin: <Shield className="h-3 w-3" />,
+  admin: <Shield className="h-3 w-3" />,
+  label: <Building2 className="h-3 w-3" />,
+  artist: <Music className="h-3 w-3" />,
+  user: <User className="h-3 w-3" />,
+};
+
+const ROLE_COLORS: Record<AppRole, string> = {
+  superadmin: 'bg-red-500/20 text-red-400 border-red-500/30',
+  admin: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  label: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  artist: 'bg-green-500/20 text-green-400 border-green-500/30',
+  user: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+};
 
 export default function Users() {
   const navigate = useNavigate();
@@ -32,6 +53,8 @@ export default function Users() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -47,13 +70,30 @@ export default function Users() {
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase
+      // Fetch profiles
+      const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setUsers(data || []);
+      if (profilesError) throw profilesError;
+
+      // Fetch user roles
+      const { data: roles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id, role');
+
+      if (rolesError) throw rolesError;
+
+      // Map roles to users
+      const rolesMap = new Map(roles?.map(r => [r.user_id, r.role as AppRole]) || []);
+      
+      const usersWithRoles = (profiles || []).map(profile => ({
+        ...profile,
+        role: rolesMap.get(profile.id) || 'user' as AppRole,
+      }));
+
+      setUsers(usersWithRoles);
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
@@ -68,6 +108,11 @@ export default function Users() {
       suspended: 'destructive',
     };
     return variants[status] || 'secondary';
+  };
+
+  const handleEditRole = (user: UserProfile) => {
+    setSelectedUser(user);
+    setDialogOpen(true);
   };
 
   const filteredUsers = users.filter(
@@ -123,10 +168,11 @@ export default function Users() {
                     <TableRow>
                       <TableHead>Nama</TableHead>
                       <TableHead>Email</TableHead>
-                      <TableHead>Phone</TableHead>
+                      <TableHead>Role</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Balance</TableHead>
                       <TableHead>Bergabung</TableHead>
+                      <TableHead className="text-right">Aksi</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -134,7 +180,12 @@ export default function Users() {
                       <TableRow key={user.id}>
                         <TableCell className="font-medium">{user.full_name}</TableCell>
                         <TableCell>{user.email}</TableCell>
-                        <TableCell>{user.phone || '-'}</TableCell>
+                        <TableCell>
+                          <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${ROLE_COLORS[user.role || 'user']}`}>
+                            {ROLE_ICONS[user.role || 'user']}
+                            <span className="capitalize">{user.role || 'user'}</span>
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <Badge variant={getStatusBadge(user.status)} className="capitalize">
                             {user.status}
@@ -146,6 +197,17 @@ export default function Users() {
                         <TableCell>
                           {new Date(user.created_at).toLocaleDateString('id-ID')}
                         </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditRole(user)}
+                            disabled={user.role === 'superadmin'}
+                          >
+                            <Edit className="h-4 w-4 mr-1" />
+                            Ubah Role
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -155,6 +217,14 @@ export default function Users() {
           </CardContent>
         </Card>
       </div>
+
+      <ChangeRoleDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        user={selectedUser}
+        currentRole={selectedUser?.role || 'user'}
+        onSuccess={fetchUsers}
+      />
     </DashboardLayout>
   );
 }
