@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -14,7 +15,7 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { Disc3, Search, Plus, Loader2, Pencil } from 'lucide-react';
+import { Disc3, Search, Plus, Loader2, Pencil, Eye } from 'lucide-react';
 import { ReleaseFormDialog } from '@/components/releases/ReleaseFormDialog';
 
 interface Release {
@@ -32,6 +33,7 @@ interface Release {
 }
 
 export default function Releases() {
+  const navigate = useNavigate();
   const { isAdmin, isLabel } = useAuth();
   const [releases, setReleases] = useState<Release[]>([]);
   const [loading, setLoading] = useState(true);
@@ -151,7 +153,7 @@ export default function Releases() {
                       <TableHead>Type</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Release Date</TableHead>
-                      {canManageReleases && <TableHead>Aksi</TableHead>}
+                      <TableHead>Aksi</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -188,17 +190,26 @@ export default function Releases() {
                             ? new Date(release.release_date).toLocaleDateString('id-ID')
                             : '-'}
                         </TableCell>
-                        {canManageReleases && (
-                          <TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleEditRelease(release)}
+                              onClick={() => navigate(`/dashboard/releases/${release.id}`)}
                             >
-                              <Pencil className="h-4 w-4" />
+                              <Eye className="h-4 w-4" />
                             </Button>
-                          </TableCell>
-                        )}
+                            {canManageReleases && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditRelease(release)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
