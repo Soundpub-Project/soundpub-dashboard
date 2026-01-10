@@ -176,7 +176,6 @@ export function ReleaseFormDialog({
   const [loadingLabels, setLoadingLabels] = useState(false);
   const [labelArtists, setLabelArtists] = useState<Artist[]>([]);
   const [loadingArtists, setLoadingArtists] = useState(false);
-  const [genreOpen, setGenreOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isEditMode = !!release;
@@ -751,8 +750,9 @@ export function ReleaseFormDialog({
     );
   };
 
-  // Genre Combobox Component
+  // Genre Combobox Component - with internal open state
   const GenreCombobox = ({ value, onChange }: { value: string; onChange: (value: string) => void }) => {
+    const [open, setOpen] = useState(false);
     const [searchValue, setSearchValue] = useState('');
     
     const filteredGenres = GENRE_LIST.filter(genre => 
@@ -760,38 +760,47 @@ export function ReleaseFormDialog({
     );
 
     return (
-      <Popover open={genreOpen} onOpenChange={setGenreOpen}>
+      <Popover open={open} onOpenChange={setOpen} modal={false}>
         <PopoverTrigger asChild>
           <Button
+            type="button"
             variant="outline"
             role="combobox"
-            aria-expanded={genreOpen}
+            aria-expanded={open}
             className="w-full justify-between"
           >
             {value || "Pilih atau ketik genre..."}
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-full p-0 z-50" align="start">
+        <PopoverContent 
+          className="w-[280px] p-0" 
+          align="start"
+          sideOffset={4}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
           <Command>
             <CommandInput 
               placeholder="Cari atau ketik genre..." 
               value={searchValue}
               onValueChange={setSearchValue}
             />
-            <CommandList>
+            <CommandList className="max-h-[200px]">
               <CommandEmpty>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start"
-                  onClick={() => {
-                    onChange(searchValue);
-                    setGenreOpen(false);
-                    setSearchValue('');
-                  }}
-                >
-                  Gunakan "{searchValue}"
-                </Button>
+                {searchValue && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full justify-start"
+                    onClick={() => {
+                      onChange(searchValue);
+                      setOpen(false);
+                      setSearchValue('');
+                    }}
+                  >
+                    Gunakan "{searchValue}"
+                  </Button>
+                )}
               </CommandEmpty>
               <CommandGroup>
                 {filteredGenres.map((genre) => (
@@ -800,7 +809,7 @@ export function ReleaseFormDialog({
                     value={genre}
                     onSelect={() => {
                       onChange(genre);
-                      setGenreOpen(false);
+                      setOpen(false);
                       setSearchValue('');
                     }}
                   >
