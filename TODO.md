@@ -20,6 +20,23 @@
 - [x] Edit release
 - [x] Release detail page
 - [x] Track management dalam release
+- [x] Delete releases
+- [x] Archive/restore releases
+- [x] Bulk actions (select multiple, bulk archive, bulk delete)
+
+### Release Metadata
+- [x] Multiple artists (Main/Featured) per track
+- [x] Complete genre list (25+ genres termasuk Indonesian genres)
+- [x] Explicit lyrics flag per track
+- [x] Composer & lyricist fields per track
+- [x] Lyrics text area per track
+- [x] Additional contributors (Composer, Lyricist, Producer, Arranger, dll)
+
+### Media Upload
+- [x] Full audio upload (WAV/FLAC, up to 500MB)
+- [x] Music video upload (MP4, up to 2GB)
+- [x] Audio clip upload (30-60s preview, up to 20MB)
+- [x] Storage buckets dengan RLS policies
 
 ### User Management
 - [x] Daftar users (admin view)
@@ -70,24 +87,8 @@
 
 ## 🔮 Future Implementation (Deferred)
 
-### Media Upload
-- [ ] Full audio upload (WAV/FLAC, 120s+)
-- [ ] Music video upload (MP4, 120s+)
-- [ ] Audio clip upload (30-60s)
-
-### Release Metadata
-- [ ] Multiple artists (Main/Featured)
-- [ ] Complete genre list
-- [ ] Explicit lyrics flag
-- [ ] Composer & lyricist fields *(sudah ada di tracks)*
-- [ ] Lyrics text area *(sudah ada di tracks)*
-- [ ] Additional contributors
-- [ ] Metadata versioning
-
 ### Release Management
-- [ ] Edit metadata *(sudah bisa edit release)*
-- [ ] Delete/archive releases
-- [ ] Bulk actions
+- [ ] Metadata versioning (track changes history)
 
 ---
 
@@ -123,4 +124,5 @@
 - Database menggunakan Lovable Cloud (Supabase)
 - RLS policies sudah diimplementasi untuk keamanan data
 - Edge functions untuk create-user dan process-royalty-upload
+- Storage buckets: release-covers, track-audio, track-video, audio-clips
 - Beberapa fitur metadata (composer, lyricist, lyrics) sudah ada di level track

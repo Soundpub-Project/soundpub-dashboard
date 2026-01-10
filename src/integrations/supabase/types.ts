@@ -155,6 +155,7 @@ export type Database = {
       }
       releases: {
         Row: {
+          archived_at: string | null
           artist_name: string
           cover_url: string | null
           created_at: string | null
@@ -170,6 +171,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          archived_at?: string | null
           artist_name: string
           cover_url?: string | null
           created_at?: string | null
@@ -185,6 +187,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          archived_at?: string | null
           artist_name?: string
           cover_url?: string | null
           created_at?: string | null
@@ -333,6 +336,7 @@ export type Database = {
           artist_name: string
           artists: Json | null
           audio_url: string | null
+          clip_url: string | null
           composer: string | null
           contributors: Json | null
           created_at: string | null
@@ -345,11 +349,13 @@ export type Database = {
           release_id: string
           title: string
           updated_at: string | null
+          video_url: string | null
         }
         Insert: {
           artist_name: string
           artists?: Json | null
           audio_url?: string | null
+          clip_url?: string | null
           composer?: string | null
           contributors?: Json | null
           created_at?: string | null
@@ -362,11 +368,13 @@ export type Database = {
           release_id: string
           title: string
           updated_at?: string | null
+          video_url?: string | null
         }
         Update: {
           artist_name?: string
           artists?: Json | null
           audio_url?: string | null
+          clip_url?: string | null
           composer?: string | null
           contributors?: Json | null
           created_at?: string | null
@@ -379,6 +387,7 @@ export type Database = {
           release_id?: string
           title?: string
           updated_at?: string | null
+          video_url?: string | null
         }
         Relationships: [
           {
