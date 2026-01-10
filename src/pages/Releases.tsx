@@ -14,7 +14,8 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { Disc3, Search, Plus, Loader2 } from 'lucide-react';
+import { Disc3, Search, Plus, Loader2, Pencil } from 'lucide-react';
+import { ReleaseFormDialog } from '@/components/releases/ReleaseFormDialog';
 
 interface Release {
   id: string;
@@ -27,13 +28,18 @@ interface Release {
   release_type: string;
   status: string;
   created_at: string;
+  label_id: string;
 }
 
 export default function Releases() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isLabel } = useAuth();
   const [releases, setReleases] = useState<Release[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [formOpen, setFormOpen] = useState(false);
+  const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
+
+  const canManageReleases = isAdmin || isLabel;
 
   useEffect(() => {
     fetchReleases();
@@ -73,6 +79,20 @@ export default function Releases() {
       release.upc.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleAddRelease = () => {
+    setSelectedRelease(null);
+    setFormOpen(true);
+  };
+
+  const handleEditRelease = (release: Release) => {
+    setSelectedRelease(release);
+    setFormOpen(true);
+  };
+
+  const handleFormSuccess = () => {
+    fetchReleases();
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -81,8 +101,8 @@ export default function Releases() {
             <h1 className="text-2xl md:text-3xl font-bold">Releases</h1>
             <p className="text-muted-foreground">Kelola album dan single Anda</p>
           </div>
-          {isAdmin && (
-            <Button className="gradient-primary">
+          {canManageReleases && (
+            <Button className="gradient-primary" onClick={handleAddRelease}>
               <Plus className="h-4 w-4 mr-2" />
               Tambah Release
             </Button>
@@ -131,6 +151,7 @@ export default function Releases() {
                       <TableHead>Type</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Release Date</TableHead>
+                      {canManageReleases && <TableHead>Aksi</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -167,6 +188,17 @@ export default function Releases() {
                             ? new Date(release.release_date).toLocaleDateString('id-ID')
                             : '-'}
                         </TableCell>
+                        {canManageReleases && (
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditRelease(release)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -176,6 +208,13 @@ export default function Releases() {
           </CardContent>
         </Card>
       </div>
+
+      <ReleaseFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        release={selectedRelease}
+        onSuccess={handleFormSuccess}
+      />
     </DashboardLayout>
   );
 }
