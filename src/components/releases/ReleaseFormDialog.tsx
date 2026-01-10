@@ -61,10 +61,17 @@ const releaseFormSchema = z.object({
   genre: z.string().optional(),
   release_date: z.string().optional(),
   status: z.string().default('pending'),
+  label_id: z.string().optional(),
   tracks: z.array(trackSchema).min(1, 'Minimal 1 track wajib ditambahkan'),
 });
 
 type ReleaseFormValues = z.infer<typeof releaseFormSchema>;
+
+interface LabelProfile {
+  id: string;
+  full_name: string;
+  email: string;
+}
 
 interface Release {
   id: string;
@@ -104,11 +111,13 @@ export function ReleaseFormDialog({
   release,
   onSuccess,
 }: ReleaseFormDialogProps) {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isLabel } = useAuth();
   const [loading, setLoading] = useState(false);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [labels, setLabels] = useState<LabelProfile[]>([]);
+  const [loadingLabels, setLoadingLabels] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isEditMode = !!release;
@@ -123,6 +132,7 @@ export function ReleaseFormDialog({
       genre: '',
       release_date: '',
       status: 'pending',
+      label_id: '',
       tracks: [
         {
           isrc: '',
@@ -142,6 +152,41 @@ export function ReleaseFormDialog({
     name: 'tracks',
   });
 
+  // Fetch labels for admin
+  useEffect(() => {
+    if (open && isAdmin) {
+      fetchLabels();
+    }
+  }, [open, isAdmin]);
+
+  const fetchLabels = async () => {
+    setLoadingLabels(true);
+    try {
+      // Get all users with role 'label'
+      const { data: labelRoles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'label');
+
+      if (rolesError) throw rolesError;
+
+      if (labelRoles && labelRoles.length > 0) {
+        const labelIds = labelRoles.map(r => r.user_id);
+        const { data: profiles, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', labelIds);
+
+        if (profilesError) throw profilesError;
+        setLabels(profiles || []);
+      }
+    } catch (error) {
+      console.error('Error fetching labels:', error);
+    } finally {
+      setLoadingLabels(false);
+    }
+  };
+
   useEffect(() => {
     if (open && release) {
       loadReleaseData();
@@ -154,6 +199,7 @@ export function ReleaseFormDialog({
         genre: '',
         release_date: '',
         status: 'pending',
+        label_id: isLabel && user ? user.id : '',
         tracks: [
           {
             isrc: '',
@@ -191,6 +237,7 @@ export function ReleaseFormDialog({
         genre: release.genre || '',
         release_date: release.release_date || '',
         status: release.status,
+        label_id: release.label_id,
         tracks: tracks && tracks.length > 0
           ? tracks.map((t) => ({
               id: t.id,
@@ -356,6 +403,15 @@ export function ReleaseFormDialog({
         toast.success('Release berhasil diupdate');
       } else {
         // Create new release
+        // Determine label_id: for admin use selected label, for label use their own id
+        const labelId = isAdmin ? values.label_id : user.id;
+        
+        if (!labelId) {
+          toast.error('Label wajib dipilih');
+          setLoading(false);
+          return;
+        }
+
         const { data: newRelease, error: releaseError } = await supabase
           .from('releases')
           .insert({
@@ -367,7 +423,7 @@ export function ReleaseFormDialog({
             release_date: values.release_date || null,
             status: values.status,
             cover_url: coverUrl,
-            label_id: user.id,
+            label_id: labelId,
             created_by: user.id,
           })
           .select()
@@ -589,6 +645,36 @@ export function ReleaseFormDialog({
                     </FormItem>
                   )}
                 />
+
+                {isAdmin && (
+                  <FormField
+                    control={form.control}
+                    name="label_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Label *</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder={loadingLabels ? "Loading..." : "Pilih label"} />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {labels.map((label) => (
+                              <SelectItem key={label.id} value={label.id}>
+                                {label.full_name} ({label.email})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 {isAdmin && (
                   <FormField
