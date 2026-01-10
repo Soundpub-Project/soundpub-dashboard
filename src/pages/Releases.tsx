@@ -23,10 +23,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Disc3, Search, Plus, Loader2, Pencil, Eye, MoreHorizontal, Trash2, Archive, ArchiveRestore, CheckSquare } from 'lucide-react';
+import { Disc3, Search, Plus, Loader2, Pencil, Eye, MoreHorizontal, Trash2, Archive, ArchiveRestore, CheckSquare, Beaker } from 'lucide-react';
 import { ReleaseFormDialog } from '@/components/releases/ReleaseFormDialog';
+import { ArtistReleaseFormDialog } from '@/components/releases/ArtistReleaseFormDialog';
 import { DeleteReleaseDialog } from '@/components/releases/DeleteReleaseDialog';
 import { ArchiveReleaseDialog } from '@/components/releases/ArchiveReleaseDialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 
 interface Release {
@@ -46,11 +48,12 @@ interface Release {
 
 export default function Releases() {
   const navigate = useNavigate();
-  const { isAdmin, isLabel, loading: authLoading } = useAuth();
+  const { isAdmin, isLabel, isArtist, loading: authLoading } = useAuth();
   const [releases, setReleases] = useState<Release[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [formOpen, setFormOpen] = useState(false);
+  const [artistFormOpen, setArtistFormOpen] = useState(false);
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
@@ -59,6 +62,7 @@ export default function Releases() {
   const [bulkLoading, setBulkLoading] = useState(false);
 
   const canManageReleases = isAdmin || isLabel;
+  const canCreateRelease = isAdmin || isLabel || isArtist;
 
   useEffect(() => {
     fetchReleases();
@@ -111,7 +115,11 @@ export default function Releases() {
 
   const handleAddRelease = () => {
     setSelectedRelease(null);
-    setFormOpen(true);
+    if (isArtist && !isAdmin && !isLabel) {
+      setArtistFormOpen(true);
+    } else {
+      setFormOpen(true);
+    }
   };
 
   const handleEditRelease = (release: Release) => {
@@ -219,14 +227,19 @@ export default function Releases() {
             <h1 className="text-2xl md:text-3xl font-bold">Releases</h1>
             <p className="text-muted-foreground">Kelola album dan single Anda</p>
           </div>
-          {!authLoading && canManageReleases && (
-            <Button className="gradient-primary" onClick={handleAddRelease}>
-              <Plus className="h-4 w-4 mr-2" />
-              Tambah Release
-            </Button>
-          )}
-          {authLoading && (
-            <div className="h-10 w-32 bg-muted animate-pulse rounded-md" />
+          {!authLoading && canCreateRelease && (
+            <div className="flex items-center gap-2">
+              {isArtist && !isAdmin && !isLabel && (
+                <Badge variant="secondary" className="bg-amber-500/10 text-amber-600 border-amber-500/30">
+                  <Beaker className="h-3 w-3 mr-1" />
+                  BETA
+                </Badge>
+              )}
+              <Button className="gradient-primary" onClick={handleAddRelease}>
+                <Plus className="h-4 w-4 mr-2" />
+                Tambah Release
+              </Button>
+            </div>
           )}
         </div>
 
@@ -457,6 +470,13 @@ export default function Releases() {
       <ReleaseFormDialog
         open={formOpen}
         onOpenChange={setFormOpen}
+        release={selectedRelease}
+        onSuccess={handleFormSuccess}
+      />
+
+      <ArtistReleaseFormDialog
+        open={artistFormOpen}
+        onOpenChange={setArtistFormOpen}
         release={selectedRelease}
         onSuccess={handleFormSuccess}
       />

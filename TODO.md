@@ -79,15 +79,14 @@
 - [x] CSV exports (sudah ada di royalties/reports)
 - [x] PDF reports (browser print available)
 
+### Artist Simplified Release Form
+- [x] Form sederhana khusus untuk role Artist (BETA)
+- [x] Upload cover art langsung
+- [x] UPC/ISRC dikosongkan (diisi oleh label)
+
 ---
 
 ## ❌ Belum Dikerjakan
-
-### Medium Priority
-- [ ] **Artist Simplified Release Form**
-  - Form yang lebih sederhana untuk artist
-  - Upload cover art langsung
-  - Auto-generate UPC/ISRC (optional)
 
 ### Low Priority
 - [ ] **Artist Profile Page**
