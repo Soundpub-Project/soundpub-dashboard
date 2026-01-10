@@ -15,6 +15,7 @@ import Users from "./pages/Users";
 import Payouts from "./pages/Payouts";
 import Settings from "./pages/Settings";
 import UploadRoyalty from "./pages/UploadRoyalty";
+import MyArtists from "./pages/MyArtists";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/dashboard/upload" element={<UploadRoyalty />} />
             <Route path="/dashboard/payouts" element={<Payouts />} />
             <Route path="/dashboard/settings" element={<Settings />} />
+            <Route path="/dashboard/my-artists" element={<MyArtists />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

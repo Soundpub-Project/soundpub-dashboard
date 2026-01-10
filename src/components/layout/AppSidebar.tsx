@@ -74,6 +74,15 @@ const adminNavItems: NavItem[] = [
   },
 ];
 
+const labelNavItems: NavItem[] = [
+  { 
+    title: 'My Artists', 
+    url: '/dashboard/my-artists', 
+    icon: Users,
+    roles: ['label'],
+  },
+];
+
 const accountNavItems: NavItem[] = [
   { 
     title: 'Payouts', 
@@ -90,7 +99,7 @@ const accountNavItems: NavItem[] = [
 export function AppSidebar() {
   const { state } = useSidebar();
   const location = useLocation();
-  const { profile, role, signOut, isAdmin } = useAuth();
+  const { profile, role, signOut, isAdmin, isLabel } = useAuth();
   const collapsed = state === 'collapsed';
 
   const isActive = (path: string) => location.pathname === path;
@@ -161,6 +170,32 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 {adminNavItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                      <NavLink 
+                        to={item.url} 
+                        end 
+                        className="flex items-center gap-2"
+                        activeClassName="bg-sidebar-accent text-sidebar-accent-foreground"
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {/* Label Navigation */}
+        {isLabel && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Label</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {labelNavItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive(item.url)}>
                       <NavLink 

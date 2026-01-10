@@ -188,19 +188,15 @@ export type Database = {
         Row: {
           artist: string | null
           artist_name: string
-          artist_revenue: number
           country: string
           created_at: string | null
           id: string
           isrc: string
           label_name: string
           pendapatan_bersih_soundpub: number
-          pendapatan_kotor_dsp: number
           pendapatan_label_artis: number
           period: string
           platform: string
-          sales_type: string
-          soundpub_revenue: number
           title: string | null
           unit_penjualan: number
           upc: string
@@ -209,19 +205,15 @@ export type Database = {
         Insert: {
           artist?: string | null
           artist_name: string
-          artist_revenue?: number
           country: string
           created_at?: string | null
           id?: string
           isrc: string
           label_name: string
           pendapatan_bersih_soundpub?: number
-          pendapatan_kotor_dsp?: number
           pendapatan_label_artis?: number
           period: string
           platform: string
-          sales_type: string
-          soundpub_revenue?: number
           title?: string | null
           unit_penjualan?: number
           upc: string
@@ -230,19 +222,15 @@ export type Database = {
         Update: {
           artist?: string | null
           artist_name?: string
-          artist_revenue?: number
           country?: string
           created_at?: string | null
           id?: string
           isrc?: string
           label_name?: string
           pendapatan_bersih_soundpub?: number
-          pendapatan_kotor_dsp?: number
           pendapatan_label_artis?: number
           period?: string
           platform?: string
-          sales_type?: string
-          soundpub_revenue?: number
           title?: string | null
           unit_penjualan?: number
           upc?: string

@@ -109,10 +109,10 @@ export default function Dashboard() {
       // Fetch royalties data
       const { data: royaltiesData } = await supabase
         .from('royalties')
-        .select('artist_revenue, unit_penjualan, period, platform');
+        .select('pendapatan_label_artis, unit_penjualan, period, platform');
 
       const totalRevenue = royaltiesData?.reduce(
-        (sum, r) => sum + Number(r.artist_revenue || 0),
+        (sum, r) => sum + Number(r.pendapatan_label_artis || 0),
         0
       ) || 0;
 
@@ -128,7 +128,7 @@ export default function Dashboard() {
         if (!monthlyData[period]) {
           monthlyData[period] = { revenue: 0, streams: 0 };
         }
-        monthlyData[period].revenue += Number(r.artist_revenue || 0);
+        monthlyData[period].revenue += Number(r.pendapatan_label_artis || 0);
         monthlyData[period].streams += Number(r.unit_penjualan || 0);
       });
 
@@ -146,7 +146,7 @@ export default function Dashboard() {
         if (!platformData[platform]) {
           platformData[platform] = { revenue: 0, streams: 0 };
         }
-        platformData[platform].revenue += Number(r.artist_revenue || 0);
+        platformData[platform].revenue += Number(r.pendapatan_label_artis || 0);
         platformData[platform].streams += Number(r.unit_penjualan || 0);
       });
 
