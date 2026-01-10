@@ -1,1 +1,7 @@
 project_id = "opkvvdgnhhopkkeaokzo"
+
+[functions.create-user]
+verify_jwt = false
+
+[functions.process-royalty-upload]
+verify_jwt = false
