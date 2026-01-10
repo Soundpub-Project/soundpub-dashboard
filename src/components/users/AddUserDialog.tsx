@@ -77,7 +77,8 @@ export function AddUserDialog({
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
-  const [selectedRole, setSelectedRole] = useState<AppRole>('user');
+  const [phone, setPhone] = useState('');
+  const [selectedRole, setSelectedRole] = useState<AppRole>(allowedRoles?.[0] || 'user');
   const [loading, setLoading] = useState(false);
 
   // Filter role options based on allowedRoles or user permissions
@@ -121,6 +122,7 @@ export function AddUserDialog({
           email,
           password,
           full_name: fullName,
+          phone: phone || null,
           role: selectedRole,
           parent_label_id: defaultParentLabelId || (isLabel && currentUser ? currentUser.id : null),
         },
@@ -140,7 +142,8 @@ export function AddUserDialog({
       setEmail('');
       setFullName('');
       setPassword('');
-      setSelectedRole(isLabel ? 'artist' : 'user');
+      setPhone('');
+      setSelectedRole(allowedRoles?.[0] || (isLabel ? 'artist' : 'user'));
       
       onSuccess();
       onOpenChange(false);
@@ -162,7 +165,8 @@ export function AddUserDialog({
       setEmail('');
       setFullName('');
       setPassword('');
-      setSelectedRole(isLabel ? 'artist' : 'user');
+      setPhone('');
+      setSelectedRole(allowedRoles?.[0] || (isLabel ? 'artist' : 'user'));
     }
     onOpenChange(open);
   };
@@ -212,9 +216,21 @@ export function AddUserDialog({
             <Input
               id="password"
               type="password"
+              autoComplete="new-password"
               placeholder="Minimal 6 karakter"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="phone">No. Telepon <span className="text-muted-foreground">(opsional)</span></Label>
+            <Input
+              id="phone"
+              type="tel"
+              placeholder="08123456789"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
             />
           </div>
 
@@ -259,9 +275,10 @@ export function AddUserDialog({
           <Button 
             onClick={handleSave} 
             disabled={loading || !email || !fullName || !password}
+            className="gradient-primary"
           >
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Tambah User
+            {isLabel ? 'Tambah Artist' : 'Tambah User'}
           </Button>
         </DialogFooter>
       </DialogContent>
