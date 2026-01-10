@@ -109,58 +109,29 @@ export function AddUserDialog({
 
     setLoading(true);
     try {
-      // Create user via Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
+      // Get current session token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      // Call edge function to create user without logging in as them
+      const response = await supabase.functions.invoke('create-user', {
+        body: {
+          email,
+          password,
+          full_name: fullName,
+          role: selectedRole,
+          parent_label_id: defaultParentLabelId || (isLabel && currentUser ? currentUser.id : null),
         },
       });
 
-      if (authError) throw authError;
-
-      if (!authData.user) {
-        throw new Error('Gagal membuat user');
+      if (response.error) {
+        throw new Error(response.error.message || 'Gagal membuat user');
       }
 
-      // Wait a moment for the trigger to create profile and role
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Update the role
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .update({ role: selectedRole })
-        .eq('user_id', authData.user.id);
-
-      if (roleError) {
-        console.error('Error updating role:', roleError);
-      }
-
-      // If Label is adding Artist, set parent_label_id
-      if (isLabel && selectedRole === 'artist' && currentUser) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({ parent_label_id: currentUser.id })
-          .eq('id', authData.user.id);
-
-        if (profileError) {
-          console.error('Error setting parent label:', profileError);
-        }
-      }
-
-      // If admin is adding with default parent label
-      if (defaultParentLabelId && selectedRole === 'artist') {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({ parent_label_id: defaultParentLabelId })
-          .eq('id', authData.user.id);
-
-        if (profileError) {
-          console.error('Error setting parent label:', profileError);
-        }
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Gagal membuat user');
       }
 
       toast.success(`User ${fullName} berhasil ditambahkan sebagai ${selectedRole}`);
@@ -169,13 +140,13 @@ export function AddUserDialog({
       setEmail('');
       setFullName('');
       setPassword('');
-      setSelectedRole('user');
+      setSelectedRole(isLabel ? 'artist' : 'user');
       
       onSuccess();
       onOpenChange(false);
     } catch (error: any) {
       console.error('Error creating user:', error);
-      if (error.message?.includes('already registered')) {
+      if (error.message?.includes('already registered') || error.message?.includes('already been registered')) {
         toast.error('Email sudah terdaftar');
       } else {
         toast.error(error.message || 'Gagal menambahkan user');
