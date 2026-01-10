@@ -23,7 +23,10 @@ import {
   XCircle, 
   Loader2,
   AlertCircle,
-  Download
+  Download,
+  TrendingUp,
+  Users,
+  DollarSign
 } from 'lucide-react';
 
 interface RoyaltyRow {
@@ -41,6 +44,25 @@ interface RoyaltyRow {
   artist?: string;
 }
 
+interface ValidationError {
+  row: number;
+  field: string;
+  message: string;
+}
+
+interface BalanceUpdate {
+  label: string;
+  amount: number;
+  success: boolean;
+}
+
+interface UploadSummary {
+  total?: number;
+  inserted?: number;
+  errors?: number;
+  balanceUpdates?: BalanceUpdate[];
+}
+
 interface UploadHistory {
   id: string;
   original_filename: string;
@@ -48,6 +70,7 @@ interface UploadHistory {
   inserted_records: number;
   status: string;
   created_at: string;
+  summary?: UploadSummary | null;
 }
 
 const REQUIRED_COLUMNS = [
@@ -75,8 +98,14 @@ export default function UploadRoyalty() {
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState<string>('');
   const [uploadHistory, setUploadHistory] = useState<UploadHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [lastUploadResult, setLastUploadResult] = useState<{
+    insertedCount: number;
+    totalErrors: number;
+    balanceUpdates: BalanceUpdate[];
+  } | null>(null);
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -94,12 +123,12 @@ export default function UploadRoyalty() {
     try {
       const { data, error } = await supabase
         .from('royalty_uploads')
-        .select('id, original_filename, total_records, inserted_records, status, created_at')
+        .select('id, original_filename, total_records, inserted_records, status, created_at, summary')
         .order('created_at', { ascending: false })
         .limit(10);
 
       if (error) throw error;
-      setUploadHistory(data || []);
+      setUploadHistory((data || []) as unknown as UploadHistory[]);
     } catch (error) {
       console.error('Error fetching upload history:', error);
     } finally {
@@ -170,7 +199,7 @@ export default function UploadRoyalty() {
           artist: headers.includes('artist') ? values[getIndex('artist')] : undefined,
         };
 
-        // Validate required fields
+        // Basic client-side validation
         if (!row.period || !row.isrc || !row.upc) {
           errors.push(`Baris ${i + 1}: Data period, isrc, atau upc kosong`);
           continue;
@@ -207,6 +236,7 @@ export default function UploadRoyalty() {
     setSelectedFile(file);
     setParsedData([]);
     setParseErrors([]);
+    setLastUploadResult(null);
 
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -250,64 +280,79 @@ export default function UploadRoyalty() {
 
     setIsUploading(true);
     setUploadProgress(0);
+    setUploadStage('Memvalidasi data...');
+    setLastUploadResult(null);
 
     try {
-      // Create upload record
-      const { data: uploadRecord, error: uploadError } = await supabase
-        .from('royalty_uploads')
-        .insert({
-          user_id: user.id,
-          filename: `royalty_${Date.now()}.csv`,
-          original_filename: selectedFile.name,
-          total_records: parsedData.length,
-          inserted_records: 0,
-          status: 'pending',
-        })
-        .select()
-        .single();
+      // Simulate progress for UX
+      setUploadProgress(10);
+      setUploadStage('Mengirim data ke server...');
 
-      if (uploadError) throw uploadError;
-
-      // Insert royalties in batches
-      const batchSize = 100;
-      let insertedCount = 0;
-
-      for (let i = 0; i < parsedData.length; i += batchSize) {
-        const batch = parsedData.slice(i, i + batchSize).map(row => ({
-          ...row,
-          upload_id: uploadRecord.id,
-        }));
-
-        const { error: insertError } = await supabase
-          .from('royalties')
-          .insert(batch);
-
-        if (insertError) {
-          console.error('Batch insert error:', insertError);
-          throw insertError;
-        }
-
-        insertedCount += batch.length;
-        setUploadProgress(Math.round((insertedCount / parsedData.length) * 100));
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No active session');
       }
 
-      // Update upload record
-      await supabase
-        .from('royalty_uploads')
-        .update({
-          inserted_records: insertedCount,
-          status: 'success',
-          summary: {
-            total: parsedData.length,
-            inserted: insertedCount,
-            errors: parseErrors.length,
-          },
-        })
-        .eq('id', uploadRecord.id);
+      setUploadProgress(20);
+      setUploadStage('Memproses validasi server-side...');
+
+      // Call edge function for server-side validation and processing
+      const { data, error } = await supabase.functions.invoke('process-royalty-upload', {
+        body: {
+          rows: parsedData,
+          filename: `royalty_${Date.now()}.csv`,
+          originalFilename: selectedFile.name,
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setUploadProgress(80);
+      setUploadStage('Memperbarui saldo...');
+
+      if (!data.success) {
+        // Handle validation errors from server
+        if (data.validationErrors && data.validationErrors.length > 0) {
+          const errorMessages = data.validationErrors.slice(0, 5).map(
+            (err: ValidationError) => `Baris ${err.row}: ${err.field} - ${err.message}`
+          );
+          
+          toast({
+            title: 'Validasi Gagal',
+            description: (
+              <div className="space-y-1">
+                {errorMessages.map((msg: string, i: number) => (
+                  <p key={i} className="text-sm">{msg}</p>
+                ))}
+                {data.totalErrors > 5 && (
+                  <p className="text-sm text-muted-foreground">
+                    ...dan {data.totalErrors - 5} error lainnya
+                  </p>
+                )}
+              </div>
+            ),
+            variant: 'destructive',
+          });
+          return;
+        }
+        throw new Error(data.error || 'Upload failed');
+      }
+
+      setUploadProgress(100);
+      setUploadStage('Selesai!');
+
+      // Store result for display
+      setLastUploadResult({
+        insertedCount: data.insertedCount,
+        totalErrors: data.totalErrors,
+        balanceUpdates: data.balanceUpdates || [],
+      });
 
       toast({
         title: 'Upload Berhasil!',
-        description: `${insertedCount} data royalty berhasil diimport`,
+        description: `${data.insertedCount} data royalty berhasil diimport`,
       });
 
       // Reset state
@@ -316,23 +361,25 @@ export default function UploadRoyalty() {
       setParseErrors([]);
       fetchUploadHistory();
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload error:', error);
       toast({
         title: 'Upload Gagal',
-        description: 'Terjadi kesalahan saat mengimport data',
+        description: error.message || 'Terjadi kesalahan saat mengimport data',
         variant: 'destructive',
       });
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
+      setUploadStage('');
     }
   };
 
   const downloadSampleCSV = () => {
     const sampleData = `period,isrc,upc,artist_name,label_name,platform,country,unit_penjualan,pendapatan_label_artis,pendapatan_bersih_soundpub,title,artist
-2024-01,IDABC123456,123456789012,John Doe,Indie Records,Spotify,ID,1000,70000,30000,My Song,John Doe
-2024-01,IDABC123457,123456789013,Jane Smith,Indie Records,Apple Music,US,500,140000,60000,Another Song,Jane Smith`;
+2024-01,IDABC1234567,123456789012,John Doe,Indie Records,Spotify,ID,1000,70000,30000,My Song,John Doe
+2024-01,IDXYZ7654321,123456789013,Jane Smith,Indie Records,Apple Music,US,500,140000,60000,Another Song,Jane Smith
+2024-02,IDABC1234567,123456789012,John Doe,Indie Records,YouTube Music,ID,2500,175000,75000,My Song,John Doe`;
     
     const blob = new Blob([sampleData], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -347,11 +394,20 @@ export default function UploadRoyalty() {
     const styles: Record<string, string> = {
       success: 'bg-green-500/20 text-green-400 border-green-500/30',
       pending: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+      processing: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
       partial: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
       failed: 'bg-red-500/20 text-red-400 border-red-500/30',
     };
     return styles[status] || '';
   };
+
+  // Calculate preview stats
+  const previewStats = parsedData.length > 0 ? {
+    totalRevenue: parsedData.reduce((sum, row) => sum + row.pendapatan_label_artis, 0),
+    totalStreams: parsedData.reduce((sum, row) => sum + row.unit_penjualan, 0),
+    uniqueLabels: [...new Set(parsedData.map(r => r.label_name))].length,
+    uniqueArtists: [...new Set(parsedData.map(r => r.artist_name))].length,
+  } : null;
 
   if (!isAdmin) {
     return null;
@@ -363,7 +419,7 @@ export default function UploadRoyalty() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold">Upload Royalty</h1>
-            <p className="text-muted-foreground">Import data royalty dari file CSV</p>
+            <p className="text-muted-foreground">Import data royalty dari file CSV dengan validasi otomatis</p>
           </div>
           <Button variant="outline" onClick={downloadSampleCSV}>
             <Download className="h-4 w-4 mr-2" />
@@ -371,12 +427,76 @@ export default function UploadRoyalty() {
           </Button>
         </div>
 
+        {/* Upload Result Summary */}
+        {lastUploadResult && (
+          <Card className="bg-green-500/10 border-green-500/30">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-green-400 flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5" />
+                Upload Berhasil
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-green-500/20">
+                    <TrendingUp className="h-5 w-5 text-green-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Data Diimport</p>
+                    <p className="text-lg font-semibold">{lastUploadResult.insertedCount.toLocaleString('id-ID')}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-yellow-500/20">
+                    <AlertCircle className="h-5 w-5 text-yellow-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Error/Dilewati</p>
+                    <p className="text-lg font-semibold">{lastUploadResult.totalErrors}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-blue-500/20">
+                    <DollarSign className="h-5 w-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Saldo Diupdate</p>
+                    <p className="text-lg font-semibold">
+                      {lastUploadResult.balanceUpdates.filter(b => b.success).length} label
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Balance Updates Detail */}
+              {lastUploadResult.balanceUpdates.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-green-500/30">
+                  <p className="text-sm font-medium mb-2">Detail Update Saldo:</p>
+                  <div className="space-y-1">
+                    {lastUploadResult.balanceUpdates.map((update, i) => (
+                      <div key={i} className="flex items-center justify-between text-sm">
+                        <span className={update.success ? 'text-green-400' : 'text-yellow-400'}>
+                          {update.success ? '✓' : '⚠'} {update.label}
+                        </span>
+                        <span className="font-mono">
+                          +Rp {update.amount.toLocaleString('id-ID')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Upload Area */}
         <Card className="bg-card/50 border-border/50">
           <CardHeader>
             <CardTitle>Upload File CSV</CardTitle>
             <CardDescription>
-              Drag & drop file CSV atau klik untuk memilih file
+              Drag & drop file CSV atau klik untuk memilih file. Data akan divalidasi di server sebelum disimpan.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -424,7 +544,45 @@ export default function UploadRoyalty() {
             {/* Parse Results */}
             {(parsedData.length > 0 || parseErrors.length > 0) && (
               <div className="mt-6 space-y-4">
-                {/* Summary */}
+                {/* Summary Stats */}
+                {previewStats && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
+                      <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                        <TrendingUp className="h-4 w-4" />
+                        <span className="text-xs">Total Revenue</span>
+                      </div>
+                      <p className="font-semibold text-green-400">
+                        Rp {previewStats.totalRevenue.toLocaleString('id-ID')}
+                      </p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
+                      <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                        <FileSpreadsheet className="h-4 w-4" />
+                        <span className="text-xs">Total Streams</span>
+                      </div>
+                      <p className="font-semibold">
+                        {previewStats.totalStreams.toLocaleString('id-ID')}
+                      </p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
+                      <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                        <Users className="h-4 w-4" />
+                        <span className="text-xs">Labels</span>
+                      </div>
+                      <p className="font-semibold">{previewStats.uniqueLabels}</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
+                      <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                        <Users className="h-4 w-4" />
+                        <span className="text-xs">Artists</span>
+                      </div>
+                      <p className="font-semibold">{previewStats.uniqueArtists}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Data count and warnings */}
                 <div className="flex items-center gap-4">
                   {parsedData.length > 0 && (
                     <div className="flex items-center gap-2 text-green-400">
@@ -466,6 +624,7 @@ export default function UploadRoyalty() {
                             <TableHead>Period</TableHead>
                             <TableHead>ISRC</TableHead>
                             <TableHead>Artist</TableHead>
+                            <TableHead>Label</TableHead>
                             <TableHead>Platform</TableHead>
                             <TableHead className="text-right">Streams</TableHead>
                             <TableHead className="text-right">Revenue</TableHead>
@@ -477,6 +636,7 @@ export default function UploadRoyalty() {
                               <TableCell className="font-mono text-xs">{row.period}</TableCell>
                               <TableCell className="font-mono text-xs">{row.isrc}</TableCell>
                               <TableCell>{row.artist_name}</TableCell>
+                              <TableCell>{row.label_name}</TableCell>
                               <TableCell>{row.platform}</TableCell>
                               <TableCell className="text-right">
                                 {row.unit_penjualan.toLocaleString('id-ID')}
@@ -489,38 +649,50 @@ export default function UploadRoyalty() {
                         </TableBody>
                       </Table>
                     </div>
+                    {parsedData.length > 5 && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        ...dan {parsedData.length - 5} baris lainnya
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Upload Progress */}
+                {isUploading && (
+                  <div className="p-4 rounded-lg bg-primary/10 border border-primary/30">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        <span className="font-medium">{uploadStage}</span>
+                      </div>
+                      <span className="text-sm text-muted-foreground">{uploadProgress}%</span>
+                    </div>
+                    <Progress value={uploadProgress} className="h-2" />
                   </div>
                 )}
 
                 {/* Upload Button */}
-                {parsedData.length > 0 && (
+                {parsedData.length > 0 && !isUploading && (
                   <div className="flex items-center gap-4">
                     <Button
                       className="gradient-primary"
                       onClick={handleUpload}
                       disabled={isUploading}
                     >
-                      {isUploading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Mengupload...
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="h-4 w-4 mr-2" />
-                          Import {parsedData.length} Data
-                        </>
-                      )}
+                      <Upload className="h-4 w-4 mr-2" />
+                      Import {parsedData.length} Data
                     </Button>
-                    
-                    {isUploading && (
-                      <div className="flex-1">
-                        <Progress value={uploadProgress} className="h-2" />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {uploadProgress}% selesai
-                        </p>
-                      </div>
-                    )}
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedFile(null);
+                        setParsedData([]);
+                        setParseErrors([]);
+                      }}
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Batal
+                    </Button>
                   </div>
                 )}
               </div>
