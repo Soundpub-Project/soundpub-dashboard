@@ -62,18 +62,26 @@
 - [x] Admin Approve/Reject Payout
   - [x] Halaman khusus admin untuk melihat semua payout requests
   - [x] Tombol approve/reject dengan konfirmasi
+  - [x] Mark as Paid functionality
   - [x] Update balance setelah payout approved (via trigger)
   - [x] Statistik payout (pending, approved, paid, rejected)
+  - [x] Search & filter by status
+
+### Analytics
+- [x] Halaman analytics dedicated
+- [x] Custom date ranges
+- [x] Perbandingan periode (MoM, YoY)
+- [x] Growth metrics & KPIs
+- [x] Performance indicators (growth %)
+- [x] Top performing releases/tracks/platforms/countries
+
+### Export Functionality
+- [x] CSV exports (sudah ada di royalties/reports)
+- [x] PDF reports (browser print available)
 
 ---
 
 ## ❌ Belum Dikerjakan
-
-### Medium Priority
-- [ ] **Artist Simplified Release Form**
-  - Form yang lebih sederhana untuk artist
-  - Upload cover art langsung
-  - Auto-generate UPC/ISRC (optional)
 
 ### Medium Priority
 - [ ] **Artist Simplified Release Form**
@@ -94,33 +102,17 @@
 ### Release Management
 - [ ] Metadata versioning (track changes history)
 
----
-
-## 📊 Export Functionality
-
-### ✅ Completed
-- [x] CSV exports (sudah ada di royalties/reports)
-- [x] PDF reports (browser print available)
-
-### ❌ Future
+### Export
 - [ ] Excel exports (.xlsx format)
 - [ ] Scheduled reports (email/auto-generate)
 
----
-
-## 📈 Advanced Analytics
-
-### ✅ Completed
-- [x] Halaman analytics dedicated
-- [x] Custom date ranges
-- [x] Perbandingan periode (MoM, YoY)
-- [x] Growth metrics & KPIs
-- [x] Performance indicators (growth %)
-- [x] Top performing releases/tracks/platforms/countries
-
-### ❌ Future
+### Analytics
 - [ ] Export analytics to PDF
 - [ ] Scheduled analytics reports
+
+### Notifications
+- [ ] Email notification ketika payout diproses
+- [ ] In-app notifications
 
 ---
 
