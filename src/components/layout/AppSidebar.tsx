@@ -121,11 +121,11 @@ export function AppSidebar() {
 
   const getRoleBadge = (role: string | null) => {
     const colors: Record<string, string> = {
-      superadmin: 'bg-red-500/20 text-red-400',
-      admin: 'bg-orange-500/20 text-orange-400',
-      label: 'bg-blue-500/20 text-blue-400',
-      artist: 'bg-purple-500/20 text-purple-400',
-      user: 'bg-gray-500/20 text-gray-400',
+      superadmin: 'bg-destructive/20 text-destructive',
+      admin: 'bg-primary/20 text-primary',
+      label: 'bg-chart-4/20 text-chart-4',
+      artist: 'bg-chart-3/20 text-chart-3',
+      user: 'bg-muted text-muted-foreground',
     };
     return colors[role || 'user'] || colors.user;
   };
@@ -136,7 +136,7 @@ export function AppSidebar() {
       <SidebarHeader className="border-b border-sidebar-border">
         <div className="flex items-center gap-2 px-2 py-3">
           <div className="p-1.5 rounded-lg gradient-primary shrink-0">
-            <Music2 className="h-5 w-5 text-white" />
+            <Music2 className="h-5 w-5 text-primary-foreground" />
           </div>
           {!collapsed && (
             <span className="font-bold text-lg text-gradient">SoundPub</span>

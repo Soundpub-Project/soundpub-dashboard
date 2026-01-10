@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Music2, Loader2 } from 'lucide-react';
+import { Music2, Loader2, Moon, Sun } from 'lucide-react';
 import { z } from 'zod';
+import { useTheme } from '@/hooks/useTheme';
 
 const loginSchema = z.object({
   email: z.string().email('Email tidak valid'),
@@ -140,21 +141,37 @@ export default function Auth() {
     );
   }
 
+  const { resolvedTheme, setTheme } = useTheme();
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4 relative">
+      {/* Theme Toggle */}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+        className="absolute top-4 right-4"
+      >
+        {resolvedTheme === 'dark' ? (
+          <Sun className="h-5 w-5" />
+        ) : (
+          <Moon className="h-5 w-5" />
+        )}
+      </Button>
+
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-2">
             <div className="p-2 rounded-xl gradient-primary">
-              <Music2 className="h-8 w-8 text-white" />
+              <Music2 className="h-8 w-8 text-primary-foreground" />
             </div>
             <h1 className="text-3xl font-bold text-gradient">SoundPub</h1>
           </div>
           <p className="text-muted-foreground">Music Distribution Platform</p>
         </div>
 
-        <Card className="border-border/50 bg-card/50 backdrop-blur">
+        <Card className="border-border bg-card">
           <Tabs defaultValue="login" className="w-full">
             <CardHeader className="pb-4">
               <TabsList className="grid w-full grid-cols-2">
