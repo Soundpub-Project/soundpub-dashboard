@@ -7,6 +7,7 @@
 - [x] Role-based access control (superadmin, admin, label, artist, user)
 - [x] Profile management (view & edit)
 - [x] Protected routes berdasarkan role
+- [x] Fix logout stuck bug di halaman admin (Users page)
 
 ### Dashboard & Layout
 - [x] Dashboard layout dengan sidebar navigation
@@ -27,6 +28,7 @@
 - [x] Delete user
 - [x] Change user role (admin only)
 - [x] My Artists page (label view)
+- [x] Fix RLS policy untuk label update status artist
 
 ### Royalty Management
 - [x] Royalty Overview dengan charts
