@@ -11,6 +11,7 @@ import Releases from "./pages/Releases";
 import ReleaseDetail from "./pages/ReleaseDetail";
 import Tracks from "./pages/Tracks";
 import Royalties from "./pages/Royalties";
+import Analytics from "./pages/Analytics";
 import Users from "./pages/Users";
 import Payouts from "./pages/Payouts";
 import Settings from "./pages/Settings";
@@ -35,6 +36,7 @@ const App = () => (
             <Route path="/dashboard/releases/:id" element={<ReleaseDetail />} />
             <Route path="/dashboard/tracks" element={<Tracks />} />
             <Route path="/dashboard/royalties" element={<Royalties />} />
+            <Route path="/dashboard/analytics" element={<Analytics />} />
             <Route path="/dashboard/users" element={<Users />} />
             <Route path="/dashboard/upload" element={<UploadRoyalty />} />
             <Route path="/dashboard/payouts" element={<Payouts />} />

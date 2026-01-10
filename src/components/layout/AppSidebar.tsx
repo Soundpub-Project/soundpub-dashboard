@@ -27,6 +27,7 @@ import {
   Settings,
   LogOut,
   Music2,
+  BarChart3,
 } from 'lucide-react';
 
 interface NavItem {
@@ -56,6 +57,11 @@ const mainNavItems: NavItem[] = [
     title: 'Royalties', 
     url: '/dashboard/royalties', 
     icon: DollarSign 
+  },
+  { 
+    title: 'Analytics', 
+    url: '/dashboard/analytics', 
+    icon: BarChart3 
   },
 ];
 
