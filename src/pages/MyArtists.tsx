@@ -15,8 +15,16 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { Music, Search, Loader2, UserPlus } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Music, Search, Loader2, UserPlus, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { AddUserDialog } from '@/components/users/AddUserDialog';
+import { EditArtistDialog } from '@/components/users/EditArtistDialog';
+import { DeleteArtistDialog } from '@/components/users/DeleteArtistDialog';
 
 interface ArtistProfile {
   id: string;
@@ -25,6 +33,7 @@ interface ArtistProfile {
   phone: string | null;
   status: string;
   balance: number;
+  address: string | null;
   created_at: string;
 }
 
@@ -35,6 +44,9 @@ export default function MyArtists() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [addArtistDialogOpen, setAddArtistDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedArtist, setSelectedArtist] = useState<ArtistProfile | null>(null);
 
   useEffect(() => {
     if (!authLoading && !isLabel) {
@@ -52,7 +64,6 @@ export default function MyArtists() {
     if (!user) return;
     
     try {
-      // Fetch profiles where parent_label_id is the current user
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('*')
@@ -76,6 +87,16 @@ export default function MyArtists() {
       suspended: 'destructive',
     };
     return variants[status] || 'secondary';
+  };
+
+  const handleEditClick = (artist: ArtistProfile) => {
+    setSelectedArtist(artist);
+    setEditDialogOpen(true);
+  };
+
+  const handleDeleteClick = (artist: ArtistProfile) => {
+    setSelectedArtist(artist);
+    setDeleteDialogOpen(true);
   };
 
   const filteredArtists = artists.filter(
@@ -138,9 +159,11 @@ export default function MyArtists() {
                     <TableRow>
                       <TableHead>Nama</TableHead>
                       <TableHead>Email</TableHead>
+                      <TableHead>Telepon</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Balance</TableHead>
                       <TableHead>Bergabung</TableHead>
+                      <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -148,6 +171,7 @@ export default function MyArtists() {
                       <TableRow key={artist.id}>
                         <TableCell className="font-medium">{artist.full_name}</TableCell>
                         <TableCell>{artist.email}</TableCell>
+                        <TableCell>{artist.phone || '-'}</TableCell>
                         <TableCell>
                           <Badge variant={getStatusBadge(artist.status)} className="capitalize">
                             {artist.status}
@@ -158,6 +182,28 @@ export default function MyArtists() {
                         </TableCell>
                         <TableCell>
                           {new Date(artist.created_at).toLocaleDateString('id-ID')}
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleEditClick(artist)}>
+                                <Pencil className="mr-2 h-4 w-4" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleDeleteClick(artist)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Hapus dari Label
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -174,6 +220,20 @@ export default function MyArtists() {
         onOpenChange={setAddArtistDialogOpen}
         onSuccess={fetchArtists}
         allowedRoles={['artist']}
+      />
+
+      <EditArtistDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        artist={selectedArtist}
+        onSuccess={fetchArtists}
+      />
+
+      <DeleteArtistDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        artist={selectedArtist}
+        onSuccess={fetchArtists}
       />
     </DashboardLayout>
   );
