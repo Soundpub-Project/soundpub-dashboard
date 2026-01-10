@@ -14,6 +14,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      artists: {
+        Row: {
+          created_at: string | null
+          id: string
+          label_id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          label_id: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          label_id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "artists_label_id_fkey"
+            columns: ["label_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payout_requests: {
         Row: {
           account_holder_name: string
@@ -134,7 +166,7 @@ export type Database = {
           release_type: string | null
           status: string
           title: string
-          upc: string
+          upc: string | null
           updated_at: string | null
         }
         Insert: {
@@ -149,7 +181,7 @@ export type Database = {
           release_type?: string | null
           status?: string
           title: string
-          upc: string
+          upc?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -164,7 +196,7 @@ export type Database = {
           release_type?: string | null
           status?: string
           title?: string
-          upc?: string
+          upc?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -299,12 +331,15 @@ export type Database = {
       tracks: {
         Row: {
           artist_name: string
+          artists: Json | null
           audio_url: string | null
           composer: string | null
+          contributors: Json | null
           created_at: string | null
+          explicit_lyrics: boolean | null
           genre: string | null
           id: string
-          isrc: string
+          isrc: string | null
           lyricist: string | null
           lyrics: string | null
           release_id: string
@@ -313,12 +348,15 @@ export type Database = {
         }
         Insert: {
           artist_name: string
+          artists?: Json | null
           audio_url?: string | null
           composer?: string | null
+          contributors?: Json | null
           created_at?: string | null
+          explicit_lyrics?: boolean | null
           genre?: string | null
           id?: string
-          isrc: string
+          isrc?: string | null
           lyricist?: string | null
           lyrics?: string | null
           release_id: string
@@ -327,12 +365,15 @@ export type Database = {
         }
         Update: {
           artist_name?: string
+          artists?: Json | null
           audio_url?: string | null
           composer?: string | null
+          contributors?: Json | null
           created_at?: string | null
+          explicit_lyrics?: boolean | null
           genre?: string | null
           id?: string
-          isrc?: string
+          isrc?: string | null
           lyricist?: string | null
           lyrics?: string | null
           release_id?: string
