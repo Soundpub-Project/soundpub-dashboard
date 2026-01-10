@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -7,13 +7,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from '@/components/ui/table';
 import { Users as UsersIcon, Search, Loader2, Shield, Music, Building2, User, Edit, UserPlus } from 'lucide-react';
 import { ChangeRoleDialog } from '@/components/users/ChangeRoleDialog';
@@ -49,7 +49,6 @@ const ROLE_COLORS: Record<AppRole, string> = {
 };
 
 export default function Users() {
-  const navigate = useNavigate();
   const { isAdmin, loading: authLoading, user } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,13 +57,6 @@ export default function Users() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
 
-  useEffect(() => {
-    // Only redirect non-admin users who are logged in
-    // Don't redirect if user is null (logging out)
-    if (!authLoading && user && !isAdmin) {
-      navigate('/dashboard');
-    }
-  }, [isAdmin, authLoading, navigate, user]);
 
   useEffect(() => {
     // Only fetch users if user is logged in AND is admin
@@ -136,8 +128,14 @@ export default function Users() {
     );
   }
 
+  // If user just logged out while staying on this route, ensure we leave this page.
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  // Logged in but not admin → kick to dashboard
   if (!isAdmin) {
-    return null;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return (
