@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Releases from "./pages/Releases";
+import ReleaseDetail from "./pages/ReleaseDetail";
 import Tracks from "./pages/Tracks";
 import Royalties from "./pages/Royalties";
 import Users from "./pages/Users";
@@ -30,6 +31,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/dashboard/releases" element={<Releases />} />
+            <Route path="/dashboard/releases/:id" element={<ReleaseDetail />} />
             <Route path="/dashboard/tracks" element={<Tracks />} />
             <Route path="/dashboard/royalties" element={<Royalties />} />
             <Route path="/dashboard/users" element={<Users />} />
