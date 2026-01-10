@@ -5,6 +5,7 @@ import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
 import { Loader2, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -34,18 +35,20 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
         
         <div className="flex-1 flex flex-col">
           {/* Top Header */}
-          <header className="h-14 border-b border-border bg-card/50 backdrop-blur sticky top-0 z-10">
+          <header className="h-14 border-b border-border bg-card sticky top-0 z-10">
             <div className="h-full flex items-center justify-between px-4">
               <div className="flex items-center gap-4">
                 <SidebarTrigger />
               </div>
               
               <div className="flex items-center gap-2">
+                <ThemeToggle />
+                
                 <Button variant="ghost" size="icon" className="relative">
                   <Bell className="h-5 w-5" />
                   <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-primary" />
@@ -53,7 +56,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 
                 {profile && (
                   <div className="hidden sm:block text-right">
-                    <p className="text-sm font-medium">{profile.full_name}</p>
+                    <p className="text-sm font-medium text-foreground">{profile.full_name}</p>
                     <p className="text-xs text-muted-foreground">
                       Balance: Rp {profile.balance.toLocaleString('id-ID')}
                     </p>
