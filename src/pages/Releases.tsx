@@ -34,7 +34,7 @@ interface Release {
 
 export default function Releases() {
   const navigate = useNavigate();
-  const { isAdmin, isLabel } = useAuth();
+  const { isAdmin, isLabel, loading: authLoading } = useAuth();
   const [releases, setReleases] = useState<Release[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -46,6 +46,11 @@ export default function Releases() {
   useEffect(() => {
     fetchReleases();
   }, []);
+
+  // Debug log to check role status
+  useEffect(() => {
+    console.log('Releases page - isAdmin:', isAdmin, 'isLabel:', isLabel, 'authLoading:', authLoading, 'canManageReleases:', canManageReleases);
+  }, [isAdmin, isLabel, authLoading, canManageReleases]);
 
   const fetchReleases = async () => {
     try {
@@ -103,11 +108,14 @@ export default function Releases() {
             <h1 className="text-2xl md:text-3xl font-bold">Releases</h1>
             <p className="text-muted-foreground">Kelola album dan single Anda</p>
           </div>
-          {canManageReleases && (
+          {!authLoading && canManageReleases && (
             <Button className="gradient-primary" onClick={handleAddRelease}>
               <Plus className="h-4 w-4 mr-2" />
               Tambah Release
             </Button>
+          )}
+          {authLoading && (
+            <div className="h-10 w-32 bg-muted animate-pulse rounded-md" />
           )}
         </div>
 
