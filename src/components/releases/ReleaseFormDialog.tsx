@@ -58,6 +58,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { MediaUploadSection } from './MediaUploadSection';
 
 // Genre list
 const GENRE_LIST = [
@@ -98,6 +99,9 @@ const trackSchema = z.object({
   lyrics: z.string().optional(),
   explicit_lyrics: z.boolean().default(false),
   contributors: z.array(contributorSchema).optional().default([]),
+  audio_url: z.string().optional().nullable(),
+  video_url: z.string().optional().nullable(),
+  clip_url: z.string().optional().nullable(),
 });
 
 const releaseFormSchema = z.object({
@@ -152,6 +156,9 @@ interface Track {
   artists?: { name: string; type: string }[];
   explicit_lyrics?: boolean;
   contributors?: { name: string; type: string; role: string }[];
+  audio_url?: string | null;
+  video_url?: string | null;
+  clip_url?: string | null;
 }
 
 interface ReleaseFormDialogProps {
@@ -202,6 +209,9 @@ export function ReleaseFormDialog({
           lyrics: '',
           explicit_lyrics: false,
           contributors: [],
+          audio_url: null,
+          video_url: null,
+          clip_url: null,
         },
       ],
     },
@@ -294,17 +304,20 @@ export function ReleaseFormDialog({
         status: 'pending',
         label_id: isLabel && user ? user.id : '',
         tracks: [
-          {
-            isrc: '',
-            title: '',
-            artists: [{ name: '', type: 'Main Artist' }],
-            composer: '',
-            lyricist: '',
-            genre: '',
-            lyrics: '',
-            explicit_lyrics: false,
-            contributors: [],
-          },
+        {
+          isrc: '',
+          title: '',
+          artists: [{ name: '', type: 'Main Artist' }],
+          composer: '',
+          lyricist: '',
+          genre: '',
+          lyrics: '',
+          explicit_lyrics: false,
+          contributors: [],
+          audio_url: null,
+          video_url: null,
+          clip_url: null,
+        },
         ],
       });
       setCoverFile(null);
@@ -347,6 +360,9 @@ export function ReleaseFormDialog({
               lyrics: t.lyrics || '',
               explicit_lyrics: t.explicit_lyrics || false,
               contributors: t.contributors && Array.isArray(t.contributors) ? t.contributors : [],
+              audio_url: t.audio_url || null,
+              video_url: t.video_url || null,
+              clip_url: t.clip_url || null,
             }))
           : [
               {
@@ -359,6 +375,9 @@ export function ReleaseFormDialog({
                 lyrics: '',
                 explicit_lyrics: false,
                 contributors: [],
+                audio_url: null,
+                video_url: null,
+                clip_url: null,
               },
             ],
       });
@@ -480,6 +499,9 @@ export function ReleaseFormDialog({
                 lyrics: track.lyrics || null,
                 explicit_lyrics: track.explicit_lyrics,
                 contributors: track.contributors || [],
+                audio_url: track.audio_url || null,
+                video_url: track.video_url || null,
+                clip_url: track.clip_url || null,
               })
               .eq('id', track.id);
 
@@ -497,6 +519,9 @@ export function ReleaseFormDialog({
               lyrics: track.lyrics || null,
               explicit_lyrics: track.explicit_lyrics,
               contributors: track.contributors || [],
+              audio_url: track.audio_url || null,
+              video_url: track.video_url || null,
+              clip_url: track.clip_url || null,
             });
 
             if (error) throw error;
@@ -546,6 +571,9 @@ export function ReleaseFormDialog({
             lyrics: track.lyrics || null,
             explicit_lyrics: track.explicit_lyrics,
             contributors: track.contributors || [],
+            audio_url: track.audio_url || null,
+            video_url: track.video_url || null,
+            clip_url: track.clip_url || null,
           };
         });
 
@@ -579,6 +607,9 @@ export function ReleaseFormDialog({
       lyrics: '',
       explicit_lyrics: false,
       contributors: [],
+      audio_url: null,
+      video_url: null,
+      clip_url: null,
     });
   };
 
@@ -1356,6 +1387,18 @@ export function ReleaseFormDialog({
                               <FormMessage />
                             </FormItem>
                           )}
+                        />
+
+                        {/* Media Upload Section */}
+                        <MediaUploadSection
+                          trackIndex={trackIndex}
+                          audioUrl={form.watch(`tracks.${trackIndex}.audio_url`) || undefined}
+                          videoUrl={form.watch(`tracks.${trackIndex}.video_url`) || undefined}
+                          clipUrl={form.watch(`tracks.${trackIndex}.clip_url`) || undefined}
+                          onAudioChange={(url) => form.setValue(`tracks.${trackIndex}.audio_url`, url)}
+                          onVideoChange={(url) => form.setValue(`tracks.${trackIndex}.video_url`, url)}
+                          onClipChange={(url) => form.setValue(`tracks.${trackIndex}.clip_url`, url)}
+                          disabled={loading}
                         />
                       </div>
                     );
