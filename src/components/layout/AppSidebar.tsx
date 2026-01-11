@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Sidebar,
   SidebarContent,
@@ -15,7 +17,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   LayoutDashboard,
   Disc3,
@@ -120,6 +122,27 @@ export function AppSidebar() {
   const location = useLocation();
   const { profile, role, signOut, isAdmin, isLabel } = useAuth();
   const collapsed = state === 'collapsed';
+  const [dashboardLogo, setDashboardLogo] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchLogo = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'dashboard_logo')
+          .single();
+
+        if (!error && data?.value) {
+          setDashboardLogo(data.value);
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard logo:', error);
+      }
+    };
+
+    fetchLogo();
+  }, []);
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -148,9 +171,17 @@ export function AppSidebar() {
       {/* Header */}
       <SidebarHeader className="border-b border-sidebar-border">
         <div className="flex items-center gap-2 px-2 py-3">
-          <div className="p-1.5 rounded-lg gradient-primary shrink-0">
-            <Music2 className="h-5 w-5 text-primary-foreground" />
-          </div>
+          {dashboardLogo ? (
+            <img 
+              src={dashboardLogo} 
+              alt="Logo" 
+              className="h-8 w-8 rounded-lg object-contain shrink-0"
+            />
+          ) : (
+            <div className="p-1.5 rounded-lg gradient-primary shrink-0">
+              <Music2 className="h-5 w-5 text-primary-foreground" />
+            </div>
+          )}
           {!collapsed && (
             <span className="font-bold text-lg text-gradient">SoundPub</span>
           )}
