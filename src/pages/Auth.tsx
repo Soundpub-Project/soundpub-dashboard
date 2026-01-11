@@ -31,6 +31,7 @@ export default function Auth() {
   const navigate = useNavigate();
   const { signIn, signUp, user, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const { resolvedTheme, setTheme } = useTheme();
   
   const [isLoading, setIsLoading] = useState(false);
   const [loginData, setLoginData] = useState({ email: '', password: '' });
@@ -145,7 +146,6 @@ export default function Auth() {
     );
   }
 
-  const { resolvedTheme, setTheme } = useTheme();
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 relative">
