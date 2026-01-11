@@ -170,20 +170,17 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       {/* Header */}
       <SidebarHeader className="border-b border-sidebar-border">
-        <div className="flex items-center gap-2 px-2 py-3">
+        <div className="flex items-center justify-center px-2 py-3">
           {dashboardLogo ? (
             <img 
               src={dashboardLogo} 
               alt="Logo" 
-              className="h-8 w-8 rounded-lg object-contain shrink-0"
+              className={`${collapsed ? 'h-8 w-8' : 'h-10 max-w-[160px]'} rounded-lg object-contain`}
             />
           ) : (
-            <div className="p-1.5 rounded-lg gradient-primary shrink-0">
+            <div className="p-1.5 rounded-lg gradient-primary">
               <Music2 className="h-5 w-5 text-primary-foreground" />
             </div>
-          )}
-          {!collapsed && (
-            <span className="font-bold text-lg text-gradient">SoundPub</span>
           )}
         </div>
       </SidebarHeader>
