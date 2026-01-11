@@ -8,6 +8,14 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    allowedHosts: [
+      "all",
+      // "dev-dashboard.soundpub.xyz",
+      "dashboard.soundpub.xyz",
+      "https://dashboard.soundpub.xyz",
+      "localhost",
+      "127.0.0.1"
+    ]
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
