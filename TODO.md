@@ -25,6 +25,9 @@
 - [x] Delete releases
 - [x] Archive/restore releases
 - [x] Bulk actions (select multiple, bulk archive, bulk delete)
+- [x] **Label info di release detail page** (menampilkan nama label pemilik release)
+- [x] **Audio Player di release detail** (play/pause, progress bar, volume control, skip next/prev)
+- [x] **Dropdown artist di form tambah release untuk Label** (pilih dari artist yang terdaftar di label)
 
 ### Release Metadata
 - [x] Multiple artists (Main/Featured) per track
@@ -53,6 +56,9 @@
 - [x] **Label dapat menghapus artist dari labelnya**
 - [x] **Fix RLS policy untuk label menghapus artist (parent_label_id = null)**
 - [x] **Admin change password untuk user lain**
+- [x] **Filter users by role** (dropdown filter)
+- [x] **Filter users by status** (dropdown filter)
+- [x] **Search users by name/email**
 
 ### Royalty Management
 - [x] Royalty Overview dengan charts
@@ -147,8 +153,12 @@
 
 ### User Management
 - [ ] Bulk actions untuk users (bulk delete, bulk status change)
-- [ ] Filter users by role/status
 - [ ] Export data users
+
+### Super Admin Features (Planned)
+- [ ] **Google Cloud Storage Integration** - Bucket management untuk file storage
+- [ ] **Google Tag Manager Integration** - Event tracking dan analytics
+- [ ] **Google Analytics Integration** - Dashboard analytics terhubung ke GA4
 
 ---
 
@@ -159,3 +169,4 @@
 - Storage buckets: release-covers, track-audio, track-video, audio-clips
 - Beberapa fitur metadata (composer, lyricist, lyrics) sudah ada di level track
 - Audit logs mencatat semua aktivitas penting admin dan label
+- Audio player mendukung: play/pause individual track, volume control, progress seek, next/prev navigation
