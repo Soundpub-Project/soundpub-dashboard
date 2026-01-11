@@ -118,7 +118,7 @@ export default function Settings() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 max-w-2xl">
+      <div className="space-y-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Settings</h1>
           <p className="text-muted-foreground">Kelola pengaturan akun Anda</p>
@@ -143,196 +143,205 @@ export default function Settings() {
           </>
         )}
 
-        <Card className="bg-card/50 border-border/50">
-          <CardHeader>
-            <CardTitle>Profil</CardTitle>
-            <CardDescription>Informasi pribadi Anda</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={user?.email || ''}
-                  disabled
-                  className="bg-muted"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Email tidak dapat diubah
-                </p>
-              </div>
+        {/* Two Column Layout for Desktop */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left Column */}
+          <div className="space-y-6">
+            <Card className="bg-card/50 border-border/50">
+              <CardHeader>
+                <CardTitle>Profil</CardTitle>
+                <CardDescription>Informasi pribadi Anda</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={user?.email || ''}
+                      disabled
+                      className="bg-muted"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Email tidak dapat diubah
+                    </p>
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="full_name">Nama Lengkap</Label>
-                <Input
-                  id="full_name"
-                  value={formData.full_name}
-                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  placeholder="Nama lengkap Anda"
-                />
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="full_name">Nama Lengkap</Label>
+                    <Input
+                      id="full_name"
+                      value={formData.full_name}
+                      onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                      placeholder="Nama lengkap Anda"
+                    />
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="phone">Nomor Telepon</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="+62 xxx xxxx xxxx"
-                />
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Nomor Telepon</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      placeholder="+62 xxx xxxx xxxx"
+                    />
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="address">Alamat</Label>
-                <Textarea
-                  id="address"
-                  value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  placeholder="Alamat lengkap"
-                  rows={3}
-                />
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="address">Alamat</Label>
+                    <Textarea
+                      id="address"
+                      value={formData.address}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                      placeholder="Alamat lengkap"
+                      rows={3}
+                    />
+                  </div>
 
-              <Button type="submit" className="gradient-primary" disabled={loading}>
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Menyimpan...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Simpan Perubahan
-                  </>
-                )}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-card/50 border-border/50">
-          <CardHeader>
-            <CardTitle>Ubah Password</CardTitle>
-            <CardDescription>Ubah password akun Anda</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handlePasswordChange} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="new_password">Password Baru</Label>
-                <div className="relative">
-                  <Input
-                    id="new_password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={passwordData.newPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                    placeholder="Masukkan password baru"
-                    className="pr-10"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                  <Button type="submit" className="gradient-primary" disabled={loading}>
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Menyimpan...
+                      </>
                     ) : (
-                      <Eye className="h-4 w-4 text-muted-foreground" />
+                      <>
+                        <Save className="mr-2 h-4 w-4" />
+                        Simpan Perubahan
+                      </>
                     )}
                   </Button>
-                </div>
-              </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="confirm_password">Konfirmasi Password</Label>
-                <div className="relative">
-                  <Input
-                    id="confirm_password"
-                    type={showConfirmPassword ? 'text' : 'password'}
-                    value={passwordData.confirmPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                    placeholder="Konfirmasi password baru"
-                    className="pr-10"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+          {/* Right Column */}
+          <div className="space-y-6">
+            <Card className="bg-card/50 border-border/50">
+              <CardHeader>
+                <CardTitle>Ubah Password</CardTitle>
+                <CardDescription>Ubah password akun Anda</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handlePasswordChange} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="new_password">Password Baru</Label>
+                    <div className="relative">
+                      <Input
+                        id="new_password"
+                        type={showPassword ? 'text' : 'password'}
+                        value={passwordData.newPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                        placeholder="Masukkan password baru"
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm_password">Konfirmasi Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="confirm_password"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        value={passwordData.confirmPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                        placeholder="Konfirmasi password baru"
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Button 
+                    type="submit" 
+                    variant="outline" 
+                    disabled={passwordLoading || !passwordData.newPassword || !passwordData.confirmPassword}
                   >
-                    {showConfirmPassword ? (
-                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    {passwordLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Menyimpan...
+                      </>
                     ) : (
-                      <Eye className="h-4 w-4 text-muted-foreground" />
+                      <>
+                        <KeyRound className="mr-2 h-4 w-4" />
+                        Ubah Password
+                      </>
                     )}
                   </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-card/50 border-border/50">
+              <CardHeader>
+                <CardTitle>Akun</CardTitle>
+                <CardDescription>Informasi akun Anda</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex justify-between items-center p-3 rounded-lg bg-muted/30">
+                  <div>
+                    <p className="font-medium">Status Akun</p>
+                    <p className="text-sm text-muted-foreground capitalize">
+                      {profile?.status || 'active'}
+                    </p>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full text-sm ${
+                    profile?.status === 'active' 
+                      ? 'bg-green-500/20 text-green-400' 
+                      : 'bg-yellow-500/20 text-yellow-400'
+                  }`}>
+                    {profile?.status || 'active'}
+                  </div>
                 </div>
-              </div>
 
-              <Button 
-                type="submit" 
-                variant="outline" 
-                disabled={passwordLoading || !passwordData.newPassword || !passwordData.confirmPassword}
-              >
-                {passwordLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Menyimpan...
-                  </>
-                ) : (
-                  <>
-                    <KeyRound className="mr-2 h-4 w-4" />
-                    Ubah Password
-                  </>
-                )}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-card/50 border-border/50">
-          <CardHeader>
-            <CardTitle>Akun</CardTitle>
-            <CardDescription>Informasi akun Anda</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between items-center p-3 rounded-lg bg-muted/30">
-              <div>
-                <p className="font-medium">Status Akun</p>
-                <p className="text-sm text-muted-foreground capitalize">
-                  {profile?.status || 'active'}
-                </p>
-              </div>
-              <div className={`px-3 py-1 rounded-full text-sm ${
-                profile?.status === 'active' 
-                  ? 'bg-green-500/20 text-green-400' 
-                  : 'bg-yellow-500/20 text-yellow-400'
-              }`}>
-                {profile?.status || 'active'}
-              </div>
-            </div>
-
-            <div className="flex justify-between items-center p-3 rounded-lg bg-muted/30">
-              <div>
-                <p className="font-medium">Bergabung Sejak</p>
-                <p className="text-sm text-muted-foreground">
-                  {profile?.created_at 
-                    ? new Date(profile.created_at).toLocaleDateString('id-ID', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                      })
-                    : '-'}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                <div className="flex justify-between items-center p-3 rounded-lg bg-muted/30">
+                  <div>
+                    <p className="font-medium">Bergabung Sejak</p>
+                    <p className="text-sm text-muted-foreground">
+                      {profile?.created_at 
+                        ? new Date(profile.created_at).toLocaleDateString('id-ID', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                          })
+                        : '-'}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     </DashboardLayout>
   );
