@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,12 +46,33 @@ export default function Auth() {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [dashboardLogo, setDashboardLogo] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && user) {
       navigate('/dashboard');
     }
   }, [user, authLoading, navigate]);
+
+  useEffect(() => {
+    const fetchLogo = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'dashboard_logo')
+          .single();
+
+        if (!error && data?.value) {
+          setDashboardLogo(data.value);
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard logo:', error);
+      }
+    };
+
+    fetchLogo();
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,13 +188,25 @@ export default function Auth() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-2">
-            <div className="p-2 rounded-xl gradient-primary">
-              <Music2 className="h-8 w-8 text-primary-foreground" />
-            </div>
-            <h1 className="text-3xl font-bold text-gradient">SoundPub</h1>
+          <div className="inline-flex items-center justify-center mb-2">
+            {dashboardLogo ? (
+              <img 
+                src={dashboardLogo} 
+                alt="Logo" 
+                className="h-16 w-auto max-w-[200px] object-contain"
+              />
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl gradient-primary">
+                  <Music2 className="h-8 w-8 text-primary-foreground" />
+                </div>
+                <h1 className="text-3xl font-bold text-gradient">SoundPub</h1>
+              </div>
+            )}
           </div>
-          <p className="text-muted-foreground">Music Distribution Platform</p>
+          {!dashboardLogo && (
+            <p className="text-muted-foreground">Music Distribution Platform</p>
+          )}
         </div>
 
         <Card className="border-border bg-card">

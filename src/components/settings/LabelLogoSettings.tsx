@@ -27,10 +27,10 @@ export function LabelLogoSettings() {
       return;
     }
 
-    if (file.size > 2 * 1024 * 1024) {
+    if (file.size > 1 * 1024 * 1024) {
       toast({
         title: 'Error',
-        description: 'Ukuran file maksimal 2MB',
+        description: 'Ukuran file maksimal 1MB',
         variant: 'destructive',
       });
       return;
@@ -177,9 +177,15 @@ export function LabelLogoSettings() {
               </>
             )}
           </Button>
-          <span className="text-xs text-muted-foreground">
-            Format: PNG, JPG, SVG. Maks 2MB
-          </span>
+        </div>
+        <div className="p-3 rounded-lg bg-muted/50 text-sm">
+          <p className="font-medium">📐 Ketentuan Gambar:</p>
+          <ul className="text-muted-foreground mt-1 space-y-1 list-disc list-inside">
+            <li>Ukuran rekomendasi: <strong>512 x 512 px</strong> (rasio 1:1)</li>
+            <li>Ukuran minimal: 128 x 128 px</li>
+            <li>Ukuran maksimal file: <strong>1 MB</strong></li>
+            <li>Format: PNG, JPG, SVG</li>
+          </ul>
         </div>
       </CardContent>
     </Card>
