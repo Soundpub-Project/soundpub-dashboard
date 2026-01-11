@@ -21,10 +21,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Music, Search, Loader2, UserPlus, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Music, Search, Loader2, UserPlus, MoreHorizontal, Pencil, Trash2, KeyRound } from 'lucide-react';
 import { AddUserDialog } from '@/components/users/AddUserDialog';
 import { EditArtistDialog } from '@/components/users/EditArtistDialog';
 import { DeleteArtistDialog } from '@/components/users/DeleteArtistDialog';
+import { ChangePasswordDialog } from '@/components/users/ChangePasswordDialog';
 
 interface ArtistProfile {
   id: string;
@@ -46,6 +47,7 @@ export default function MyArtists() {
   const [addArtistDialogOpen, setAddArtistDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [selectedArtist, setSelectedArtist] = useState<ArtistProfile | null>(null);
 
   useEffect(() => {
@@ -97,6 +99,11 @@ export default function MyArtists() {
   const handleDeleteClick = (artist: ArtistProfile) => {
     setSelectedArtist(artist);
     setDeleteDialogOpen(true);
+  };
+
+  const handlePasswordClick = (artist: ArtistProfile) => {
+    setSelectedArtist(artist);
+    setPasswordDialogOpen(true);
   };
 
   const filteredArtists = artists.filter(
@@ -195,6 +202,10 @@ export default function MyArtists() {
                                 <Pencil className="mr-2 h-4 w-4" />
                                 Edit
                               </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handlePasswordClick(artist)}>
+                                <KeyRound className="mr-2 h-4 w-4" />
+                                Ubah Password
+                              </DropdownMenuItem>
                               <DropdownMenuItem 
                                 onClick={() => handleDeleteClick(artist)}
                                 className="text-destructive focus:text-destructive"
@@ -233,6 +244,13 @@ export default function MyArtists() {
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         artist={selectedArtist}
+        onSuccess={fetchArtists}
+      />
+
+      <ChangePasswordDialog
+        open={passwordDialogOpen}
+        onOpenChange={setPasswordDialogOpen}
+        user={selectedArtist}
         onSuccess={fetchArtists}
       />
     </DashboardLayout>

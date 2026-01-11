@@ -15,9 +15,16 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table';
-import { Users as UsersIcon, Search, Loader2, Shield, Music, Building2, User, Edit, UserPlus } from 'lucide-react';
+import { Users as UsersIcon, Search, Loader2, Shield, Music, Building2, User, Edit, UserPlus, KeyRound, MoreHorizontal } from 'lucide-react';
 import { ChangeRoleDialog } from '@/components/users/ChangeRoleDialog';
 import { AddUserDialog } from '@/components/users/AddUserDialog';
+import { ChangePasswordDialog } from '@/components/users/ChangePasswordDialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 type AppRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user';
 
@@ -56,6 +63,7 @@ export default function Users() {
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
 
 
   useEffect(() => {
@@ -110,6 +118,11 @@ export default function Users() {
   const handleEditRole = (user: UserProfile) => {
     setSelectedUser(user);
     setDialogOpen(true);
+  };
+
+  const handleEditPassword = (user: UserProfile) => {
+    setSelectedUser(user);
+    setPasswordDialogOpen(true);
   };
 
   const filteredUsers = users.filter(
@@ -217,15 +230,29 @@ export default function Users() {
                           {new Date(user.created_at).toLocaleDateString('id-ID')}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditRole(user)}
-                            disabled={user.role === 'superadmin'}
-                          >
-                            <Edit className="h-4 w-4 mr-1" />
-                            Ubah Role
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem 
+                                onClick={() => handleEditRole(user)}
+                                disabled={user.role === 'superadmin'}
+                              >
+                                <Edit className="mr-2 h-4 w-4" />
+                                Ubah Role
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleEditPassword(user)}
+                                disabled={user.role === 'superadmin'}
+                              >
+                                <KeyRound className="mr-2 h-4 w-4" />
+                                Ubah Password
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -248,6 +275,13 @@ export default function Users() {
       <AddUserDialog
         open={addUserDialogOpen}
         onOpenChange={setAddUserDialogOpen}
+        onSuccess={fetchUsers}
+      />
+
+      <ChangePasswordDialog
+        open={passwordDialogOpen}
+        onOpenChange={setPasswordDialogOpen}
+        user={selectedUser}
         onSuccess={fetchUsers}
       />
     </DashboardLayout>
