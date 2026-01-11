@@ -8,6 +8,8 @@
 - [x] Profile management (view & edit)
 - [x] Protected routes berdasarkan role
 - [x] Fix logout stuck bug di halaman admin (Users page)
+- [x] **Password visibility toggle di login & signup form**
+- [x] **Self-password change di Settings (semua role)**
 
 ### Dashboard & Layout
 - [x] Dashboard layout dengan sidebar navigation
@@ -46,6 +48,11 @@
 - [x] Change user role (admin only)
 - [x] My Artists page (label view)
 - [x] Fix RLS policy untuk label update status artist
+- [x] **Delete user (Admin/Superadmin only)**
+- [x] **Change user status (active/inactive/suspended)**
+- [x] **Label dapat menghapus artist dari labelnya**
+- [x] **Fix RLS policy untuk label menghapus artist (parent_label_id = null)**
+- [x] **Admin change password untuk user lain**
 
 ### Royalty Management
 - [x] Royalty Overview dengan charts
@@ -84,6 +91,26 @@
 - [x] Upload cover art langsung
 - [x] UPC/ISRC dikosongkan (diisi oleh label)
 
+### Audit Logs
+- [x] **Halaman Audit Logs (Admin only)**
+- [x] **Log password_change (admin ubah password user)**
+- [x] **Log self_password_change (user ubah password sendiri)**
+- [x] **Log role_change**
+- [x] **Log status_change**
+- [x] **Log user_created**
+- [x] **Log user_deleted**
+- [x] **Log artist_removed (label hapus artist dari label)**
+- [x] **Search & filter audit logs**
+
+### Edge Functions
+- [x] `create-user` - Membuat user baru (admin/label)
+- [x] `process-royalty-upload` - Proses upload CSV royalty
+- [x] `delete-user` - Hapus user (admin/superadmin)
+- [x] `update-user-status` - Update status user
+- [x] `update-user-password` - Admin ubah password user lain
+- [x] `change-own-password` - User ubah password sendiri
+- [x] `remove-artist-from-label` - Label hapus artist dengan audit log
+
 ---
 
 ## ❌ Belum Dikerjakan
@@ -97,6 +124,11 @@
 ---
 
 ## 🔮 Future Implementation (Deferred)
+
+### Authentication & Security
+- [ ] Forgot Password / Reset Password via email
+- [ ] Email notification saat password diubah
+- [ ] Two-Factor Authentication (2FA)
 
 ### Release Management
 - [ ] Metadata versioning (track changes history)
@@ -113,11 +145,17 @@
 - [ ] Email notification ketika payout diproses
 - [ ] In-app notifications
 
+### User Management
+- [ ] Bulk actions untuk users (bulk delete, bulk status change)
+- [ ] Filter users by role/status
+- [ ] Export data users
+
 ---
 
 ## 📝 Notes
 - Database menggunakan Lovable Cloud (Supabase)
 - RLS policies sudah diimplementasi untuk keamanan data
-- Edge functions untuk create-user dan process-royalty-upload
+- Edge functions untuk operasi yang memerlukan service role
 - Storage buckets: release-covers, track-audio, track-video, audio-clips
 - Beberapa fitur metadata (composer, lyricist, lyrics) sudah ada di level track
+- Audit logs mencatat semua aktivitas penting admin dan label
