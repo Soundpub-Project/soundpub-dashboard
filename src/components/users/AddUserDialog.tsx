@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
@@ -23,6 +23,11 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Shield, Music, Building2, User, UserPlus } from 'lucide-react';
 
 type AppRole = 'admin' | 'label' | 'artist' | 'user';
+
+interface LabelOption {
+  id: string;
+  full_name: string;
+}
 
 interface AddUserDialogProps {
   open: boolean;
@@ -79,7 +84,50 @@ export function AddUserDialog({
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [selectedRole, setSelectedRole] = useState<AppRole>(allowedRoles?.[0] || 'user');
+  const [selectedLabelId, setSelectedLabelId] = useState<string>('');
+  const [labels, setLabels] = useState<LabelOption[]>([]);
+  const [loadingLabels, setLoadingLabels] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Fetch labels when dialog opens and role is artist
+  useEffect(() => {
+    if (open && isAdmin) {
+      fetchLabels();
+    }
+  }, [open, isAdmin]);
+
+  const fetchLabels = async () => {
+    setLoadingLabels(true);
+    try {
+      // Fetch all users with label role
+      const { data: roles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'label');
+
+      if (rolesError) throw rolesError;
+
+      const labelUserIds = roles?.map(r => r.user_id) || [];
+
+      if (labelUserIds.length > 0) {
+        const { data: profiles, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', labelUserIds)
+          .eq('status', 'active');
+
+        if (profilesError) throw profilesError;
+
+        setLabels(profiles || []);
+      } else {
+        setLabels([]);
+      }
+    } catch (error) {
+      console.error('Error fetching labels:', error);
+    } finally {
+      setLoadingLabels(false);
+    }
+  };
 
   // Filter role options based on allowedRoles or user permissions
   const roleOptions = ALL_ROLE_OPTIONS.filter(role => {
@@ -108,12 +156,28 @@ export function AddUserDialog({
       return;
     }
 
+    // Validate label selection for artist role
+    if (selectedRole === 'artist' && isAdmin && !selectedLabelId && !defaultParentLabelId) {
+      toast.error('Pilih label untuk artist');
+      return;
+    }
+
     setLoading(true);
     try {
       // Get current session token
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         throw new Error('Not authenticated');
+      }
+
+      // Determine parent_label_id
+      let parentLabelId = defaultParentLabelId || null;
+      if (selectedRole === 'artist') {
+        if (isLabel && currentUser) {
+          parentLabelId = currentUser.id;
+        } else if (isAdmin && selectedLabelId) {
+          parentLabelId = selectedLabelId;
+        }
       }
 
       // Call edge function to create user without logging in as them
@@ -124,7 +188,7 @@ export function AddUserDialog({
           full_name: fullName,
           phone: phone || null,
           role: selectedRole,
-          parent_label_id: defaultParentLabelId || (isLabel && currentUser ? currentUser.id : null),
+          parent_label_id: parentLabelId,
         },
       });
 
@@ -144,6 +208,7 @@ export function AddUserDialog({
       setPassword('');
       setPhone('');
       setSelectedRole(allowedRoles?.[0] || (isLabel ? 'artist' : 'user'));
+      setSelectedLabelId('');
       
       onSuccess();
       onOpenChange(false);
@@ -167,6 +232,7 @@ export function AddUserDialog({
       setPassword('');
       setPhone('');
       setSelectedRole(allowedRoles?.[0] || (isLabel ? 'artist' : 'user'));
+      setSelectedLabelId('');
     }
     onOpenChange(open);
   };
@@ -175,6 +241,8 @@ export function AddUserDialog({
   const dialogDescription = isLabel 
     ? 'Tambahkan artist baru di bawah label Anda'
     : 'Tambahkan user baru ke platform';
+
+  const showLabelSelect = isAdmin && selectedRole === 'artist' && !defaultParentLabelId;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -260,6 +328,35 @@ export function AddUserDialog({
             </div>
           )}
 
+          {showLabelSelect && (
+            <div className="space-y-2">
+              <Label>Label</Label>
+              <Select value={selectedLabelId} onValueChange={setSelectedLabelId}>
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingLabels ? "Memuat..." : "Pilih label"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {labels.map((label) => (
+                    <SelectItem key={label.id} value={label.id}>
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4" />
+                        <span>{label.full_name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                  {labels.length === 0 && !loadingLabels && (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                      Tidak ada label tersedia
+                    </div>
+                  )}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Artist akan otomatis muncul di halaman My Artists label yang dipilih
+              </p>
+            </div>
+          )}
+
           <div className="p-3 rounded-lg bg-muted/50 border border-border/50">
             <p className="text-sm text-muted-foreground">
               User akan menerima email konfirmasi untuk verifikasi akun. 
@@ -274,7 +371,7 @@ export function AddUserDialog({
           </Button>
           <Button 
             onClick={handleSave} 
-            disabled={loading || !email || !fullName || !password}
+            disabled={loading || !email || !fullName || !password || (showLabelSelect && !selectedLabelId)}
             className="gradient-primary"
           >
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

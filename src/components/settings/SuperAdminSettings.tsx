@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
@@ -15,11 +14,14 @@ import {
   Cloud,
   Check,
   X,
-  Trash2
+  Trash2,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 interface AppSettings {
-  dashboard_logo: string | null;
+  dashboard_logo_light: string | null;
+  dashboard_logo_dark: string | null;
   favicon: string | null;
   ga4_enabled: string;
   gcs_enabled: string;
@@ -28,15 +30,18 @@ interface AppSettings {
 export function SuperAdminSettings() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingLogoLight, setUploadingLogoLight] = useState(false);
+  const [uploadingLogoDark, setUploadingLogoDark] = useState(false);
   const [uploadingFavicon, setUploadingFavicon] = useState(false);
   const [settings, setSettings] = useState<AppSettings>({
-    dashboard_logo: null,
+    dashboard_logo_light: null,
+    dashboard_logo_dark: null,
     favicon: null,
     ga4_enabled: 'false',
     gcs_enabled: 'false',
   });
-  const logoInputRef = useRef<HTMLInputElement>(null);
+  const logoLightInputRef = useRef<HTMLInputElement>(null);
+  const logoDarkInputRef = useRef<HTMLInputElement>(null);
   const faviconInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -57,7 +62,8 @@ export function SuperAdminSettings() {
       });
 
       setSettings({
-        dashboard_logo: settingsMap.dashboard_logo || null,
+        dashboard_logo_light: settingsMap.dashboard_logo_light || settingsMap.dashboard_logo || null,
+        dashboard_logo_dark: settingsMap.dashboard_logo_dark || null,
         favicon: settingsMap.favicon || null,
         ga4_enabled: settingsMap.ga4_enabled || 'false',
         gcs_enabled: settingsMap.gcs_enabled || 'false',
@@ -99,7 +105,10 @@ export function SuperAdminSettings() {
     }
   };
 
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    type: 'light' | 'dark'
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -123,7 +132,11 @@ export function SuperAdminSettings() {
       return;
     }
 
-    setUploadingLogo(true);
+    const setUploading = type === 'light' ? setUploadingLogoLight : setUploadingLogoDark;
+    const inputRef = type === 'light' ? logoLightInputRef : logoDarkInputRef;
+    const settingsKey = type === 'light' ? 'dashboard_logo_light' : 'dashboard_logo_dark';
+
+    setUploading(true);
     try {
       // Check if GCS is enabled
       if (settings.gcs_enabled === 'true') {
@@ -134,7 +147,7 @@ export function SuperAdminSettings() {
           
           const { data, error } = await supabase.functions.invoke('gcs-upload', {
             body: {
-              file_name: `logo-${Date.now()}.${file.name.split('.').pop()}`,
+              file_name: `logo-${type}-${Date.now()}.${file.name.split('.').pop()}`,
               file_type: file.type,
               file_data: base64,
               folder: 'logos',
@@ -143,12 +156,12 @@ export function SuperAdminSettings() {
 
           if (error) throw error;
 
-          await updateSettings('dashboard_logo', data.url);
+          await updateSettings(settingsKey, data.url);
         };
         reader.readAsDataURL(file);
       } else {
         // Upload to Supabase Storage
-        const fileName = `dashboard-logo-${Date.now()}.${file.name.split('.').pop()}`;
+        const fileName = `dashboard-logo-${type}-${Date.now()}.${file.name.split('.').pop()}`;
         
         const { error: uploadError } = await supabase.storage
           .from('release-covers')
@@ -160,7 +173,7 @@ export function SuperAdminSettings() {
           .from('release-covers')
           .getPublicUrl(fileName);
 
-        await updateSettings('dashboard_logo', urlData.publicUrl);
+        await updateSettings(settingsKey, urlData.publicUrl);
       }
     } catch (error: any) {
       console.error('Error uploading logo:', error);
@@ -170,15 +183,16 @@ export function SuperAdminSettings() {
         variant: 'destructive',
       });
     } finally {
-      setUploadingLogo(false);
-      if (logoInputRef.current) {
-        logoInputRef.current.value = '';
+      setUploading(false);
+      if (inputRef.current) {
+        inputRef.current.value = '';
       }
     }
   };
 
-  const handleRemoveLogo = async () => {
-    await updateSettings('dashboard_logo', null);
+  const handleRemoveLogo = async (type: 'light' | 'dark') => {
+    const settingsKey = type === 'light' ? 'dashboard_logo_light' : 'dashboard_logo_dark';
+    await updateSettings(settingsKey, null);
   };
 
   const updateFaviconLink = (url: string) => {
@@ -278,6 +292,87 @@ export function SuperAdminSettings() {
     }
   };
 
+  const renderLogoSection = (
+    type: 'light' | 'dark',
+    logo: string | null,
+    uploading: boolean,
+    inputRef: React.RefObject<HTMLInputElement>
+  ) => {
+    const icon = type === 'light' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />;
+    const label = type === 'light' ? 'Tema Terang' : 'Tema Gelap';
+    const bgClass = type === 'light' ? 'bg-white' : 'bg-gray-900';
+
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          {icon}
+          <span className="font-medium">{label}</span>
+        </div>
+        
+        {logo ? (
+          <div className="flex items-center gap-4">
+            <div className={`relative w-20 h-20 border rounded-lg overflow-hidden ${bgClass}`}>
+              <img 
+                src={logo} 
+                alt={`Logo ${label}`}
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Badge variant="outline" className="w-fit">
+                <Check className="h-3 w-3 mr-1" />
+                Aktif
+              </Badge>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => handleRemoveLogo(type)}
+                disabled={loading}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Hapus
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className={`flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-lg ${bgClass}`}>
+            <ImageIcon className="h-8 w-8 text-muted-foreground mb-2" />
+            <p className="text-xs text-muted-foreground">Belum ada logo</p>
+          </div>
+        )}
+        
+        <div className="flex items-center gap-2">
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            onChange={(e) => handleLogoUpload(e, type)}
+            className="hidden"
+            id={`logo-${type}-upload`}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+          >
+            {uploading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Mengupload...
+              </>
+            ) : (
+              <>
+                <Upload className="h-4 w-4 mr-2" />
+                {logo ? 'Ganti' : 'Upload'}
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Logo Settings */}
@@ -288,71 +383,15 @@ export function SuperAdminSettings() {
             Logo Dashboard
           </CardTitle>
           <CardDescription>
-            Upload logo untuk ditampilkan di sidebar, halaman login, dan header dashboard
+            Upload logo untuk tema terang dan gelap. Logo akan ditampilkan di sidebar, halaman login, dan header dashboard.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {settings.dashboard_logo ? (
-            <div className="flex items-center gap-4">
-              <div className="relative w-24 h-24 border rounded-lg overflow-hidden bg-muted">
-                <img 
-                  src={settings.dashboard_logo} 
-                  alt="Dashboard Logo"
-                  className="w-full h-full object-contain"
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Badge variant="outline" className="w-fit">
-                  <Check className="h-3 w-3 mr-1" />
-                  Logo Aktif
-                </Badge>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={handleRemoveLogo}
-                  disabled={loading}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Hapus Logo
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg">
-              <ImageIcon className="h-12 w-12 text-muted-foreground mb-2" />
-              <p className="text-sm text-muted-foreground mb-4">
-                Belum ada logo. Upload logo untuk dashboard.
-              </p>
-            </div>
-          )}
-          
-          <div className="flex items-center gap-2">
-            <input
-              ref={logoInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleLogoUpload}
-              className="hidden"
-              id="logo-upload"
-            />
-            <Button
-              variant="outline"
-              onClick={() => logoInputRef.current?.click()}
-              disabled={uploadingLogo}
-            >
-              {uploadingLogo ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Mengupload...
-                </>
-              ) : (
-                <>
-                  <Upload className="h-4 w-4 mr-2" />
-                  {settings.dashboard_logo ? 'Ganti Logo' : 'Upload Logo'}
-                </>
-              )}
-            </Button>
+        <CardContent className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {renderLogoSection('light', settings.dashboard_logo_light, uploadingLogoLight, logoLightInputRef)}
+            {renderLogoSection('dark', settings.dashboard_logo_dark, uploadingLogoDark, logoDarkInputRef)}
           </div>
+          
           <div className="p-3 rounded-lg bg-muted/50 text-sm">
             <p className="font-medium">📐 Ketentuan Gambar:</p>
             <ul className="text-muted-foreground mt-1 space-y-1 list-disc list-inside">

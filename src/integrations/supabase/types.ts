@@ -172,6 +172,8 @@ export type Database = {
           full_name: string
           id: string
           logo_url: string | null
+          logo_url_dark: string | null
+          logo_url_light: string | null
           parent_label_id: string | null
           phone: string | null
           status: string
@@ -185,6 +187,8 @@ export type Database = {
           full_name: string
           id: string
           logo_url?: string | null
+          logo_url_dark?: string | null
+          logo_url_light?: string | null
           parent_label_id?: string | null
           phone?: string | null
           status?: string
@@ -198,6 +202,8 @@ export type Database = {
           full_name?: string
           id?: string
           logo_url?: string | null
+          logo_url_dark?: string | null
+          logo_url_light?: string | null
           parent_label_id?: string | null
           phone?: string | null
           status?: string

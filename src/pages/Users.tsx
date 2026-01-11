@@ -48,6 +48,8 @@ interface UserProfile {
   balance: number;
   created_at: string;
   role?: AppRole;
+  parent_label_id?: string | null;
+  parent_label_name?: string | null;
 }
 
 const ROLE_ICONS: Record<AppRole, React.ReactNode> = {
@@ -111,9 +113,13 @@ export default function Users() {
       // Map roles to users
       const rolesMap = new Map(roles?.map(r => [r.user_id, r.role as AppRole]) || []);
       
+      // Create a map of user IDs to their names for label lookup
+      const profilesMap = new Map(profiles?.map(p => [p.id, p.full_name]) || []);
+      
       const usersWithRoles = (profiles || []).map(profile => ({
         ...profile,
         role: rolesMap.get(profile.id) || 'user' as AppRole,
+        parent_label_name: profile.parent_label_id ? profilesMap.get(profile.parent_label_id) || null : null,
       }));
 
       setUsers(usersWithRoles);
@@ -286,6 +292,7 @@ export default function Users() {
                       <TableHead>Nama</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Role</TableHead>
+                      <TableHead>Label</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Balance</TableHead>
                       <TableHead>Bergabung</TableHead>
@@ -302,6 +309,18 @@ export default function Users() {
                             {ROLE_ICONS[user.role || 'user']}
                             <span className="capitalize">{user.role || 'user'}</span>
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {user.role === 'artist' && user.parent_label_name ? (
+                            <div className="flex items-center gap-1.5">
+                              <Building2 className="h-3 w-3 text-muted-foreground" />
+                              <span className="text-sm">{user.parent_label_name}</span>
+                            </div>
+                          ) : user.role === 'artist' ? (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant={getStatusBadge(user.status)} className="capitalize">
