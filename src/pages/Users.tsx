@@ -15,14 +15,17 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table';
-import { Users as UsersIcon, Search, Loader2, Shield, Music, Building2, User, Edit, UserPlus, KeyRound, MoreHorizontal } from 'lucide-react';
+import { Users as UsersIcon, Search, Loader2, Shield, Music, Building2, User, Edit, UserPlus, KeyRound, MoreHorizontal, UserCog, Trash2 } from 'lucide-react';
 import { ChangeRoleDialog } from '@/components/users/ChangeRoleDialog';
 import { AddUserDialog } from '@/components/users/AddUserDialog';
 import { ChangePasswordDialog } from '@/components/users/ChangePasswordDialog';
+import { ChangeStatusDialog } from '@/components/users/ChangeStatusDialog';
+import { DeleteUserDialog } from '@/components/users/DeleteUserDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
@@ -64,6 +67,8 @@ export default function Users() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
 
   useEffect(() => {
@@ -123,6 +128,16 @@ export default function Users() {
   const handleEditPassword = (user: UserProfile) => {
     setSelectedUser(user);
     setPasswordDialogOpen(true);
+  };
+
+  const handleEditStatus = (user: UserProfile) => {
+    setSelectedUser(user);
+    setStatusDialogOpen(true);
+  };
+
+  const handleDeleteUser = (user: UserProfile) => {
+    setSelectedUser(user);
+    setDeleteDialogOpen(true);
   };
 
   const filteredUsers = users.filter(
@@ -251,6 +266,22 @@ export default function Users() {
                                 <KeyRound className="mr-2 h-4 w-4" />
                                 Ubah Password
                               </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleEditStatus(user)}
+                                disabled={user.role === 'superadmin'}
+                              >
+                                <UserCog className="mr-2 h-4 w-4" />
+                                Ubah Status
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem 
+                                onClick={() => handleDeleteUser(user)}
+                                disabled={user.role === 'superadmin'}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Hapus User
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
@@ -281,6 +312,20 @@ export default function Users() {
       <ChangePasswordDialog
         open={passwordDialogOpen}
         onOpenChange={setPasswordDialogOpen}
+        user={selectedUser}
+        onSuccess={fetchUsers}
+      />
+
+      <ChangeStatusDialog
+        open={statusDialogOpen}
+        onOpenChange={setStatusDialogOpen}
+        user={selectedUser}
+        onSuccess={fetchUsers}
+      />
+
+      <DeleteUserDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
         user={selectedUser}
         onSuccess={fetchUsers}
       />

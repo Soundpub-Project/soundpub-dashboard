@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table';
-import { ScrollText, Search, Loader2, KeyRound, UserCog, Shield } from 'lucide-react';
+import { ScrollText, Search, Loader2, KeyRound, UserCog, Shield, Trash2, UserPlus } from 'lucide-react';
 
 interface AuditLogDetails {
   actor_role?: string;
@@ -47,10 +47,20 @@ const ACTION_CONFIG: Record<string, { label: string; icon: React.ReactNode; colo
     icon: <UserCog className="h-3 w-3" />,
     color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   },
+  status_change: {
+    label: 'Status Changed',
+    icon: <UserCog className="h-3 w-3" />,
+    color: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  },
   user_created: {
     label: 'User Created',
-    icon: <Shield className="h-3 w-3" />,
+    icon: <UserPlus className="h-3 w-3" />,
     color: 'bg-green-500/20 text-green-400 border-green-500/30',
+  },
+  user_deleted: {
+    label: 'User Deleted',
+    icon: <Trash2 className="h-3 w-3" />,
+    color: 'bg-red-500/20 text-red-400 border-red-500/30',
   },
 };
 
