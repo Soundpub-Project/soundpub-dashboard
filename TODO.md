@@ -155,10 +155,11 @@
 - [ ] Bulk actions untuk users (bulk delete, bulk status change)
 - [ ] Export data users
 
-### Super Admin Features (Planned)
-- [ ] **Google Cloud Storage Integration** - Bucket management untuk file storage
-- [ ] **Google Tag Manager Integration** - Event tracking dan analytics
-- [ ] **Google Analytics Integration** - Dashboard analytics terhubung ke GA4
+### Super Admin Features
+- [x] **Google Cloud Storage Integration** - GCS sebagai primary storage (toggle on/off)
+- [x] **Google Analytics 4 Integration** - GA4 tracking dengan Measurement ID
+- [x] **Dashboard Logo Upload** - Upload logo untuk sidebar/header
+- [x] **Label Logo Upload** - Setiap label bisa upload logo masing-masing
 
 ---
 
