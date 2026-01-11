@@ -39,14 +39,13 @@ export function DeleteArtistDialog({
 
     setLoading(true);
     try {
-      // Remove artist from label by clearing parent_label_id
-      // This doesn't delete the user, just removes them from the label
-      const { error } = await supabase
-        .from('profiles')
-        .update({ parent_label_id: null })
-        .eq('id', artist.id);
+      // Call edge function to remove artist and log the action
+      const { data, error } = await supabase.functions.invoke('remove-artist-from-label', {
+        body: { artist_id: artist.id },
+      });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       toast.success(`${artist.full_name} telah dihapus dari label Anda`);
       onSuccess();

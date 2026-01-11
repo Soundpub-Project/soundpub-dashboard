@@ -5,3 +5,18 @@ verify_jwt = false
 
 [functions.process-royalty-upload]
 verify_jwt = false
+
+[functions.delete-user]
+verify_jwt = false
+
+[functions.update-user-status]
+verify_jwt = false
+
+[functions.update-user-password]
+verify_jwt = false
+
+[functions.remove-artist-from-label]
+verify_jwt = false
+
+[functions.change-own-password]
+verify_jwt = false
