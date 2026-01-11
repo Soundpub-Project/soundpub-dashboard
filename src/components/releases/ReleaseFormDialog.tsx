@@ -972,46 +972,73 @@ export function ReleaseFormDialog({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Nama Artist Utama *</FormLabel>
-                      {isLabel && labelArtists.length > 0 ? (
-                        <Popover>
-                          <PopoverTrigger asChild>
+                      {isLabel || (isAdmin && selectedLabelId) ? (
+                        loadingArtists ? (
+                          <div className="flex items-center gap-2 h-10 px-3 border rounded-md">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span className="text-sm text-muted-foreground">Loading artists...</span>
+                          </div>
+                        ) : labelArtists.length > 0 ? (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <FormControl>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  className="w-full justify-between"
+                                >
+                                  {field.value || "Pilih artist..."}
+                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                              </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-full p-0 z-50" align="start">
+                              <Command>
+                                <CommandInput placeholder="Cari artist..." />
+                                <CommandList>
+                                  <CommandEmpty>Tidak ada artist ditemukan.</CommandEmpty>
+                                  <CommandGroup>
+                                    {labelArtists.map((artist) => (
+                                      <CommandItem
+                                        key={artist.id}
+                                        value={artist.name}
+                                        onSelect={() => field.onChange(artist.name)}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-4 w-4",
+                                            field.value === artist.name ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        {artist.name}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 p-3 rounded-md border border-dashed border-amber-500/50 bg-amber-500/10">
+                              <UserPlus className="h-4 w-4 text-amber-500" />
+                              <p className="text-sm text-amber-600 dark:text-amber-400">
+                                Belum ada artist. Tambahkan artist terlebih dahulu di halaman{' '}
+                                <a 
+                                  href="/dashboard/my-artists" 
+                                  className="underline font-medium hover:text-amber-700 dark:hover:text-amber-300"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  My Artists
+                                </a>
+                              </p>
+                            </div>
                             <FormControl>
-                              <Button
-                                variant="outline"
-                                role="combobox"
-                                className="w-full justify-between"
-                              >
-                                {field.value || "Pilih artist..."}
-                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                              </Button>
+                              <Input placeholder="Atau ketik nama artist baru" {...field} />
                             </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-full p-0 z-50" align="start">
-                            <Command>
-                              <CommandInput placeholder="Cari artist..." />
-                              <CommandList>
-                                <CommandEmpty>Tidak ada artist.</CommandEmpty>
-                                <CommandGroup>
-                                  {labelArtists.map((artist) => (
-                                    <CommandItem
-                                      key={artist.id}
-                                      value={artist.name}
-                                      onSelect={() => field.onChange(artist.name)}
-                                    >
-                                      <Check
-                                        className={cn(
-                                          "mr-2 h-4 w-4",
-                                          field.value === artist.name ? "opacity-100" : "opacity-0"
-                                        )}
-                                      />
-                                      {artist.name}
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
+                          </div>
+                        )
                       ) : (
                         <FormControl>
                           <Input placeholder="Artist Name" {...field} />

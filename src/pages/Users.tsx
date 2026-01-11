@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table';
-import { Users as UsersIcon, Search, Loader2, Shield, Music, Building2, User, Edit, UserPlus, KeyRound, MoreHorizontal, UserCog, Trash2 } from 'lucide-react';
+import { Users as UsersIcon, Search, Loader2, Shield, Music, Building2, User, Edit, UserPlus, KeyRound, MoreHorizontal, UserCog, Trash2, Filter, X } from 'lucide-react';
 import { ChangeRoleDialog } from '@/components/users/ChangeRoleDialog';
 import { AddUserDialog } from '@/components/users/AddUserDialog';
 import { ChangePasswordDialog } from '@/components/users/ChangePasswordDialog';
@@ -28,8 +28,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 type AppRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user';
+type UserStatus = 'active' | 'inactive' | 'suspended';
 
 interface UserProfile {
   id: string;
@@ -58,11 +66,16 @@ const ROLE_COLORS: Record<AppRole, string> = {
   user: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
 };
 
+const ALL_ROLES: AppRole[] = ['superadmin', 'admin', 'label', 'artist', 'user'];
+const ALL_STATUSES: UserStatus[] = ['active', 'inactive', 'suspended'];
+
 export default function Users() {
   const { isAdmin, loading: authLoading, user } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState<AppRole | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<UserStatus | 'all'>('all');
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
@@ -140,11 +153,24 @@ export default function Users() {
     setDeleteDialogOpen(true);
   };
 
-  const filteredUsers = users.filter(
-    (user) =>
+  const clearFilters = () => {
+    setSearchTerm('');
+    setRoleFilter('all');
+    setStatusFilter('all');
+  };
+
+  const hasActiveFilters = searchTerm || roleFilter !== 'all' || statusFilter !== 'all';
+
+  const filteredUsers = users.filter((user) => {
+    const matchesSearch = 
       user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+      user.email.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesRole = roleFilter === 'all' || user.role === roleFilter;
+    const matchesStatus = statusFilter === 'all' || user.status === statusFilter;
+    
+    return matchesSearch && matchesRole && matchesStatus;
+  });
 
   if (authLoading) {
     return (
@@ -176,25 +202,69 @@ export default function Users() {
 
         <Card className="bg-card/50 border-border/50">
           <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <CardTitle>Daftar Users</CardTitle>
-                <CardDescription>{users.length} total users</CardDescription>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="relative w-full sm:w-64">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Cari user..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9"
-                  />
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <CardTitle>Daftar Users</CardTitle>
+                  <CardDescription>
+                    {filteredUsers.length} dari {users.length} users
+                    {hasActiveFilters && ' (filtered)'}
+                  </CardDescription>
                 </div>
                 <Button onClick={() => setAddUserDialogOpen(true)} className="gradient-primary">
                   <UserPlus className="h-4 w-4 mr-2" />
                   Tambah User
                 </Button>
+              </div>
+              
+              {/* Filter Section */}
+              <div className="flex flex-col sm:flex-row gap-3 p-4 rounded-lg bg-muted/30 border border-border/50">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Filter className="h-4 w-4" />
+                  <span>Filter:</span>
+                </div>
+                <div className="flex flex-1 flex-col sm:flex-row gap-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Cari nama atau email..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+                  <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as AppRole | 'all')}>
+                    <SelectTrigger className="w-full sm:w-40">
+                      <SelectValue placeholder="Semua Role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Semua Role</SelectItem>
+                      {ALL_ROLES.map((role) => (
+                        <SelectItem key={role} value={role} className="capitalize">
+                          {role}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as UserStatus | 'all')}>
+                    <SelectTrigger className="w-full sm:w-40">
+                      <SelectValue placeholder="Semua Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Semua Status</SelectItem>
+                      {ALL_STATUSES.map((status) => (
+                        <SelectItem key={status} value={status} className="capitalize">
+                          {status}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {hasActiveFilters && (
+                    <Button variant="ghost" size="icon" onClick={clearFilters} title="Clear filters">
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           </CardHeader>
