@@ -114,6 +114,44 @@ Deno.serve(async (req) => {
       throw updateError
     }
 
+    // Get target user info for audit log
+    const { data: targetProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('full_name, email')
+      .eq('id', user_id)
+      .single()
+
+    // Get actor info for audit log
+    const { data: actorProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('full_name, email')
+      .eq('id', currentUser.id)
+      .single()
+
+    // Log the password change to audit_logs
+    const { error: auditError } = await supabaseAdmin
+      .from('audit_logs')
+      .insert({
+        action: 'password_change',
+        actor_id: currentUser.id,
+        target_id: user_id,
+        target_type: 'user',
+        details: {
+          actor_role: userRole?.role,
+          actor_name: actorProfile?.full_name || 'Unknown',
+          actor_email: actorProfile?.email || 'Unknown',
+          target_name: targetProfile?.full_name || 'Unknown',
+          target_email: targetProfile?.email || 'Unknown',
+        },
+      })
+
+    if (auditError) {
+      console.error('Error creating audit log:', auditError)
+      // Don't fail the request if audit log fails
+    }
+
+    console.log(`Password changed: ${actorProfile?.email} changed password for ${targetProfile?.email}`)
+
     return new Response(
       JSON.stringify({ 
         success: true, 
