@@ -20,3 +20,12 @@ verify_jwt = false
 
 [functions.change-own-password]
 verify_jwt = false
+
+[functions.gcs-upload]
+verify_jwt = false
+
+[functions.update-app-settings]
+verify_jwt = false
+
+[functions.get-ga4-config]
+verify_jwt = false

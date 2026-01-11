@@ -7,11 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save, Eye, EyeOff, KeyRound } from 'lucide-react';
+import { SuperAdminSettings } from '@/components/settings/SuperAdminSettings';
+import { LabelLogoSettings } from '@/components/settings/LabelLogoSettings';
 
 export default function Settings() {
-  const { profile, user } = useAuth();
+  const { profile, user, role, isLabel } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -111,6 +114,8 @@ export default function Settings() {
     }
   };
 
+  const isSuperAdmin = role === 'superadmin';
+
   return (
     <DashboardLayout>
       <div className="space-y-6 max-w-2xl">
@@ -118,6 +123,25 @@ export default function Settings() {
           <h1 className="text-2xl md:text-3xl font-bold">Settings</h1>
           <p className="text-muted-foreground">Kelola pengaturan akun Anda</p>
         </div>
+
+        {/* Super Admin Settings Section */}
+        {isSuperAdmin && (
+          <>
+            <div>
+              <h2 className="text-xl font-semibold mb-4">Super Admin Settings</h2>
+              <SuperAdminSettings />
+            </div>
+            <Separator className="my-6" />
+          </>
+        )}
+
+        {/* Label Logo Settings */}
+        {isLabel && (
+          <>
+            <LabelLogoSettings />
+            <Separator className="my-6" />
+          </>
+        )}
 
         <Card className="bg-card/50 border-border/50">
           <CardHeader>

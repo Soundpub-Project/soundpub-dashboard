@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          created_at: string | null
+          id: string
+          key: string
+          updated_at: string | null
+          value: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          key: string
+          updated_at?: string | null
+          value?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          key?: string
+          updated_at?: string | null
+          value?: string | null
+        }
+        Relationships: []
+      }
       artists: {
         Row: {
           created_at: string | null
@@ -147,6 +171,7 @@ export type Database = {
           email: string
           full_name: string
           id: string
+          logo_url: string | null
           parent_label_id: string | null
           phone: string | null
           status: string
@@ -159,6 +184,7 @@ export type Database = {
           email: string
           full_name: string
           id: string
+          logo_url?: string | null
           parent_label_id?: string | null
           phone?: string | null
           status?: string
@@ -171,6 +197,7 @@ export type Database = {
           email?: string
           full_name?: string
           id?: string
+          logo_url?: string | null
           parent_label_id?: string | null
           phone?: string | null
           status?: string

@@ -13,6 +13,7 @@ interface Profile {
   parent_label_id: string | null;
   status: string;
   balance: number;
+  logo_url: string | null;
   created_at: string;
   updated_at: string;
 }
