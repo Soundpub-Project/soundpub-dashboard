@@ -28,6 +28,7 @@ import {
   LogOut,
   Music2,
   BarChart3,
+  ScrollText,
 } from 'lucide-react';
 
 interface NavItem {
@@ -82,6 +83,12 @@ const adminNavItems: NavItem[] = [
     title: 'Manage Payouts', 
     url: '/dashboard/admin-payouts', 
     icon: CreditCard,
+    roles: ['superadmin', 'admin'],
+  },
+  { 
+    title: 'Audit Logs', 
+    url: '/dashboard/audit-logs', 
+    icon: ScrollText,
     roles: ['superadmin', 'admin'],
   },
 ];

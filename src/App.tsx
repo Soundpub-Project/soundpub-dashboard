@@ -16,6 +16,7 @@ import Analytics from "./pages/Analytics";
 import Users from "./pages/Users";
 import Payouts from "./pages/Payouts";
 import AdminPayouts from "./pages/AdminPayouts";
+import AuditLogs from "./pages/AuditLogs";
 import Settings from "./pages/Settings";
 import UploadRoyalty from "./pages/UploadRoyalty";
 import MyArtists from "./pages/MyArtists";
@@ -44,6 +45,7 @@ const App = () => (
               <Route path="/dashboard/upload" element={<UploadRoyalty />} />
               <Route path="/dashboard/payouts" element={<Payouts />} />
               <Route path="/dashboard/admin-payouts" element={<AdminPayouts />} />
+              <Route path="/dashboard/audit-logs" element={<AuditLogs />} />
               <Route path="/dashboard/settings" element={<Settings />} />
               <Route path="/dashboard/my-artists" element={<MyArtists />} />
               <Route path="*" element={<NotFound />} />
