@@ -154,12 +154,19 @@
 ### User Management
 - [ ] Bulk actions untuk users (bulk delete, bulk status change)
 - [ ] Export data users
+- [x] **Kolom Label untuk Artist** - Menampilkan label parent di tabel users
+- [x] **Pilih Label saat tambah Artist** - Admin/Superadmin bisa pilih label untuk artist baru
 
 ### Super Admin Features
 - [x] **Google Cloud Storage Integration** - GCS sebagai primary storage (toggle on/off)
 - [x] **Google Analytics 4 Integration** - GA4 tracking dengan Measurement ID
 - [x] **Dashboard Logo Upload** - Upload logo untuk sidebar/header
 - [x] **Label Logo Upload** - Setiap label bisa upload logo masing-masing
+- [x] **Logo Light/Dark Theme** - Upload logo terpisah untuk tema terang dan gelap
+- [x] **Favicon Upload** - Upload favicon khusus untuk dashboard
+
+### UI/UX Improvements
+- [x] **Settings Page 2-Column Layout** - Layout desktop lebih optimal dengan 2 kolom
 
 ---
 
