@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/hooks/useTheme';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Sidebar,
@@ -120,29 +121,70 @@ const accountNavItems: NavItem[] = [
 export function AppSidebar() {
   const { state } = useSidebar();
   const location = useLocation();
-  const { profile, role, signOut, isAdmin, isLabel } = useAuth();
+  const { profile, role, signOut, isAdmin, isLabel, isArtist } = useAuth();
+  const { resolvedTheme } = useTheme();
   const collapsed = state === 'collapsed';
-  const [dashboardLogo, setDashboardLogo] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchLogo = async () => {
       try {
+        // For artists, get their parent label's logo
+        if (isArtist && profile?.parent_label_id) {
+          const { data: labelProfile, error: labelError } = await supabase
+            .from('profiles')
+            .select('logo_url_light, logo_url_dark, logo_url')
+            .eq('id', profile.parent_label_id)
+            .single();
+
+          if (!labelError && labelProfile) {
+            const themeLogo = resolvedTheme === 'dark' 
+              ? (labelProfile as any).logo_url_dark || (labelProfile as any).logo_url_light || labelProfile.logo_url
+              : (labelProfile as any).logo_url_light || labelProfile.logo_url;
+            if (themeLogo) {
+              setLogoUrl(themeLogo);
+              return;
+            }
+          }
+        }
+
+        // For labels, use their own logo
+        if (isLabel && profile) {
+          const themeLogo = resolvedTheme === 'dark' 
+            ? (profile as any).logo_url_dark || (profile as any).logo_url_light || profile.logo_url
+            : (profile as any).logo_url_light || profile.logo_url;
+          if (themeLogo) {
+            setLogoUrl(themeLogo);
+            return;
+          }
+        }
+
+        // Fallback to app-wide dashboard logo
+        const logoKey = resolvedTheme === 'dark' ? 'dashboard_logo_dark' : 'dashboard_logo_light';
         const { data, error } = await supabase
           .from('app_settings')
-          .select('value')
-          .eq('key', 'dashboard_logo')
-          .single();
+          .select('key, value')
+          .in('key', ['dashboard_logo_light', 'dashboard_logo_dark', 'dashboard_logo']);
 
-        if (!error && data?.value) {
-          setDashboardLogo(data.value);
+        if (!error && data) {
+          const settingsMap: Record<string, string | null> = {};
+          data.forEach(row => {
+            settingsMap[row.key] = row.value;
+          });
+          
+          const themeLogo = resolvedTheme === 'dark'
+            ? settingsMap.dashboard_logo_dark || settingsMap.dashboard_logo_light || settingsMap.dashboard_logo
+            : settingsMap.dashboard_logo_light || settingsMap.dashboard_logo;
+          
+          setLogoUrl(themeLogo || null);
         }
       } catch (error) {
-        console.error('Error fetching dashboard logo:', error);
+        console.error('Error fetching logo:', error);
       }
     };
 
     fetchLogo();
-  }, []);
+  }, [resolvedTheme, isLabel, isArtist, profile]);
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -171,9 +213,9 @@ export function AppSidebar() {
       {/* Header */}
       <SidebarHeader className="border-b border-sidebar-border">
         <div className="flex items-center justify-center px-2 py-3">
-          {dashboardLogo ? (
+          {logoUrl ? (
             <img 
-              src={dashboardLogo} 
+              src={logoUrl} 
               alt="Logo" 
               className={`${collapsed ? 'h-8 w-8' : 'h-10 max-w-[160px]'} rounded-lg object-contain`}
             />

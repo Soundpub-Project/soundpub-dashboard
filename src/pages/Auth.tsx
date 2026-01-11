@@ -46,7 +46,7 @@ export default function Auth() {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [dashboardLogo, setDashboardLogo] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -59,12 +59,20 @@ export default function Auth() {
       try {
         const { data, error } = await supabase
           .from('app_settings')
-          .select('value')
-          .eq('key', 'dashboard_logo')
-          .single();
+          .select('key, value')
+          .in('key', ['dashboard_logo_light', 'dashboard_logo_dark', 'dashboard_logo']);
 
-        if (!error && data?.value) {
-          setDashboardLogo(data.value);
+        if (!error && data) {
+          const settingsMap: Record<string, string | null> = {};
+          data.forEach(row => {
+            settingsMap[row.key] = row.value;
+          });
+          
+          const themeLogo = resolvedTheme === 'dark'
+            ? settingsMap.dashboard_logo_dark || settingsMap.dashboard_logo_light || settingsMap.dashboard_logo
+            : settingsMap.dashboard_logo_light || settingsMap.dashboard_logo;
+          
+          setLogoUrl(themeLogo || null);
         }
       } catch (error) {
         console.error('Error fetching dashboard logo:', error);
@@ -72,7 +80,7 @@ export default function Auth() {
     };
 
     fetchLogo();
-  }, []);
+  }, [resolvedTheme]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -189,9 +197,9 @@ export default function Auth() {
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center mb-2">
-            {dashboardLogo ? (
+            {logoUrl ? (
               <img 
-                src={dashboardLogo} 
+                src={logoUrl} 
                 alt="Logo" 
                 className="h-16 w-auto max-w-[200px] object-contain"
               />
@@ -204,7 +212,7 @@ export default function Auth() {
               </div>
             )}
           </div>
-          {!dashboardLogo && (
+          {!logoUrl && (
             <p className="text-muted-foreground">Music Distribution Platform</p>
           )}
         </div>
