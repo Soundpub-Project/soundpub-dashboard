@@ -495,6 +495,45 @@ Deno.serve(async (req) => {
       })
       .eq('id', uploadRecord.id)
 
+    // Get uploader's profile name
+    const { data: uploaderProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('full_name, email')
+      .eq('id', user.id)
+      .single()
+
+    // Calculate total revenue
+    const totalRevenue = validRows.reduce((sum, row) => sum + row.net_revenue, 0)
+
+    // Send email notification (non-blocking)
+    const notificationPayload = {
+      uploadId: uploadRecord.id,
+      uploadedBy: uploaderProfile?.full_name || uploaderProfile?.email || user.email || 'Unknown',
+      totalRows: rows.length,
+      insertedCount,
+      totalRevenue,
+      affectedLabels: Object.keys(labelRevenueMap),
+      balanceUpdates,
+    }
+
+    // Fire and forget - don't wait for email to complete
+    fetch(`${supabaseUrl}/functions/v1/send-royalty-notification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader,
+      },
+      body: JSON.stringify(notificationPayload),
+    }).then(res => {
+      if (res.ok) {
+        console.log('Royalty notification sent successfully')
+      } else {
+        console.error('Failed to send royalty notification:', res.status)
+      }
+    }).catch(err => {
+      console.error('Error sending royalty notification:', err)
+    })
+
     return new Response(
       JSON.stringify({
         success: true,
