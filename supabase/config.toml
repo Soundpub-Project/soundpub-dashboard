@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.get-ga4-config]
 verify_jwt = false
+
+[functions.send-royalty-notification]
+verify_jwt = false
