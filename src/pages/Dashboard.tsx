@@ -109,15 +109,15 @@ export default function Dashboard() {
       // Fetch royalties data
       const { data: royaltiesData } = await supabase
         .from('royalties')
-        .select('pendapatan_label_artis, unit_penjualan, period, platform');
+        .select('net_revenue, sales_unit, period, platform');
 
       const totalRevenue = royaltiesData?.reduce(
-        (sum, r) => sum + Number(r.pendapatan_label_artis || 0),
+        (sum, r) => sum + Number(r.net_revenue || 0),
         0
       ) || 0;
 
       const totalStreams = royaltiesData?.reduce(
-        (sum, r) => sum + Number(r.unit_penjualan || 0),
+        (sum, r) => sum + Number(r.sales_unit || 0),
         0
       ) || 0;
 
@@ -128,8 +128,8 @@ export default function Dashboard() {
         if (!monthlyData[period]) {
           monthlyData[period] = { revenue: 0, streams: 0 };
         }
-        monthlyData[period].revenue += Number(r.pendapatan_label_artis || 0);
-        monthlyData[period].streams += Number(r.unit_penjualan || 0);
+        monthlyData[period].revenue += Number(r.net_revenue || 0);
+        monthlyData[period].streams += Number(r.sales_unit || 0);
       });
 
       const sortedMonthly = Object.entries(monthlyData)
@@ -146,8 +146,8 @@ export default function Dashboard() {
         if (!platformData[platform]) {
           platformData[platform] = { revenue: 0, streams: 0 };
         }
-        platformData[platform].revenue += Number(r.pendapatan_label_artis || 0);
-        platformData[platform].streams += Number(r.unit_penjualan || 0);
+        platformData[platform].revenue += Number(r.net_revenue || 0);
+        platformData[platform].streams += Number(r.sales_unit || 0);
       });
 
       const sortedPlatforms = Object.entries(platformData)

@@ -40,12 +40,13 @@ interface Royalty {
   period: string;
   isrc: string;
   title: string | null;
-  artist_name: string;
+  artist: string;
+  label_name: string;
   platform: string;
   country: string;
-  unit_penjualan: number;
-  pendapatan_label_artis: number;
-  pendapatan_bersih_soundpub: number;
+  sales_type: string | null;
+  sales_unit: number;
+  net_revenue: number;
   created_at: string;
 }
 
@@ -115,8 +116,8 @@ export default function Royalties() {
       
       setRoyalties(data || []);
       
-      const total = data?.reduce((sum, r) => sum + Number(r.pendapatan_label_artis || 0), 0) || 0;
-      const streams = data?.reduce((sum, r) => sum + Number(r.unit_penjualan || 0), 0) || 0;
+      const total = data?.reduce((sum, r) => sum + Number(r.net_revenue || 0), 0) || 0;
+      const streams = data?.reduce((sum, r) => sum + Number(r.sales_unit || 0), 0) || 0;
       setTotalRevenue(total);
       setTotalStreams(streams);
     } catch (error) {
@@ -134,8 +135,8 @@ export default function Royalties() {
       const period = r.period; // Format: YYYY-MM or similar
       const existing = monthMap.get(period) || { revenue: 0, streams: 0 };
       monthMap.set(period, {
-        revenue: existing.revenue + Number(r.pendapatan_label_artis || 0),
-        streams: existing.streams + Number(r.unit_penjualan || 0),
+        revenue: existing.revenue + Number(r.net_revenue || 0),
+        streams: existing.streams + Number(r.sales_unit || 0),
       });
     });
 
@@ -155,8 +156,8 @@ export default function Royalties() {
     royalties.forEach((r) => {
       const existing = platformMap.get(r.platform) || { revenue: 0, streams: 0 };
       platformMap.set(r.platform, {
-        revenue: existing.revenue + Number(r.pendapatan_label_artis || 0),
-        streams: existing.streams + Number(r.unit_penjualan || 0),
+        revenue: existing.revenue + Number(r.net_revenue || 0),
+        streams: existing.streams + Number(r.sales_unit || 0),
       });
     });
 
@@ -178,8 +179,8 @@ export default function Royalties() {
     royalties.forEach((r) => {
       const existing = countryMap.get(r.country) || { revenue: 0, streams: 0 };
       countryMap.set(r.country, {
-        revenue: existing.revenue + Number(r.pendapatan_label_artis || 0),
-        streams: existing.streams + Number(r.unit_penjualan || 0),
+        revenue: existing.revenue + Number(r.net_revenue || 0),
+        streams: existing.streams + Number(r.sales_unit || 0),
       });
     });
 
@@ -197,7 +198,7 @@ export default function Royalties() {
   const filteredRoyalties = royalties.filter(
     (royalty) =>
       (royalty.title?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-      royalty.artist_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      royalty.artist.toLowerCase().includes(searchTerm.toLowerCase()) ||
       royalty.platform.toLowerCase().includes(searchTerm.toLowerCase()) ||
       royalty.isrc.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -577,14 +578,14 @@ export default function Royalties() {
                             <TableRow key={royalty.id}>
                               <TableCell className="font-mono text-xs">{royalty.period}</TableCell>
                               <TableCell className="font-medium max-w-[150px] truncate">{royalty.title || '-'}</TableCell>
-                              <TableCell>{royalty.artist_name}</TableCell>
+                              <TableCell>{royalty.artist}</TableCell>
                               <TableCell>{royalty.platform}</TableCell>
                               <TableCell>{royalty.country}</TableCell>
                               <TableCell className="text-right">
-                                {royalty.unit_penjualan.toLocaleString('id-ID')}
+                                {royalty.sales_unit.toLocaleString('id-ID')}
                               </TableCell>
                               <TableCell className="text-right font-medium text-green-500">
-                                Rp {Number(royalty.pendapatan_label_artis).toLocaleString('id-ID')}
+                                Rp {Number(royalty.net_revenue).toLocaleString('id-ID')}
                               </TableCell>
                             </TableRow>
                           ))}
