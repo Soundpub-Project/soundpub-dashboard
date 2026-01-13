@@ -37,15 +37,15 @@ Catat informasi berikut dari Lovable Cloud (project saat ini):
 ### 1.3 File yang Perlu Diexport
 Dari aplikasi SoundPub Dashboard, akses `/dashboard/export` untuk mendownload:
 
-- [ ] `profiles.csv`
-- [ ] `user_roles.csv`
-- [ ] `releases.csv`
-- [ ] `tracks.csv`
-- [ ] `royalties.csv`
-- [ ] `royalty_uploads.csv`
-- [ ] `payout_requests.csv`
-- [ ] `app_settings.csv`
-- [ ] `audit_logs.csv`
+- [x] `profiles.csv`
+- [x] `user_roles.csv`
+- [x] `releases.csv`
+- [x] `tracks.csv`
+- [x] `royalties.csv`
+- [x] `royalty_uploads.csv`
+- [x] `payout_requests.csv`
+- [x] `app_settings.csv`
+- [x] `audit_logs.csv`
 
 ---
 
@@ -89,33 +89,33 @@ SUPABASE_SERVICE_ROLE_KEY=eyJhbGc... (RAHASIA!)
 
 ### 3.2 Verifikasi Tabel
 Pastikan tabel-tabel berikut terbuat di **Table Editor**:
-- [ ] `profiles`
-- [ ] `user_roles`
-- [ ] `artists`
-- [ ] `releases`
-- [ ] `tracks`
-- [ ] `royalties`
-- [ ] `royalty_uploads`
-- [ ] `payout_requests`
-- [ ] `app_settings`
-- [ ] `audit_logs`
+- [x] `profiles`
+- [x] `user_roles`
+- [x] `artists`
+- [x] `releases`
+- [x] `tracks`
+- [x] `royalties`
+- [x] `royalty_uploads`
+- [x] `payout_requests`
+- [x] `app_settings`
+- [x] `audit_logs`
 
 ### 3.3 Verifikasi Functions
 Buka **Database > Functions** dan pastikan fungsi-fungsi berikut ada:
-- [ ] `has_role`
-- [ ] `is_admin`
-- [ ] `get_user_role`
-- [ ] `get_user_full_name`
-- [ ] `handle_new_user`
-- [ ] `update_timestamp`
-- [ ] `update_balance_on_payout_status_change`
+- [x] `has_role`
+- [x] `is_admin`
+- [x] `get_user_role`
+- [x] `get_user_full_name`
+- [x] `handle_new_user`
+- [x] `update_timestamp`
+- [x] `update_balance_on_payout_status_change`
 
 ### 3.4 Verifikasi Storage Buckets
 Buka **Storage** dan pastikan bucket berikut ada:
-- [ ] `release-covers` (public)
-- [ ] `track-audio` (private)
-- [ ] `track-video` (private)
-- [ ] `audio-clips` (public)
+- [x] `release-covers` (public)
+- [x] `track-audio` (private)
+- [x] `track-video` (private)
+- [x] `audio-clips` (public)
 
 ---
 
