@@ -1,14 +1,31 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts'
 
-interface CreateUserRequest {
-  email: string
-  password: string
-  full_name: string
-  phone?: string
-  role: 'admin' | 'label' | 'artist' | 'user'
-  parent_label_id?: string
-}
+// Input validation schema
+const CreateUserSchema = z.object({
+  email: z.string()
+    .email('Format email tidak valid')
+    .max(255, 'Email terlalu panjang'),
+  password: z.string()
+    .min(6, 'Password minimal 6 karakter')
+    .max(128, 'Password terlalu panjang'),
+  full_name: z.string()
+    .min(2, 'Nama minimal 2 karakter')
+    .max(200, 'Nama terlalu panjang')
+    .regex(/^[\p{L}\p{M}\s'.-]+$/u, 'Nama mengandung karakter tidak valid'),
+  phone: z.string()
+    .regex(/^(\+?[1-9]\d{1,14})?$/, 'Format nomor telepon tidak valid')
+    .max(20, 'Nomor telepon terlalu panjang')
+    .optional()
+    .or(z.literal('')),
+  role: z.enum(['superadmin', 'admin', 'label', 'artist', 'user'], {
+    errorMap: () => ({ message: 'Role tidak valid' })
+  }),
+  parent_label_id: z.string().uuid('Format parent_label_id tidak valid').optional().nullable(),
+})
+
+type CreateUserRequest = z.infer<typeof CreateUserSchema>
 
 Deno.serve(async (req) => {
   // Handle CORS
@@ -54,16 +71,37 @@ Deno.serve(async (req) => {
       throw new Error('Only admins and labels can create users')
     }
 
-    // Parse request body
-    const body: CreateUserRequest = await req.json()
-    const { email, password, full_name, phone, role, parent_label_id } = body
+    // Parse and validate request body
+    const rawBody = await req.json()
+    const validationResult = CreateUserSchema.safeParse(rawBody)
+    
+    if (!validationResult.success) {
+      const errors = validationResult.error.errors.map(e => ({
+        field: e.path.join('.'),
+        message: e.message
+      }))
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Validation failed',
+          details: errors
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400
+        }
+      )
+    }
+    
+    const { email, password, full_name, phone, role, parent_label_id } = validationResult.data
 
     // Validate role permissions
     if (isLabel && role !== 'artist') {
       throw new Error('Labels can only create artists')
     }
 
-    if (!isAdmin && role === 'admin') {
+    if (!isAdmin && (role === 'admin' || role === 'superadmin')) {
       throw new Error('Only admins can create admin users')
     }
 

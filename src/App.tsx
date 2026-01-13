@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -33,21 +34,80 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
             <Routes>
+              {/* Public routes */}
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/dashboard/releases" element={<Releases />} />
-              <Route path="/dashboard/releases/:id" element={<ReleaseDetail />} />
-              <Route path="/dashboard/tracks" element={<Tracks />} />
-              <Route path="/dashboard/royalties" element={<Royalties />} />
-              <Route path="/dashboard/analytics" element={<Analytics />} />
-              <Route path="/dashboard/users" element={<Users />} />
-              <Route path="/dashboard/upload" element={<UploadRoyalty />} />
-              <Route path="/dashboard/payouts" element={<Payouts />} />
-              <Route path="/dashboard/admin-payouts" element={<AdminPayouts />} />
-              <Route path="/dashboard/audit-logs" element={<AuditLogs />} />
-              <Route path="/dashboard/settings" element={<Settings />} />
-              <Route path="/dashboard/my-artists" element={<MyArtists />} />
+              
+              {/* Protected dashboard routes - require authentication */}
+              <Route path="/dashboard" element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/releases" element={
+                <ProtectedRoute>
+                  <Releases />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/releases/:id" element={
+                <ProtectedRoute>
+                  <ReleaseDetail />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/tracks" element={
+                <ProtectedRoute>
+                  <Tracks />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/royalties" element={
+                <ProtectedRoute>
+                  <Royalties />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/analytics" element={
+                <ProtectedRoute>
+                  <Analytics />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/payouts" element={
+                <ProtectedRoute>
+                  <Payouts />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/settings" element={
+                <ProtectedRoute>
+                  <Settings />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/my-artists" element={
+                <ProtectedRoute requireLabel>
+                  <MyArtists />
+                </ProtectedRoute>
+              } />
+              
+              {/* Admin-only routes */}
+              <Route path="/dashboard/users" element={
+                <ProtectedRoute requireAdmin>
+                  <Users />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/upload" element={
+                <ProtectedRoute requireAdmin>
+                  <UploadRoyalty />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/admin-payouts" element={
+                <ProtectedRoute requireAdmin>
+                  <AdminPayouts />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/audit-logs" element={
+                <ProtectedRoute requireAdmin>
+                  <AuditLogs />
+                </ProtectedRoute>
+              } />
+              
+              {/* 404 */}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AuthProvider>
