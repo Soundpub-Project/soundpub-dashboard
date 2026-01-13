@@ -33,15 +33,14 @@ interface RoyaltyRow {
   period: string;
   isrc: string;
   upc: string;
-  artist_name: string;
+  title?: string;
+  artist: string;
   label_name: string;
   platform: string;
   country: string;
-  unit_penjualan: number;
-  pendapatan_label_artis: number;
-  pendapatan_bersih_soundpub: number;
-  title?: string;
-  artist?: string;
+  sales_type?: string;
+  sales_unit: number;
+  net_revenue: number;
 }
 
 interface ValidationError {
@@ -77,13 +76,12 @@ const REQUIRED_COLUMNS = [
   'period',
   'isrc',
   'upc',
-  'artist_name',
+  'artist',
   'label_name',
   'platform',
   'country',
-  'unit_penjualan',
-  'pendapatan_label_artis',
-  'pendapatan_bersih_soundpub',
+  'sales_unit',
+  'net_revenue',
 ];
 
 export default function UploadRoyalty() {
@@ -188,15 +186,14 @@ export default function UploadRoyalty() {
           period: values[getIndex('period')] || '',
           isrc: values[getIndex('isrc')] || '',
           upc: values[getIndex('upc')] || '',
-          artist_name: values[getIndex('artist_name')] || '',
+          title: headers.includes('title') ? values[getIndex('title')] : undefined,
+          artist: values[getIndex('artist')] || '',
           label_name: values[getIndex('label_name')] || '',
           platform: values[getIndex('platform')] || '',
           country: values[getIndex('country')] || '',
-          unit_penjualan: parseInt(values[getIndex('unit_penjualan')] || '0', 10) || 0,
-          pendapatan_label_artis: parseFloat(values[getIndex('pendapatan_label_artis')] || '0') || 0,
-          pendapatan_bersih_soundpub: parseFloat(values[getIndex('pendapatan_bersih_soundpub')] || '0') || 0,
-          title: headers.includes('title') ? values[getIndex('title')] : undefined,
-          artist: headers.includes('artist') ? values[getIndex('artist')] : undefined,
+          sales_type: headers.includes('sales_type') ? values[getIndex('sales_type')] : undefined,
+          sales_unit: parseInt(values[getIndex('sales_unit')] || '0', 10) || 0,
+          net_revenue: parseFloat(values[getIndex('net_revenue')] || '0') || 0,
         };
 
         // Basic client-side validation
@@ -376,10 +373,10 @@ export default function UploadRoyalty() {
   };
 
   const downloadSampleCSV = () => {
-    const sampleData = `period,isrc,upc,artist_name,label_name,platform,country,unit_penjualan,pendapatan_label_artis,pendapatan_bersih_soundpub,title,artist
-2024-01,IDABC1234567,123456789012,John Doe,Indie Records,Spotify,ID,1000,70000,30000,My Song,John Doe
-2024-01,IDXYZ7654321,123456789013,Jane Smith,Indie Records,Apple Music,US,500,140000,60000,Another Song,Jane Smith
-2024-02,IDABC1234567,123456789012,John Doe,Indie Records,YouTube Music,ID,2500,175000,75000,My Song,John Doe`;
+    const sampleData = `period,isrc,upc,title,artist,label_name,platform,country,sales_type,sales_unit,net_revenue
+2024-01,IDABC1234567,123456789012,My Song,John Doe,Indie Records,Spotify,ID,streaming,1000,100000
+2024-01,IDXYZ7654321,123456789013,Another Song,Jane Smith,Soundpub Music,Apple Music,US,streaming,500,200000
+2024-02,IDABC1234567,123456789012,My Song,John Doe,Indie Records,YouTube Music,ID,streaming,2500,250000`;
     
     const blob = new Blob([sampleData], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -403,10 +400,10 @@ export default function UploadRoyalty() {
 
   // Calculate preview stats
   const previewStats = parsedData.length > 0 ? {
-    totalRevenue: parsedData.reduce((sum, row) => sum + row.pendapatan_label_artis, 0),
-    totalStreams: parsedData.reduce((sum, row) => sum + row.unit_penjualan, 0),
+    totalRevenue: parsedData.reduce((sum, row) => sum + row.net_revenue, 0),
+    totalStreams: parsedData.reduce((sum, row) => sum + row.sales_unit, 0),
     uniqueLabels: [...new Set(parsedData.map(r => r.label_name))].length,
-    uniqueArtists: [...new Set(parsedData.map(r => r.artist_name))].length,
+    uniqueArtists: [...new Set(parsedData.map(r => r.artist))].length,
   } : null;
 
   if (!isAdmin) {

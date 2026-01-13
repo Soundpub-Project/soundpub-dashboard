@@ -52,12 +52,13 @@ interface Royalty {
   period: string;
   isrc: string;
   title: string | null;
-  artist_name: string;
+  artist: string;
+  label_name: string;
   platform: string;
   country: string;
-  unit_penjualan: number;
-  pendapatan_label_artis: number;
-  pendapatan_bersih_soundpub: number;
+  sales_type: string | null;
+  sales_unit: number;
+  net_revenue: number;
   created_at: string;
 }
 
@@ -176,12 +177,12 @@ export default function Analytics() {
 
   // Calculate KPIs
   const kpis = useMemo(() => {
-    const currentRevenue = currentPeriodData.reduce((sum, r) => sum + Number(r.pendapatan_label_artis || 0), 0);
-    const previousRevenue = previousPeriodData.reduce((sum, r) => sum + Number(r.pendapatan_label_artis || 0), 0);
+    const currentRevenue = currentPeriodData.reduce((sum, r) => sum + Number(r.net_revenue || 0), 0);
+    const previousRevenue = previousPeriodData.reduce((sum, r) => sum + Number(r.net_revenue || 0), 0);
     const revenueGrowth = previousRevenue > 0 ? ((currentRevenue - previousRevenue) / previousRevenue) * 100 : 0;
 
-    const currentStreams = currentPeriodData.reduce((sum, r) => sum + Number(r.unit_penjualan || 0), 0);
-    const previousStreams = previousPeriodData.reduce((sum, r) => sum + Number(r.unit_penjualan || 0), 0);
+    const currentStreams = currentPeriodData.reduce((sum, r) => sum + Number(r.sales_unit || 0), 0);
+    const previousStreams = previousPeriodData.reduce((sum, r) => sum + Number(r.sales_unit || 0), 0);
     const streamsGrowth = previousStreams > 0 ? ((currentStreams - previousStreams) / previousStreams) * 100 : 0;
 
     const currentPlatforms = new Set(currentPeriodData.map(r => r.platform)).size;
@@ -215,8 +216,8 @@ export default function Analytics() {
       const period = r.period;
       const existing = currentMonthMap.get(period) || { revenue: 0, streams: 0 };
       currentMonthMap.set(period, {
-        revenue: existing.revenue + Number(r.pendapatan_label_artis || 0),
-        streams: existing.streams + Number(r.unit_penjualan || 0),
+        revenue: existing.revenue + Number(r.net_revenue || 0),
+        streams: existing.streams + Number(r.sales_unit || 0),
       });
     });
 
@@ -224,8 +225,8 @@ export default function Analytics() {
       const period = r.period;
       const existing = previousMonthMap.get(period) || { revenue: 0, streams: 0 };
       previousMonthMap.set(period, {
-        revenue: existing.revenue + Number(r.pendapatan_label_artis || 0),
-        streams: existing.streams + Number(r.unit_penjualan || 0),
+        revenue: existing.revenue + Number(r.net_revenue || 0),
+        streams: existing.streams + Number(r.sales_unit || 0),
       });
     });
 
@@ -255,8 +256,8 @@ export default function Analytics() {
       const key = r.title || r.isrc;
       const existing = currentMap.get(key) || { revenue: 0, streams: 0 };
       currentMap.set(key, {
-        revenue: existing.revenue + Number(r.pendapatan_label_artis || 0),
-        streams: existing.streams + Number(r.unit_penjualan || 0),
+        revenue: existing.revenue + Number(r.net_revenue || 0),
+        streams: existing.streams + Number(r.sales_unit || 0),
       });
     });
 
@@ -264,8 +265,8 @@ export default function Analytics() {
       const key = r.title || r.isrc;
       const existing = previousMap.get(key) || { revenue: 0, streams: 0 };
       previousMap.set(key, {
-        revenue: existing.revenue + Number(r.pendapatan_label_artis || 0),
-        streams: existing.streams + Number(r.unit_penjualan || 0),
+        revenue: existing.revenue + Number(r.net_revenue || 0),
+        streams: existing.streams + Number(r.sales_unit || 0),
       });
     });
 
@@ -287,16 +288,16 @@ export default function Analytics() {
     currentPeriodData.forEach((r) => {
       const existing = currentMap.get(r.platform) || { revenue: 0, streams: 0 };
       currentMap.set(r.platform, {
-        revenue: existing.revenue + Number(r.pendapatan_label_artis || 0),
-        streams: existing.streams + Number(r.unit_penjualan || 0),
+        revenue: existing.revenue + Number(r.net_revenue || 0),
+        streams: existing.streams + Number(r.sales_unit || 0),
       });
     });
 
     previousPeriodData.forEach((r) => {
       const existing = previousMap.get(r.platform) || { revenue: 0, streams: 0 };
       previousMap.set(r.platform, {
-        revenue: existing.revenue + Number(r.pendapatan_label_artis || 0),
-        streams: existing.streams + Number(r.unit_penjualan || 0),
+        revenue: existing.revenue + Number(r.net_revenue || 0),
+        streams: existing.streams + Number(r.sales_unit || 0),
       });
     });
 
@@ -318,16 +319,16 @@ export default function Analytics() {
     currentPeriodData.forEach((r) => {
       const existing = currentMap.get(r.country) || { revenue: 0, streams: 0 };
       currentMap.set(r.country, {
-        revenue: existing.revenue + Number(r.pendapatan_label_artis || 0),
-        streams: existing.streams + Number(r.unit_penjualan || 0),
+        revenue: existing.revenue + Number(r.net_revenue || 0),
+        streams: existing.streams + Number(r.sales_unit || 0),
       });
     });
 
     previousPeriodData.forEach((r) => {
       const existing = previousMap.get(r.country) || { revenue: 0, streams: 0 };
       previousMap.set(r.country, {
-        revenue: existing.revenue + Number(r.pendapatan_label_artis || 0),
-        streams: existing.streams + Number(r.unit_penjualan || 0),
+        revenue: existing.revenue + Number(r.net_revenue || 0),
+        streams: existing.streams + Number(r.sales_unit || 0),
       });
     });
 

@@ -5,19 +5,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// New structure matching updated database schema
 interface RoyaltyRow {
   period: string
   isrc: string
   upc: string
-  artist_name: string
+  title?: string
+  artist: string
   label_name: string
   platform: string
   country: string
-  unit_penjualan: number
-  pendapatan_label_artis: number
-  pendapatan_bersih_soundpub: number
-  title?: string
-  artist?: string
+  sales_type?: string
+  sales_unit: number
+  net_revenue: number
 }
 
 interface ValidationError {
@@ -26,23 +26,33 @@ interface ValidationError {
   message: string
 }
 
+// Revenue distribution result
+interface RevenueDistribution {
+  label_name: string
+  artist_name: string
+  net_revenue: number
+  soundpub_admin_share: number
+  label_share: number
+  artist_share: number
+  is_soundpub_label: boolean
+}
+
+const SOUNDPUB_LABEL_NAME = 'Soundpub Music'
+
 // Validation functions
 function validatePeriod(period: string): boolean {
   return /^\d{4}-\d{2}$/.test(period)
 }
 
 function validateISRC(isrc: string): boolean {
-  // ISRC format: 2 letters, 3 alphanumeric, 7 digits (12 characters total)
   return /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(isrc.toUpperCase())
 }
 
 function validateUPC(upc: string): boolean {
-  // UPC: 12 or 13 digits
   return /^\d{12,13}$/.test(upc)
 }
 
 function validateCountry(country: string): boolean {
-  // ISO 3166-1 alpha-2 code
   return /^[A-Z]{2}$/.test(country.toUpperCase())
 }
 
@@ -68,10 +78,10 @@ function validateRow(row: RoyaltyRow, rowNumber: number): ValidationError[] {
     errors.push({ row: rowNumber, field: 'upc', message: 'UPC harus 12-13 digit angka' })
   }
 
-  if (!row.artist_name || !row.artist_name.trim()) {
-    errors.push({ row: rowNumber, field: 'artist_name', message: 'Nama artis tidak boleh kosong' })
-  } else if (row.artist_name.length > 200) {
-    errors.push({ row: rowNumber, field: 'artist_name', message: 'Nama artis maksimal 200 karakter' })
+  if (!row.artist || !row.artist.trim()) {
+    errors.push({ row: rowNumber, field: 'artist', message: 'Nama artis tidak boleh kosong' })
+  } else if (row.artist.length > 200) {
+    errors.push({ row: rowNumber, field: 'artist', message: 'Nama artis maksimal 200 karakter' })
   }
 
   if (!row.label_name || !row.label_name.trim()) {
@@ -93,24 +103,18 @@ function validateRow(row: RoyaltyRow, rowNumber: number): ValidationError[] {
   }
 
   // Numeric validations
-  if (typeof row.unit_penjualan !== 'number' || isNaN(row.unit_penjualan)) {
-    errors.push({ row: rowNumber, field: 'unit_penjualan', message: 'Unit penjualan harus berupa angka' })
-  } else if (row.unit_penjualan < 0) {
-    errors.push({ row: rowNumber, field: 'unit_penjualan', message: 'Unit penjualan tidak boleh negatif' })
-  } else if (row.unit_penjualan > 1000000000) {
-    errors.push({ row: rowNumber, field: 'unit_penjualan', message: 'Unit penjualan melebihi batas maksimal' })
+  if (typeof row.sales_unit !== 'number' || isNaN(row.sales_unit)) {
+    errors.push({ row: rowNumber, field: 'sales_unit', message: 'Sales unit harus berupa angka' })
+  } else if (row.sales_unit < 0) {
+    errors.push({ row: rowNumber, field: 'sales_unit', message: 'Sales unit tidak boleh negatif' })
+  } else if (row.sales_unit > 1000000000) {
+    errors.push({ row: rowNumber, field: 'sales_unit', message: 'Sales unit melebihi batas maksimal' })
   }
 
-  if (typeof row.pendapatan_label_artis !== 'number' || isNaN(row.pendapatan_label_artis)) {
-    errors.push({ row: rowNumber, field: 'pendapatan_label_artis', message: 'Pendapatan label/artis harus berupa angka' })
-  } else if (row.pendapatan_label_artis < 0) {
-    errors.push({ row: rowNumber, field: 'pendapatan_label_artis', message: 'Pendapatan label/artis tidak boleh negatif' })
-  }
-
-  if (typeof row.pendapatan_bersih_soundpub !== 'number' || isNaN(row.pendapatan_bersih_soundpub)) {
-    errors.push({ row: rowNumber, field: 'pendapatan_bersih_soundpub', message: 'Pendapatan bersih harus berupa angka' })
-  } else if (row.pendapatan_bersih_soundpub < 0) {
-    errors.push({ row: rowNumber, field: 'pendapatan_bersih_soundpub', message: 'Pendapatan bersih tidak boleh negatif' })
+  if (typeof row.net_revenue !== 'number' || isNaN(row.net_revenue)) {
+    errors.push({ row: rowNumber, field: 'net_revenue', message: 'Net revenue harus berupa angka' })
+  } else if (row.net_revenue < 0) {
+    errors.push({ row: rowNumber, field: 'net_revenue', message: 'Net revenue tidak boleh negatif' })
   }
 
   // Optional field validations
@@ -118,11 +122,60 @@ function validateRow(row: RoyaltyRow, rowNumber: number): ValidationError[] {
     errors.push({ row: rowNumber, field: 'title', message: 'Judul lagu maksimal 500 karakter' })
   }
 
-  if (row.artist && row.artist.length > 200) {
-    errors.push({ row: rowNumber, field: 'artist', message: 'Nama artis (opsional) maksimal 200 karakter' })
+  if (row.sales_type && row.sales_type.length > 100) {
+    errors.push({ row: rowNumber, field: 'sales_type', message: 'Sales type maksimal 100 karakter' })
   }
 
   return errors
+}
+
+/**
+ * Calculate revenue distribution based on label type
+ * 
+ * For Soundpub Music Label:
+ * - 70% goes to Artist
+ * - 30% goes to Soundpub Music (label)
+ * - 0% Soundpub Admin fee
+ * 
+ * For Whitelabel Partners:
+ * - 30% goes to Soundpub Admin (platform fee)
+ * - From remaining 70%:
+ *   - 70% goes to Artist (49% of total)
+ *   - 30% goes to Label (21% of total)
+ */
+function calculateRevenueDistribution(
+  labelName: string,
+  artistName: string,
+  netRevenue: number
+): RevenueDistribution {
+  const isSoundpubLabel = labelName.toLowerCase() === SOUNDPUB_LABEL_NAME.toLowerCase()
+
+  if (isSoundpubLabel) {
+    // Soundpub Music Label: 70% artist, 30% label, no admin fee
+    return {
+      label_name: labelName,
+      artist_name: artistName,
+      net_revenue: netRevenue,
+      soundpub_admin_share: 0,
+      label_share: netRevenue * 0.30, // 30% to Soundpub Music label
+      artist_share: netRevenue * 0.70, // 70% to artist
+      is_soundpub_label: true,
+    }
+  } else {
+    // Whitelabel Partner: 30% admin, then split remaining 70%
+    const adminFee = netRevenue * 0.30 // 30% for Soundpub Admin
+    const remainingForLabel = netRevenue * 0.70 // 70% remaining
+
+    return {
+      label_name: labelName,
+      artist_name: artistName,
+      net_revenue: netRevenue,
+      soundpub_admin_share: adminFee, // 30% to Soundpub Admin
+      label_share: remainingForLabel * 0.30, // 21% of total to label
+      artist_share: remainingForLabel * 0.70, // 49% of total to artist
+      is_soundpub_label: false,
+    }
+  }
 }
 
 Deno.serve(async (req) => {
@@ -143,10 +196,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     
-    // Use service role client for admin operations
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
-    
-    // Use user's token to verify authentication
     const supabaseUser = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
       global: { headers: { Authorization: authHeader } }
     })
@@ -190,23 +240,21 @@ Deno.serve(async (req) => {
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]
-      // Normalize data
       const normalizedRow: RoyaltyRow = {
         period: (row.period || '').trim(),
         isrc: (row.isrc || '').trim().toUpperCase(),
         upc: (row.upc || '').trim(),
-        artist_name: (row.artist_name || '').trim(),
+        title: row.title?.trim() || undefined,
+        artist: (row.artist || '').trim(),
         label_name: (row.label_name || '').trim(),
         platform: (row.platform || '').trim(),
         country: (row.country || '').trim().toUpperCase(),
-        unit_penjualan: Number(row.unit_penjualan) || 0,
-        pendapatan_label_artis: Number(row.pendapatan_label_artis) || 0,
-        pendapatan_bersih_soundpub: Number(row.pendapatan_bersih_soundpub) || 0,
-        title: row.title?.trim() || undefined,
-        artist: row.artist?.trim() || undefined,
+        sales_type: row.sales_type?.trim() || undefined,
+        sales_unit: Number(row.sales_unit) || 0,
+        net_revenue: Number(row.net_revenue) || 0,
       }
 
-      const rowErrors = validateRow(normalizedRow, i + 2) // +2 because row 1 is header, 0-indexed
+      const rowErrors = validateRow(normalizedRow, i + 2)
       if (rowErrors.length > 0) {
         allErrors.push(...rowErrors)
       } else {
@@ -214,13 +262,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    // If there are validation errors, return them
+    // If all rows have validation errors, return them
     if (allErrors.length > 0 && validRows.length === 0) {
       return new Response(
         JSON.stringify({
           success: false,
           error: 'Validation failed',
-          validationErrors: allErrors.slice(0, 50), // Limit to 50 errors
+          validationErrors: allErrors.slice(0, 50),
           totalErrors: allErrors.length
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -246,10 +294,14 @@ Deno.serve(async (req) => {
       throw uploadError
     }
 
-    // Insert royalties in batches and collect label revenue
+    // Insert royalties and calculate revenue distribution
     const batchSize = 100
     let insertedCount = 0
-    const labelRevenue: Record<string, number> = {}
+    
+    // Aggregate revenue by label and artist
+    const labelRevenueMap: Record<string, { balance: number; label_revenue: number; artist_revenue: number }> = {}
+    const artistRevenueMap: Record<string, number> = {}
+    let totalSoundpubAdminRevenue = 0
 
     for (let i = 0; i < validRows.length; i += batchSize) {
       const batch = validRows.slice(i, i + batchSize).map(row => ({
@@ -263,7 +315,6 @@ Deno.serve(async (req) => {
 
       if (insertError) {
         console.error('Batch insert error:', insertError)
-        // Update upload record as failed
         await supabaseAdmin
           .from('royalty_uploads')
           .update({
@@ -285,50 +336,145 @@ Deno.serve(async (req) => {
 
       insertedCount += batch.length
 
-      // Collect revenue per label_name
+      // Calculate revenue distribution for each row
       for (const row of batch) {
-        if (!labelRevenue[row.label_name]) {
-          labelRevenue[row.label_name] = 0
+        const distribution = calculateRevenueDistribution(
+          row.label_name,
+          row.artist,
+          row.net_revenue
+        )
+
+        // Initialize label entry if not exists
+        if (!labelRevenueMap[row.label_name]) {
+          labelRevenueMap[row.label_name] = { balance: 0, label_revenue: 0, artist_revenue: 0 }
         }
-        labelRevenue[row.label_name] += row.pendapatan_label_artis
+
+        // Add label share to label_revenue
+        labelRevenueMap[row.label_name].label_revenue += distribution.label_share
+        
+        // Add artist share to artist_revenue (tracked under label)
+        labelRevenueMap[row.label_name].artist_revenue += distribution.artist_share
+        
+        // For balance, add both label and artist share (total for the label account)
+        labelRevenueMap[row.label_name].balance += distribution.label_share + distribution.artist_share
+
+        // Track individual artist revenue
+        if (!artistRevenueMap[row.artist]) {
+          artistRevenueMap[row.artist] = 0
+        }
+        artistRevenueMap[row.artist] += distribution.artist_share
+
+        // Accumulate Soundpub Admin revenue (from whitelabel partners)
+        totalSoundpubAdminRevenue += distribution.soundpub_admin_share
       }
     }
 
-    // Update balances for each label
-    console.log('Updating balances for labels:', Object.keys(labelRevenue))
-    const balanceUpdates: { label: string; amount: number; success: boolean }[] = []
+    console.log('Revenue distribution calculated:', {
+      labels: Object.keys(labelRevenueMap),
+      totalSoundpubAdminRevenue,
+    })
 
-    for (const [labelName, revenue] of Object.entries(labelRevenue)) {
-      // Find profile by full_name (label_name)
+    // Update balances for each label
+    const balanceUpdates: { 
+      label: string
+      balance_added: number
+      label_revenue_added: number
+      artist_revenue_added: number
+      success: boolean 
+    }[] = []
+
+    for (const [labelName, revenue] of Object.entries(labelRevenueMap)) {
       const { data: profile, error: profileError } = await supabaseAdmin
         .from('profiles')
-        .select('id, balance, full_name')
+        .select('id, balance, label_revenue, artist_revenue, full_name')
         .eq('full_name', labelName)
         .maybeSingle()
 
       if (profileError) {
         console.error(`Error finding profile for ${labelName}:`, profileError)
-        balanceUpdates.push({ label: labelName, amount: revenue, success: false })
+        balanceUpdates.push({ 
+          label: labelName, 
+          balance_added: revenue.balance,
+          label_revenue_added: revenue.label_revenue,
+          artist_revenue_added: revenue.artist_revenue,
+          success: false 
+        })
         continue
       }
 
       if (profile) {
-        const newBalance = (profile.balance || 0) + revenue
+        const newBalance = (profile.balance || 0) + revenue.balance
+        const newLabelRevenue = (profile.label_revenue || 0) + revenue.label_revenue
+        const newArtistRevenue = (profile.artist_revenue || 0) + revenue.artist_revenue
+
         const { error: updateError } = await supabaseAdmin
           .from('profiles')
-          .update({ balance: newBalance })
+          .update({ 
+            balance: newBalance,
+            label_revenue: newLabelRevenue,
+            artist_revenue: newArtistRevenue,
+          })
           .eq('id', profile.id)
 
         if (updateError) {
           console.error(`Error updating balance for ${labelName}:`, updateError)
-          balanceUpdates.push({ label: labelName, amount: revenue, success: false })
+          balanceUpdates.push({ 
+            label: labelName, 
+            balance_added: revenue.balance,
+            label_revenue_added: revenue.label_revenue,
+            artist_revenue_added: revenue.artist_revenue,
+            success: false 
+          })
         } else {
-          console.log(`Updated balance for ${labelName}: ${profile.balance} -> ${newBalance}`)
-          balanceUpdates.push({ label: labelName, amount: revenue, success: true })
+          console.log(`Updated ${labelName}: balance +${revenue.balance}, label_revenue +${revenue.label_revenue}, artist_revenue +${revenue.artist_revenue}`)
+          balanceUpdates.push({ 
+            label: labelName, 
+            balance_added: revenue.balance,
+            label_revenue_added: revenue.label_revenue,
+            artist_revenue_added: revenue.artist_revenue,
+            success: true 
+          })
         }
       } else {
         console.log(`Profile not found for label: ${labelName}`)
-        balanceUpdates.push({ label: labelName, amount: revenue, success: false })
+        balanceUpdates.push({ 
+          label: labelName, 
+          balance_added: revenue.balance,
+          label_revenue_added: revenue.label_revenue,
+          artist_revenue_added: revenue.artist_revenue,
+          success: false 
+        })
+      }
+    }
+
+    // Update Soundpub Admin balance (find admin users and distribute)
+    if (totalSoundpubAdminRevenue > 0) {
+      // Find Soundpub Music profile to add the admin revenue
+      const { data: soundpubProfile } = await supabaseAdmin
+        .from('profiles')
+        .select('id, balance, label_revenue, full_name')
+        .eq('full_name', SOUNDPUB_LABEL_NAME)
+        .maybeSingle()
+
+      if (soundpubProfile) {
+        const { error: updateError } = await supabaseAdmin
+          .from('profiles')
+          .update({ 
+            balance: (soundpubProfile.balance || 0) + totalSoundpubAdminRevenue,
+            label_revenue: (soundpubProfile.label_revenue || 0) + totalSoundpubAdminRevenue,
+          })
+          .eq('id', soundpubProfile.id)
+
+        if (!updateError) {
+          console.log(`Added Soundpub Admin revenue: ${totalSoundpubAdminRevenue}`)
+          balanceUpdates.push({
+            label: `${SOUNDPUB_LABEL_NAME} (Admin Fee)`,
+            balance_added: totalSoundpubAdminRevenue,
+            label_revenue_added: totalSoundpubAdminRevenue,
+            artist_revenue_added: 0,
+            success: true,
+          })
+        }
       }
     }
 
@@ -343,6 +489,8 @@ Deno.serve(async (req) => {
           inserted: insertedCount,
           errors: allErrors.length,
           balanceUpdates: balanceUpdates,
+          totalSoundpubAdminRevenue,
+          artistRevenueBreakdown: artistRevenueMap,
         },
       })
       .eq('id', uploadRecord.id)
@@ -356,6 +504,7 @@ Deno.serve(async (req) => {
         validationErrors: allErrors.length > 0 ? allErrors.slice(0, 20) : [],
         totalErrors: allErrors.length,
         balanceUpdates,
+        totalSoundpubAdminRevenue,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )

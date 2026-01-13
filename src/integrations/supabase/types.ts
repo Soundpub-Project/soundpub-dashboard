@@ -294,52 +294,49 @@ export type Database = {
       royalties: {
         Row: {
           artist: string | null
-          artist_name: string
           country: string
           created_at: string | null
           id: string
           isrc: string
           label_name: string
-          pendapatan_bersih_soundpub: number
-          pendapatan_label_artis: number
+          net_revenue: number
           period: string
           platform: string
+          sales_type: string | null
+          sales_unit: number
           title: string | null
-          unit_penjualan: number
           upc: string
           upload_id: string
         }
         Insert: {
           artist?: string | null
-          artist_name: string
           country: string
           created_at?: string | null
           id?: string
           isrc: string
           label_name: string
-          pendapatan_bersih_soundpub?: number
-          pendapatan_label_artis?: number
+          net_revenue?: number
           period: string
           platform: string
+          sales_type?: string | null
+          sales_unit?: number
           title?: string | null
-          unit_penjualan?: number
           upc: string
           upload_id: string
         }
         Update: {
           artist?: string | null
-          artist_name?: string
           country?: string
           created_at?: string | null
           id?: string
           isrc?: string
           label_name?: string
-          pendapatan_bersih_soundpub?: number
-          pendapatan_label_artis?: number
+          net_revenue?: number
           period?: string
           platform?: string
+          sales_type?: string | null
+          sales_unit?: number
           title?: string | null
-          unit_penjualan?: number
           upc?: string
           upload_id?: string
         }
