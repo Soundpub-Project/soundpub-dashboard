@@ -20,6 +20,7 @@ import AuditLogs from "./pages/AuditLogs";
 import Settings from "./pages/Settings";
 import UploadRoyalty from "./pages/UploadRoyalty";
 import MyArtists from "./pages/MyArtists";
+import ExportData from "./pages/ExportData";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -48,6 +49,7 @@ const App = () => (
               <Route path="/dashboard/audit-logs" element={<AuditLogs />} />
               <Route path="/dashboard/settings" element={<Settings />} />
               <Route path="/dashboard/my-artists" element={<MyArtists />} />
+              <Route path="/dashboard/export" element={<ExportData />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AuthProvider>
