@@ -32,6 +32,7 @@ import {
   Music2,
   BarChart3,
   ScrollText,
+  FolderArchive,
 } from 'lucide-react';
 
 interface NavItem {
@@ -92,6 +93,12 @@ const adminNavItems: NavItem[] = [
     title: 'Audit Logs', 
     url: '/dashboard/audit-logs', 
     icon: ScrollText,
+    roles: ['superadmin', 'admin'],
+  },
+  { 
+    title: 'Export', 
+    url: '/dashboard/export', 
+    icon: FolderArchive,
     roles: ['superadmin', 'admin'],
   },
 ];
