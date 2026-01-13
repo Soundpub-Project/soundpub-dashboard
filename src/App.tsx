@@ -13,6 +13,7 @@ import Releases from "./pages/Releases";
 import ReleaseDetail from "./pages/ReleaseDetail";
 import Tracks from "./pages/Tracks";
 import Royalties from "./pages/Royalties";
+import RoyaltySummary from "./pages/RoyaltySummary";
 import Analytics from "./pages/Analytics";
 import Users from "./pages/Users";
 import Payouts from "./pages/Payouts";
@@ -68,6 +69,11 @@ const App = () => (
               <Route path="/dashboard/analytics" element={
                 <ProtectedRoute>
                   <Analytics />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/royalty-summary" element={
+                <ProtectedRoute>
+                  <RoyaltySummary />
                 </ProtectedRoute>
               } />
               <Route path="/dashboard/payouts" element={
