@@ -632,14 +632,14 @@ export default function UploadRoyalty() {
                             <TableRow key={index}>
                               <TableCell className="font-mono text-xs">{row.period}</TableCell>
                               <TableCell className="font-mono text-xs">{row.isrc}</TableCell>
-                              <TableCell>{row.artist_name}</TableCell>
+                              <TableCell>{row.artist}</TableCell>
                               <TableCell>{row.label_name}</TableCell>
                               <TableCell>{row.platform}</TableCell>
                               <TableCell className="text-right">
-                                {row.unit_penjualan.toLocaleString('id-ID')}
+                                {row.sales_unit.toLocaleString('id-ID')}
                               </TableCell>
                               <TableCell className="text-right text-green-400">
-                                Rp {row.pendapatan_label_artis.toLocaleString('id-ID')}
+                                Rp {row.net_revenue.toLocaleString('id-ID')}
                               </TableCell>
                             </TableRow>
                           ))}
