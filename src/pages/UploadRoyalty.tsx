@@ -47,6 +47,7 @@ interface ValidationError {
   row: number;
   field: string;
   message: string;
+  severity: 'error' | 'warning';
 }
 
 interface BalanceUpdate {
@@ -60,6 +61,18 @@ interface UploadSummary {
   inserted?: number;
   errors?: number;
   balanceUpdates?: BalanceUpdate[];
+}
+
+interface RevenueSplitPreview {
+  label: string;
+  isSoundpubLabel: boolean;
+  totalRevenue: number;
+  labelShare: number;
+  artistShare: number;
+  adminShare: number;
+  labelPercentage: number;
+  artistPercentage: number;
+  adminPercentage: number;
 }
 
 interface UploadHistory {
@@ -93,7 +106,8 @@ export default function UploadRoyalty() {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [parsedData, setParsedData] = useState<RoyaltyRow[]>([]);
-  const [parseErrors, setParseErrors] = useState<string[]>([]);
+  const [parseErrors, setParseErrors] = useState<ValidationError[]>([]);
+  const [revenueSplitPreview, setRevenueSplitPreview] = useState<RevenueSplitPreview[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStage, setUploadStage] = useState<string>('');
@@ -134,13 +148,13 @@ export default function UploadRoyalty() {
     }
   };
 
-  const parseCSV = (text: string): { data: RoyaltyRow[]; errors: string[] } => {
+  const parseCSV = (text: string): { data: RoyaltyRow[]; errors: ValidationError[] } => {
     const lines = text.trim().split('\n');
-    const errors: string[] = [];
+    const errors: ValidationError[] = [];
     const data: RoyaltyRow[] = [];
 
     if (lines.length < 2) {
-      errors.push('File CSV kosong atau tidak memiliki data');
+      errors.push({ row: 0, field: 'file', message: 'File CSV kosong atau tidak memiliki data', severity: 'error' });
       return { data, errors };
     }
 
@@ -151,7 +165,12 @@ export default function UploadRoyalty() {
     // Check required columns
     const missingColumns = REQUIRED_COLUMNS.filter(col => !headers.includes(col));
     if (missingColumns.length > 0) {
-      errors.push(`Kolom yang diperlukan tidak ditemukan: ${missingColumns.join(', ')}`);
+      errors.push({ 
+        row: 1, 
+        field: 'header', 
+        message: `Kolom yang diperlukan tidak ditemukan: ${missingColumns.join(', ')}`, 
+        severity: 'error' 
+      });
       return { data, errors };
     }
 
@@ -182,33 +201,150 @@ export default function UploadRoyalty() {
       values.push(current.trim());
 
       try {
-        const row: RoyaltyRow = {
-          period: values[getIndex('period')] || '',
-          isrc: values[getIndex('isrc')] || '',
-          upc: values[getIndex('upc')] || '',
-          title: headers.includes('title') ? values[getIndex('title')] : undefined,
-          artist: values[getIndex('artist')] || '',
-          label_name: values[getIndex('label_name')] || '',
-          platform: values[getIndex('platform')] || '',
-          country: values[getIndex('country')] || '',
-          sales_type: headers.includes('sales_type') ? values[getIndex('sales_type')] : undefined,
-          sales_unit: parseInt(values[getIndex('sales_unit')] || '0', 10) || 0,
-          net_revenue: parseFloat(values[getIndex('net_revenue')] || '0') || 0,
-        };
-
-        // Basic client-side validation
-        if (!row.period || !row.isrc || !row.upc) {
-          errors.push(`Baris ${i + 1}: Data period, isrc, atau upc kosong`);
+        const period = values[getIndex('period')] || '';
+        const isrc = values[getIndex('isrc')] || '';
+        const upc = values[getIndex('upc')] || '';
+        const artist = values[getIndex('artist')] || '';
+        const label_name = values[getIndex('label_name')] || '';
+        const platform = values[getIndex('platform')] || '';
+        const country = values[getIndex('country')] || '';
+        const salesUnitRaw = values[getIndex('sales_unit')] || '0';
+        const netRevenueRaw = values[getIndex('net_revenue')] || '0';
+        
+        // Validate period format (YYYY-MM or similar)
+        if (!period) {
+          errors.push({ row: i + 1, field: 'period', message: 'Period tidak boleh kosong', severity: 'error' });
           continue;
         }
+        
+        // Validate ISRC format (should be 12 characters)
+        if (!isrc) {
+          errors.push({ row: i + 1, field: 'isrc', message: 'ISRC tidak boleh kosong', severity: 'error' });
+          continue;
+        }
+        if (isrc.length !== 12) {
+          errors.push({ row: i + 1, field: 'isrc', message: `ISRC "${isrc}" harus 12 karakter (saat ini: ${isrc.length})`, severity: 'warning' });
+        }
+        
+        // Validate UPC format (should be 12-13 digits)
+        if (!upc) {
+          errors.push({ row: i + 1, field: 'upc', message: 'UPC tidak boleh kosong', severity: 'error' });
+          continue;
+        }
+        if (!/^\d{12,13}$/.test(upc)) {
+          errors.push({ row: i + 1, field: 'upc', message: `UPC "${upc}" harus 12-13 digit angka`, severity: 'warning' });
+        }
+        
+        // Validate artist
+        if (!artist) {
+          errors.push({ row: i + 1, field: 'artist', message: 'Nama artist tidak boleh kosong', severity: 'error' });
+          continue;
+        }
+        
+        // Validate label_name
+        if (!label_name) {
+          errors.push({ row: i + 1, field: 'label_name', message: 'Nama label tidak boleh kosong', severity: 'error' });
+          continue;
+        }
+        
+        // Validate platform
+        if (!platform) {
+          errors.push({ row: i + 1, field: 'platform', message: 'Platform tidak boleh kosong', severity: 'error' });
+          continue;
+        }
+        
+        // Validate country
+        if (!country) {
+          errors.push({ row: i + 1, field: 'country', message: 'Country tidak boleh kosong', severity: 'error' });
+          continue;
+        }
+        
+        // Validate numeric fields
+        const salesUnit = parseInt(salesUnitRaw, 10);
+        if (isNaN(salesUnit)) {
+          errors.push({ row: i + 1, field: 'sales_unit', message: `Sales unit "${salesUnitRaw}" bukan angka valid`, severity: 'error' });
+          continue;
+        }
+        if (salesUnit < 0) {
+          errors.push({ row: i + 1, field: 'sales_unit', message: 'Sales unit tidak boleh negatif', severity: 'warning' });
+        }
+        
+        const netRevenue = parseFloat(netRevenueRaw);
+        if (isNaN(netRevenue)) {
+          errors.push({ row: i + 1, field: 'net_revenue', message: `Net revenue "${netRevenueRaw}" bukan angka valid`, severity: 'error' });
+          continue;
+        }
+        if (netRevenue < 0) {
+          errors.push({ row: i + 1, field: 'net_revenue', message: 'Net revenue negatif terdeteksi', severity: 'warning' });
+        }
+
+        const row: RoyaltyRow = {
+          period,
+          isrc,
+          upc,
+          title: headers.includes('title') ? values[getIndex('title')] : undefined,
+          artist,
+          label_name,
+          platform,
+          country,
+          sales_type: headers.includes('sales_type') ? values[getIndex('sales_type')] : undefined,
+          sales_unit: salesUnit,
+          net_revenue: netRevenue,
+        };
 
         data.push(row);
       } catch (err) {
-        errors.push(`Baris ${i + 1}: Format data tidak valid`);
+        errors.push({ row: i + 1, field: 'parsing', message: 'Format data tidak valid', severity: 'error' });
       }
     }
 
     return { data, errors };
+  };
+
+  // Calculate revenue split preview per label
+  const calculateRevenueSplitPreview = (data: RoyaltyRow[]): RevenueSplitPreview[] => {
+    const labelTotals: Record<string, number> = {};
+    
+    data.forEach(row => {
+      labelTotals[row.label_name] = (labelTotals[row.label_name] || 0) + row.net_revenue;
+    });
+    
+    return Object.entries(labelTotals).map(([label, totalRevenue]) => {
+      const isSoundpubLabel = label.toLowerCase() === 'soundpub music';
+      
+      if (isSoundpubLabel) {
+        // Soundpub Music: 70% Artist, 30% Label (no admin fee)
+        const artistShare = totalRevenue * 0.70;
+        const labelShare = totalRevenue * 0.30;
+        return {
+          label,
+          isSoundpubLabel: true,
+          totalRevenue,
+          labelShare,
+          artistShare,
+          adminShare: 0,
+          labelPercentage: 30,
+          artistPercentage: 70,
+          adminPercentage: 0,
+        };
+      } else {
+        // Other labels: 30% Admin, 21% Label, 49% Artist
+        const adminShare = totalRevenue * 0.30;
+        const labelShare = totalRevenue * 0.21;
+        const artistShare = totalRevenue * 0.49;
+        return {
+          label,
+          isSoundpubLabel: false,
+          totalRevenue,
+          labelShare,
+          artistShare,
+          adminShare,
+          labelPercentage: 21,
+          artistPercentage: 49,
+          adminPercentage: 30,
+        };
+      }
+    }).sort((a, b) => b.totalRevenue - a.totalRevenue);
   };
 
   const handleFileSelect = (file: File) => {
@@ -233,6 +369,7 @@ export default function UploadRoyalty() {
     setSelectedFile(file);
     setParsedData([]);
     setParseErrors([]);
+    setRevenueSplitPreview([]);
     setLastUploadResult(null);
 
     const reader = new FileReader();
@@ -241,11 +378,25 @@ export default function UploadRoyalty() {
       const { data, errors } = parseCSV(text);
       setParsedData(data);
       setParseErrors(errors);
+      
+      // Calculate revenue split preview
+      if (data.length > 0) {
+        setRevenueSplitPreview(calculateRevenueSplitPreview(data));
+      }
 
+      const errorCount = errors.filter(e => e.severity === 'error').length;
+      const warningCount = errors.filter(e => e.severity === 'warning').length;
+      
       if (data.length > 0) {
         toast({
           title: 'File Berhasil Diparsing',
-          description: `${data.length} baris data siap diimport`,
+          description: `${data.length} baris valid${warningCount > 0 ? `, ${warningCount} peringatan` : ''}`,
+        });
+      } else if (errorCount > 0) {
+        toast({
+          title: 'Parsing Gagal',
+          description: `Ditemukan ${errorCount} error yang harus diperbaiki`,
+          variant: 'destructive',
         });
       }
     };
@@ -579,34 +730,132 @@ export default function UploadRoyalty() {
                   </div>
                 )}
 
-                {/* Data count and warnings */}
-                <div className="flex items-center gap-4">
+                {/* Data count and validation summary */}
+                <div className="flex flex-wrap items-center gap-4">
                   {parsedData.length > 0 && (
                     <div className="flex items-center gap-2 text-green-400">
                       <CheckCircle2 className="h-5 w-5" />
                       <span>{parsedData.length} baris data valid</span>
                     </div>
                   )}
-                  {parseErrors.length > 0 && (
+                  {parseErrors.filter(e => e.severity === 'error').length > 0 && (
+                    <div className="flex items-center gap-2 text-red-400">
+                      <XCircle className="h-5 w-5" />
+                      <span>{parseErrors.filter(e => e.severity === 'error').length} error</span>
+                    </div>
+                  )}
+                  {parseErrors.filter(e => e.severity === 'warning').length > 0 && (
                     <div className="flex items-center gap-2 text-yellow-400">
                       <AlertCircle className="h-5 w-5" />
-                      <span>{parseErrors.length} peringatan</span>
+                      <span>{parseErrors.filter(e => e.severity === 'warning').length} peringatan</span>
                     </div>
                   )}
                 </div>
 
-                {/* Errors */}
+                {/* Validation Errors */}
                 {parseErrors.length > 0 && (
-                  <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
-                    <p className="font-medium text-yellow-400 mb-2">Peringatan:</p>
-                    <ul className="text-sm text-yellow-300 space-y-1">
-                      {parseErrors.slice(0, 5).map((error, index) => (
-                        <li key={index}>• {error}</li>
+                  <div className="space-y-3">
+                    {/* Critical Errors */}
+                    {parseErrors.filter(e => e.severity === 'error').length > 0 && (
+                      <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30">
+                        <p className="font-medium text-red-400 mb-2 flex items-center gap-2">
+                          <XCircle className="h-4 w-4" />
+                          Error ({parseErrors.filter(e => e.severity === 'error').length}):
+                        </p>
+                        <ul className="text-sm text-red-300 space-y-1">
+                          {parseErrors.filter(e => e.severity === 'error').slice(0, 5).map((error, index) => (
+                            <li key={index} className="flex items-start gap-2">
+                              <span className="text-red-400 font-mono text-xs bg-red-500/20 px-1.5 py-0.5 rounded">
+                                Baris {error.row}
+                              </span>
+                              <span>
+                                <strong className="text-red-400">{error.field}:</strong> {error.message}
+                              </span>
+                            </li>
+                          ))}
+                          {parseErrors.filter(e => e.severity === 'error').length > 5 && (
+                            <li className="text-red-400/70">
+                              ...dan {parseErrors.filter(e => e.severity === 'error').length - 5} error lainnya
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                    
+                    {/* Warnings */}
+                    {parseErrors.filter(e => e.severity === 'warning').length > 0 && (
+                      <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                        <p className="font-medium text-yellow-400 mb-2 flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4" />
+                          Peringatan ({parseErrors.filter(e => e.severity === 'warning').length}):
+                        </p>
+                        <ul className="text-sm text-yellow-300 space-y-1">
+                          {parseErrors.filter(e => e.severity === 'warning').slice(0, 3).map((error, index) => (
+                            <li key={index} className="flex items-start gap-2">
+                              <span className="text-yellow-400 font-mono text-xs bg-yellow-500/20 px-1.5 py-0.5 rounded">
+                                Baris {error.row}
+                              </span>
+                              <span>
+                                <strong className="text-yellow-400">{error.field}:</strong> {error.message}
+                              </span>
+                            </li>
+                          ))}
+                          {parseErrors.filter(e => e.severity === 'warning').length > 3 && (
+                            <li className="text-yellow-400/70">
+                              ...dan {parseErrors.filter(e => e.severity === 'warning').length - 3} peringatan lainnya
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Revenue Split Preview */}
+                {revenueSplitPreview.length > 0 && (
+                  <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+                    <p className="font-medium mb-3 flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-primary" />
+                      Preview Pembagian Revenue
+                    </p>
+                    <div className="space-y-3">
+                      {revenueSplitPreview.map((split, index) => (
+                        <div key={index} className="p-3 rounded-lg bg-muted/30 border border-border/50">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{split.label}</span>
+                              {split.isSoundpubLabel && (
+                                <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/30">
+                                  Soundpub Label
+                                </Badge>
+                              )}
+                            </div>
+                            <span className="font-mono text-sm text-muted-foreground">
+                              Total: Rp {split.totalRevenue.toLocaleString('id-ID')}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 text-sm">
+                            {split.adminPercentage > 0 && (
+                              <div className="p-2 rounded bg-red-500/10 border border-red-500/20">
+                                <p className="text-xs text-muted-foreground">Admin ({split.adminPercentage}%)</p>
+                                <p className="font-mono text-red-400">Rp {split.adminShare.toLocaleString('id-ID')}</p>
+                              </div>
+                            )}
+                            <div className="p-2 rounded bg-blue-500/10 border border-blue-500/20">
+                              <p className="text-xs text-muted-foreground">Label ({split.labelPercentage}%)</p>
+                              <p className="font-mono text-blue-400">Rp {split.labelShare.toLocaleString('id-ID')}</p>
+                            </div>
+                            <div className="p-2 rounded bg-green-500/10 border border-green-500/20">
+                              <p className="text-xs text-muted-foreground">Artist ({split.artistPercentage}%)</p>
+                              <p className="font-mono text-green-400">Rp {split.artistShare.toLocaleString('id-ID')}</p>
+                            </div>
+                          </div>
+                        </div>
                       ))}
-                      {parseErrors.length > 5 && (
-                        <li>• ...dan {parseErrors.length - 5} peringatan lainnya</li>
-                      )}
-                    </ul>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-3">
+                      * Soundpub Music: 70% Artist, 30% Label | Label lain: 49% Artist, 21% Label, 30% Admin
+                    </p>
                   </div>
                 )}
 
@@ -685,6 +934,7 @@ export default function UploadRoyalty() {
                         setSelectedFile(null);
                         setParsedData([]);
                         setParseErrors([]);
+                        setRevenueSplitPreview([]);
                       }}
                     >
                       <XCircle className="h-4 w-4 mr-2" />
