@@ -33,6 +33,7 @@ import {
   BarChart3,
   ScrollText,
   FolderArchive,
+  PieChart,
 } from 'lucide-react';
 
 interface NavItem {
@@ -67,6 +68,11 @@ const mainNavItems: NavItem[] = [
     title: 'Analytics', 
     url: '/dashboard/analytics', 
     icon: BarChart3 
+  },
+  { 
+    title: 'Ringkasan Royalti', 
+    url: '/dashboard/royalty-summary', 
+    icon: PieChart 
   },
 ];
 
