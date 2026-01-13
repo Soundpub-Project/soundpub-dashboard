@@ -166,11 +166,13 @@ export type Database = {
       profiles: {
         Row: {
           address: string | null
+          artist_revenue: number
           balance: number
           created_at: string | null
           email: string
           full_name: string
           id: string
+          label_revenue: number
           logo_url: string | null
           logo_url_dark: string | null
           logo_url_light: string | null
@@ -181,11 +183,13 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          artist_revenue?: number
           balance?: number
           created_at?: string | null
           email: string
           full_name: string
           id: string
+          label_revenue?: number
           logo_url?: string | null
           logo_url_dark?: string | null
           logo_url_light?: string | null
@@ -196,11 +200,13 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          artist_revenue?: number
           balance?: number
           created_at?: string | null
           email?: string
           full_name?: string
           id?: string
+          label_revenue?: number
           logo_url?: string | null
           logo_url_dark?: string | null
           logo_url_light?: string | null
