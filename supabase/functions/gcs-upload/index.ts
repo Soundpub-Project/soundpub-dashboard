@@ -6,10 +6,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface GCSUploadRequest {
+interface GCSSignedUrlRequest {
   file_name: string;
   file_type: string;
-  file_data: string; // base64 encoded
   folder?: string;
 }
 
@@ -62,11 +61,11 @@ serve(async (req) => {
       throw new Error('GCS configuration is missing');
     }
 
-    const body: GCSUploadRequest = await req.json();
-    const { file_name, file_type, file_data, folder } = body;
+    const body: GCSSignedUrlRequest = await req.json();
+    const { file_name, file_type, folder } = body;
 
-    if (!file_name || !file_type || !file_data) {
-      throw new Error('Missing required fields: file_name, file_type, file_data');
+    if (!file_name || !file_type) {
+      throw new Error('Missing required fields: file_name, file_type');
     }
 
     // Parse the service account key
@@ -132,52 +131,61 @@ serve(async (req) => {
       throw new Error('Failed to get GCS access token');
     }
 
-    // Upload file to GCS
+    // Generate object path
     const objectPath = folder ? `${folder}/${file_name}` : file_name;
-    const fileBuffer = Uint8Array.from(atob(file_data), c => c.charCodeAt(0));
     
-    const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${gcsBucketName}/o?uploadType=media&name=${encodeURIComponent(objectPath)}`;
+    // Create resumable upload session to get upload URL
+    const initiateUrl = `https://storage.googleapis.com/upload/storage/v1/b/${gcsBucketName}/o?uploadType=resumable&name=${encodeURIComponent(objectPath)}`;
     
-    const uploadResponse = await fetch(uploadUrl, {
+    const initiateResponse = await fetch(initiateUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${tokenData.access_token}`,
-        'Content-Type': file_type,
+        'Content-Type': 'application/json',
+        'X-Upload-Content-Type': file_type,
       },
-      body: fileBuffer,
+      body: JSON.stringify({
+        name: objectPath,
+        contentType: file_type,
+      }),
     });
 
-    if (!uploadResponse.ok) {
-      const errorText = await uploadResponse.text();
-      console.error('GCS Upload Error:', errorText);
-      throw new Error(`GCS upload failed: ${uploadResponse.status}`);
+    if (!initiateResponse.ok) {
+      const errorText = await initiateResponse.text();
+      console.error('GCS Initiate Error:', errorText);
+      throw new Error(`Failed to initiate upload: ${initiateResponse.status}`);
     }
 
-    const uploadResult = await uploadResponse.json();
+    // Get the resumable upload URL from the Location header
+    const uploadUrl = initiateResponse.headers.get('Location');
     
+    if (!uploadUrl) {
+      throw new Error('Failed to get upload URL from GCS');
+    }
+
     // Generate public URL
     const publicUrl = `https://storage.googleapis.com/${gcsBucketName}/${objectPath}`;
 
-    // Log the upload action
+    // Log the upload initiation
     await supabase.from('audit_logs').insert({
       actor_id: user.id,
-      action: 'gcs_file_upload',
+      action: 'gcs_upload_initiated',
       target_type: 'gcs_file',
       details: { 
         file_name: objectPath, 
         file_type,
         bucket: gcsBucketName,
-        size: fileBuffer.length
       },
     });
 
-    console.log(`File uploaded to GCS: ${objectPath}`);
+    console.log(`Upload session created for: ${objectPath}`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        url: publicUrl,
-        object: uploadResult
+        uploadUrl: uploadUrl,
+        publicUrl: publicUrl,
+        objectPath: objectPath,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

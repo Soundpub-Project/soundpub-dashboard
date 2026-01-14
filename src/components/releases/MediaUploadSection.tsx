@@ -89,33 +89,46 @@ export function MediaUploadSection({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // All audio uploads go to GCS
+  // All audio uploads go to GCS using resumable upload
   const uploadToGCS = async (file: File, type: MediaType): Promise<string> => {
     const fileExt = file.name.split('.').pop()?.toLowerCase();
     const fileName = `${type}-${trackIndex}-${Date.now()}.${fileExt}`;
     const folder = GCS_FOLDER_MAP[type];
 
-    // Convert file to base64
-    const base64 = await new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        resolve(result.split(',')[1]);
-      };
-      reader.readAsDataURL(file);
-    });
+    // Get the session from Supabase
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData?.session?.access_token) {
+      throw new Error('Not authenticated');
+    }
 
+    // Step 1: Get signed upload URL from edge function
     const { data, error } = await supabase.functions.invoke('gcs-upload', {
       body: {
         file_name: fileName,
-        file_type: file.type,
-        file_data: base64,
+        file_type: file.type || 'audio/mpeg',
         folder: folder,
       },
     });
 
     if (error) throw error;
-    return data.url;
+    if (!data?.uploadUrl) throw new Error('Failed to get upload URL');
+
+    // Step 2: Upload file directly to GCS using the resumable URL
+    const uploadResponse = await fetch(data.uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': file.type || 'audio/mpeg',
+      },
+      body: file,
+    });
+
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      console.error('GCS Upload Error:', errorText);
+      throw new Error(`Upload failed: ${uploadResponse.status}`);
+    }
+
+    return data.publicUrl;
   };
 
   // Get audio duration from file
