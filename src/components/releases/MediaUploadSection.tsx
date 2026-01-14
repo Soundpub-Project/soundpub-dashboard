@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,12 @@ interface MediaUploadSectionProps {
 }
 
 type MediaType = 'audio' | 'video' | 'clip';
+
+const GCS_FOLDER_MAP: Record<MediaType, string> = {
+  audio: 'audio',
+  video: 'video',
+  clip: 'clips',
+};
 
 const BUCKET_MAP: Record<MediaType, string> = {
   audio: 'track-audio',
@@ -70,17 +76,79 @@ export function MediaUploadSection({
   const [uploading, setUploading] = useState<MediaType | null>(null);
   const [progress, setProgress] = useState(0);
   const [playingClip, setPlayingClip] = useState(false);
+  const [gcsEnabled, setGcsEnabled] = useState(false);
   
   const audioInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const clipInputRef = useRef<HTMLInputElement>(null);
   const audioPlayerRef = useRef<HTMLAudioElement>(null);
 
+  // Check if GCS is enabled
+  useEffect(() => {
+    const checkGcsEnabled = async () => {
+      const { data } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'gcs_enabled')
+        .single();
+      setGcsEnabled(data?.value === 'true');
+    };
+    checkGcsEnabled();
+  }, []);
+
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  };
+
+  const uploadToGCS = async (file: File, type: MediaType): Promise<string> => {
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    const fileName = `${type}-${trackIndex}-${Date.now()}.${fileExt}`;
+    const folder = GCS_FOLDER_MAP[type];
+
+    // Convert file to base64
+    const base64 = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result.split(',')[1]);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    const { data, error } = await supabase.functions.invoke('gcs-upload', {
+      body: {
+        file_name: fileName,
+        file_type: file.type,
+        file_data: base64,
+        folder: folder,
+      },
+    });
+
+    if (error) throw error;
+    return data.url;
+  };
+
+  const uploadToSupabase = async (file: File, type: MediaType): Promise<string> => {
+    const bucket = BUCKET_MAP[type];
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    const fileName = `${crypto.randomUUID()}.${fileExt}`;
+    const filePath = `track-${trackIndex}/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(bucket)
+      .upload(filePath, file);
+
+    if (uploadError) throw uploadError;
+
+    const { data: urlData } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(filePath);
+
+    // For private buckets, we store the path instead of public URL
+    return bucket === 'audio-clips' ? urlData.publicUrl : filePath;
   };
 
   const handleUpload = async (file: File, type: MediaType) => {
@@ -94,32 +162,21 @@ export function MediaUploadSection({
     setProgress(0);
 
     try {
-      const bucket = BUCKET_MAP[type];
-      const fileExt = file.name.split('.').pop()?.toLowerCase();
-      const fileName = `${crypto.randomUUID()}.${fileExt}`;
-      const filePath = `track-${trackIndex}/${fileName}`;
-
       // Simulate progress for better UX
       const progressInterval = setInterval(() => {
         setProgress((prev) => Math.min(prev + 10, 90));
       }, 200);
 
-      const { error: uploadError } = await supabase.storage
-        .from(bucket)
-        .upload(filePath, file);
+      let url: string;
+
+      if (gcsEnabled) {
+        url = await uploadToGCS(file, type);
+      } else {
+        url = await uploadToSupabase(file, type);
+      }
 
       clearInterval(progressInterval);
-
-      if (uploadError) throw uploadError;
-
       setProgress(100);
-
-      const { data: urlData } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(filePath);
-
-      // For private buckets, we store the path instead of public URL
-      const url = bucket === 'audio-clips' ? urlData.publicUrl : filePath;
 
       switch (type) {
         case 'audio':

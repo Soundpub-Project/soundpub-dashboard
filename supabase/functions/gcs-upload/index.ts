@@ -24,7 +24,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Verify user is superadmin
+    // Verify user is authenticated
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       throw new Error('No authorization header');
@@ -37,15 +37,21 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    // Check if user is superadmin
+    // Get user role
     const { data: roleData, error: roleError } = await supabase
       .from('user_roles')
       .select('role')
       .eq('user_id', user.id)
       .single();
 
-    if (roleError || !roleData || roleData.role !== 'superadmin') {
-      throw new Error('Only superadmins can use GCS upload');
+    if (roleError || !roleData) {
+      throw new Error('User role not found');
+    }
+
+    // Allow superadmin, admin, and label roles to upload
+    const allowedRoles = ['superadmin', 'admin', 'label'];
+    if (!allowedRoles.includes(roleData.role)) {
+      throw new Error('Insufficient permissions to upload files');
     }
 
     const gcsProjectId = Deno.env.get('GCS_PROJECT_ID');
