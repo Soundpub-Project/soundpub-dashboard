@@ -69,6 +69,7 @@ export function MediaUploadSection({
   const [playingClip, setPlayingClip] = useState(false);
   const [clipDuration, setClipDuration] = useState<number | null>(null);
   const [clipError, setClipError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<MediaType | null>(null);
   
   const audioInputRef = useRef<HTMLInputElement>(null);
   const clipInputRef = useRef<HTMLInputElement>(null);
@@ -252,6 +253,44 @@ export function MediaUploadSection({
     }
   };
 
+  const isValidAudioFile = (file: File, type: MediaType): boolean => {
+    const acceptedTypes = ACCEPT_MAP[type].split(',').map(ext => ext.trim().replace('.', ''));
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    return !!fileExt && acceptedTypes.includes(fileExt);
+  };
+
+  const handleDragOver = (e: React.DragEvent, type: MediaType) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!disabled && !uploading) {
+      setDragOver(type);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, type: MediaType) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(null);
+
+    if (disabled || uploading) return;
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const file = files[0];
+      if (isValidAudioFile(file, type)) {
+        handleUpload(file, type);
+      } else {
+        toast.error(`Format file tidak didukung. Gunakan: ${ACCEPT_MAP[type]}`);
+      }
+    }
+  };
+
   const renderMediaUpload = (
     type: MediaType,
     currentUrl: string | undefined,
@@ -259,6 +298,7 @@ export function MediaUploadSection({
   ) => {
     const isUploading = uploading === type;
     const hasFile = !!currentUrl;
+    const isDraggedOver = dragOver === type;
 
     return (
       <div className="space-y-2">
@@ -338,17 +378,31 @@ export function MediaUploadSection({
                   <Progress value={progress} className="h-2" />
                 </div>
               ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => inputRef.current?.click()}
-                  disabled={disabled}
+                <div
+                  className={`
+                    flex flex-col items-center justify-center gap-2 p-4 rounded-lg border-2 border-dashed 
+                    cursor-pointer transition-all duration-200
+                    ${isDraggedOver 
+                      ? 'border-primary bg-primary/10 scale-[1.02]' 
+                      : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50'
+                    }
+                    ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+                  `}
+                  onClick={() => !disabled && inputRef.current?.click()}
+                  onDragOver={(e) => handleDragOver(e, type)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, type)}
                 >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload {type === 'audio' ? 'Full Audio' : 'Audio Clip'}
-                </Button>
+                  <Upload className={`h-6 w-6 ${isDraggedOver ? 'text-primary' : 'text-muted-foreground'}`} />
+                  <div className="text-center">
+                    <p className={`text-sm font-medium ${isDraggedOver ? 'text-primary' : ''}`}>
+                      {isDraggedOver ? 'Lepaskan file di sini' : 'Drag & drop atau klik untuk upload'}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {type === 'audio' ? 'WAV, FLAC, AIFF, MP3' : 'MP3, M4A, OGG, WAV (30-60 detik)'}
+                    </p>
+                  </div>
+                </div>
               )}
               
               {type === 'clip' && clipError && (
