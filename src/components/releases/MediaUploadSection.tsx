@@ -117,6 +117,23 @@ export function MediaUploadSection({
     return data.url;
   };
 
+  // Get audio duration from file
+  const getAudioDuration = (file: File): Promise<number> => {
+    return new Promise((resolve, reject) => {
+      const audio = new Audio();
+      audio.onloadedmetadata = () => {
+        const duration = audio.duration;
+        URL.revokeObjectURL(audio.src);
+        resolve(duration);
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(audio.src);
+        reject(new Error('Gagal membaca file audio'));
+      };
+      audio.src = URL.createObjectURL(file);
+    });
+  };
+
   const validateClipDuration = (file: File): Promise<number> => {
     return new Promise((resolve, reject) => {
       const audio = new Audio();
@@ -152,12 +169,25 @@ export function MediaUploadSection({
     // Validate clip duration (30-60 seconds)
     if (type === 'clip') {
       try {
-        const duration = await validateClipDuration(file);
-        setClipDuration(duration);
+        const clipDur = await validateClipDuration(file);
+        setClipDuration(clipDur);
       } catch (error: any) {
         setClipError(error.message);
         toast.error(error.message);
         return;
+      }
+    }
+
+    // Auto-detect duration for full audio
+    if (type === 'audio') {
+      try {
+        const audioDuration = await getAudioDuration(file);
+        const durationInSeconds = Math.round(audioDuration);
+        onDurationChange(durationInSeconds);
+        toast.success(`Durasi terdeteksi: ${formatDuration(durationInSeconds)}`);
+      } catch (error) {
+        console.error('Could not detect audio duration:', error);
+        // Don't block upload if duration detection fails
       }
     }
 
