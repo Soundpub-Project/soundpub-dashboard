@@ -409,6 +409,7 @@ export type Database = {
           composer: string | null
           contributors: Json | null
           created_at: string | null
+          duration: number | null
           explicit_lyrics: boolean | null
           genre: string | null
           id: string
@@ -428,6 +429,7 @@ export type Database = {
           composer?: string | null
           contributors?: Json | null
           created_at?: string | null
+          duration?: number | null
           explicit_lyrics?: boolean | null
           genre?: string | null
           id?: string
@@ -447,6 +449,7 @@ export type Database = {
           composer?: string | null
           contributors?: Json | null
           created_at?: string | null
+          duration?: number | null
           explicit_lyrics?: boolean | null
           genre?: string | null
           id?: string
