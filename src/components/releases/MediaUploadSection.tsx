@@ -3,98 +3,77 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { 
   Music, 
-  Video, 
   FileAudio, 
   Upload, 
   X, 
   Loader2,
   Play,
-  Pause
+  Pause,
+  Clock
 } from 'lucide-react';
 
 interface MediaUploadSectionProps {
   trackIndex: number;
   audioUrl?: string;
-  videoUrl?: string;
   clipUrl?: string;
+  duration?: number;
   onAudioChange: (url: string | null) => void;
-  onVideoChange: (url: string | null) => void;
   onClipChange: (url: string | null) => void;
+  onDurationChange: (duration: number | null) => void;
   disabled?: boolean;
 }
 
-type MediaType = 'audio' | 'video' | 'clip';
+type MediaType = 'audio' | 'clip';
 
 const GCS_FOLDER_MAP: Record<MediaType, string> = {
   audio: 'audio',
-  video: 'video',
   clip: 'clips',
-};
-
-const BUCKET_MAP: Record<MediaType, string> = {
-  audio: 'track-audio',
-  video: 'track-video',
-  clip: 'audio-clips',
 };
 
 const ACCEPT_MAP: Record<MediaType, string> = {
   audio: '.wav,.flac,.aiff,.mp3',
-  video: '.mp4,.mov,.webm',
   clip: '.mp3,.m4a,.ogg,.wav',
 };
 
 const MAX_SIZE_MAP: Record<MediaType, number> = {
-  audio: 500 * 1024 * 1024, // 500MB for full audio
-  video: 2 * 1024 * 1024 * 1024, // 2GB for video
+  audio: 500 * 1024 * 1024, // 500MB for full audio (no limit practically)
   clip: 20 * 1024 * 1024, // 20MB for clips
 };
 
 const LABEL_MAP: Record<MediaType, string> = {
-  audio: 'Full Audio (WAV/FLAC)',
-  video: 'Music Video (MP4)',
-  clip: 'Audio Clip (30-60s)',
+  audio: 'Full Audio (WAV/FLAC/MP3)',
+  clip: 'Audio Clip (30-60 detik)',
 };
 
 const ICON_MAP: Record<MediaType, React.ReactNode> = {
   audio: <Music className="h-4 w-4" />,
-  video: <Video className="h-4 w-4" />,
   clip: <FileAudio className="h-4 w-4" />,
 };
 
 export function MediaUploadSection({
   trackIndex,
   audioUrl,
-  videoUrl,
   clipUrl,
+  duration,
   onAudioChange,
-  onVideoChange,
   onClipChange,
+  onDurationChange,
   disabled = false,
 }: MediaUploadSectionProps) {
   const [uploading, setUploading] = useState<MediaType | null>(null);
   const [progress, setProgress] = useState(0);
   const [playingClip, setPlayingClip] = useState(false);
-  const [gcsEnabled, setGcsEnabled] = useState(false);
+  const [clipDuration, setClipDuration] = useState<number | null>(null);
+  const [clipError, setClipError] = useState<string | null>(null);
   
   const audioInputRef = useRef<HTMLInputElement>(null);
-  const videoInputRef = useRef<HTMLInputElement>(null);
   const clipInputRef = useRef<HTMLInputElement>(null);
   const audioPlayerRef = useRef<HTMLAudioElement>(null);
-
-  // Check if GCS is enabled
-  useEffect(() => {
-    const checkGcsEnabled = async () => {
-      const { data } = await supabase
-        .from('app_settings')
-        .select('value')
-        .eq('key', 'gcs_enabled')
-        .single();
-      setGcsEnabled(data?.value === 'true');
-    };
-    checkGcsEnabled();
-  }, []);
+  const clipValidationRef = useRef<HTMLAudioElement>(null);
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
@@ -103,6 +82,13 @@ export function MediaUploadSection({
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
   };
 
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // All audio uploads go to GCS
   const uploadToGCS = async (file: File, type: MediaType): Promise<string> => {
     const fileExt = file.name.split('.').pop()?.toLowerCase();
     const fileName = `${type}-${trackIndex}-${Date.now()}.${fileExt}`;
@@ -131,24 +117,27 @@ export function MediaUploadSection({
     return data.url;
   };
 
-  const uploadToSupabase = async (file: File, type: MediaType): Promise<string> => {
-    const bucket = BUCKET_MAP[type];
-    const fileExt = file.name.split('.').pop()?.toLowerCase();
-    const fileName = `${crypto.randomUUID()}.${fileExt}`;
-    const filePath = `track-${trackIndex}/${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from(bucket)
-      .upload(filePath, file);
-
-    if (uploadError) throw uploadError;
-
-    const { data: urlData } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(filePath);
-
-    // For private buckets, we store the path instead of public URL
-    return bucket === 'audio-clips' ? urlData.publicUrl : filePath;
+  const validateClipDuration = (file: File): Promise<number> => {
+    return new Promise((resolve, reject) => {
+      const audio = new Audio();
+      audio.onloadedmetadata = () => {
+        const duration = audio.duration;
+        URL.revokeObjectURL(audio.src);
+        
+        if (duration < 30) {
+          reject(new Error(`Audio clip terlalu pendek (${formatDuration(duration)}). Minimal 30 detik.`));
+        } else if (duration > 60) {
+          reject(new Error(`Audio clip terlalu panjang (${formatDuration(duration)}). Maksimal 60 detik.`));
+        } else {
+          resolve(duration);
+        }
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(audio.src);
+        reject(new Error('Gagal membaca file audio'));
+      };
+      audio.src = URL.createObjectURL(file);
+    });
   };
 
   const handleUpload = async (file: File, type: MediaType) => {
@@ -156,6 +145,20 @@ export function MediaUploadSection({
     if (file.size > maxSize) {
       toast.error(`File terlalu besar. Maksimal ${formatFileSize(maxSize)}`);
       return;
+    }
+
+    setClipError(null);
+
+    // Validate clip duration (30-60 seconds)
+    if (type === 'clip') {
+      try {
+        const duration = await validateClipDuration(file);
+        setClipDuration(duration);
+      } catch (error: any) {
+        setClipError(error.message);
+        toast.error(error.message);
+        return;
+      }
     }
 
     setUploading(type);
@@ -167,27 +170,16 @@ export function MediaUploadSection({
         setProgress((prev) => Math.min(prev + 10, 90));
       }, 200);
 
-      let url: string;
-
-      if (gcsEnabled) {
-        url = await uploadToGCS(file, type);
-      } else {
-        url = await uploadToSupabase(file, type);
-      }
+      // All audio uploads go to GCS
+      const url = await uploadToGCS(file, type);
 
       clearInterval(progressInterval);
       setProgress(100);
 
-      switch (type) {
-        case 'audio':
-          onAudioChange(url);
-          break;
-        case 'video':
-          onVideoChange(url);
-          break;
-        case 'clip':
-          onClipChange(url);
-          break;
+      if (type === 'audio') {
+        onAudioChange(url);
+      } else {
+        onClipChange(url);
       }
 
       toast.success(`${LABEL_MAP[type]} berhasil diupload`);
@@ -200,45 +192,14 @@ export function MediaUploadSection({
     }
   };
 
-  const handleRemove = async (type: MediaType, currentUrl: string | undefined) => {
-    if (!currentUrl) return;
-
-    try {
-      const bucket = BUCKET_MAP[type];
-      const filePath = type === 'clip' 
-        ? currentUrl.split('/').slice(-2).join('/') 
-        : currentUrl;
-
-      await supabase.storage.from(bucket).remove([filePath]);
-
-      switch (type) {
-        case 'audio':
-          onAudioChange(null);
-          break;
-        case 'video':
-          onVideoChange(null);
-          break;
-        case 'clip':
-          onClipChange(null);
-          break;
-      }
-
-      toast.success(`${LABEL_MAP[type]} berhasil dihapus`);
-    } catch (error) {
-      console.error('Error removing file:', error);
-      // Still remove from state even if storage delete fails
-      switch (type) {
-        case 'audio':
-          onAudioChange(null);
-          break;
-        case 'video':
-          onVideoChange(null);
-          break;
-        case 'clip':
-          onClipChange(null);
-          break;
-      }
+  const handleRemove = (type: MediaType) => {
+    if (type === 'audio') {
+      onAudioChange(null);
+    } else {
+      onClipChange(null);
+      setClipDuration(null);
     }
+    toast.success(`${LABEL_MAP[type]} berhasil dihapus`);
   };
 
   const togglePlayClip = () => {
@@ -249,6 +210,15 @@ export function MediaUploadSection({
         audioPlayerRef.current.play();
       }
       setPlayingClip(!playingClip);
+    }
+  };
+
+  const handleDurationChange = (value: string) => {
+    const numValue = parseInt(value, 10);
+    if (isNaN(numValue) || numValue < 0) {
+      onDurationChange(null);
+    } else {
+      onDurationChange(numValue);
     }
   };
 
@@ -287,6 +257,11 @@ export function MediaUploadSection({
                       )}
                     </Button>
                     <span>Audio clip uploaded</span>
+                    {clipDuration && (
+                      <span className="text-xs text-muted-foreground">
+                        ({formatDuration(clipDuration)})
+                      </span>
+                    )}
                     <audio
                       ref={audioPlayerRef}
                       src={currentUrl}
@@ -295,7 +270,7 @@ export function MediaUploadSection({
                     />
                   </div>
                 ) : (
-                  <span>File uploaded</span>
+                  <span>Full audio uploaded</span>
                 )}
               </div>
               <Button
@@ -303,7 +278,7 @@ export function MediaUploadSection({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 text-destructive hover:text-destructive"
-                onClick={() => handleRemove(type, currentUrl)}
+                onClick={() => handleRemove(type)}
                 disabled={disabled}
               >
                 <X className="h-4 w-4" />
@@ -342,8 +317,12 @@ export function MediaUploadSection({
                   disabled={disabled}
                 >
                   <Upload className="h-4 w-4 mr-2" />
-                  Upload {type === 'audio' ? 'Audio' : type === 'video' ? 'Video' : 'Clip'}
+                  Upload {type === 'audio' ? 'Full Audio' : 'Audio Clip'}
                 </Button>
+              )}
+              
+              {type === 'clip' && clipError && (
+                <p className="text-xs text-destructive mt-1">{clipError}</p>
               )}
             </div>
           )}
@@ -356,9 +335,30 @@ export function MediaUploadSection({
     <div className="space-y-4 p-4 rounded-lg border bg-background">
       <h4 className="font-medium text-sm">Media Files</h4>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Duration Input */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Clock className="h-4 w-4" />
+          <span>Durasi Track (dalam detik)</span>
+        </div>
+        <Input
+          type="number"
+          min="0"
+          placeholder="Contoh: 180 untuk 3 menit"
+          value={duration || ''}
+          onChange={(e) => handleDurationChange(e.target.value)}
+          disabled={disabled}
+          className="max-w-xs"
+        />
+        {duration && duration > 0 && (
+          <p className="text-xs text-muted-foreground">
+            = {formatDuration(duration)}
+          </p>
+        )}
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {renderMediaUpload('audio', audioUrl, audioInputRef)}
-        {renderMediaUpload('video', videoUrl, videoInputRef)}
         {renderMediaUpload('clip', clipUrl, clipInputRef)}
       </div>
     </div>

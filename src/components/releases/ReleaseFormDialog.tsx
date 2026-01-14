@@ -100,8 +100,8 @@ const trackSchema = z.object({
   explicit_lyrics: z.boolean().default(false),
   contributors: z.array(contributorSchema).optional().default([]),
   audio_url: z.string().optional().nullable(),
-  video_url: z.string().optional().nullable(),
   clip_url: z.string().optional().nullable(),
+  duration: z.number().optional().nullable(),
 });
 
 const releaseFormSchema = z.object({
@@ -157,8 +157,8 @@ interface Track {
   explicit_lyrics?: boolean;
   contributors?: { name: string; type: string; role: string }[];
   audio_url?: string | null;
-  video_url?: string | null;
   clip_url?: string | null;
+  duration?: number | null;
 }
 
 interface ReleaseFormDialogProps {
@@ -210,8 +210,8 @@ export function ReleaseFormDialog({
           explicit_lyrics: false,
           contributors: [],
           audio_url: null,
-          video_url: null,
           clip_url: null,
+          duration: null,
         },
       ],
     },
@@ -315,8 +315,8 @@ export function ReleaseFormDialog({
           explicit_lyrics: false,
           contributors: [],
           audio_url: null,
-          video_url: null,
           clip_url: null,
+          duration: null,
         },
         ],
       });
@@ -361,8 +361,8 @@ export function ReleaseFormDialog({
               explicit_lyrics: t.explicit_lyrics || false,
               contributors: t.contributors && Array.isArray(t.contributors) ? t.contributors : [],
               audio_url: t.audio_url || null,
-              video_url: t.video_url || null,
               clip_url: t.clip_url || null,
+              duration: t.duration || null,
             }))
           : [
               {
@@ -376,8 +376,8 @@ export function ReleaseFormDialog({
                 explicit_lyrics: false,
                 contributors: [],
                 audio_url: null,
-                video_url: null,
                 clip_url: null,
+                duration: null,
               },
             ],
       });
@@ -534,8 +534,8 @@ export function ReleaseFormDialog({
                 explicit_lyrics: track.explicit_lyrics,
                 contributors: track.contributors || [],
                 audio_url: track.audio_url || null,
-                video_url: track.video_url || null,
                 clip_url: track.clip_url || null,
+                duration: track.duration || null,
               })
               .eq('id', track.id);
 
@@ -554,9 +554,10 @@ export function ReleaseFormDialog({
               explicit_lyrics: track.explicit_lyrics,
               contributors: track.contributors || [],
               audio_url: track.audio_url || null,
-              video_url: track.video_url || null,
               clip_url: track.clip_url || null,
+              duration: track.duration || null,
             });
+
 
             if (error) throw error;
           }
@@ -606,8 +607,8 @@ export function ReleaseFormDialog({
             explicit_lyrics: track.explicit_lyrics,
             contributors: track.contributors || [],
             audio_url: track.audio_url || null,
-            video_url: track.video_url || null,
             clip_url: track.clip_url || null,
+            duration: track.duration || null,
           };
         });
 
@@ -642,8 +643,8 @@ export function ReleaseFormDialog({
       explicit_lyrics: false,
       contributors: [],
       audio_url: null,
-      video_url: null,
       clip_url: null,
+      duration: null,
     });
   };
 
@@ -1454,11 +1455,11 @@ export function ReleaseFormDialog({
                         <MediaUploadSection
                           trackIndex={trackIndex}
                           audioUrl={form.watch(`tracks.${trackIndex}.audio_url`) || undefined}
-                          videoUrl={form.watch(`tracks.${trackIndex}.video_url`) || undefined}
                           clipUrl={form.watch(`tracks.${trackIndex}.clip_url`) || undefined}
+                          duration={form.watch(`tracks.${trackIndex}.duration`) || undefined}
                           onAudioChange={(url) => form.setValue(`tracks.${trackIndex}.audio_url`, url)}
-                          onVideoChange={(url) => form.setValue(`tracks.${trackIndex}.video_url`, url)}
                           onClipChange={(url) => form.setValue(`tracks.${trackIndex}.clip_url`, url)}
+                          onDurationChange={(duration) => form.setValue(`tracks.${trackIndex}.duration`, duration)}
                           disabled={loading}
                         />
                       </div>
