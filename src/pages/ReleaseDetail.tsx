@@ -160,7 +160,8 @@ export default function ReleaseDetail() {
 
       setRelease(releaseData);
 
-      // Fetch label info
+      // Fetch label info - use royalties table to get label name if artist can't see profiles
+      // First try to fetch from profiles
       const { data: labelData, error: labelError } = await supabase
         .from('profiles')
         .select('id, full_name, email')
@@ -169,6 +170,42 @@ export default function ReleaseDetail() {
 
       if (!labelError && labelData) {
         setLabelInfo(labelData);
+      } else {
+        // For artists who can't see label profiles due to RLS,
+        // try to get label name from royalties table
+        const { data: royaltyData } = await supabase
+          .from('royalties')
+          .select('label_name')
+          .limit(1);
+        
+        if (royaltyData && royaltyData.length > 0) {
+          // Use the label_name from royalties as a fallback
+          setLabelInfo({
+            id: releaseData.label_id,
+            full_name: royaltyData[0].label_name,
+            email: ''
+          });
+        } else {
+          // Last resort: check if current user has parent_label_id
+          const { data: currentUserProfile } = await supabase
+            .from('profiles')
+            .select('parent_label_id')
+            .eq('id', releaseData.label_id)
+            .maybeSingle();
+          
+          // If still no data, try to get parent label info
+          if (currentUserProfile?.parent_label_id) {
+            const { data: parentLabel } = await supabase
+              .from('profiles')
+              .select('id, full_name, email')
+              .eq('id', currentUserProfile.parent_label_id)
+              .maybeSingle();
+            
+            if (parentLabel) {
+              setLabelInfo(parentLabel);
+            }
+          }
+        }
       }
 
       // Fetch tracks

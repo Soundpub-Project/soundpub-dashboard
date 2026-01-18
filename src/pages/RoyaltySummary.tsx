@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -101,6 +102,7 @@ const CHART_COLORS = [
 ];
 
 export default function RoyaltySummary() {
+  const { isArtist, profile } = useAuth();
   const [royalties, setRoyalties] = useState<Royalty[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState<string>('all');
@@ -286,6 +288,49 @@ export default function RoyaltySummary() {
       }))
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 20);
+  }, [filteredRoyalties]);
+
+  // Track breakdown (for artists - shows per song summary)
+  const trackBreakdown = useMemo(() => {
+    const trackMap = new Map<string, { 
+      title: string; 
+      isrc: string;
+      revenue: number; 
+      streams: number; 
+      label: string;
+      platforms: Set<string>;
+      countries: Set<string>;
+    }>();
+    
+    filteredRoyalties.forEach((r) => {
+      const key = r.isrc;
+      const existing = trackMap.get(key) || { 
+        title: r.title || 'Unknown', 
+        isrc: r.isrc,
+        revenue: 0, 
+        streams: 0, 
+        label: r.label_name,
+        platforms: new Set(),
+        countries: new Set(),
+      };
+      existing.revenue += Number(r.net_revenue || 0);
+      existing.streams += Number(r.sales_unit || 0);
+      existing.platforms.add(r.platform);
+      existing.countries.add(r.country);
+      trackMap.set(key, existing);
+    });
+
+    return Array.from(trackMap.entries())
+      .map(([isrc, data]) => ({
+        isrc,
+        title: data.title,
+        revenue: data.revenue,
+        streams: data.streams,
+        label: data.label,
+        platformCount: data.platforms.size,
+        countryCount: data.countries.size,
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
   }, [filteredRoyalties]);
 
   // Total stats for selected period
@@ -545,11 +590,20 @@ export default function RoyaltySummary() {
 
             {/* Tabs for different views */}
             <Tabs defaultValue="periods" className="space-y-4">
-              <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+              <TabsList className={cn(
+                "grid w-full lg:w-auto lg:inline-grid",
+                isArtist ? "grid-cols-3" : "grid-cols-4"
+              )}>
                 <TabsTrigger value="periods">Per Periode</TabsTrigger>
                 <TabsTrigger value="platforms">Per Platform</TabsTrigger>
-                <TabsTrigger value="labels">Per Label</TabsTrigger>
-                <TabsTrigger value="artists">Per Artist</TabsTrigger>
+                {isArtist ? (
+                  <TabsTrigger value="tracks">Per Lagu</TabsTrigger>
+                ) : (
+                  <>
+                    <TabsTrigger value="labels">Per Label</TabsTrigger>
+                    <TabsTrigger value="artists">Per Artist</TabsTrigger>
+                  </>
+                )}
               </TabsList>
 
               {/* Period Summary Tab */}
@@ -769,6 +823,71 @@ export default function RoyaltySummary() {
                   </CardContent>
                 </Card>
               </TabsContent>
+
+              {/* Track Breakdown Tab (for Artists) */}
+              {isArtist && (
+                <TabsContent value="tracks">
+                  <Card className="bg-card/50 border-border/50">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Disc3 className="h-5 w-5 text-primary" />
+                        Ringkasan Per Lagu
+                      </CardTitle>
+                      <CardDescription>
+                        Detail performa setiap lagu Anda dengan breakdown revenue dan streams
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>#</TableHead>
+                              <TableHead>Judul Lagu</TableHead>
+                              <TableHead>ISRC</TableHead>
+                              <TableHead>Label</TableHead>
+                              <TableHead className="text-right">Revenue</TableHead>
+                              <TableHead className="text-right">Streams</TableHead>
+                              <TableHead className="text-right">Platforms</TableHead>
+                              <TableHead className="text-right">Negara</TableHead>
+                              <TableHead className="text-right">Avg/Stream</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {trackBreakdown.map((track, index) => (
+                              <TableRow key={track.isrc}>
+                                <TableCell className="font-mono text-muted-foreground">{index + 1}</TableCell>
+                                <TableCell className="font-medium">{track.title}</TableCell>
+                                <TableCell className="font-mono text-xs">{track.isrc}</TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="text-xs">
+                                    {track.label}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right text-green-500 font-medium">
+                                  {formatCurrency(track.revenue)}
+                                </TableCell>
+                                <TableCell className="text-right">{formatNumber(track.streams)}</TableCell>
+                                <TableCell className="text-right">{track.platformCount}</TableCell>
+                                <TableCell className="text-right">{track.countryCount}</TableCell>
+                                <TableCell className="text-right text-muted-foreground">
+                                  {track.streams > 0 ? `Rp ${(track.revenue / track.streams).toFixed(2)}` : '-'}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      {trackBreakdown.length === 0 && (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Disc3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                          <p>Belum ada data lagu untuk periode ini</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              )}
             </Tabs>
           </>
         )}
