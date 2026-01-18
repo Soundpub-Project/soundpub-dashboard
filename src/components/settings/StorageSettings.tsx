@@ -40,7 +40,9 @@ export function StorageSettings() {
   const [corsStatus, setCorsStatus] = useState<{
     checked: boolean;
     configured: boolean | null;
+    partiallyConfigured?: boolean;
     message?: string;
+    lastApplied?: string;
   }>({ checked: false, configured: null });
   const [config, setConfig] = useState<StorageConfig>({
     storage_provider: 'supabase',
@@ -175,6 +177,7 @@ export function StorageSettings() {
       setCorsStatus({
         checked: true,
         configured: data?.corsConfigured ?? false,
+        partiallyConfigured: data?.partiallyConfigured ?? false,
         message: data?.message,
       });
     } catch (error: any) {
@@ -182,6 +185,7 @@ export function StorageSettings() {
       setCorsStatus({
         checked: true,
         configured: null,
+        partiallyConfigured: false,
         message: error.message || 'Gagal memeriksa status CORS',
       });
     } finally {
@@ -198,15 +202,18 @@ export function StorageSettings() {
 
       if (error) throw error;
 
+      const now = new Date().toLocaleString('id-ID');
       setCorsStatus({
         checked: true,
         configured: true,
+        partiallyConfigured: false,
         message: data?.message || 'CORS berhasil dikonfigurasi',
+        lastApplied: now,
       });
 
       toast({
         title: 'Sukses',
-        description: 'CORS berhasil dikonfigurasi untuk browser uploads',
+        description: 'CORS berhasil dikonfigurasi. Tunggu 1-2 menit agar perubahan berlaku sepenuhnya.',
       });
     } catch (error: any) {
       console.error('Apply CORS error:', error);
@@ -434,29 +441,47 @@ export function StorageSettings() {
                 </div>
 
                 {corsStatus.checked && (
-                  <div className={`p-3 rounded-lg ${
-                    corsStatus.configured === true 
-                      ? 'bg-chart-3/10 text-chart-3' 
-                      : corsStatus.configured === false 
-                        ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
-                        : 'bg-destructive/10 text-destructive'
-                  }`}>
-                    <div className="flex items-center gap-2">
-                      {corsStatus.configured === true ? (
-                        <CheckCircle2 className="h-4 w-4" />
-                      ) : corsStatus.configured === false ? (
-                        <XCircle className="h-4 w-4" />
-                      ) : (
-                        <X className="h-4 w-4" />
-                      )}
-                      <span className="text-sm font-medium">
-                        {corsStatus.configured === true 
-                          ? 'CORS sudah dikonfigurasi dengan benar' 
-                          : corsStatus.configured === false
-                            ? 'CORS belum dikonfigurasi - klik "Apply/Fix CORS" untuk mengaktifkan'
-                            : corsStatus.message || 'Gagal memeriksa status CORS'}
-                      </span>
+                  <div className="space-y-2">
+                    <div className={`p-3 rounded-lg ${
+                      corsStatus.configured === true 
+                        ? 'bg-chart-3/10 text-chart-3' 
+                        : corsStatus.partiallyConfigured
+                          ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
+                          : corsStatus.configured === false 
+                            ? 'bg-destructive/10 text-destructive'
+                            : 'bg-destructive/10 text-destructive'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        {corsStatus.configured === true ? (
+                          <CheckCircle2 className="h-4 w-4" />
+                        ) : corsStatus.partiallyConfigured ? (
+                          <RefreshCw className="h-4 w-4" />
+                        ) : (
+                          <XCircle className="h-4 w-4" />
+                        )}
+                        <span className="text-sm font-medium">
+                          {corsStatus.message || 'Status tidak diketahui'}
+                        </span>
+                      </div>
                     </div>
+                    
+                    {corsStatus.lastApplied && (
+                      <p className="text-xs text-muted-foreground">
+                        Terakhir diapply: {corsStatus.lastApplied}
+                      </p>
+                    )}
+                    
+                    {(corsStatus.configured || corsStatus.partiallyConfigured) && !corsStatus.configured && (
+                      <p className="text-xs text-muted-foreground">
+                        ⚠️ CORS tidak lengkap. Klik "Apply/Fix CORS" untuk memperbarui dengan konfigurasi terbaru.
+                      </p>
+                    )}
+                    
+                    {corsStatus.configured && (
+                      <p className="text-xs text-muted-foreground">
+                        ✅ Jika upload masih gagal setelah Apply CORS, tunggu 1-2 menit agar perubahan terpropagasi di Google Cloud.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

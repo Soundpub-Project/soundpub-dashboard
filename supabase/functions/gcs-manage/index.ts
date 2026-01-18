@@ -21,12 +21,13 @@ interface CorsRule {
   maxAgeSeconds?: number;
 }
 
+// Complete CORS rule with ALL required headers for resumable uploads
 const DESIRED_CORS_RULE: CorsRule = {
   origin: ['*'],
   method: ['GET', 'HEAD', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
   responseHeader: [
     'Content-Type',
-    'Content-Length',
+    'Content-Length', 
     'Content-Range',
     'ETag',
     'Location',
@@ -34,6 +35,20 @@ const DESIRED_CORS_RULE: CorsRule = {
     'x-goog-resumable',
     'x-goog-generation',
     'x-goog-metageneration',
+    'x-goog-stored-content-encoding',
+    'x-goog-stored-content-length',
+    'x-goog-upload-chunk-granularity',
+    'x-goog-upload-control-url',
+    'x-goog-upload-header-content-type',
+    'x-goog-upload-status',
+    'x-goog-upload-url',
+    'x-upload-content-length',
+    'x-upload-content-type',
+    'Access-Control-Allow-Origin',
+    'Access-Control-Allow-Methods',
+    'Access-Control-Allow-Headers',
+    'Access-Control-Expose-Headers',
+    'Access-Control-Max-Age',
   ],
   maxAgeSeconds: 3600,
 };
@@ -192,24 +207,44 @@ async function handleCheckCors(bucketName: string, accessToken: string) {
   const bucketData = await getRes.json();
   const existingCors: CorsRule[] | undefined = bucketData?.cors;
 
-  const hasWorkingRule = Array.isArray(existingCors)
+  // Check for complete CORS configuration including all required headers
+  const hasCompleteRule = Array.isArray(existingCors)
     ? existingCors.some((rule) => {
         const origins = rule.origin ?? [];
         const methods = (rule.method ?? []).map((m) => m.toUpperCase());
+        const headers = rule.responseHeader ?? [];
+        
         const originOk = origins.includes('*');
-        const methodsOk = methods.includes('PUT') && methods.includes('OPTIONS') && methods.includes('GET');
-        return originOk && methodsOk;
+        const methodsOk = methods.includes('PUT') && methods.includes('OPTIONS') && methods.includes('GET') && methods.includes('POST');
+        // Check for critical headers that indicate complete configuration
+        const hasAccessControlHeaders = headers.includes('Access-Control-Allow-Origin');
+        const hasResumableHeaders = headers.includes('x-goog-resumable');
+        const hasBasicHeaders = headers.includes('Content-Type') && headers.includes('Content-Length');
+        
+        return originOk && methodsOk && hasAccessControlHeaders && hasResumableHeaders && hasBasicHeaders;
       })
     : false;
+
+  // Also check if it's partially configured (has some rules but incomplete)
+  const hasPartialRule = Array.isArray(existingCors) && existingCors.length > 0 && !hasCompleteRule;
+
+  let message = '';
+  if (hasCompleteRule) {
+    message = 'CORS sudah dikonfigurasi lengkap untuk browser uploads';
+  } else if (hasPartialRule) {
+    message = 'CORS ada tapi tidak lengkap - disarankan klik "Apply/Fix CORS" untuk memperbarui';
+  } else {
+    message = 'CORS belum dikonfigurasi - browser uploads akan gagal, klik "Apply/Fix CORS"';
+  }
 
   return new Response(
     JSON.stringify({
       success: true,
-      corsConfigured: hasWorkingRule,
+      corsConfigured: hasCompleteRule,
+      partiallyConfigured: hasPartialRule,
       currentRules: existingCors || [],
-      message: hasWorkingRule 
-        ? 'CORS sudah dikonfigurasi dengan benar untuk browser uploads' 
-        : 'CORS belum dikonfigurasi - browser uploads mungkin akan gagal',
+      requiredHeaders: DESIRED_CORS_RULE.responseHeader,
+      message,
     }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );

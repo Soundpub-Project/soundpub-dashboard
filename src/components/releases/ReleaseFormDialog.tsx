@@ -409,6 +409,50 @@ export function ReleaseFormDialog({
     setCoverPreview(URL.createObjectURL(file));
   };
 
+  // Upload with retry logic for CORS issues
+  const uploadWithRetry = async (
+    uploadUrl: string, 
+    file: File, 
+    mimeType: string,
+    maxRetries = 3
+  ): Promise<Response> => {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Cover upload attempt ${attempt}/${maxRetries}`);
+        
+        const uploadResponse = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': mimeType,
+          },
+          body: file,
+        });
+
+        if (uploadResponse.ok) {
+          return uploadResponse;
+        }
+
+        const errorText = await uploadResponse.text();
+        console.error(`Cover upload attempt ${attempt} failed:`, uploadResponse.status, errorText);
+        lastError = new Error(`Upload failed: ${uploadResponse.status}`);
+        
+      } catch (error: any) {
+        console.error(`Cover upload attempt ${attempt} error:`, error);
+        lastError = error;
+        
+        if (attempt < maxRetries) {
+          const waitTime = attempt * 1000;
+          console.log(`Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+      }
+    }
+
+    throw lastError || new Error('Upload failed after retries');
+  };
+
   const uploadCover = async (): Promise<string | null> => {
     if (!coverFile) return release?.cover_url || null;
 
@@ -429,31 +473,35 @@ export function ReleaseFormDialog({
           file_name: fileName,
           file_type: coverFile.type,
           folder: 'covers',
+          file_size: coverFile.size,
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        if (error.message?.includes('CORS') || error.message?.includes('cors')) {
+          throw new Error('CORS belum dikonfigurasi. Hubungi admin untuk Apply CORS di Storage Settings.');
+        }
+        throw error;
+      }
       if (!data?.uploadUrl) throw new Error('Failed to get upload URL');
 
-      // Step 2: Upload file directly to GCS using the resumable URL
-      const uploadResponse = await fetch(data.uploadUrl, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': coverFile.type,
-        },
-        body: coverFile,
-      });
-
-      if (!uploadResponse.ok) {
-        const errorText = await uploadResponse.text();
-        console.error('GCS Upload Error:', errorText);
-        throw new Error(`Upload failed: ${uploadResponse.status}`);
+      // Step 2: Upload file directly to GCS with retry logic
+      try {
+        await uploadWithRetry(data.uploadUrl, coverFile, coverFile.type, 3);
+      } catch (uploadError: any) {
+        console.error('All cover upload attempts failed:', uploadError);
+        if (uploadError.message?.includes('Failed to fetch') || uploadError.name === 'TypeError') {
+          throw new Error(
+            'Upload gagal karena CORS. Buka Settings > Storage > klik "Apply/Fix CORS", tunggu 1-2 menit, lalu coba lagi.'
+          );
+        }
+        throw uploadError;
       }
 
       return data.publicUrl;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading cover:', error);
-      toast.error('Gagal mengupload cover');
+      toast.error(error.message || 'Gagal mengupload cover');
       return null;
     } finally {
       setUploadingCover(false);
