@@ -80,8 +80,9 @@
 - [x] **Tab Per Platform** - Ringkasan royalti per platform streaming
 - [x] **Tab Per Label** - Ringkasan royalti per label (admin/label only)
 - [x] **Tab Per Artis** - Ringkasan royalti per artist (admin/label only)
-- [x] **Tab Per Lagu (Artist View)** - Ringkasan royalti per lagu khusus untuk role artist
+- [x] **Tab Per Lagu** - Ringkasan royalti per lagu untuk semua role
 - [x] **Role-based tab visibility** - Tab tertentu hanya muncul untuk role yang sesuai
+- [x] **Export CSV Per Lagu** - Export data ringkasan per lagu ke file CSV
 
 ### Payout System
 - [x] Daftar payout requests
