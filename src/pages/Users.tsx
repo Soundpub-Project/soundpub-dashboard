@@ -15,12 +15,13 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table';
-import { Users as UsersIcon, Search, Loader2, Shield, Music, Building2, User, Edit, UserPlus, KeyRound, MoreHorizontal, UserCog, Trash2, Filter, X } from 'lucide-react';
+import { Users as UsersIcon, Search, Loader2, Shield, Music, Building2, User, Edit, UserPlus, KeyRound, MoreHorizontal, UserCog, Trash2, Filter, X, Hash } from 'lucide-react';
 import { ChangeRoleDialog } from '@/components/users/ChangeRoleDialog';
 import { AddUserDialog } from '@/components/users/AddUserDialog';
 import { ChangePasswordDialog } from '@/components/users/ChangePasswordDialog';
 import { ChangeStatusDialog } from '@/components/users/ChangeStatusDialog';
 import { DeleteUserDialog } from '@/components/users/DeleteUserDialog';
+import { EditComposerCodeDialog } from '@/components/users/EditComposerCodeDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -88,7 +89,7 @@ export default function Users() {
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-
+  const [composerCodeDialogOpen, setComposerCodeDialogOpen] = useState(false);
 
   useEffect(() => {
     // Only fetch users if user is logged in AND is admin
@@ -161,6 +162,11 @@ export default function Users() {
   const handleDeleteUser = (user: UserProfile) => {
     setSelectedUser(user);
     setDeleteDialogOpen(true);
+  };
+
+  const handleEditComposerCode = (user: UserProfile) => {
+    setSelectedUser(user);
+    setComposerCodeDialogOpen(true);
   };
 
   const clearFilters = () => {
@@ -366,6 +372,12 @@ export default function Users() {
                                 <UserCog className="mr-2 h-4 w-4" />
                                 Ubah Status
                               </DropdownMenuItem>
+                              {user.role === 'copyright' && (
+                                <DropdownMenuItem onClick={() => handleEditComposerCode(user)}>
+                                  <Hash className="mr-2 h-4 w-4" />
+                                  Edit Composer Code
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem 
                                 onClick={() => handleDeleteUser(user)}
@@ -419,6 +431,13 @@ export default function Users() {
       <DeleteUserDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
+        user={selectedUser}
+        onSuccess={fetchUsers}
+      />
+
+      <EditComposerCodeDialog
+        open={composerCodeDialogOpen}
+        onOpenChange={setComposerCodeDialogOpen}
         user={selectedUser}
         onSuccess={fetchUsers}
       />
