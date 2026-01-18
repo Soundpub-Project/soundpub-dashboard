@@ -18,6 +18,7 @@ const CreateUserSchema = z.object({
     .regex(/^(\+?[1-9]\d{1,14})?$/, 'Format nomor telepon tidak valid')
     .max(20, 'Nomor telepon terlalu panjang')
     .optional()
+    .nullable()
     .or(z.literal('')),
   role: z.enum(['superadmin', 'admin', 'label', 'artist', 'user', 'copyright', 'whitelabel'], {
     errorMap: () => ({ message: 'Role tidak valid' })
