@@ -89,11 +89,26 @@ export function MediaUploadSection({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Get proper MIME type for audio files
+  const getAudioMimeType = (fileName: string): string => {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    const mimeTypes: Record<string, string> = {
+      'wav': 'audio/wav',
+      'flac': 'audio/flac',
+      'aiff': 'audio/aiff',
+      'mp3': 'audio/mpeg',
+      'm4a': 'audio/mp4',
+      'ogg': 'audio/ogg',
+    };
+    return mimeTypes[ext || ''] || 'audio/mpeg';
+  };
+
   // All audio uploads go to GCS using resumable upload
   const uploadToGCS = async (file: File, type: MediaType): Promise<string> => {
     const fileExt = file.name.split('.').pop()?.toLowerCase();
     const fileName = `${type}-${trackIndex}-${Date.now()}.${fileExt}`;
     const folder = GCS_FOLDER_MAP[type];
+    const mimeType = file.type || getAudioMimeType(file.name);
 
     // Get the session from Supabase
     const { data: sessionData } = await supabase.auth.getSession();
@@ -105,19 +120,22 @@ export function MediaUploadSection({
     const { data, error } = await supabase.functions.invoke('gcs-upload', {
       body: {
         file_name: fileName,
-        file_type: file.type || 'audio/mpeg',
+        file_type: mimeType,
         folder: folder,
       },
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error('GCS Upload Function Error:', error);
+      throw new Error(error.message || 'Gagal mendapatkan upload URL');
+    }
     if (!data?.uploadUrl) throw new Error('Failed to get upload URL');
 
     // Step 2: Upload file directly to GCS using the resumable URL
     const uploadResponse = await fetch(data.uploadUrl, {
       method: 'PUT',
       headers: {
-        'Content-Type': file.type || 'audio/mpeg',
+        'Content-Type': mimeType,
       },
       body: file,
     });
