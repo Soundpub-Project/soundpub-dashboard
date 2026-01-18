@@ -191,6 +191,119 @@
 
 ---
 
+## 🚀 Big Role Future (Custom Role System)
+
+### Overview
+Sistem custom role yang memungkinkan admin membuat role dinamis dengan permission per-fitur, seperti dashboard CMS advance.
+
+### Database Changes Required
+- [ ] **permissions** table - Daftar semua permission yang tersedia
+  - `id`, `name`, `description`, `category`, `created_at`
+  - Contoh: `view_releases`, `create_releases`, `edit_isrc`, `view_royalties`, `upload_royalty`, dll.
+
+- [ ] **custom_roles** table - Role yang dibuat admin
+  - `id`, `name`, `description`, `created_by`, `created_at`, `updated_at`
+  - Contoh: "Label Basic", "Label Pro", "Artist View Only"
+
+- [ ] **role_permissions** table - Mapping role ke permissions
+  - `id`, `role_id`, `permission_id`
+
+- [ ] **user_custom_roles** table - Assign custom role ke user
+  - `id`, `user_id`, `custom_role_id`
+
+### Core Features
+- [ ] **Permission Management UI (Superadmin)**
+  - Lihat semua permission yang tersedia
+  - Kategori permission: Dashboard, Releases, Tracks, Royalties, Analytics, Users, Settings
+  
+- [ ] **Custom Role Builder UI**
+  - Buat role baru dengan nama dan deskripsi
+  - Checklist permission per kategori
+  - Preview permission yang dipilih
+  - Copy dari role yang sudah ada
+  
+- [ ] **Role Assignment**
+  - Assign custom role ke user (bisa multiple)
+  - Override default role behavior
+  
+- [ ] **Dynamic Menu/Sidebar**
+  - Sidebar menu berubah sesuai permission user
+  - Hanya tampilkan menu yang user punya akses
+  
+- [ ] **Permission Check Hooks**
+  - `usePermission('view_releases')` - Check single permission
+  - `usePermissions(['view_releases', 'create_releases'])` - Check multiple
+  - Middleware untuk route protection
+
+### Example Permission Categories
+```
+Dashboard:
+  - view_dashboard
+  - view_analytics
+  - view_royalty_summary
+
+Releases:
+  - view_releases
+  - create_releases
+  - edit_releases
+  - delete_releases
+  - archive_releases
+  - input_upc
+  - input_isrc
+
+Tracks:
+  - view_tracks
+  - edit_tracks
+  - upload_audio
+  - upload_video
+  - upload_clips
+
+Royalties:
+  - view_royalties
+  - upload_royalty
+  - view_composer_royalties
+
+Users:
+  - view_users
+  - create_users
+  - edit_users
+  - delete_users
+  - change_roles
+  - view_audit_logs
+
+Payouts:
+  - view_own_payouts
+  - request_payout
+  - manage_all_payouts (admin)
+
+Settings:
+  - edit_own_profile
+  - edit_storage_settings
+  - edit_app_settings
+```
+
+### UI Mockup Ideas
+- Drag & drop permission cards
+- Toggle switches per permission
+- Role template presets
+- Permission inheritance from base roles
+
+### Implementation Priority
+1. Database schema design
+2. Backend permission check functions
+3. Permission management UI
+4. Role builder UI
+5. Dynamic sidebar integration
+6. Route/component protection
+
+### Estimated Effort
+- Database: 2-3 migrations
+- Backend: 5-7 edge functions
+- Frontend: 10+ new components
+- Integration: 2-3 days testing
+
+---
+
 ## 📝 Notes
 - Database menggunakan Lovable Cloud (Supabase)
 - RLS policies sudah diimplementasi untuk keamanan data
@@ -200,5 +313,6 @@
 - Audit logs mencatat semua aktivitas penting admin dan label
 - Audio player mendukung: play/pause individual track, volume control, progress seek, next/prev navigation
 - Role baru: `copyright` untuk pemilik hak cipta, `whitelabel` untuk label dengan artist tanpa akses login
-- GCS upload menggunakan resumable upload untuk menghindari memory limit
+- GCS upload menggunakan Signed URL V4 untuk upload langsung dari browser
 - Storage provider bisa di-switch antara Supabase dan GCS melalui superadmin settings
+- Copyright royalty matching: support by name (case insensitive) OR composer_code

@@ -46,36 +46,43 @@ interface NavItem {
   roles?: string[];
 }
 
+// Main navigation - NOT shown to copyright users
 const mainNavItems: NavItem[] = [
   { 
     title: 'Dashboard', 
     url: '/dashboard', 
-    icon: LayoutDashboard 
+    icon: LayoutDashboard,
+    roles: ['superadmin', 'admin', 'label', 'artist', 'user', 'whitelabel'],
   },
   { 
     title: 'Releases', 
     url: '/dashboard/releases', 
-    icon: Disc3 
+    icon: Disc3,
+    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel'],
   },
   { 
     title: 'Tracks', 
     url: '/dashboard/tracks', 
-    icon: Music 
+    icon: Music,
+    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel'],
   },
   { 
     title: 'Royalties', 
     url: '/dashboard/royalties', 
-    icon: DollarSign 
+    icon: DollarSign,
+    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel'],
   },
   { 
     title: 'Analytics', 
     url: '/dashboard/analytics', 
-    icon: BarChart3 
+    icon: BarChart3,
+    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel'],
   },
   { 
     title: 'Ringkasan Royalti', 
     url: '/dashboard/royalty-summary', 
-    icon: PieChart 
+    icon: PieChart,
+    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel'],
   },
 ];
 
@@ -276,29 +283,33 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        {/* Main Navigation */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Menu Utama</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {mainNavItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <NavLink 
-                      to={item.url} 
-                      end 
-                      className="flex items-center gap-2"
-                      activeClassName="bg-sidebar-accent text-sidebar-accent-foreground"
-                    >
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {/* Main Navigation - Only show to non-copyright users */}
+        {!isCopyright && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Menu Utama</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {mainNavItems
+                  .filter(item => !item.roles || item.roles.includes(role || 'user'))
+                  .map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                      <NavLink 
+                        to={item.url} 
+                        end 
+                        className="flex items-center gap-2"
+                        activeClassName="bg-sidebar-accent text-sidebar-accent-foreground"
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {/* Admin Navigation */}
         {isAdmin && (
