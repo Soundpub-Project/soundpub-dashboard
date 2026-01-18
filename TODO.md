@@ -148,12 +148,13 @@
   - Statistik singkat
   - Daftar releases
 
-### White Label Features (In Progress)
+### White Label Features
 - [x] **ProtectedRoute support untuk role whitelabel dan copyright**
 - [x] **StorageSettings terintegrasi ke SuperAdminSettings**
-- [ ] **Dashboard khusus untuk role Whitelabel**
-- [ ] **Set password untuk artist whitelabel** (setelah upgrade subscription)
-- [ ] **Subscription management UI untuk whitelabel**
+- [x] **Dashboard khusus untuk role Whitelabel** - Manage artists dan subscription status
+- [x] **Dashboard khusus untuk role Copyright** - Lihat royalty composer
+- [x] **Set password untuk artist whitelabel** (setelah upgrade subscription)
+- [ ] **Subscription management UI untuk whitelabel** (admin side)
 
 ---
 
