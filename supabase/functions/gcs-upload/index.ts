@@ -6,63 +6,105 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Enhanced CORS rule with all required headers for resumable uploads
+const COMPLETE_CORS_RULE = {
+  origin: ['*'],
+  method: ['GET', 'HEAD', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
+  responseHeader: [
+    'Content-Type',
+    'Content-Length', 
+    'Content-Range',
+    'ETag',
+    'Location',
+    'Range',
+    'x-goog-resumable',
+    'x-goog-generation',
+    'x-goog-metageneration',
+    'x-goog-stored-content-encoding',
+    'x-goog-stored-content-length',
+    'x-goog-upload-chunk-granularity',
+    'x-goog-upload-control-url',
+    'x-goog-upload-header-content-type',
+    'x-goog-upload-status',
+    'x-goog-upload-url',
+    'x-upload-content-length',
+    'x-upload-content-type',
+    'Access-Control-Allow-Origin',
+    'Access-Control-Allow-Methods',
+    'Access-Control-Allow-Headers',
+    'Access-Control-Expose-Headers',
+    'Access-Control-Max-Age',
+  ],
+  maxAgeSeconds: 3600,
+};
+
+// Track last CORS update to avoid excessive patching
+let lastCorsUpdateTime = 0;
+const CORS_UPDATE_COOLDOWN_MS = 60000; // 1 minute cooldown
+
 async function ensureBucketCorsForBrowserUploads(params: {
   accessToken: string;
   bucketName: string;
   requestOrigin: string;
+  forceApply?: boolean;
 }): Promise<void> {
-  const { accessToken, bucketName } = params;
+  const { accessToken, bucketName, forceApply = false } = params;
 
-  // Use a permissive origin to avoid breakage across preview/published domains.
-  // Anyone would still need a valid resumable upload URL to upload anything.
-  const desiredCorsRule = {
-    origin: ['*'],
-    method: ['GET', 'HEAD', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
-    responseHeader: [
-      'Content-Type',
-      'Content-Length',
-      'Content-Range',
-      'ETag',
-      'Location',
-      'Range',
-      'x-goog-resumable',
-      'x-goog-generation',
-      'x-goog-metageneration',
-    ],
-    maxAgeSeconds: 3600,
-  };
+  // Check cooldown unless force apply
+  const now = Date.now();
+  if (!forceApply && (now - lastCorsUpdateTime) < CORS_UPDATE_COOLDOWN_MS) {
+    console.log('CORS update skipped (cooldown active)');
+    return;
+  }
 
   const bucketInfoUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}?fields=cors`;
 
-  const getRes = await fetch(bucketInfoUrl, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
+  try {
+    const getRes = await fetch(bucketInfoUrl, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
 
-  if (!getRes.ok) {
-    const errorText = await getRes.text();
-    console.error('GCS bucket read error:', errorText);
-    throw new Error(`Failed to read bucket CORS config: ${getRes.status}`);
+    if (!getRes.ok) {
+      const errorText = await getRes.text();
+      console.error('GCS bucket read error:', errorText);
+      // Continue anyway - try to apply CORS
+    } else {
+      const bucketData = await getRes.json();
+      const existingCors: Array<{ origin?: string[]; method?: string[]; responseHeader?: string[] }> | undefined = bucketData?.cors;
+
+      // Check if CORS is fully configured with all required headers
+      const hasCompleteRule = Array.isArray(existingCors)
+        ? existingCors.some((rule) => {
+            const origins = rule.origin ?? [];
+            const methods = (rule.method ?? []).map((m) => m.toUpperCase());
+            const headers = rule.responseHeader ?? [];
+            
+            const originOk = origins.includes('*');
+            const methodsOk = methods.includes('PUT') && methods.includes('OPTIONS') && methods.includes('POST');
+            // Check for key headers that indicate complete configuration
+            const headersOk = headers.includes('Access-Control-Allow-Origin') && 
+                             headers.includes('x-goog-resumable') &&
+                             headers.includes('Content-Type');
+            
+            return originOk && methodsOk && headersOk;
+          })
+        : false;
+
+      // Skip if already complete and not forced
+      if (hasCompleteRule && !forceApply) {
+        console.log('CORS already complete, skipping update');
+        return;
+      }
+    }
+  } catch (error) {
+    console.warn('Error checking CORS, will try to apply:', error);
   }
 
-  const bucketData = await getRes.json();
-  const existingCors: Array<{ origin?: string[]; method?: string[] }> | undefined = bucketData?.cors;
-
-  const hasWorkingRule = Array.isArray(existingCors)
-    ? existingCors.some((rule) => {
-        const origins = rule.origin ?? [];
-        const methods = (rule.method ?? []).map((m) => m.toUpperCase());
-        const originOk = origins.includes('*');
-        const methodsOk = methods.includes('PUT') && methods.includes('OPTIONS');
-        return originOk && methodsOk;
-      })
-    : false;
-
-  if (hasWorkingRule) return;
-
-  console.log(`Applying GCS CORS rules to bucket: ${bucketName}`);
+  // Always apply the complete CORS rule
+  console.log(`Applying complete GCS CORS rules to bucket: ${bucketName}`);
 
   const patchRes = await fetch(`https://storage.googleapis.com/storage/v1/b/${bucketName}`, {
     method: 'PATCH',
@@ -70,16 +112,18 @@ async function ensureBucketCorsForBrowserUploads(params: {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ cors: [desiredCorsRule] }),
+    body: JSON.stringify({ cors: [COMPLETE_CORS_RULE] }),
   });
 
   if (!patchRes.ok) {
     const errorText = await patchRes.text();
     console.error('GCS bucket patch error:', errorText);
-    throw new Error(`Failed to update bucket CORS config: ${patchRes.status}`);
+    // Don't throw - let the upload proceed and fail with a clearer error if needed
+    console.warn('Failed to update CORS, upload may fail');
+  } else {
+    lastCorsUpdateTime = Date.now();
+    console.log(`GCS CORS configured successfully for bucket: ${bucketName}`);
   }
-
-  console.log(`GCS CORS configured for bucket: ${bucketName}`);
 }
 
 interface GCSSignedUrlRequest {

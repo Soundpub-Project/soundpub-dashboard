@@ -103,6 +103,52 @@ export function MediaUploadSection({
     return mimeTypes[ext || ''] || 'audio/mpeg';
   };
 
+  // Upload with retry logic for CORS issues
+  const uploadWithRetry = async (
+    uploadUrl: string, 
+    file: File, 
+    mimeType: string,
+    maxRetries = 3
+  ): Promise<Response> => {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Upload attempt ${attempt}/${maxRetries}`);
+        
+        const uploadResponse = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': mimeType,
+          },
+          body: file,
+        });
+
+        if (uploadResponse.ok) {
+          return uploadResponse;
+        }
+
+        // If we get a response but it's not ok, check if it's a CORS-related issue
+        const errorText = await uploadResponse.text();
+        console.error(`Upload attempt ${attempt} failed:`, uploadResponse.status, errorText);
+        lastError = new Error(`Upload failed: ${uploadResponse.status}`);
+        
+      } catch (error: any) {
+        console.error(`Upload attempt ${attempt} error:`, error);
+        lastError = error;
+        
+        // If it's a network/CORS error and we have retries left, wait before retrying
+        if (attempt < maxRetries) {
+          const waitTime = attempt * 1000; // 1s, 2s, 3s
+          console.log(`Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+      }
+    }
+
+    throw lastError || new Error('Upload failed after retries');
+  };
+
   // All audio uploads go to GCS using resumable upload
   const uploadToGCS = async (file: File, type: MediaType): Promise<string> => {
     const fileExt = file.name.split('.').pop()?.toLowerCase();
@@ -122,28 +168,32 @@ export function MediaUploadSection({
         file_name: fileName,
         file_type: mimeType,
         folder: folder,
+        file_size: file.size,
       },
     });
 
     if (error) {
       console.error('GCS Upload Function Error:', error);
+      // Check if it's a CORS-related error
+      if (error.message?.includes('CORS') || error.message?.includes('cors')) {
+        throw new Error('CORS belum dikonfigurasi. Hubungi admin untuk Apply CORS di Storage Settings.');
+      }
       throw new Error(error.message || 'Gagal mendapatkan upload URL');
     }
     if (!data?.uploadUrl) throw new Error('Failed to get upload URL');
 
-    // Step 2: Upload file directly to GCS using the resumable URL
-    const uploadResponse = await fetch(data.uploadUrl, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': mimeType,
-      },
-      body: file,
-    });
-
-    if (!uploadResponse.ok) {
-      const errorText = await uploadResponse.text();
-      console.error('GCS Upload Error:', errorText);
-      throw new Error(`Upload failed: ${uploadResponse.status}`);
+    // Step 2: Upload file directly to GCS with retry logic
+    try {
+      await uploadWithRetry(data.uploadUrl, file, mimeType, 3);
+    } catch (uploadError: any) {
+      console.error('All upload attempts failed:', uploadError);
+      // Provide helpful error message for CORS issues
+      if (uploadError.message?.includes('Failed to fetch') || uploadError.name === 'TypeError') {
+        throw new Error(
+          'Upload gagal karena CORS. Solusi: Buka Settings > Storage > klik "Apply/Fix CORS", tunggu 1-2 menit, lalu coba upload lagi.'
+        );
+      }
+      throw uploadError;
     }
 
     return data.publicUrl;
