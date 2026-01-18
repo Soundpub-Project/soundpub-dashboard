@@ -16,7 +16,10 @@ import {
   RefreshCw,
   TestTube,
   BarChart3,
-  Save
+  Save,
+  Wrench,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 
 interface StorageConfig {
@@ -32,7 +35,13 @@ export function StorageSettings() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState<'gcs' | 'ga4' | null>(null);
+  const [testing, setTesting] = useState<'gcs' | 'ga4' | 'cors' | null>(null);
+  const [applyingCors, setApplyingCors] = useState(false);
+  const [corsStatus, setCorsStatus] = useState<{
+    checked: boolean;
+    configured: boolean | null;
+    message?: string;
+  }>({ checked: false, configured: null });
   const [config, setConfig] = useState<StorageConfig>({
     storage_provider: 'supabase',
     gcs_enabled: 'false',
@@ -120,18 +129,11 @@ export function StorageSettings() {
     setTestResults(prev => ({ ...prev, gcs: undefined }));
     
     try {
-      // Try to get a signed URL from GCS to test connection
-      const { data, error } = await supabase.functions.invoke('gcs-upload', {
-        body: {
-          file_name: 'test-connection.txt',
-          file_type: 'text/plain',
-          folder: 'test',
-        },
-      });
+      const { data, error } = await supabase.functions.invoke('test-gcs');
 
       if (error) throw error;
 
-      if (data?.uploadUrl) {
+      if (data?.success) {
         setTestResults(prev => ({
           ...prev,
           gcs: { success: true, message: 'Koneksi GCS berhasil! Bucket dapat diakses.' }
@@ -140,8 +142,10 @@ export function StorageSettings() {
           title: 'Sukses',
           description: 'Koneksi ke Google Cloud Storage berhasil',
         });
+        // Also check CORS status after successful connection
+        checkCorsStatus();
       } else {
-        throw new Error('Tidak ada upload URL yang dikembalikan');
+        throw new Error(data?.message || 'Gagal terhubung ke GCS');
       }
     } catch (error: any) {
       console.error('GCS test error:', error);
@@ -156,6 +160,63 @@ export function StorageSettings() {
       });
     } finally {
       setTesting(null);
+    }
+  };
+
+  const checkCorsStatus = async () => {
+    setTesting('cors');
+    try {
+      const { data, error } = await supabase.functions.invoke('gcs-manage', {
+        body: { action: 'check_cors' },
+      });
+
+      if (error) throw error;
+
+      setCorsStatus({
+        checked: true,
+        configured: data?.corsConfigured ?? false,
+        message: data?.message,
+      });
+    } catch (error: any) {
+      console.error('CORS check error:', error);
+      setCorsStatus({
+        checked: true,
+        configured: null,
+        message: error.message || 'Gagal memeriksa status CORS',
+      });
+    } finally {
+      setTesting(null);
+    }
+  };
+
+  const applyCors = async () => {
+    setApplyingCors(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('gcs-manage', {
+        body: { action: 'apply_cors' },
+      });
+
+      if (error) throw error;
+
+      setCorsStatus({
+        checked: true,
+        configured: true,
+        message: data?.message || 'CORS berhasil dikonfigurasi',
+      });
+
+      toast({
+        title: 'Sukses',
+        description: 'CORS berhasil dikonfigurasi untuk browser uploads',
+      });
+    } catch (error: any) {
+      console.error('Apply CORS error:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Gagal mengonfigurasi CORS',
+        variant: 'destructive',
+      });
+    } finally {
+      setApplyingCors(false);
     }
   };
 
@@ -329,6 +390,76 @@ export function StorageSettings() {
                   </div>
                 </div>
               )}
+
+              {/* CORS Status Section */}
+              <div className="border-t border-border pt-4 mt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h5 className="font-medium flex items-center gap-2">
+                      <Wrench className="h-4 w-4" />
+                      Status CORS Bucket
+                    </h5>
+                    <p className="text-sm text-muted-foreground">
+                      CORS diperlukan agar browser dapat upload langsung ke GCS
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={checkCorsStatus}
+                      disabled={testing === 'cors'}
+                    >
+                      {testing === 'cors' ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                      )}
+                      Cek Status
+                    </Button>
+                    <Button
+                      variant={corsStatus.configured ? 'outline' : 'default'}
+                      size="sm"
+                      onClick={applyCors}
+                      disabled={applyingCors}
+                    >
+                      {applyingCors ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Wrench className="h-4 w-4 mr-2" />
+                      )}
+                      Apply/Fix CORS
+                    </Button>
+                  </div>
+                </div>
+
+                {corsStatus.checked && (
+                  <div className={`p-3 rounded-lg ${
+                    corsStatus.configured === true 
+                      ? 'bg-chart-3/10 text-chart-3' 
+                      : corsStatus.configured === false 
+                        ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
+                        : 'bg-destructive/10 text-destructive'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {corsStatus.configured === true ? (
+                        <CheckCircle2 className="h-4 w-4" />
+                      ) : corsStatus.configured === false ? (
+                        <XCircle className="h-4 w-4" />
+                      ) : (
+                        <X className="h-4 w-4" />
+                      )}
+                      <span className="text-sm font-medium">
+                        {corsStatus.configured === true 
+                          ? 'CORS sudah dikonfigurasi dengan benar' 
+                          : corsStatus.configured === false
+                            ? 'CORS belum dikonfigurasi - klik "Apply/Fix CORS" untuk mengaktifkan'
+                            : corsStatus.message || 'Gagal memeriksa status CORS'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <div className="text-xs text-muted-foreground space-y-1">
                 <p>• <strong>GCS_PROJECT_ID</strong>: ID project Google Cloud</p>

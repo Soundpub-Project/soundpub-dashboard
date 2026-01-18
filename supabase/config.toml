@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.set-artist-password]
 verify_jwt = false
+
+[functions.gcs-manage]
+verify_jwt = false
