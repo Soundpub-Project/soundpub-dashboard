@@ -51,6 +51,7 @@ interface UserProfile {
   role?: AppRole;
   parent_label_id?: string | null;
   parent_label_name?: string | null;
+  composer_code?: string | null;
 }
 
 const ROLE_ICONS: Record<AppRole, React.ReactNode> = {
@@ -125,6 +126,7 @@ export default function Users() {
         ...profile,
         role: rolesMap.get(profile.id) || 'user' as AppRole,
         parent_label_name: profile.parent_label_id ? profilesMap.get(profile.parent_label_id) || null : null,
+        composer_code: profile.composer_code || null,
       }));
 
       setUsers(usersWithRoles);
@@ -302,7 +304,7 @@ export default function Users() {
                       <TableHead>Nama</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Role</TableHead>
-                      <TableHead>Label</TableHead>
+                      <TableHead>Label / Kode</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Balance</TableHead>
                       <TableHead>Bergabung</TableHead>
@@ -321,13 +323,16 @@ export default function Users() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {user.role === 'artist' && user.parent_label_name ? (
+                          {user.role === 'copyright' && user.composer_code ? (
+                            <div className="flex items-center gap-1.5">
+                              <Hash className="h-3 w-3 text-cyan-500" />
+                              <span className="text-sm font-mono">{user.composer_code}</span>
+                            </div>
+                          ) : user.role === 'artist' && user.parent_label_name ? (
                             <div className="flex items-center gap-1.5">
                               <Building2 className="h-3 w-3 text-muted-foreground" />
                               <span className="text-sm">{user.parent_label_name}</span>
                             </div>
-                          ) : user.role === 'artist' ? (
-                            <span className="text-xs text-muted-foreground">-</span>
                           ) : (
                             <span className="text-xs text-muted-foreground">-</span>
                           )}

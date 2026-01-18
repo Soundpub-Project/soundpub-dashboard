@@ -55,25 +55,25 @@ const mainNavItems: NavItem[] = [
     roles: ['superadmin', 'admin', 'label', 'artist', 'user', 'whitelabel'],
   },
   { 
-    title: 'Releases', 
+    title: 'Rilis', 
     url: '/dashboard/releases', 
     icon: Disc3,
     roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel'],
   },
   { 
-    title: 'Tracks', 
+    title: 'Lagu', 
     url: '/dashboard/tracks', 
     icon: Music,
     roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel'],
   },
   { 
-    title: 'Royalties', 
+    title: 'Royalti', 
     url: '/dashboard/royalties', 
     icon: DollarSign,
     roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel'],
   },
   { 
-    title: 'Analytics', 
+    title: 'Analitik', 
     url: '/dashboard/analytics', 
     icon: BarChart3,
     roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel'],
@@ -88,37 +88,37 @@ const mainNavItems: NavItem[] = [
 
 const adminNavItems: NavItem[] = [
   { 
-    title: 'Users', 
+    title: 'Pengguna', 
     url: '/dashboard/users', 
     icon: Users,
     roles: ['superadmin', 'admin'],
   },
   { 
-    title: 'Upload Royalty', 
+    title: 'Upload Royalti', 
     url: '/dashboard/upload', 
     icon: Upload,
     roles: ['superadmin', 'admin'],
   },
   { 
-    title: 'Royalty Composer', 
+    title: 'Royalti Komposer', 
     url: '/dashboard/composer-royalties', 
     icon: Music2,
     roles: ['superadmin', 'admin'],
   },
   { 
-    title: 'Manage Payouts', 
+    title: 'Kelola Pembayaran', 
     url: '/dashboard/admin-payouts', 
     icon: CreditCard,
     roles: ['superadmin', 'admin'],
   },
   { 
-    title: 'Audit Logs', 
+    title: 'Log Aktivitas', 
     url: '/dashboard/audit-logs', 
     icon: ScrollText,
     roles: ['superadmin', 'admin'],
   },
   { 
-    title: 'Export', 
+    title: 'Ekspor Data', 
     url: '/dashboard/export', 
     icon: FolderArchive,
     roles: ['superadmin', 'admin'],
@@ -133,7 +133,7 @@ const adminNavItems: NavItem[] = [
 
 const labelNavItems: NavItem[] = [
   { 
-    title: 'My Artists', 
+    title: 'Artis Saya', 
     url: '/dashboard/my-artists', 
     icon: Users,
     roles: ['label', 'whitelabel'],
@@ -142,7 +142,7 @@ const labelNavItems: NavItem[] = [
 
 const whitelabelNavItems: NavItem[] = [
   { 
-    title: 'Whitelabel Dashboard', 
+    title: 'Panel Whitelabel', 
     url: '/dashboard/whitelabel', 
     icon: Crown,
     roles: ['whitelabel'],
@@ -151,7 +151,7 @@ const whitelabelNavItems: NavItem[] = [
 
 const copyrightNavItems: NavItem[] = [
   { 
-    title: 'Copyright Dashboard', 
+    title: 'Hak Cipta', 
     url: '/dashboard/copyright', 
     icon: Shield,
     roles: ['copyright'],
@@ -160,12 +160,12 @@ const copyrightNavItems: NavItem[] = [
 
 const accountNavItems: NavItem[] = [
   { 
-    title: 'Payouts', 
+    title: 'Pembayaran', 
     url: '/dashboard/payouts', 
     icon: CreditCard 
   },
   { 
-    title: 'Settings', 
+    title: 'Pengaturan', 
     url: '/dashboard/settings', 
     icon: Settings 
   },
@@ -337,10 +337,10 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* Label Navigation */}
+        {/* Label/Whitelabel Navigation */}
         {(isLabel || isWhitelabel) && (
           <SidebarGroup>
-            <SidebarGroupLabel>{isWhitelabel ? 'Whitelabel' : 'Label'}</SidebarGroupLabel>
+            <SidebarGroupLabel>{isWhitelabel ? 'Manajemen' : 'Label'}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {labelNavItems.map((item) => (
@@ -358,18 +358,8 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-
-        {/* Whitelabel Navigation */}
-        {isWhitelabel && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Whitelabel</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {whitelabelNavItems.map((item) => (
+                {/* Whitelabel specific items inline */}
+                {isWhitelabel && whitelabelNavItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive(item.url)}>
                       <NavLink 
