@@ -1,0 +1,426 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+import { 
+  Loader2, 
+  Cloud,
+  Database,
+  Check,
+  X,
+  RefreshCw,
+  TestTube,
+  BarChart3,
+  Save
+} from 'lucide-react';
+
+interface StorageConfig {
+  storage_provider: string;
+  gcs_enabled: string;
+  gcs_bucket_name: string | null;
+  gcs_project_id: string | null;
+  ga4_enabled: string;
+  ga4_measurement_id: string | null;
+}
+
+export function StorageSettings() {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState<'gcs' | 'ga4' | null>(null);
+  const [config, setConfig] = useState<StorageConfig>({
+    storage_provider: 'supabase',
+    gcs_enabled: 'false',
+    gcs_bucket_name: null,
+    gcs_project_id: null,
+    ga4_enabled: 'false',
+    ga4_measurement_id: null,
+  });
+  const [testResults, setTestResults] = useState<{
+    gcs?: { success: boolean; message: string };
+    ga4?: { success: boolean; message: string };
+  }>({});
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const fetchSettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('app_settings')
+        .select('key, value');
+
+      if (error) throw error;
+
+      const settingsMap: Record<string, string | null> = {};
+      data?.forEach((row: { key: string; value: string | null }) => {
+        settingsMap[row.key] = row.value;
+      });
+
+      setConfig({
+        storage_provider: settingsMap.storage_provider || 'supabase',
+        gcs_enabled: settingsMap.gcs_enabled || 'false',
+        gcs_bucket_name: settingsMap.gcs_bucket_name || null,
+        gcs_project_id: settingsMap.gcs_project_id || null,
+        ga4_enabled: settingsMap.ga4_enabled || 'false',
+        ga4_measurement_id: settingsMap.ga4_measurement_id || null,
+      });
+    } catch (error) {
+      console.error('Error fetching settings:', error);
+      toast({
+        title: 'Error',
+        description: 'Gagal memuat pengaturan',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveSettings = async (updates: Partial<StorageConfig>) => {
+    setSaving(true);
+    try {
+      const settingsToUpdate = Object.entries(updates).map(([key, value]) => ({
+        key,
+        value: value === null ? null : String(value),
+      }));
+
+      const { error } = await supabase.functions.invoke('update-app-settings', {
+        body: { settings: settingsToUpdate },
+      });
+
+      if (error) throw error;
+
+      setConfig(prev => ({ ...prev, ...updates }));
+      
+      toast({
+        title: 'Berhasil',
+        description: 'Pengaturan berhasil disimpan',
+      });
+    } catch (error: any) {
+      console.error('Error saving settings:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Gagal menyimpan pengaturan',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const testGCSConnection = async () => {
+    setTesting('gcs');
+    setTestResults(prev => ({ ...prev, gcs: undefined }));
+    
+    try {
+      // Try to get a signed URL from GCS to test connection
+      const { data, error } = await supabase.functions.invoke('gcs-upload', {
+        body: {
+          file_name: 'test-connection.txt',
+          file_type: 'text/plain',
+          folder: 'test',
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.uploadUrl) {
+        setTestResults(prev => ({
+          ...prev,
+          gcs: { success: true, message: 'Koneksi GCS berhasil! Bucket dapat diakses.' }
+        }));
+        toast({
+          title: 'Sukses',
+          description: 'Koneksi ke Google Cloud Storage berhasil',
+        });
+      } else {
+        throw new Error('Tidak ada upload URL yang dikembalikan');
+      }
+    } catch (error: any) {
+      console.error('GCS test error:', error);
+      setTestResults(prev => ({
+        ...prev,
+        gcs: { success: false, message: error.message || 'Gagal terhubung ke GCS' }
+      }));
+      toast({
+        title: 'Error',
+        description: 'Gagal terhubung ke Google Cloud Storage',
+        variant: 'destructive',
+      });
+    } finally {
+      setTesting(null);
+    }
+  };
+
+  const testGA4Connection = async () => {
+    setTesting('ga4');
+    setTestResults(prev => ({ ...prev, ga4: undefined }));
+    
+    try {
+      // Test GA4 by checking if measurement ID is configured
+      const { data, error } = await supabase.functions.invoke('get-ga4-config');
+
+      if (error) throw error;
+
+      if (data?.measurementId) {
+        setTestResults(prev => ({
+          ...prev,
+          ga4: { success: true, message: `GA4 dikonfigurasi dengan Measurement ID: ${data.measurementId}` }
+        }));
+        toast({
+          title: 'Sukses',
+          description: 'Konfigurasi Google Analytics 4 valid',
+        });
+      } else {
+        throw new Error('Measurement ID tidak ditemukan');
+      }
+    } catch (error: any) {
+      console.error('GA4 test error:', error);
+      setTestResults(prev => ({
+        ...prev,
+        ga4: { success: false, message: error.message || 'Gagal memverifikasi GA4' }
+      }));
+      toast({
+        title: 'Error',
+        description: 'Gagal memverifikasi konfigurasi GA4',
+        variant: 'destructive',
+      });
+    } finally {
+      setTesting(null);
+    }
+  };
+
+  const handleStorageProviderChange = (useGCS: boolean) => {
+    saveSettings({
+      storage_provider: useGCS ? 'gcs' : 'supabase',
+      gcs_enabled: useGCS ? 'true' : 'false',
+    });
+  };
+
+  const handleGA4Toggle = (enabled: boolean) => {
+    saveSettings({
+      ga4_enabled: enabled ? 'true' : 'false',
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const isGCSEnabled = config.gcs_enabled === 'true' || config.storage_provider === 'gcs';
+  const isGA4Enabled = config.ga4_enabled === 'true';
+
+  return (
+    <div className="space-y-6">
+      {/* Storage Provider Settings */}
+      <Card className="bg-card/50 border-border/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Cloud className="h-5 w-5" />
+            Storage Provider
+          </CardTitle>
+          <CardDescription>
+            Pilih penyimpanan utama untuk file upload (gambar, audio, video)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Provider Selection */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Supabase Storage Option */}
+            <div
+              className={`
+                relative p-4 rounded-lg border-2 cursor-pointer transition-all
+                ${!isGCSEnabled 
+                  ? 'border-primary bg-primary/5' 
+                  : 'border-border hover:border-primary/50'
+                }
+              `}
+              onClick={() => handleStorageProviderChange(false)}
+            >
+              <div className="flex items-start gap-3">
+                <Database className={`h-8 w-8 ${!isGCSEnabled ? 'text-primary' : 'text-muted-foreground'}`} />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-medium">Lovable Cloud Storage</h4>
+                    {!isGCSEnabled && (
+                      <Badge variant="default" className="text-xs">Aktif</Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Penyimpanan bawaan yang sudah terintegrasi. Tidak perlu konfigurasi tambahan.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* GCS Option */}
+            <div
+              className={`
+                relative p-4 rounded-lg border-2 cursor-pointer transition-all
+                ${isGCSEnabled 
+                  ? 'border-primary bg-primary/5' 
+                  : 'border-border hover:border-primary/50'
+                }
+              `}
+              onClick={() => handleStorageProviderChange(true)}
+            >
+              <div className="flex items-start gap-3">
+                <Cloud className={`h-8 w-8 ${isGCSEnabled ? 'text-primary' : 'text-muted-foreground'}`} />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-medium">Google Cloud Storage</h4>
+                    {isGCSEnabled && (
+                      <Badge variant="default" className="text-xs">Aktif</Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Gunakan bucket GCS Anda sendiri untuk penyimpanan file.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* GCS Config Details */}
+          {isGCSEnabled && (
+            <div className="space-y-4 p-4 rounded-lg bg-muted/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h5 className="font-medium">Konfigurasi GCS</h5>
+                  <p className="text-sm text-muted-foreground">
+                    Credentials dikonfigurasi melalui secrets di backend
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={testGCSConnection}
+                  disabled={testing === 'gcs'}
+                >
+                  {testing === 'gcs' ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <TestTube className="h-4 w-4 mr-2" />
+                  )}
+                  Test Koneksi
+                </Button>
+              </div>
+              
+              {testResults.gcs && (
+                <div className={`p-3 rounded-lg ${testResults.gcs.success ? 'bg-chart-3/10 text-chart-3' : 'bg-destructive/10 text-destructive'}`}>
+                  <div className="flex items-center gap-2">
+                    {testResults.gcs.success ? (
+                      <Check className="h-4 w-4" />
+                    ) : (
+                      <X className="h-4 w-4" />
+                    )}
+                    <span className="text-sm font-medium">{testResults.gcs.message}</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>• <strong>GCS_PROJECT_ID</strong>: ID project Google Cloud</p>
+                <p>• <strong>GCS_BUCKET_NAME</strong>: Nama bucket untuk penyimpanan</p>
+                <p>• <strong>GCS_SERVICE_ACCOUNT_KEY</strong>: JSON service account key</p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Google Analytics 4 Settings */}
+      <Card className="bg-card/50 border-border/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5" />
+            Google Analytics 4
+          </CardTitle>
+          <CardDescription>
+            Aktifkan tracking analitik dengan Google Analytics 4
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Status GA4</Label>
+              <p className="text-sm text-muted-foreground">
+                {isGA4Enabled 
+                  ? 'GA4 tracking aktif'
+                  : 'GA4 tracking tidak aktif'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant={isGA4Enabled ? 'default' : 'secondary'}>
+                {isGA4Enabled ? (
+                  <><Check className="h-3 w-3 mr-1" /> Aktif</>
+                ) : (
+                  <><X className="h-3 w-3 mr-1" /> Nonaktif</>
+                )}
+              </Badge>
+              <Switch
+                checked={isGA4Enabled}
+                onCheckedChange={handleGA4Toggle}
+                disabled={saving}
+              />
+            </div>
+          </div>
+
+          {isGA4Enabled && (
+            <div className="space-y-4 p-4 rounded-lg bg-muted/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h5 className="font-medium">Konfigurasi GA4</h5>
+                  <p className="text-sm text-muted-foreground">
+                    Measurement ID dikonfigurasi melalui secrets
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={testGA4Connection}
+                  disabled={testing === 'ga4'}
+                >
+                  {testing === 'ga4' ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <TestTube className="h-4 w-4 mr-2" />
+                  )}
+                  Verifikasi
+                </Button>
+              </div>
+
+              {testResults.ga4 && (
+                <div className={`p-3 rounded-lg ${testResults.ga4.success ? 'bg-chart-3/10 text-chart-3' : 'bg-destructive/10 text-destructive'}`}>
+                  <div className="flex items-center gap-2">
+                    {testResults.ga4.success ? (
+                      <Check className="h-4 w-4" />
+                    ) : (
+                      <X className="h-4 w-4" />
+                    )}
+                    <span className="text-sm font-medium">{testResults.ga4.message}</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="text-xs text-muted-foreground">
+                <p>• <strong>GA4_MEASUREMENT_ID</strong>: Measurement ID (G-XXXXXXXXXX)</p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

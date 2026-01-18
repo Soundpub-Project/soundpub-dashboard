@@ -90,6 +90,12 @@ const adminNavItems: NavItem[] = [
     roles: ['superadmin', 'admin'],
   },
   { 
+    title: 'Royalty Composer', 
+    url: '/dashboard/composer-royalties', 
+    icon: Music2,
+    roles: ['superadmin', 'admin'],
+  },
+  { 
     title: 'Manage Payouts', 
     url: '/dashboard/admin-payouts', 
     icon: CreditCard,

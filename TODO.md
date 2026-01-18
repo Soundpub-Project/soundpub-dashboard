@@ -4,7 +4,7 @@
 
 ### Authentication & Authorization
 - [x] Login/Signup system
-- [x] Role-based access control (superadmin, admin, label, artist, user)
+- [x] Role-based access control (superadmin, admin, label, artist, user, **copyright**, **whitelabel**)
 - [x] Profile management (view & edit)
 - [x] Protected routes berdasarkan role
 - [x] Fix logout stuck bug di halaman admin (Users page)
@@ -28,6 +28,7 @@
 - [x] **Label info di release detail page** (menampilkan nama label pemilik release)
 - [x] **Audio Player di release detail** (play/pause, progress bar, volume control, skip next/prev)
 - [x] **Dropdown artist di form tambah release untuk Label** (pilih dari artist yang terdaftar di label)
+- [x] **Drag and drop upload untuk audio files**
 
 ### Release Metadata
 - [x] Multiple artists (Main/Featured) per track
@@ -42,6 +43,7 @@
 - [x] Music video upload (MP4, up to 2GB)
 - [x] Audio clip upload (30-60s preview, up to 20MB)
 - [x] Storage buckets dengan RLS policies
+- [x] **GCS resumable upload untuk file besar**
 
 ### User Management
 - [x] Daftar users (admin view)
@@ -67,6 +69,7 @@
   - [x] Country distribution chart
 - [x] Upload Royalty CSV dengan validasi
 - [x] Balance update otomatis setelah upload
+- [x] **Royalty Composer (Hak Cipta)** - Upload royalty untuk composer/pencipta lagu
 
 ### Payout System
 - [x] Daftar payout requests
@@ -116,6 +119,24 @@
 - [x] `update-user-password` - Admin ubah password user lain
 - [x] `change-own-password` - User ubah password sendiri
 - [x] `remove-artist-from-label` - Label hapus artist dengan audit log
+- [x] `gcs-upload` - Upload file ke Google Cloud Storage
+- [x] `test-gcs` - Test koneksi GCS
+- [x] `create-whitelabel-artist` - Buat artist tanpa password (whitelabel)
+- [x] `set-artist-password` - Set password untuk artist whitelabel
+
+### Super Admin Features
+- [x] **Google Cloud Storage Integration** - GCS sebagai primary storage (toggle on/off)
+- [x] **Google Analytics 4 Integration** - GA4 tracking dengan Measurement ID
+- [x] **Dashboard Logo Upload** - Upload logo untuk sidebar/header
+- [x] **Label Logo Upload** - Setiap label bisa upload logo masing-masing
+- [x] **Logo Light/Dark Theme** - Upload logo terpisah untuk tema terang dan gelap
+- [x] **Favicon Upload** - Upload favicon khusus untuk dashboard
+- [x] **Storage Provider Switch** - Pilih antara Supabase Storage atau GCS
+- [x] **Test API untuk GCS** - Verifikasi koneksi GCS
+
+### Role Baru
+- [x] **Copyright Role** - Akses ke royalty composer (perlindungan hak cipta)
+- [x] **White Label Role** - Seperti label tapi artist tidak bisa login sampai upgrade
 
 ---
 
@@ -126,6 +147,11 @@
   - Public profile page untuk artist
   - Statistik singkat
   - Daftar releases
+
+### White Label Features (In Progress)
+- [ ] **Dashboard khusus untuk role Whitelabel**
+- [ ] **Set password untuk artist whitelabel** (setelah upgrade subscription)
+- [ ] **Subscription management UI untuk whitelabel**
 
 ---
 
@@ -157,14 +183,6 @@
 - [x] **Kolom Label untuk Artist** - Menampilkan label parent di tabel users
 - [x] **Pilih Label saat tambah Artist** - Admin/Superadmin bisa pilih label untuk artist baru
 
-### Super Admin Features
-- [x] **Google Cloud Storage Integration** - GCS sebagai primary storage (toggle on/off)
-- [x] **Google Analytics 4 Integration** - GA4 tracking dengan Measurement ID
-- [x] **Dashboard Logo Upload** - Upload logo untuk sidebar/header
-- [x] **Label Logo Upload** - Setiap label bisa upload logo masing-masing
-- [x] **Logo Light/Dark Theme** - Upload logo terpisah untuk tema terang dan gelap
-- [x] **Favicon Upload** - Upload favicon khusus untuk dashboard
-
 ### UI/UX Improvements
 - [x] **Settings Page 2-Column Layout** - Layout desktop lebih optimal dengan 2 kolom
 
@@ -178,3 +196,6 @@
 - Beberapa fitur metadata (composer, lyricist, lyrics) sudah ada di level track
 - Audit logs mencatat semua aktivitas penting admin dan label
 - Audio player mendukung: play/pause individual track, volume control, progress seek, next/prev navigation
+- Role baru: `copyright` untuk pemilik hak cipta, `whitelabel` untuk label dengan artist tanpa akses login
+- GCS upload menggunakan resumable upload untuk menghindari memory limit
+- Storage provider bisa di-switch antara Supabase dan GCS melalui superadmin settings
