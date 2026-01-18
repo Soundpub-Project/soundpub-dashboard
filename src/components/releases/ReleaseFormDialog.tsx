@@ -469,7 +469,7 @@ export function ReleaseFormDialog({
         throw new Error('Not authenticated');
       }
 
-      // Step 1: Get signed upload URL from edge function
+      // Step 1: Get signed URL from edge function
       const { data, error } = await supabase.functions.invoke('gcs-upload', {
         body: {
           file_name: fileName,
@@ -486,43 +486,45 @@ export function ReleaseFormDialog({
         
         console.error('Cover upload function error:', { error, data: errorData });
         
-        // Handle specific error codes
         if (errorCode === 'INSUFFICIENT_ROLE') {
           throw new Error(`Role "${errorData.currentRole}" tidak diizinkan upload. Hubungi admin.`);
         }
         if (errorMessage?.includes('GCS configuration is missing')) {
           throw new Error('Konfigurasi storage belum lengkap. Hubungi admin.');
         }
-        if (errorMessage?.includes('CORS') || errorMessage?.includes('cors')) {
-          throw new Error('CORS belum dikonfigurasi. Hubungi admin untuk Apply CORS di Storage Settings.');
-        }
         throw new Error(errorMessage || 'Gagal mendapatkan upload URL');
       }
-      if (!data?.uploadUrl) throw new Error('Failed to get upload URL');
+      
+      // Use signedUrl (new) or uploadUrl (backward compat)
+      const uploadUrl = data?.signedUrl || data?.uploadUrl;
+      if (!uploadUrl) throw new Error('Failed to get upload URL');
 
-      // Step 2: Upload file directly to GCS with retry logic
+      // Step 2: Upload file directly to GCS using signed URL
       try {
-        const uploadResponse = await uploadWithRetry(data.uploadUrl, coverFile, coverFile.type, 3);
+        const uploadResponse = await uploadWithRetry(uploadUrl, coverFile, coverFile.type, 3);
         console.log('Cover upload successful:', uploadResponse.status);
       } catch (uploadError: any) {
         console.error('All cover upload attempts failed:', uploadError);
         
         const errorMsg = uploadError.message || '';
         
-        // CORS/Network error
-        if (errorMsg.includes('Failed to fetch') || uploadError.name === 'TypeError') {
+        // True network error
+        if (uploadError.name === 'TypeError' && errorMsg.includes('Failed to fetch')) {
           throw new Error(
-            'Upload gagal karena CORS. Buka Settings > Storage > klik "Apply/Fix CORS", tunggu 1-2 menit, lalu coba lagi.'
+            'Upload gagal (network error). Pastikan koneksi internet stabil dan CORS bucket sudah dikonfigurasi.'
           );
         }
         
-        // HTTP status code errors
+        // HTTP status code errors from GCS
         if (errorMsg.includes('Upload failed:')) {
           const statusMatch = errorMsg.match(/Upload failed: (\d+)/);
           const status = statusMatch ? parseInt(statusMatch[1]) : 0;
           
+          if (status === 400) {
+            throw new Error('Upload ditolak (400). Signed URL mungkin expired atau Content-Type tidak cocok.');
+          }
           if (status === 403) {
-            throw new Error('Upload ditolak (403). Bucket mungkin tidak mengizinkan public write atau CORS belum dikonfigurasi.');
+            throw new Error('Upload ditolak (403). Service account tidak punya akses write ke bucket.');
           }
           if (status === 404) {
             throw new Error('Bucket tidak ditemukan (404). Pastikan GCS_BUCKET_NAME sudah benar.');

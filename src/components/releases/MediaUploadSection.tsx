@@ -149,7 +149,7 @@ export function MediaUploadSection({
     throw lastError || new Error('Upload failed after retries');
   };
 
-  // All audio uploads go to GCS using resumable upload
+  // All audio uploads go to GCS using Signed URL V4
   const uploadToGCS = async (file: File, type: MediaType): Promise<string> => {
     const fileExt = file.name.split('.').pop()?.toLowerCase();
     const fileName = `${type}-${trackIndex}-${Date.now()}.${fileExt}`;
@@ -162,7 +162,7 @@ export function MediaUploadSection({
       throw new Error('Not authenticated');
     }
 
-    // Step 1: Get signed upload URL from edge function
+    // Step 1: Get signed URL from edge function
     const { data, error } = await supabase.functions.invoke('gcs-upload', {
       body: {
         file_name: fileName,
@@ -186,40 +186,42 @@ export function MediaUploadSection({
       if (errorMessage?.includes('GCS configuration is missing')) {
         throw new Error('Konfigurasi storage belum lengkap. Hubungi admin.');
       }
-      if (errorMessage?.includes('CORS') || errorMessage?.includes('cors')) {
-        throw new Error('CORS belum dikonfigurasi. Hubungi admin untuk Apply CORS di Storage Settings.');
-      }
       throw new Error(errorMessage || 'Gagal mendapatkan upload URL');
     }
-    if (!data?.uploadUrl) throw new Error('Failed to get upload URL');
+    
+    // Use signedUrl (new) or uploadUrl (backward compat)
+    const uploadUrl = data?.signedUrl || data?.uploadUrl;
+    if (!uploadUrl) throw new Error('Failed to get upload URL');
 
-    // Step 2: Upload file directly to GCS with retry logic
+    // Step 2: Upload file directly to GCS using signed URL
     try {
-      const uploadResponse = await uploadWithRetry(data.uploadUrl, file, mimeType, 3);
+      const uploadResponse = await uploadWithRetry(uploadUrl, file, mimeType, 3);
       console.log('Upload successful:', uploadResponse.status);
     } catch (uploadError: any) {
       console.error('All upload attempts failed:', uploadError);
       
-      // Detect specific error types for better messaging
       const errorMsg = uploadError.message || '';
       
-      // CORS/Network error - browser blocked the request
-      if (errorMsg.includes('Failed to fetch') || uploadError.name === 'TypeError') {
+      // True network/CORS error - browser blocked before getting any response
+      if (uploadError.name === 'TypeError' && errorMsg.includes('Failed to fetch')) {
         throw new Error(
-          'Upload gagal karena CORS. Solusi: Buka Settings > Storage > klik "Apply/Fix CORS", tunggu 1-2 menit, lalu coba upload lagi.'
+          'Upload gagal (network error). Pastikan koneksi internet stabil dan CORS bucket sudah dikonfigurasi.'
         );
       }
       
-      // HTTP status code errors
+      // HTTP status code errors from GCS
       if (errorMsg.includes('Upload failed:')) {
         const statusMatch = errorMsg.match(/Upload failed: (\d+)/);
         const status = statusMatch ? parseInt(statusMatch[1]) : 0;
         
+        if (status === 400) {
+          throw new Error('Upload ditolak (400). Signed URL mungkin sudah expired atau Content-Type tidak cocok.');
+        }
         if (status === 403) {
-          throw new Error('Upload ditolak (403). Bucket mungkin tidak mengizinkan public write atau CORS belum dikonfigurasi.');
+          throw new Error('Upload ditolak (403). Service account tidak punya akses write ke bucket.');
         }
         if (status === 404) {
-          throw new Error('Bucket tidak ditemukan (404). Pastikan GCS_BUCKET_NAME sudah benar di backend secrets.');
+          throw new Error('Bucket tidak ditemukan (404). Pastikan GCS_BUCKET_NAME sudah benar.');
         }
         if (status >= 500) {
           throw new Error(`Server GCS error (${status}). Coba lagi dalam beberapa saat.`);

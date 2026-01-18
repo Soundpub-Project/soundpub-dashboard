@@ -232,12 +232,14 @@ export function StorageSettings() {
         throw new Error(data.error);
       }
 
-      if (!data?.uploadUrl) {
+      // Use signedUrl (new) or uploadUrl (backward compat)
+      const uploadUrl = data?.signedUrl || data?.uploadUrl;
+      if (!uploadUrl) {
         throw new Error('Tidak dapat upload URL dari backend');
       }
 
-      // Step 2: Upload the test file directly to GCS
-      const uploadResponse = await fetch(data.uploadUrl, {
+      // Step 2: Upload the test file directly to GCS using signed URL
+      const uploadResponse = await fetch(uploadUrl, {
         method: 'PUT',
         headers: {
           'Content-Type': 'text/plain',
@@ -246,7 +248,14 @@ export function StorageSettings() {
       });
 
       if (!uploadResponse.ok) {
-        throw new Error(`Upload gagal: ${uploadResponse.status}`);
+        const status = uploadResponse.status;
+        if (status === 400) {
+          throw new Error('Upload gagal (400): Signed URL mungkin expired atau Content-Type tidak cocok.');
+        }
+        if (status === 403) {
+          throw new Error('Upload gagal (403): Service account tidak punya akses write ke bucket.');
+        }
+        throw new Error(`Upload gagal: ${status}`);
       }
 
       // Step 3: Try to delete the test file
