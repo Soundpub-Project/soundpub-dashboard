@@ -4,33 +4,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '@/components/ui/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { 
   Shield, 
-  Search, 
   Loader2, 
   DollarSign,
   TrendingUp,
   Calendar,
-  Music2,
-  FileText,
   Wallet
 } from 'lucide-react';
 import { 
@@ -42,16 +22,6 @@ import {
   Tooltip, 
   ResponsiveContainer 
 } from 'recharts';
-
-interface ComposerRoyalty {
-  id: string;
-  composer_id: string;
-  composer_name: string;
-  total_net_royalti: number;
-  period: string | null;
-  upload_id: string | null;
-  created_at: string;
-}
 
 interface CopyrightStats {
   totalRoyalties: number;
@@ -68,7 +38,6 @@ interface MonthlyData {
 export default function CopyrightDashboard() {
   const navigate = useNavigate();
   const { user, profile, isCopyright, loading: authLoading } = useAuth();
-  const [royalties, setRoyalties] = useState<ComposerRoyalty[]>([]);
   const [stats, setStats] = useState<CopyrightStats>({
     totalRoyalties: 0,
     totalPeriods: 0,
@@ -77,9 +46,6 @@ export default function CopyrightDashboard() {
   });
   const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [periodFilter, setPeriodFilter] = useState<string>('all');
-  const [availablePeriods, setAvailablePeriods] = useState<string[]>([]);
 
   useEffect(() => {
     if (!authLoading && !isCopyright) {
@@ -107,7 +73,6 @@ export default function CopyrightDashboard() {
       if (error) throw error;
 
       const royaltyList = data || [];
-      setRoyalties(royaltyList);
 
       // Calculate stats
       const totalRoyalties = royaltyList.reduce(
@@ -116,7 +81,6 @@ export default function CopyrightDashboard() {
       );
 
       const periods = [...new Set(royaltyList.map(r => r.period).filter(Boolean))] as string[];
-      setAvailablePeriods(periods.sort().reverse());
 
       // Group by period for chart
       const periodData: Record<string, number> = {};
@@ -156,15 +120,6 @@ export default function CopyrightDashboard() {
       maximumFractionDigits: 0,
     }).format(value);
   };
-
-  const filteredRoyalties = royalties.filter((royalty) => {
-    const matchesSearch = royalty.composer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (royalty.period || '').toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesPeriod = periodFilter === 'all' || royalty.period === periodFilter;
-    
-    return matchesSearch && matchesPeriod;
-  });
 
   if (!isCopyright) {
     return null;
@@ -270,7 +225,7 @@ export default function CopyrightDashboard() {
           <CardHeader>
             <CardTitle>Trend Royalti</CardTitle>
             <CardDescription>
-              Pendapatan royalti per periode
+              Pendapatan royalti per periode (12 periode terakhir)
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -284,7 +239,7 @@ export default function CopyrightDashboard() {
                 <p>Belum ada data royalti</p>
               </div>
             ) : (
-              <div className="h-[300px]">
+              <div className="h-[350px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={monthlyData}>
                     <defs>
@@ -323,97 +278,6 @@ export default function CopyrightDashboard() {
                     />
                   </AreaChart>
                 </ResponsiveContainer>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Royalties Table */}
-        <Card className="bg-card/50 border-border/50">
-          <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Detail Royalti
-                </CardTitle>
-                <CardDescription>{royalties.length} total entri</CardDescription>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="relative w-full sm:w-64">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Cari..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
-                <Select value={periodFilter} onValueChange={setPeriodFilter}>
-                  <SelectTrigger className="w-[150px]">
-                    <SelectValue placeholder="Filter Periode" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Semua Periode</SelectItem>
-                    {availablePeriods.map((period) => (
-                      <SelectItem key={period} value={period}>
-                        {period}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : filteredRoyalties.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Music2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Belum ada data royalti</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nama Pencipta</TableHead>
-                      <TableHead>Periode</TableHead>
-                      <TableHead className="text-right">Total Royalti</TableHead>
-                      <TableHead>Tanggal Upload</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredRoyalties.map((royalty) => (
-                      <TableRow key={royalty.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <div className="p-1.5 rounded-full bg-blue-500/10">
-                              <Shield className="h-4 w-4 text-blue-500" />
-                            </div>
-                            {royalty.composer_name}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{royalty.period || '-'}</Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-semibold text-green-600">
-                          {formatCurrency(Number(royalty.total_net_royalti))}
-                        </TableCell>
-                        <TableCell>
-                          {new Date(royalty.created_at).toLocaleDateString('id-ID', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                          })}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
               </div>
             )}
           </CardContent>
