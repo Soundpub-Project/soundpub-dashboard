@@ -20,6 +20,7 @@ import {
   Wrench,
   CheckCircle2,
   XCircle,
+  Upload,
 } from 'lucide-react';
 
 interface StorageConfig {
@@ -35,15 +36,21 @@ export function StorageSettings() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState<'gcs' | 'ga4' | 'cors' | null>(null);
+  const [testing, setTesting] = useState<'gcs' | 'ga4' | 'cors' | 'upload' | null>(null);
   const [applyingCors, setApplyingCors] = useState(false);
   const [corsStatus, setCorsStatus] = useState<{
     checked: boolean;
     configured: boolean | null;
     partiallyConfigured?: boolean;
+    bucketExists?: boolean;
+    bucketName?: string;
     message?: string;
     lastApplied?: string;
   }>({ checked: false, configured: null });
+  const [testUploadResult, setTestUploadResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
   const [config, setConfig] = useState<StorageConfig>({
     storage_provider: 'supabase',
     gcs_enabled: 'false',
@@ -178,6 +185,8 @@ export function StorageSettings() {
         checked: true,
         configured: data?.corsConfigured ?? false,
         partiallyConfigured: data?.partiallyConfigured ?? false,
+        bucketExists: data?.bucketExists ?? true,
+        bucketName: data?.bucketName,
         message: data?.message,
       });
     } catch (error: any) {
@@ -186,7 +195,101 @@ export function StorageSettings() {
         checked: true,
         configured: null,
         partiallyConfigured: false,
+        bucketExists: false,
         message: error.message || 'Gagal memeriksa status CORS',
+      });
+    } finally {
+      setTesting(null);
+    }
+  };
+
+  // Test Upload function - uploads a tiny test file to verify full pipeline
+  const testUpload = async () => {
+    setTesting('upload');
+    setTestUploadResult(null);
+    
+    try {
+      // Create a small test file
+      const testContent = `Test upload at ${new Date().toISOString()}`;
+      const testBlob = new Blob([testContent], { type: 'text/plain' });
+      const testFileName = `test-${Date.now()}.txt`;
+
+      // Step 1: Get upload URL from edge function
+      const { data, error } = await supabase.functions.invoke('gcs-upload', {
+        body: {
+          file_name: testFileName,
+          file_type: 'text/plain',
+          folder: 'test',
+          file_size: testBlob.size,
+        },
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Gagal mendapatkan upload URL');
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      if (!data?.uploadUrl) {
+        throw new Error('Tidak dapat upload URL dari backend');
+      }
+
+      // Step 2: Upload the test file directly to GCS
+      const uploadResponse = await fetch(data.uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'text/plain',
+        },
+        body: testBlob,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Upload gagal: ${uploadResponse.status}`);
+      }
+
+      // Step 3: Try to delete the test file
+      try {
+        await supabase.functions.invoke('gcs-manage', {
+          body: { 
+            action: 'delete_file',
+            file_path: `test/${testFileName}`,
+          },
+        });
+      } catch (deleteError) {
+        console.warn('Could not delete test file:', deleteError);
+        // Don't fail if delete fails
+      }
+
+      setTestUploadResult({
+        success: true,
+        message: 'Test upload berhasil! Upload pipeline bekerja dengan baik.',
+      });
+
+      toast({
+        title: 'Sukses',
+        description: 'Test upload berhasil. GCS siap digunakan.',
+      });
+    } catch (error: any) {
+      console.error('Test upload error:', error);
+      
+      let message = error.message || 'Test upload gagal';
+      
+      // Detect CORS error
+      if (error.name === 'TypeError' || message.includes('Failed to fetch')) {
+        message = 'CORS belum dikonfigurasi. Klik "Apply/Fix CORS" terlebih dahulu.';
+      }
+      
+      setTestUploadResult({
+        success: false,
+        message,
+      });
+
+      toast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive',
       });
     } finally {
       setTesting(null);
@@ -485,6 +588,64 @@ export function StorageSettings() {
                   </div>
                 )}
               </div>
+
+              {/* Test Upload Section */}
+              <div className="border-t border-border pt-4 mt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h5 className="font-medium flex items-center gap-2">
+                      <Upload className="h-4 w-4" />
+                      Test Upload
+                    </h5>
+                    <p className="text-sm text-muted-foreground">
+                      Upload file kecil untuk memverifikasi seluruh pipeline bekerja
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={testUpload}
+                    disabled={testing === 'upload'}
+                  >
+                    {testing === 'upload' ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4 mr-2" />
+                    )}
+                    Test Upload
+                  </Button>
+                </div>
+
+                {testUploadResult && (
+                  <div className={`p-3 rounded-lg ${
+                    testUploadResult.success 
+                      ? 'bg-chart-3/10 text-chart-3' 
+                      : 'bg-destructive/10 text-destructive'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {testUploadResult.success ? (
+                        <CheckCircle2 className="h-4 w-4" />
+                      ) : (
+                        <XCircle className="h-4 w-4" />
+                      )}
+                      <span className="text-sm font-medium">{testUploadResult.message}</span>
+                    </div>
+                  </div>
+                )}
+
+                {!testUploadResult && corsStatus.configured && (
+                  <p className="text-xs text-muted-foreground">
+                    💡 Klik "Test Upload" untuk memastikan GCS siap menerima upload dari browser.
+                  </p>
+                )}
+              </div>
+
+              {/* Bucket info if available */}
+              {corsStatus.bucketName && (
+                <div className="text-xs text-muted-foreground bg-muted/30 p-2 rounded mt-2">
+                  <strong>Bucket aktif:</strong> {corsStatus.bucketName}
+                </div>
+              )}
 
               <div className="text-xs text-muted-foreground space-y-1">
                 <p>• <strong>GCS_PROJECT_ID</strong>: ID project Google Cloud</p>

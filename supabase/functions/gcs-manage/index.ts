@@ -192,6 +192,8 @@ async function getGCSAccessToken(serviceAccountKeyJson: string): Promise<string>
 async function handleCheckCors(bucketName: string, accessToken: string) {
   const bucketInfoUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}?fields=cors`;
 
+  console.log(`Checking CORS for bucket: ${bucketName}`);
+
   const getRes = await fetch(bucketInfoUrl, {
     method: 'GET',
     headers: {
@@ -199,8 +201,34 @@ async function handleCheckCors(bucketName: string, accessToken: string) {
     },
   });
 
+  // Handle bucket not found or access denied
+  if (getRes.status === 404) {
+    return new Response(
+      JSON.stringify({
+        success: false,
+        corsConfigured: false,
+        bucketExists: false,
+        message: `Bucket "${bucketName}" tidak ditemukan. Pastikan GCS_BUCKET_NAME sudah benar.`,
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  if (getRes.status === 403) {
+    return new Response(
+      JSON.stringify({
+        success: false,
+        corsConfigured: false,
+        bucketExists: false,
+        message: `Service account tidak punya akses ke bucket "${bucketName}". Cek IAM permissions.`,
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
   if (!getRes.ok) {
     const errorText = await getRes.text();
+    console.error(`Bucket CORS check error: ${getRes.status}`, errorText);
     throw new Error(`Failed to read bucket CORS config: ${getRes.status} - ${errorText}`);
   }
 
@@ -237,11 +265,15 @@ async function handleCheckCors(bucketName: string, accessToken: string) {
     message = 'CORS belum dikonfigurasi - browser uploads akan gagal, klik "Apply/Fix CORS"';
   }
 
+  console.log(`CORS check result for ${bucketName}: configured=${hasCompleteRule}, partial=${hasPartialRule}`);
+
   return new Response(
     JSON.stringify({
       success: true,
       corsConfigured: hasCompleteRule,
       partiallyConfigured: hasPartialRule,
+      bucketExists: true,
+      bucketName: bucketName,
       currentRules: existingCors || [],
       requiredHeaders: DESIRED_CORS_RULE.responseHeader,
       message,
