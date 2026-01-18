@@ -86,6 +86,74 @@ interface GCSSignedUrlRequest {
   file_name: string;
   file_type: string;
   folder?: string;
+  file_size?: number;
+}
+
+// Server-side validation configuration
+const FOLDER_VALIDATION: Record<string, {
+  allowedTypes: string[];
+  maxSizeMB: number;
+  description: string;
+}> = {
+  covers: {
+    allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
+    maxSizeMB: 10,
+    description: 'Cover images',
+  },
+  audio: {
+    allowedTypes: [
+      'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav',
+      'audio/flac', 'audio/x-flac', 'audio/aiff', 'audio/x-aiff',
+      'audio/m4a', 'audio/mp4', 'audio/x-m4a',
+    ],
+    maxSizeMB: 500,
+    description: 'Full audio files',
+  },
+  clips: {
+    allowedTypes: [
+      'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav',
+      'audio/flac', 'audio/x-flac', 'audio/m4a', 'audio/mp4',
+    ],
+    maxSizeMB: 50,
+    description: 'Audio clips (30-60 seconds)',
+  },
+};
+
+function validateFileUpload(folder: string | undefined, fileType: string, fileSize?: number): { valid: boolean; error?: string } {
+  // If no folder specified, skip validation (backwards compatibility)
+  if (!folder) {
+    return { valid: true };
+  }
+
+  const config = FOLDER_VALIDATION[folder];
+  
+  // Unknown folder - allow upload but log warning
+  if (!config) {
+    console.warn(`Unknown folder for validation: ${folder}`);
+    return { valid: true };
+  }
+
+  // Validate file type
+  const normalizedType = fileType.toLowerCase();
+  if (!config.allowedTypes.includes(normalizedType)) {
+    return {
+      valid: false,
+      error: `Tipe file tidak diizinkan untuk ${config.description}. Tipe yang diizinkan: ${config.allowedTypes.map(t => t.split('/')[1]).join(', ')}`,
+    };
+  }
+
+  // Validate file size if provided
+  if (fileSize !== undefined) {
+    const maxSizeBytes = config.maxSizeMB * 1024 * 1024;
+    if (fileSize > maxSizeBytes) {
+      return {
+        valid: false,
+        error: `Ukuran file melebihi batas ${config.maxSizeMB}MB untuk ${config.description}`,
+      };
+    }
+  }
+
+  return { valid: true };
 }
 
 serve(async (req) => {
@@ -138,10 +206,16 @@ serve(async (req) => {
     }
 
     const body: GCSSignedUrlRequest = await req.json();
-    const { file_name, file_type, folder } = body;
+    const { file_name, file_type, folder, file_size } = body;
 
     if (!file_name || !file_type) {
       throw new Error('Missing required fields: file_name, file_type');
+    }
+
+    // Server-side validation for file type and size
+    const validation = validateFileUpload(folder, file_type, file_size);
+    if (!validation.valid) {
+      throw new Error(validation.error);
     }
 
     // Parse the service account key

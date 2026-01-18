@@ -36,6 +36,7 @@ import {
   PieChart,
   Crown,
   Shield,
+  HardDrive,
 } from 'lucide-react';
 
 interface NavItem {
@@ -113,6 +114,12 @@ const adminNavItems: NavItem[] = [
     title: 'Export', 
     url: '/dashboard/export', 
     icon: FolderArchive,
+    roles: ['superadmin', 'admin'],
+  },
+  { 
+    title: 'Media Library', 
+    url: '/dashboard/media-library', 
+    icon: HardDrive,
     roles: ['superadmin', 'admin'],
   },
 ];

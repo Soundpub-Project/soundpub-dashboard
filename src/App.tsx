@@ -26,6 +26,7 @@ import Export from "./pages/Export";
 import ComposerRoyalties from "./pages/ComposerRoyalties";
 import WhitelabelDashboard from "./pages/WhitelabelDashboard";
 import CopyrightDashboard from "./pages/CopyrightDashboard";
+import MediaLibrary from "./pages/MediaLibrary";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -138,6 +139,11 @@ const App = () => (
               <Route path="/dashboard/composer-royalties" element={
                 <ProtectedRoute requireAdmin>
                   <ComposerRoyalties />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/media-library" element={
+                <ProtectedRoute requireAdmin>
+                  <MediaLibrary />
                 </ProtectedRoute>
               } />
               
