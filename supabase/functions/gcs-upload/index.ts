@@ -235,10 +235,19 @@ serve(async (req) => {
       throw new Error('User role not found');
     }
 
-    // Allow superadmin, admin, and label roles to upload
-    const allowedRoles = ['superadmin', 'admin', 'label'];
+    // Allow superadmin, admin, label, and whitelabel roles to upload
+    const allowedRoles = ['superadmin', 'admin', 'label', 'whitelabel'];
     if (!allowedRoles.includes(roleData.role)) {
-      throw new Error('Insufficient permissions to upload files');
+      console.error(`Role denied: ${roleData.role}, allowed: ${allowedRoles.join(', ')}`);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Insufficient permissions to upload files',
+          code: 'INSUFFICIENT_ROLE',
+          currentRole: roleData.role,
+          allowedRoles: allowedRoles,
+        }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const gcsProjectId = Deno.env.get('GCS_PROJECT_ID');

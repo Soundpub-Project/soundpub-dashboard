@@ -479,11 +479,24 @@ export function ReleaseFormDialog({
         },
       });
 
-      if (error) {
-        if (error.message?.includes('CORS') || error.message?.includes('cors')) {
+      if (error || data?.error) {
+        const errorData = data || {};
+        const errorCode = errorData.code;
+        const errorMessage = errorData.error || error?.message;
+        
+        console.error('Cover upload function error:', { error, data: errorData });
+        
+        // Handle specific error codes
+        if (errorCode === 'INSUFFICIENT_ROLE') {
+          throw new Error(`Role "${errorData.currentRole}" tidak diizinkan upload. Hubungi admin.`);
+        }
+        if (errorMessage?.includes('GCS configuration is missing')) {
+          throw new Error('Konfigurasi storage belum lengkap. Hubungi admin.');
+        }
+        if (errorMessage?.includes('CORS') || errorMessage?.includes('cors')) {
           throw new Error('CORS belum dikonfigurasi. Hubungi admin untuk Apply CORS di Storage Settings.');
         }
-        throw error;
+        throw new Error(errorMessage || 'Gagal mendapatkan upload URL');
       }
       if (!data?.uploadUrl) throw new Error('Failed to get upload URL');
 
