@@ -40,7 +40,7 @@ interface ArtistProfile {
 
 export default function MyArtists() {
   const navigate = useNavigate();
-  const { user, isLabel, loading: authLoading } = useAuth();
+  const { user, isLabel, isWhitelabel, loading: authLoading } = useAuth();
   const [artists, setArtists] = useState<ArtistProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,17 +50,19 @@ export default function MyArtists() {
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [selectedArtist, setSelectedArtist] = useState<ArtistProfile | null>(null);
 
+  const canAccessMyArtists = isLabel || isWhitelabel;
+  
   useEffect(() => {
-    if (!authLoading && !isLabel) {
+    if (!authLoading && !canAccessMyArtists) {
       navigate('/dashboard');
     }
-  }, [isLabel, authLoading, navigate]);
+  }, [canAccessMyArtists, authLoading, navigate]);
 
   useEffect(() => {
-    if (isLabel && user) {
+    if (canAccessMyArtists && user) {
       fetchArtists();
     }
-  }, [isLabel, user]);
+  }, [canAccessMyArtists, user]);
 
   const fetchArtists = async () => {
     if (!user) return;
@@ -112,7 +114,7 @@ export default function MyArtists() {
       artist.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (!isLabel) {
+  if (!canAccessMyArtists) {
     return null;
   }
 

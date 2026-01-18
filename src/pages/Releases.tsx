@@ -48,7 +48,7 @@ interface Release {
 
 export default function Releases() {
   const navigate = useNavigate();
-  const { isAdmin, isLabel, isArtist, loading: authLoading } = useAuth();
+  const { isAdmin, isLabel, isArtist, isWhitelabel, loading: authLoading } = useAuth();
   const [releases, setReleases] = useState<Release[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -61,8 +61,8 @@ export default function Releases() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkLoading, setBulkLoading] = useState(false);
 
-  const canManageReleases = isAdmin || isLabel;
-  const canCreateRelease = isAdmin || isLabel || isArtist;
+  const canManageReleases = isAdmin || isLabel || isWhitelabel;
+  const canCreateRelease = isAdmin || isLabel || isArtist || isWhitelabel;
 
   useEffect(() => {
     fetchReleases();
@@ -70,8 +70,8 @@ export default function Releases() {
 
   // Debug log to check role status
   useEffect(() => {
-    console.log('Releases page - isAdmin:', isAdmin, 'isLabel:', isLabel, 'authLoading:', authLoading, 'canManageReleases:', canManageReleases);
-  }, [isAdmin, isLabel, authLoading, canManageReleases]);
+    console.log('Releases page - isAdmin:', isAdmin, 'isLabel:', isLabel, 'isWhitelabel:', isWhitelabel, 'authLoading:', authLoading, 'canManageReleases:', canManageReleases);
+  }, [isAdmin, isLabel, isWhitelabel, authLoading, canManageReleases]);
 
   const fetchReleases = async () => {
     try {
@@ -115,7 +115,7 @@ export default function Releases() {
 
   const handleAddRelease = () => {
     setSelectedRelease(null);
-    if (isArtist && !isAdmin && !isLabel) {
+    if (isArtist && !isAdmin && !isLabel && !isWhitelabel) {
       setArtistFormOpen(true);
     } else {
       setFormOpen(true);
