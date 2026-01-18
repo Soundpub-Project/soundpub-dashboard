@@ -502,14 +502,33 @@ export function ReleaseFormDialog({
 
       // Step 2: Upload file directly to GCS with retry logic
       try {
-        await uploadWithRetry(data.uploadUrl, coverFile, coverFile.type, 3);
+        const uploadResponse = await uploadWithRetry(data.uploadUrl, coverFile, coverFile.type, 3);
+        console.log('Cover upload successful:', uploadResponse.status);
       } catch (uploadError: any) {
         console.error('All cover upload attempts failed:', uploadError);
-        if (uploadError.message?.includes('Failed to fetch') || uploadError.name === 'TypeError') {
+        
+        const errorMsg = uploadError.message || '';
+        
+        // CORS/Network error
+        if (errorMsg.includes('Failed to fetch') || uploadError.name === 'TypeError') {
           throw new Error(
             'Upload gagal karena CORS. Buka Settings > Storage > klik "Apply/Fix CORS", tunggu 1-2 menit, lalu coba lagi.'
           );
         }
+        
+        // HTTP status code errors
+        if (errorMsg.includes('Upload failed:')) {
+          const statusMatch = errorMsg.match(/Upload failed: (\d+)/);
+          const status = statusMatch ? parseInt(statusMatch[1]) : 0;
+          
+          if (status === 403) {
+            throw new Error('Upload ditolak (403). Bucket mungkin tidak mengizinkan public write atau CORS belum dikonfigurasi.');
+          }
+          if (status === 404) {
+            throw new Error('Bucket tidak ditemukan (404). Pastikan GCS_BUCKET_NAME sudah benar.');
+          }
+        }
+        
         throw uploadError;
       }
 

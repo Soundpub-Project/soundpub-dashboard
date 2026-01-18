@@ -38,25 +38,12 @@ const COMPLETE_CORS_RULE = {
   maxAgeSeconds: 3600,
 };
 
-// Track last CORS update to avoid excessive patching
-let lastCorsUpdateTime = 0;
-const CORS_UPDATE_COOLDOWN_MS = 60000; // 1 minute cooldown
-
-async function ensureBucketCorsForBrowserUploads(params: {
+// Check CORS status without applying (faster)
+async function checkBucketCorsStatus(params: {
   accessToken: string;
   bucketName: string;
-  requestOrigin: string;
-  forceApply?: boolean;
-}): Promise<void> {
-  const { accessToken, bucketName, forceApply = false } = params;
-
-  // Check cooldown unless force apply
-  const now = Date.now();
-  if (!forceApply && (now - lastCorsUpdateTime) < CORS_UPDATE_COOLDOWN_MS) {
-    console.log('CORS update skipped (cooldown active)');
-    return;
-  }
-
+}): Promise<{ configured: boolean; bucketExists: boolean; error?: string }> {
+  const { accessToken, bucketName } = params;
   const bucketInfoUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}?fields=cors`;
 
   try {
@@ -67,62 +54,44 @@ async function ensureBucketCorsForBrowserUploads(params: {
       },
     });
 
+    if (getRes.status === 404) {
+      return { configured: false, bucketExists: false, error: `Bucket "${bucketName}" tidak ditemukan` };
+    }
+
+    if (getRes.status === 403) {
+      return { configured: false, bucketExists: false, error: `Service account tidak punya akses ke bucket "${bucketName}"` };
+    }
+
     if (!getRes.ok) {
       const errorText = await getRes.text();
-      console.error('GCS bucket read error:', errorText);
-      // Continue anyway - try to apply CORS
-    } else {
-      const bucketData = await getRes.json();
-      const existingCors: Array<{ origin?: string[]; method?: string[]; responseHeader?: string[] }> | undefined = bucketData?.cors;
-
-      // Check if CORS is fully configured with all required headers
-      const hasCompleteRule = Array.isArray(existingCors)
-        ? existingCors.some((rule) => {
-            const origins = rule.origin ?? [];
-            const methods = (rule.method ?? []).map((m) => m.toUpperCase());
-            const headers = rule.responseHeader ?? [];
-            
-            const originOk = origins.includes('*');
-            const methodsOk = methods.includes('PUT') && methods.includes('OPTIONS') && methods.includes('POST');
-            // Check for key headers that indicate complete configuration
-            const headersOk = headers.includes('Access-Control-Allow-Origin') && 
-                             headers.includes('x-goog-resumable') &&
-                             headers.includes('Content-Type');
-            
-            return originOk && methodsOk && headersOk;
-          })
-        : false;
-
-      // Skip if already complete and not forced
-      if (hasCompleteRule && !forceApply) {
-        console.log('CORS already complete, skipping update');
-        return;
-      }
+      console.error('GCS bucket read error:', getRes.status, errorText);
+      return { configured: false, bucketExists: true, error: `Error cek bucket: ${getRes.status}` };
     }
+
+    const bucketData = await getRes.json();
+    const existingCors: Array<{ origin?: string[]; method?: string[]; responseHeader?: string[] }> | undefined = bucketData?.cors;
+
+    // Check if CORS is fully configured with all required headers
+    const hasCompleteRule = Array.isArray(existingCors)
+      ? existingCors.some((rule) => {
+          const origins = rule.origin ?? [];
+          const methods = (rule.method ?? []).map((m) => m.toUpperCase());
+          const headers = rule.responseHeader ?? [];
+          
+          const originOk = origins.includes('*');
+          const methodsOk = methods.includes('PUT') && methods.includes('OPTIONS') && methods.includes('POST');
+          const headersOk = headers.includes('Access-Control-Allow-Origin') && 
+                           headers.includes('x-goog-resumable') &&
+                           headers.includes('Content-Type');
+          
+          return originOk && methodsOk && headersOk;
+        })
+      : false;
+
+    return { configured: hasCompleteRule, bucketExists: true };
   } catch (error) {
-    console.warn('Error checking CORS, will try to apply:', error);
-  }
-
-  // Always apply the complete CORS rule
-  console.log(`Applying complete GCS CORS rules to bucket: ${bucketName}`);
-
-  const patchRes = await fetch(`https://storage.googleapis.com/storage/v1/b/${bucketName}`, {
-    method: 'PATCH',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ cors: [COMPLETE_CORS_RULE] }),
-  });
-
-  if (!patchRes.ok) {
-    const errorText = await patchRes.text();
-    console.error('GCS bucket patch error:', errorText);
-    // Don't throw - let the upload proceed and fail with a clearer error if needed
-    console.warn('Failed to update CORS, upload may fail');
-  } else {
-    lastCorsUpdateTime = Date.now();
-    console.log(`GCS CORS configured successfully for bucket: ${bucketName}`);
+    console.error('Error checking CORS:', error);
+    return { configured: false, bucketExists: true, error: 'Network error saat cek bucket' };
   }
 }
 
@@ -160,6 +129,11 @@ const FOLDER_VALIDATION: Record<string, {
     ],
     maxSizeMB: 50,
     description: 'Audio clips (30-60 seconds)',
+  },
+  test: {
+    allowedTypes: ['text/plain', 'application/octet-stream'],
+    maxSizeMB: 1,
+    description: 'Test files',
   },
 };
 
@@ -334,19 +308,42 @@ serve(async (req) => {
       throw new Error('Failed to get GCS access token');
     }
 
-    // Ensure the bucket has CORS rules so browser uploads to GCS don't get blocked
-    const requestOrigin = req.headers.get('Origin') ?? '*';
-    await ensureBucketCorsForBrowserUploads({
+    // Log bucket info for debugging
+    console.log(`Using GCS bucket: ${gcsBucketName}`);
+
+    // Check bucket status and CORS before proceeding
+    const corsStatus = await checkBucketCorsStatus({
       accessToken: tokenData.access_token,
       bucketName: gcsBucketName,
-      requestOrigin,
     });
+
+    // If bucket doesn't exist or no access, return specific error
+    if (!corsStatus.bucketExists) {
+      console.error(`Bucket error: ${corsStatus.error}`);
+      return new Response(
+        JSON.stringify({ 
+          error: corsStatus.error,
+          code: 'BUCKET_NOT_FOUND',
+          bucket: gcsBucketName,
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Warn if CORS not configured, but don't block - let the upload try
+    if (!corsStatus.configured) {
+      console.warn(`CORS not fully configured for bucket: ${gcsBucketName}. Browser upload may fail.`);
+    } else {
+      console.log(`CORS verified OK for bucket: ${gcsBucketName}`);
+    }
 
     // Generate object path
     const objectPath = folder ? `${folder}/${file_name}` : file_name;
 
     // Create resumable upload session to get upload URL
     const initiateUrl = `https://storage.googleapis.com/upload/storage/v1/b/${gcsBucketName}/o?uploadType=resumable&name=${encodeURIComponent(objectPath)}`;
+    
+    console.log(`Initiating resumable upload for: ${objectPath}`);
     
     const initiateResponse = await fetch(initiateUrl, {
       method: 'POST',
@@ -363,7 +360,29 @@ serve(async (req) => {
 
     if (!initiateResponse.ok) {
       const errorText = await initiateResponse.text();
-      console.error('GCS Initiate Error:', errorText);
+      console.error('GCS Initiate Error:', initiateResponse.status, errorText);
+      
+      // Provide specific error for common issues
+      if (initiateResponse.status === 404) {
+        return new Response(
+          JSON.stringify({ 
+            error: `Bucket "${gcsBucketName}" tidak ditemukan. Pastikan GCS_BUCKET_NAME sudah benar.`,
+            code: 'BUCKET_NOT_FOUND',
+            bucket: gcsBucketName,
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      if (initiateResponse.status === 403) {
+        return new Response(
+          JSON.stringify({ 
+            error: `Service account tidak punya akses ke bucket "${gcsBucketName}". Cek permission.`,
+            code: 'ACCESS_DENIED',
+            bucket: gcsBucketName,
+          }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
       throw new Error(`Failed to initiate upload: ${initiateResponse.status}`);
     }
 
