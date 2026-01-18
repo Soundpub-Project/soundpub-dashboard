@@ -249,10 +249,11 @@ export function ReleaseFormDialog({
   const fetchLabels = async () => {
     setLoadingLabels(true);
     try {
+      // Fetch both label and whitelabel roles
       const { data: labelRoles, error: rolesError } = await supabase
         .from('user_roles')
-        .select('user_id')
-        .eq('role', 'label');
+        .select('user_id, role')
+        .in('role', ['label', 'whitelabel']);
 
       if (rolesError) throw rolesError;
 
@@ -264,7 +265,19 @@ export function ReleaseFormDialog({
           .in('id', labelIds);
 
         if (profilesError) throw profilesError;
-        setLabels(profiles || []);
+        
+        // Map role info to profiles for display
+        const profilesWithRole = (profiles || []).map(profile => {
+          const roleInfo = labelRoles.find(r => r.user_id === profile.id);
+          return {
+            ...profile,
+            full_name: roleInfo?.role === 'whitelabel' 
+              ? `${profile.full_name} (Whitelabel)` 
+              : profile.full_name
+          };
+        });
+        
+        setLabels(profilesWithRole);
       }
     } catch (error) {
       console.error('Error fetching labels:', error);
