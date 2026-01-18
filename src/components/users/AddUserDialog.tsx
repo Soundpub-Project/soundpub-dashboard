@@ -22,7 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, Shield, Music, Building2, User, UserPlus } from 'lucide-react';
 
-type AppRole = 'admin' | 'label' | 'artist' | 'user';
+type AppRole = 'admin' | 'label' | 'artist' | 'user' | 'copyright' | 'whitelabel';
 
 interface LabelOption {
   id: string;
@@ -35,6 +35,7 @@ interface AddUserDialogProps {
   onSuccess: () => void;
   allowedRoles?: AppRole[];
   defaultParentLabelId?: string;
+  isWhitelabelMode?: boolean;
 }
 
 interface RoleOption {
@@ -77,8 +78,9 @@ export function AddUserDialog({
   onSuccess,
   allowedRoles,
   defaultParentLabelId,
+  isWhitelabelMode = false,
 }: AddUserDialogProps) {
-  const { user: currentUser, isAdmin, isLabel } = useAuth();
+  const { user: currentUser, isAdmin, isLabel, isWhitelabel } = useAuth();
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
@@ -138,20 +140,27 @@ export function AddUserDialog({
     if (isAdmin) {
       return true;
     }
-    // Label can only add artists
-    if (isLabel) {
+    // Label or Whitelabel can only add artists
+    if (isLabel || isWhitelabel) {
       return role.value === 'artist';
     }
     return false;
   });
 
   const handleSave = async () => {
-    if (!email || !fullName || !password) {
-      toast.error('Semua field harus diisi');
+    // For whitelabel mode, password is not required
+    if (!email || !fullName) {
+      toast.error('Email dan nama lengkap harus diisi');
       return;
     }
 
-    if (password.length < 6) {
+    // Password only required if not in whitelabel mode
+    if (!isWhitelabelMode && !password) {
+      toast.error('Password harus diisi');
+      return;
+    }
+
+    if (!isWhitelabelMode && password.length < 6) {
       toast.error('Password minimal 6 karakter');
       return;
     }
@@ -173,34 +182,54 @@ export function AddUserDialog({
       // Determine parent_label_id
       let parentLabelId = defaultParentLabelId || null;
       if (selectedRole === 'artist') {
-        if (isLabel && currentUser) {
+        if ((isLabel || isWhitelabel) && currentUser) {
           parentLabelId = currentUser.id;
         } else if (isAdmin && selectedLabelId) {
           parentLabelId = selectedLabelId;
         }
       }
 
-      // Call edge function to create user without logging in as them
-      const response = await supabase.functions.invoke('create-user', {
-        body: {
-          email,
-          password,
-          full_name: fullName,
-          phone: phone || null,
-          role: selectedRole,
-          parent_label_id: parentLabelId,
-        },
-      });
+      // Use different edge function for whitelabel mode
+      if (isWhitelabelMode) {
+        const response = await supabase.functions.invoke('create-whitelabel-artist', {
+          body: {
+            email,
+            full_name: fullName,
+            phone: phone || null,
+            parent_label_id: parentLabelId,
+          },
+        });
 
-      if (response.error) {
-        throw new Error(response.error.message || 'Gagal membuat user');
+        if (response.error) {
+          throw new Error(response.error.message || 'Gagal membuat artist');
+        }
+
+        if (!response.data.success) {
+          throw new Error(response.data.error || 'Gagal membuat artist');
+        }
+      } else {
+        // Call edge function to create user without logging in as them
+        const response = await supabase.functions.invoke('create-user', {
+          body: {
+            email,
+            password,
+            full_name: fullName,
+            phone: phone || null,
+            role: selectedRole,
+            parent_label_id: parentLabelId,
+          },
+        });
+
+        if (response.error) {
+          throw new Error(response.error.message || 'Gagal membuat user');
+        }
+
+        if (!response.data.success) {
+          throw new Error(response.data.error || 'Gagal membuat user');
+        }
       }
 
-      if (!response.data.success) {
-        throw new Error(response.data.error || 'Gagal membuat user');
-      }
-
-      toast.success(`User ${fullName} berhasil ditambahkan sebagai ${selectedRole}`);
+      toast.success(`${isWhitelabelMode ? 'Artist' : 'User'} ${fullName} berhasil ditambahkan${isWhitelabelMode ? '' : ` sebagai ${selectedRole}`}`);
       
       // Reset form
       setEmail('');

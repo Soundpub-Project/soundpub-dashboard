@@ -34,6 +34,8 @@ import {
   ScrollText,
   FolderArchive,
   PieChart,
+  Crown,
+  Shield,
 } from 'lucide-react';
 
 interface NavItem {
@@ -124,6 +126,24 @@ const labelNavItems: NavItem[] = [
   },
 ];
 
+const whitelabelNavItems: NavItem[] = [
+  { 
+    title: 'Whitelabel Dashboard', 
+    url: '/dashboard/whitelabel', 
+    icon: Crown,
+    roles: ['whitelabel'],
+  },
+];
+
+const copyrightNavItems: NavItem[] = [
+  { 
+    title: 'Copyright Dashboard', 
+    url: '/dashboard/copyright', 
+    icon: Shield,
+    roles: ['copyright'],
+  },
+];
+
 const accountNavItems: NavItem[] = [
   { 
     title: 'Payouts', 
@@ -140,7 +160,7 @@ const accountNavItems: NavItem[] = [
 export function AppSidebar() {
   const { state } = useSidebar();
   const location = useLocation();
-  const { profile, role, signOut, isAdmin, isLabel, isArtist } = useAuth();
+  const { profile, role, signOut, isAdmin, isLabel, isArtist, isCopyright, isWhitelabel } = useAuth();
   const { resolvedTheme } = useTheme();
   const collapsed = state === 'collapsed';
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -304,6 +324,58 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 {labelNavItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                      <NavLink 
+                        to={item.url} 
+                        end 
+                        className="flex items-center gap-2"
+                        activeClassName="bg-sidebar-accent text-sidebar-accent-foreground"
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {/* Whitelabel Navigation */}
+        {isWhitelabel && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Whitelabel</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {whitelabelNavItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                      <NavLink 
+                        to={item.url} 
+                        end 
+                        className="flex items-center gap-2"
+                        activeClassName="bg-sidebar-accent text-sidebar-accent-foreground"
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {/* Copyright Navigation */}
+        {isCopyright && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Copyright</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {copyrightNavItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive(item.url)}>
                       <NavLink 

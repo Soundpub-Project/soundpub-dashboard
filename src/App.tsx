@@ -24,6 +24,8 @@ import UploadRoyalty from "./pages/UploadRoyalty";
 import MyArtists from "./pages/MyArtists";
 import Export from "./pages/Export";
 import ComposerRoyalties from "./pages/ComposerRoyalties";
+import WhitelabelDashboard from "./pages/WhitelabelDashboard";
+import CopyrightDashboard from "./pages/CopyrightDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -88,8 +90,22 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/dashboard/my-artists" element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['label']}>
                   <MyArtists />
+                </ProtectedRoute>
+              } />
+              
+              {/* Whitelabel-specific routes */}
+              <Route path="/dashboard/whitelabel" element={
+                <ProtectedRoute requireWhitelabel>
+                  <WhitelabelDashboard />
+                </ProtectedRoute>
+              } />
+              
+              {/* Copyright-specific routes */}
+              <Route path="/dashboard/copyright" element={
+                <ProtectedRoute requireCopyright>
+                  <CopyrightDashboard />
                 </ProtectedRoute>
               } />
               
