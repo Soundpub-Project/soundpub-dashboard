@@ -6,95 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Enhanced CORS rule with all required headers for resumable uploads
-const COMPLETE_CORS_RULE = {
-  origin: ['*'],
-  method: ['GET', 'HEAD', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
-  responseHeader: [
-    'Content-Type',
-    'Content-Length', 
-    'Content-Range',
-    'ETag',
-    'Location',
-    'Range',
-    'x-goog-resumable',
-    'x-goog-generation',
-    'x-goog-metageneration',
-    'x-goog-stored-content-encoding',
-    'x-goog-stored-content-length',
-    'x-goog-upload-chunk-granularity',
-    'x-goog-upload-control-url',
-    'x-goog-upload-header-content-type',
-    'x-goog-upload-status',
-    'x-goog-upload-url',
-    'x-upload-content-length',
-    'x-upload-content-type',
-    'Access-Control-Allow-Origin',
-    'Access-Control-Allow-Methods',
-    'Access-Control-Allow-Headers',
-    'Access-Control-Expose-Headers',
-    'Access-Control-Max-Age',
-  ],
-  maxAgeSeconds: 3600,
-};
-
-// Check CORS status without applying (faster)
-async function checkBucketCorsStatus(params: {
-  accessToken: string;
-  bucketName: string;
-}): Promise<{ configured: boolean; bucketExists: boolean; error?: string }> {
-  const { accessToken, bucketName } = params;
-  const bucketInfoUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}?fields=cors`;
-
-  try {
-    const getRes = await fetch(bucketInfoUrl, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-
-    if (getRes.status === 404) {
-      return { configured: false, bucketExists: false, error: `Bucket "${bucketName}" tidak ditemukan` };
-    }
-
-    if (getRes.status === 403) {
-      return { configured: false, bucketExists: false, error: `Service account tidak punya akses ke bucket "${bucketName}"` };
-    }
-
-    if (!getRes.ok) {
-      const errorText = await getRes.text();
-      console.error('GCS bucket read error:', getRes.status, errorText);
-      return { configured: false, bucketExists: true, error: `Error cek bucket: ${getRes.status}` };
-    }
-
-    const bucketData = await getRes.json();
-    const existingCors: Array<{ origin?: string[]; method?: string[]; responseHeader?: string[] }> | undefined = bucketData?.cors;
-
-    // Check if CORS is fully configured with all required headers
-    const hasCompleteRule = Array.isArray(existingCors)
-      ? existingCors.some((rule) => {
-          const origins = rule.origin ?? [];
-          const methods = (rule.method ?? []).map((m) => m.toUpperCase());
-          const headers = rule.responseHeader ?? [];
-          
-          const originOk = origins.includes('*');
-          const methodsOk = methods.includes('PUT') && methods.includes('OPTIONS') && methods.includes('POST');
-          const headersOk = headers.includes('Access-Control-Allow-Origin') && 
-                           headers.includes('x-goog-resumable') &&
-                           headers.includes('Content-Type');
-          
-          return originOk && methodsOk && headersOk;
-        })
-      : false;
-
-    return { configured: hasCompleteRule, bucketExists: true };
-  } catch (error) {
-    console.error('Error checking CORS:', error);
-    return { configured: false, bucketExists: true, error: 'Network error saat cek bucket' };
-  }
-}
-
 interface GCSSignedUrlRequest {
   file_name: string;
   file_type: string;
@@ -138,20 +49,17 @@ const FOLDER_VALIDATION: Record<string, {
 };
 
 function validateFileUpload(folder: string | undefined, fileType: string, fileSize?: number): { valid: boolean; error?: string } {
-  // If no folder specified, skip validation (backwards compatibility)
   if (!folder) {
     return { valid: true };
   }
 
   const config = FOLDER_VALIDATION[folder];
   
-  // Unknown folder - allow upload but log warning
   if (!config) {
     console.warn(`Unknown folder for validation: ${folder}`);
     return { valid: true };
   }
 
-  // Validate file type
   const normalizedType = fileType.toLowerCase();
   if (!config.allowedTypes.includes(normalizedType)) {
     return {
@@ -160,7 +68,6 @@ function validateFileUpload(folder: string | undefined, fileType: string, fileSi
     };
   }
 
-  // Validate file size if provided
   if (fileSize !== undefined) {
     const maxSizeBytes = config.maxSizeMB * 1024 * 1024;
     if (fileSize > maxSizeBytes) {
@@ -172,6 +79,115 @@ function validateFileUpload(folder: string | undefined, fileType: string, fileSi
   }
 
   return { valid: true };
+}
+
+// Helper function to convert PEM to binary
+function pemToBinary(pem: string): ArrayBuffer {
+  const base64 = pem
+    .replace(/-----BEGIN PRIVATE KEY-----/g, '')
+    .replace(/-----END PRIVATE KEY-----/g, '')
+    .replace(/\s/g, '');
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+// Generate V4 Signed URL for PUT upload
+async function generateSignedUrl(params: {
+  bucketName: string;
+  objectPath: string;
+  contentType: string;
+  serviceAccountEmail: string;
+  privateKey: string;
+  expiresInSeconds?: number;
+}): Promise<string> {
+  const { bucketName, objectPath, contentType, serviceAccountEmail, privateKey, expiresInSeconds = 3600 } = params;
+  
+  const now = Math.floor(Date.now() / 1000);
+  const expiration = now + expiresInSeconds;
+  
+  // Format timestamp for V4 signature
+  const dateISO = new Date(now * 1000).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const dateStamp = dateISO.substring(0, 8);
+  
+  const host = 'storage.googleapis.com';
+  const credentialScope = `${dateStamp}/auto/storage/goog4_request`;
+  const credential = `${serviceAccountEmail}/${credentialScope}`;
+  
+  // Canonical headers
+  const signedHeaders = 'content-type;host';
+  
+  // Query parameters for signed URL
+  const queryParams = new URLSearchParams({
+    'X-Goog-Algorithm': 'GOOG4-RSA-SHA256',
+    'X-Goog-Credential': credential,
+    'X-Goog-Date': dateISO,
+    'X-Goog-Expires': String(expiresInSeconds),
+    'X-Goog-SignedHeaders': signedHeaders,
+  });
+  
+  // Build canonical request
+  const encodedObjectPath = objectPath.split('/').map(encodeURIComponent).join('/');
+  const canonicalUri = `/${bucketName}/${encodedObjectPath}`;
+  const canonicalQueryString = [...queryParams.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join('&');
+  
+  const canonicalHeaders = `content-type:${contentType}\nhost:${host}\n`;
+  
+  const canonicalRequest = [
+    'PUT',
+    canonicalUri,
+    canonicalQueryString,
+    canonicalHeaders,
+    signedHeaders,
+    'UNSIGNED-PAYLOAD',
+  ].join('\n');
+  
+  // Hash canonical request
+  const encoder = new TextEncoder();
+  const canonicalRequestHash = await crypto.subtle.digest('SHA-256', encoder.encode(canonicalRequest));
+  const hashedCanonicalRequest = Array.from(new Uint8Array(canonicalRequestHash))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+  
+  // Build string to sign
+  const stringToSign = [
+    'GOOG4-RSA-SHA256',
+    dateISO,
+    credentialScope,
+    hashedCanonicalRequest,
+  ].join('\n');
+  
+  // Sign with private key
+  const key = await crypto.subtle.importKey(
+    'pkcs8',
+    pemToBinary(privateKey),
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  
+  const signature = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    key,
+    encoder.encode(stringToSign)
+  );
+  
+  const signatureHex = Array.from(new Uint8Array(signature))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+  
+  // Build final URL
+  queryParams.set('X-Goog-Signature', signatureHex);
+  
+  const signedUrl = `https://${host}${canonicalUri}?${queryParams.toString()}`;
+  
+  return signedUrl;
 }
 
 serve(async (req) => {
@@ -248,150 +264,20 @@ serve(async (req) => {
     // Parse the service account key
     const serviceAccount = JSON.parse(gcsServiceAccountKey);
     
-    // Create JWT for authentication
-    const now = Math.floor(Date.now() / 1000);
-    const exp = now + 3600;
-
-    const header = {
-      alg: 'RS256',
-      typ: 'JWT',
-    };
-
-    const payload = {
-      iss: serviceAccount.client_email,
-      scope: 'https://www.googleapis.com/auth/devstorage.read_write',
-      aud: 'https://oauth2.googleapis.com/token',
-      iat: now,
-      exp: exp,
-    };
-
-    // Encode header and payload
-    const encoder = new TextEncoder();
-    const headerB64 = btoa(JSON.stringify(header)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-    const payloadB64 = btoa(JSON.stringify(payload)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-    
-    const signatureInput = `${headerB64}.${payloadB64}`;
-    
-    // Import private key and sign
-    const privateKey = await crypto.subtle.importKey(
-      'pkcs8',
-      pemToBinary(serviceAccount.private_key),
-      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-      false,
-      ['sign']
-    );
-    
-    const signature = await crypto.subtle.sign(
-      'RSASSA-PKCS1-v1_5',
-      privateKey,
-      encoder.encode(signatureInput)
-    );
-    
-    const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
-      .replace(/=/g, '')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_');
-    
-    const jwt = `${signatureInput}.${signatureB64}`;
-
-    // Get access token
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
-    });
-
-    const tokenData = await tokenResponse.json();
-
-    if (!tokenData.access_token) {
-      console.error('Token response:', tokenData);
-      throw new Error('Failed to get GCS access token');
-    }
-
-    // Log bucket info for debugging
-    console.log(`Using GCS bucket: ${gcsBucketName}`);
-
-    // Check bucket status and CORS before proceeding
-    const corsStatus = await checkBucketCorsStatus({
-      accessToken: tokenData.access_token,
-      bucketName: gcsBucketName,
-    });
-
-    // If bucket doesn't exist or no access, return specific error
-    if (!corsStatus.bucketExists) {
-      console.error(`Bucket error: ${corsStatus.error}`);
-      return new Response(
-        JSON.stringify({ 
-          error: corsStatus.error,
-          code: 'BUCKET_NOT_FOUND',
-          bucket: gcsBucketName,
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Warn if CORS not configured, but don't block - let the upload try
-    if (!corsStatus.configured) {
-      console.warn(`CORS not fully configured for bucket: ${gcsBucketName}. Browser upload may fail.`);
-    } else {
-      console.log(`CORS verified OK for bucket: ${gcsBucketName}`);
-    }
-
     // Generate object path
     const objectPath = folder ? `${folder}/${file_name}` : file_name;
 
-    // Create resumable upload session to get upload URL
-    const initiateUrl = `https://storage.googleapis.com/upload/storage/v1/b/${gcsBucketName}/o?uploadType=resumable&name=${encodeURIComponent(objectPath)}`;
-    
-    console.log(`Initiating resumable upload for: ${objectPath}`);
-    
-    const initiateResponse = await fetch(initiateUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${tokenData.access_token}`,
-        'Content-Type': 'application/json',
-        'X-Upload-Content-Type': file_type,
-      },
-      body: JSON.stringify({
-        name: objectPath,
-        contentType: file_type,
-      }),
+    console.log(`Generating signed URL for: ${objectPath} in bucket: ${gcsBucketName}`);
+
+    // Generate V4 Signed URL for PUT
+    const signedUrl = await generateSignedUrl({
+      bucketName: gcsBucketName,
+      objectPath: objectPath,
+      contentType: file_type,
+      serviceAccountEmail: serviceAccount.client_email,
+      privateKey: serviceAccount.private_key,
+      expiresInSeconds: 3600, // 1 hour
     });
-
-    if (!initiateResponse.ok) {
-      const errorText = await initiateResponse.text();
-      console.error('GCS Initiate Error:', initiateResponse.status, errorText);
-      
-      // Provide specific error for common issues
-      if (initiateResponse.status === 404) {
-        return new Response(
-          JSON.stringify({ 
-            error: `Bucket "${gcsBucketName}" tidak ditemukan. Pastikan GCS_BUCKET_NAME sudah benar.`,
-            code: 'BUCKET_NOT_FOUND',
-            bucket: gcsBucketName,
-          }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      if (initiateResponse.status === 403) {
-        return new Response(
-          JSON.stringify({ 
-            error: `Service account tidak punya akses ke bucket "${gcsBucketName}". Cek permission.`,
-            code: 'ACCESS_DENIED',
-            bucket: gcsBucketName,
-          }),
-          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      throw new Error(`Failed to initiate upload: ${initiateResponse.status}`);
-    }
-
-    // Get the resumable upload URL from the Location header
-    const uploadUrl = initiateResponse.headers.get('Location');
-    
-    if (!uploadUrl) {
-      throw new Error('Failed to get upload URL from GCS');
-    }
 
     // Generate public URL
     const publicUrl = `https://storage.googleapis.com/${gcsBucketName}/${objectPath}`;
@@ -405,17 +291,20 @@ serve(async (req) => {
         file_name: objectPath, 
         file_type,
         bucket: gcsBucketName,
+        method: 'signed_url_v4',
       },
     });
 
-    console.log(`Upload session created for: ${objectPath}`);
+    console.log(`Signed URL generated for: ${objectPath}`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        uploadUrl: uploadUrl,
+        signedUrl: signedUrl,
         publicUrl: publicUrl,
         objectPath: objectPath,
+        // Keep uploadUrl for backward compatibility during transition
+        uploadUrl: signedUrl,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -428,17 +317,3 @@ serve(async (req) => {
     );
   }
 });
-
-// Helper function to convert PEM to binary
-function pemToBinary(pem: string): ArrayBuffer {
-  const base64 = pem
-    .replace(/-----BEGIN PRIVATE KEY-----/g, '')
-    .replace(/-----END PRIVATE KEY-----/g, '')
-    .replace(/\s/g, '');
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
