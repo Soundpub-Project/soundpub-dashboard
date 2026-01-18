@@ -25,8 +25,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Loader2, Plus, Upload, FileMusic, Search, DollarSign } from 'lucide-react';
+import { Loader2, Plus, Upload, FileMusic, Search, DollarSign, FileSpreadsheet } from 'lucide-react';
+import { ComposerRoyaltyUpload } from '@/components/royalty/ComposerRoyaltyUpload';
 
 interface ComposerRoyalty {
   id: string;
@@ -158,7 +165,7 @@ export default function ComposerRoyalties() {
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
-                Tambah Royalty
+                Tambah Royalty Manual
               </Button>
             </DialogTrigger>
             <DialogContent>
@@ -229,107 +236,127 @@ export default function ComposerRoyalties() {
           </Dialog>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Composers
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{royalties.length}</div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Royalties
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-chart-1">
-                {formatCurrency(totalRoyalties)}
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Rata-rata per Composer
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {royalties.length > 0 
-                  ? formatCurrency(totalRoyalties / royalties.length)
-                  : formatCurrency(0)}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        {/* Tabs for different views */}
+        <Tabs defaultValue="list" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="list" className="flex items-center gap-2">
+              <FileMusic className="h-4 w-4" />
+              Daftar Royalty
+            </TabsTrigger>
+            <TabsTrigger value="upload" className="flex items-center gap-2">
+              <FileSpreadsheet className="h-4 w-4" />
+              Upload CSV
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Search */}
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Cari composer..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-        </div>
+          <TabsContent value="list" className="space-y-6">
+            {/* Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Total Composers
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{royalties.length}</div>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Total Royalties
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-chart-1">
+                    {formatCurrency(totalRoyalties)}
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Rata-rata per Composer
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {royalties.length > 0 
+                      ? formatCurrency(totalRoyalties / royalties.length)
+                      : formatCurrency(0)}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
-        {/* Table */}
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Composer ID</TableHead>
-                  <TableHead>Nama Composer</TableHead>
-                  <TableHead>Total Net Royalti</TableHead>
-                  <TableHead>Periode</TableHead>
-                  <TableHead>Tanggal Dibuat</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredRoyalties.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8">
-                      <FileMusic className="h-12 w-12 mx-auto text-muted-foreground/50 mb-2" />
-                      <p className="text-muted-foreground">Belum ada data royalty composer</p>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredRoyalties.map((royalty) => (
-                    <TableRow key={royalty.id}>
-                      <TableCell className="font-mono text-sm">{royalty.composer_id}</TableCell>
-                      <TableCell className="font-medium">{royalty.composer_name}</TableCell>
-                      <TableCell className="font-medium text-chart-1">
-                        {formatCurrency(royalty.total_net_royalti)}
-                      </TableCell>
-                      <TableCell>
-                        {royalty.period ? (
-                          <Badge variant="outline">{royalty.period}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {new Date(royalty.created_at).toLocaleDateString('id-ID')}
-                      </TableCell>
+            {/* Search */}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Cari composer..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+
+            {/* Table */}
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Composer ID</TableHead>
+                      <TableHead>Nama Composer</TableHead>
+                      <TableHead>Total Net Royalti</TableHead>
+                      <TableHead>Periode</TableHead>
+                      <TableHead>Tanggal Dibuat</TableHead>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredRoyalties.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-8">
+                          <FileMusic className="h-12 w-12 mx-auto text-muted-foreground/50 mb-2" />
+                          <p className="text-muted-foreground">Belum ada data royalty composer</p>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredRoyalties.map((royalty) => (
+                        <TableRow key={royalty.id}>
+                          <TableCell className="font-mono text-sm">{royalty.composer_id}</TableCell>
+                          <TableCell className="font-medium">{royalty.composer_name}</TableCell>
+                          <TableCell className="font-medium text-chart-1">
+                            {formatCurrency(royalty.total_net_royalti)}
+                          </TableCell>
+                          <TableCell>
+                            {royalty.period ? (
+                              <Badge variant="outline">{royalty.period}</Badge>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {new Date(royalty.created_at).toLocaleDateString('id-ID')}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="upload">
+            <ComposerRoyaltyUpload onSuccess={fetchRoyalties} />
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );

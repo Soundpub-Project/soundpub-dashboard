@@ -36,7 +36,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-type AppRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user';
+type AppRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user' | 'copyright' | 'whitelabel';
 type UserStatus = 'active' | 'inactive' | 'suspended';
 
 interface UserProfile {
@@ -58,6 +58,8 @@ const ROLE_ICONS: Record<AppRole, React.ReactNode> = {
   label: <Building2 className="h-3 w-3" />,
   artist: <Music className="h-3 w-3" />,
   user: <User className="h-3 w-3" />,
+  copyright: <Shield className="h-3 w-3" />,
+  whitelabel: <Building2 className="h-3 w-3" />,
 };
 
 const ROLE_COLORS: Record<AppRole, string> = {
@@ -66,9 +68,11 @@ const ROLE_COLORS: Record<AppRole, string> = {
   label: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   artist: 'bg-green-500/20 text-green-400 border-green-500/30',
   user: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+  copyright: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+  whitelabel: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
 };
 
-const ALL_ROLES: AppRole[] = ['superadmin', 'admin', 'label', 'artist', 'user'];
+const ALL_ROLES: AppRole[] = ['superadmin', 'admin', 'label', 'whitelabel', 'artist', 'user', 'copyright'];
 const ALL_STATUSES: UserStatus[] = ['active', 'inactive', 'suspended'];
 
 export default function Users() {

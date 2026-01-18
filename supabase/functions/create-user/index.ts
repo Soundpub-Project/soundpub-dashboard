@@ -19,7 +19,7 @@ const CreateUserSchema = z.object({
     .max(20, 'Nomor telepon terlalu panjang')
     .optional()
     .or(z.literal('')),
-  role: z.enum(['superadmin', 'admin', 'label', 'artist', 'user'], {
+  role: z.enum(['superadmin', 'admin', 'label', 'artist', 'user', 'copyright', 'whitelabel'], {
     errorMap: () => ({ message: 'Role tidak valid' })
   }),
   parent_label_id: z.string().uuid('Format parent_label_id tidak valid').optional().nullable(),
