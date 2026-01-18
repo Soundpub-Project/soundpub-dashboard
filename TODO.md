@@ -29,6 +29,7 @@
 - [x] **Audio Player di release detail** (play/pause, progress bar, volume control, skip next/prev)
 - [x] **Dropdown artist di form tambah release untuk Label** (pilih dari artist yang terdaftar di label)
 - [x] **Drag and drop upload untuk audio files**
+- [x] **Fix "Unknown Label" untuk artist view** - Artis bisa melihat nama label dari release mereka
 
 ### Release Metadata
 - [x] Multiple artists (Main/Featured) per track
@@ -61,6 +62,9 @@
 - [x] **Filter users by role** (dropdown filter)
 - [x] **Filter users by status** (dropdown filter)
 - [x] **Search users by name/email**
+- [x] **Kolom Label untuk Artist** - Menampilkan label parent di tabel users
+- [x] **Pilih Label saat tambah Artist** - Admin/Superadmin bisa pilih label untuk artist baru
+- [x] **Edit Composer Code** - Admin/Superadmin bisa edit composer code untuk user
 
 ### Royalty Management
 - [x] Royalty Overview dengan charts
@@ -70,6 +74,14 @@
 - [x] Upload Royalty CSV dengan validasi
 - [x] Balance update otomatis setelah upload
 - [x] **Royalty Composer (Hak Cipta)** - Upload royalty untuk composer/pencipta lagu
+
+### Royalty Summary (NEW)
+- [x] **Tab Per Periode** - Ringkasan royalti per periode waktu
+- [x] **Tab Per Platform** - Ringkasan royalti per platform streaming
+- [x] **Tab Per Label** - Ringkasan royalti per label (admin/label only)
+- [x] **Tab Per Artis** - Ringkasan royalti per artist (admin/label only)
+- [x] **Tab Per Lagu (Artist View)** - Ringkasan royalti per lagu khusus untuk role artist
+- [x] **Role-based tab visibility** - Tab tertentu hanya muncul untuk role yang sesuai
 
 ### Payout System
 - [x] Daftar payout requests
@@ -94,6 +106,7 @@
 ### Export Functionality
 - [x] CSV exports (sudah ada di royalties/reports)
 - [x] PDF reports (browser print available)
+- [x] **Database Export Feature** - Export full schema SQL untuk migrasi
 
 ### Artist Simplified Release Form
 - [x] Form sederhana khusus untuk role Artist (BETA)
@@ -120,9 +133,13 @@
 - [x] `change-own-password` - User ubah password sendiri
 - [x] `remove-artist-from-label` - Label hapus artist dengan audit log
 - [x] `gcs-upload` - Upload file ke Google Cloud Storage
+- [x] `gcs-manage` - Manage file di GCS (delete, list, dll)
 - [x] `test-gcs` - Test koneksi GCS
 - [x] `create-whitelabel-artist` - Buat artist tanpa password (whitelabel)
 - [x] `set-artist-password` - Set password untuk artist whitelabel
+- [x] `get-ga4-config` - Ambil konfigurasi GA4
+- [x] `update-app-settings` - Update app settings
+- [x] `send-royalty-notification` - Kirim notifikasi royalty
 
 ### Super Admin Features
 - [x] **Google Cloud Storage Integration** - GCS sebagai primary storage (toggle on/off)
@@ -138,6 +155,23 @@
 - [x] **Copyright Role** - Akses ke royalty composer (perlindungan hak cipta)
 - [x] **White Label Role** - Seperti label tapi artist tidak bisa login sampai upgrade
 
+### White Label Features
+- [x] **ProtectedRoute support untuk role whitelabel dan copyright**
+- [x] **StorageSettings terintegrasi ke SuperAdminSettings**
+- [x] **Dashboard khusus untuk role Whitelabel** - Manage artists dan subscription status
+- [x] **Dashboard khusus untuk role Copyright** - Lihat royalty composer
+- [x] **Set password untuk artist whitelabel** (setelah upgrade subscription)
+
+### RLS & Security Improvements
+- [x] **SECURITY DEFINER functions** - Mencegah infinite recursion di RLS policies
+- [x] `get_user_parent_label_id()` - Function untuk ambil parent label ID tanpa trigger RLS
+- [x] `get_user_release_label_ids()` - Function untuk ambil label IDs dari releases
+- [x] **Artist RLS policies** - Artis bisa lihat profile parent label mereka
+
+### UI/UX Improvements
+- [x] **Settings Page 2-Column Layout** - Layout desktop lebih optimal dengan 2 kolom
+- [x] **Theme Toggle** - Light/Dark mode toggle
+
 ---
 
 ## ❌ Belum Dikerjakan
@@ -149,11 +183,6 @@
   - Daftar releases
 
 ### White Label Features
-- [x] **ProtectedRoute support untuk role whitelabel dan copyright**
-- [x] **StorageSettings terintegrasi ke SuperAdminSettings**
-- [x] **Dashboard khusus untuk role Whitelabel** - Manage artists dan subscription status
-- [x] **Dashboard khusus untuk role Copyright** - Lihat royalty composer
-- [x] **Set password untuk artist whitelabel** (setelah upgrade subscription)
 - [ ] **Subscription management UI untuk whitelabel** (admin side)
 
 ---
@@ -183,11 +212,6 @@
 ### User Management
 - [ ] Bulk actions untuk users (bulk delete, bulk status change)
 - [ ] Export data users
-- [x] **Kolom Label untuk Artist** - Menampilkan label parent di tabel users
-- [x] **Pilih Label saat tambah Artist** - Admin/Superadmin bisa pilih label untuk artist baru
-
-### UI/UX Improvements
-- [x] **Settings Page 2-Column Layout** - Layout desktop lebih optimal dengan 2 kolom
 
 ---
 
@@ -316,3 +340,6 @@ Settings:
 - GCS upload menggunakan Signed URL V4 untuk upload langsung dari browser
 - Storage provider bisa di-switch antara Supabase dan GCS melalui superadmin settings
 - Copyright royalty matching: support by name (case insensitive) OR composer_code
+- SECURITY DEFINER functions digunakan untuk mencegah infinite recursion di RLS policies
+- Artist bisa melihat nama label dari release mereka (fix "Unknown Label" bug)
+- Role artist memiliki tab "Per Lagu" khusus di Royalty Summary
