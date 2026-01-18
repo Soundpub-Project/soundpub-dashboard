@@ -136,7 +136,7 @@ const labelNavItems: NavItem[] = [
     title: 'Artis Saya', 
     url: '/dashboard/my-artists', 
     icon: Users,
-    roles: ['label', 'whitelabel'],
+    roles: ['label'], // Only label, not whitelabel
   },
 ];
 
@@ -337,10 +337,10 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* Label/Whitelabel Navigation */}
-        {(isLabel || isWhitelabel) && (
+        {/* Label Navigation - Only for label role */}
+        {isLabel && !isWhitelabel && (
           <SidebarGroup>
-            <SidebarGroupLabel>{isWhitelabel ? 'Manajemen' : 'Label'}</SidebarGroupLabel>
+            <SidebarGroupLabel>Label</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {labelNavItems.map((item) => (
@@ -358,8 +358,18 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
-                {/* Whitelabel specific items inline */}
-                {isWhitelabel && whitelabelNavItems.map((item) => (
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {/* Whitelabel Navigation - Only for whitelabel role */}
+        {isWhitelabel && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Manajemen</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {whitelabelNavItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive(item.url)}>
                       <NavLink 

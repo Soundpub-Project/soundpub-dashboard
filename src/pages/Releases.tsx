@@ -60,6 +60,7 @@ export default function Releases() {
   const [showArchived, setShowArchived] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [lyricsOnlyMode, setLyricsOnlyMode] = useState(false);
 
   const canManageReleases = isAdmin || isLabel || isWhitelabel;
   const canCreateRelease = isAdmin || isLabel || isArtist || isWhitelabel;
@@ -115,6 +116,7 @@ export default function Releases() {
 
   const handleAddRelease = () => {
     setSelectedRelease(null);
+    setLyricsOnlyMode(false);
     if (isArtist && !isAdmin && !isLabel && !isWhitelabel) {
       setArtistFormOpen(true);
     } else {
@@ -124,6 +126,12 @@ export default function Releases() {
 
   const handleEditRelease = (release: Release) => {
     setSelectedRelease(release);
+    // Whitelabel can only edit lyrics if release is already active
+    if (isWhitelabel && !isAdmin && release.status === 'active') {
+      setLyricsOnlyMode(true);
+    } else {
+      setLyricsOnlyMode(false);
+    }
     setFormOpen(true);
   };
 
@@ -472,6 +480,7 @@ export default function Releases() {
         onOpenChange={setFormOpen}
         release={selectedRelease}
         onSuccess={handleFormSuccess}
+        lyricsOnlyMode={lyricsOnlyMode}
       />
 
       <ArtistReleaseFormDialog
