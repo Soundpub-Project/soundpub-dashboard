@@ -14,6 +14,7 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 import { 
   Loader2, 
   TrendingUp, 
@@ -28,7 +29,9 @@ import {
   Minus,
   BarChart3,
   PieChart as PieChartIcon,
+  Download,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   AreaChart,
   Area,
@@ -107,6 +110,7 @@ export default function RoyaltySummary() {
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'overview' | 'platform' | 'label' | 'artist'>('overview');
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     fetchRoyalties();
@@ -371,6 +375,76 @@ export default function RoyaltySummary() {
     return value.toLocaleString('id-ID');
   };
 
+  // Export CSV function
+  const exportTrackBreakdownCSV = () => {
+    if (trackBreakdown.length === 0) {
+      toast.error('Tidak ada data untuk diexport');
+      return;
+    }
+
+    setExporting(true);
+    try {
+      const headers = [
+        'No',
+        'Judul Lagu',
+        'ISRC',
+        'Label',
+        'Revenue (Rp)',
+        'Streams',
+        'Jumlah Platform',
+        'Jumlah Negara',
+        'Avg/Stream (Rp)'
+      ];
+
+      const csvRows = [
+        headers.join(','),
+        ...trackBreakdown.map((track, index) => {
+          const avgPerStream = track.streams > 0 ? (track.revenue / track.streams).toFixed(2) : '0';
+          return [
+            index + 1,
+            `"${(track.title || 'Unknown').replace(/"/g, '""')}"`,
+            track.isrc,
+            `"${track.label.replace(/"/g, '""')}"`,
+            track.revenue.toFixed(2),
+            track.streams,
+            track.platformCount,
+            track.countryCount,
+            avgPerStream
+          ].join(',');
+        })
+      ];
+
+      // Add summary row
+      const totalRevenue = trackBreakdown.reduce((sum, t) => sum + t.revenue, 0);
+      const totalStreams = trackBreakdown.reduce((sum, t) => sum + t.streams, 0);
+      csvRows.push('');
+      csvRows.push(`"TOTAL","","","",${totalRevenue.toFixed(2)},${totalStreams},"","",""`);
+
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      
+      const periodSuffix = selectedPeriod === 'all' ? 'all-periods' : selectedPeriod;
+      const filename = `royalty-per-lagu_${periodSuffix}_${new Date().toISOString().split('T')[0]}.csv`;
+      
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success(`Berhasil export ${trackBreakdown.length} lagu ke CSV`);
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Gagal export data');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const GrowthBadge = ({ growth }: { growth: number }) => {
     const icon = growth > 0 ? <ArrowUpRight className="h-3 w-3" /> : 
                  growth < 0 ? <ArrowDownRight className="h-3 w-3" /> : 
@@ -590,15 +664,11 @@ export default function RoyaltySummary() {
 
             {/* Tabs for different views */}
             <Tabs defaultValue="periods" className="space-y-4">
-              <TabsList className={cn(
-                "grid w-full lg:w-auto lg:inline-grid",
-                isArtist ? "grid-cols-3" : "grid-cols-4"
-              )}>
+              <TabsList className="grid w-full lg:w-auto lg:inline-grid grid-cols-3 lg:grid-cols-5">
                 <TabsTrigger value="periods">Per Periode</TabsTrigger>
                 <TabsTrigger value="platforms">Per Platform</TabsTrigger>
-                {isArtist ? (
-                  <TabsTrigger value="tracks">Per Lagu</TabsTrigger>
-                ) : (
+                <TabsTrigger value="tracks">Per Lagu</TabsTrigger>
+                {!isArtist && (
                   <>
                     <TabsTrigger value="labels">Per Label</TabsTrigger>
                     <TabsTrigger value="artists">Per Artist</TabsTrigger>
@@ -824,70 +894,84 @@ export default function RoyaltySummary() {
                 </Card>
               </TabsContent>
 
-              {/* Track Breakdown Tab (for Artists) */}
-              {isArtist && (
-                <TabsContent value="tracks">
-                  <Card className="bg-card/50 border-border/50">
-                    <CardHeader>
+              {/* Track Breakdown Tab (for all roles) */}
+              <TabsContent value="tracks">
+                <Card className="bg-card/50 border-border/50">
+                  <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
                       <CardTitle className="flex items-center gap-2">
                         <Disc3 className="h-5 w-5 text-primary" />
                         Ringkasan Per Lagu
                       </CardTitle>
                       <CardDescription>
-                        Detail performa setiap lagu Anda dengan breakdown revenue dan streams
+                        Detail performa setiap lagu dengan breakdown revenue dan streams
                       </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>#</TableHead>
-                              <TableHead>Judul Lagu</TableHead>
-                              <TableHead>ISRC</TableHead>
-                              <TableHead>Label</TableHead>
-                              <TableHead className="text-right">Revenue</TableHead>
-                              <TableHead className="text-right">Streams</TableHead>
-                              <TableHead className="text-right">Platforms</TableHead>
-                              <TableHead className="text-right">Negara</TableHead>
-                              <TableHead className="text-right">Avg/Stream</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {trackBreakdown.map((track, index) => (
-                              <TableRow key={track.isrc}>
-                                <TableCell className="font-mono text-muted-foreground">{index + 1}</TableCell>
-                                <TableCell className="font-medium">{track.title}</TableCell>
-                                <TableCell className="font-mono text-xs">{track.isrc}</TableCell>
-                                <TableCell>
-                                  <Badge variant="outline" className="text-xs">
-                                    {track.label}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-right text-green-500 font-medium">
-                                  {formatCurrency(track.revenue)}
-                                </TableCell>
-                                <TableCell className="text-right">{formatNumber(track.streams)}</TableCell>
-                                <TableCell className="text-right">{track.platformCount}</TableCell>
-                                <TableCell className="text-right">{track.countryCount}</TableCell>
-                                <TableCell className="text-right text-muted-foreground">
-                                  {track.streams > 0 ? `Rp ${(track.revenue / track.streams).toFixed(2)}` : '-'}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                      {trackBreakdown.length === 0 && (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <Disc3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                          <p>Belum ada data lagu untuk periode ini</p>
-                        </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={exportTrackBreakdownCSV}
+                      disabled={exporting || trackBreakdown.length === 0}
+                      className="shrink-0"
+                    >
+                      {exporting ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Download className="h-4 w-4 mr-2" />
                       )}
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-              )}
+                      Export CSV
+                    </Button>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>#</TableHead>
+                            <TableHead>Judul Lagu</TableHead>
+                            <TableHead>ISRC</TableHead>
+                            <TableHead>Label</TableHead>
+                            <TableHead className="text-right">Revenue</TableHead>
+                            <TableHead className="text-right">Streams</TableHead>
+                            <TableHead className="text-right">Platforms</TableHead>
+                            <TableHead className="text-right">Negara</TableHead>
+                            <TableHead className="text-right">Avg/Stream</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {trackBreakdown.map((track, index) => (
+                            <TableRow key={track.isrc}>
+                              <TableCell className="font-mono text-muted-foreground">{index + 1}</TableCell>
+                              <TableCell className="font-medium">{track.title}</TableCell>
+                              <TableCell className="font-mono text-xs">{track.isrc}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="text-xs">
+                                  {track.label}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right text-green-500 font-medium">
+                                {formatCurrency(track.revenue)}
+                              </TableCell>
+                              <TableCell className="text-right">{formatNumber(track.streams)}</TableCell>
+                              <TableCell className="text-right">{track.platformCount}</TableCell>
+                              <TableCell className="text-right">{track.countryCount}</TableCell>
+                              <TableCell className="text-right text-muted-foreground">
+                                {track.streams > 0 ? `Rp ${(track.revenue / track.streams).toFixed(2)}` : '-'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    {trackBreakdown.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Disc3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>Belum ada data lagu untuk periode ini</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
             </Tabs>
           </>
         )}
