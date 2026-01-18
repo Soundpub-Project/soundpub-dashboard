@@ -414,55 +414,43 @@ export function ReleaseFormDialog({
 
     setUploadingCover(true);
     try {
-      // Check if GCS is enabled
-      const { data: gcsSettings } = await supabase
-        .from('app_settings')
-        .select('value')
-        .eq('key', 'gcs_enabled')
-        .single();
-
-      const gcsEnabled = gcsSettings?.value === 'true';
       const fileExt = coverFile.name.split('.').pop();
       const fileName = `cover-${Date.now()}.${fileExt}`;
 
-      if (gcsEnabled) {
-        // Upload to GCS
-        const base64 = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const result = reader.result as string;
-            resolve(result.split(',')[1]);
-          };
-          reader.readAsDataURL(coverFile);
-        });
-
-        const { data, error } = await supabase.functions.invoke('gcs-upload', {
-          body: {
-            file_name: fileName,
-            file_type: coverFile.type,
-            file_data: base64,
-            folder: 'covers',
-          },
-        });
-
-        if (error) throw error;
-        return data.url;
-      } else {
-        // Fallback to Supabase Storage
-        const filePath = `covers/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('release-covers')
-          .upload(filePath, coverFile);
-
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage
-          .from('release-covers')
-          .getPublicUrl(filePath);
-
-        return urlData.publicUrl;
+      // Get the session from Supabase
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session?.access_token) {
+        throw new Error('Not authenticated');
       }
+
+      // Step 1: Get signed upload URL from edge function
+      const { data, error } = await supabase.functions.invoke('gcs-upload', {
+        body: {
+          file_name: fileName,
+          file_type: coverFile.type,
+          folder: 'covers',
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.uploadUrl) throw new Error('Failed to get upload URL');
+
+      // Step 2: Upload file directly to GCS using the resumable URL
+      const uploadResponse = await fetch(data.uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': coverFile.type,
+        },
+        body: coverFile,
+      });
+
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        console.error('GCS Upload Error:', errorText);
+        throw new Error(`Upload failed: ${uploadResponse.status}`);
+      }
+
+      return data.publicUrl;
     } catch (error) {
       console.error('Error uploading cover:', error);
       toast.error('Gagal mengupload cover');
