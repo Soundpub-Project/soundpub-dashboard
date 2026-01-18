@@ -75,7 +75,7 @@ interface Track {
 export default function ReleaseDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAdmin, isLabel } = useAuth();
+  const { isAdmin, isLabel, isWhitelabel } = useAuth();
   const [release, setRelease] = useState<Release | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [labelInfo, setLabelInfo] = useState<LabelInfo | null>(null);
@@ -91,7 +91,16 @@ export default function ReleaseDetail() {
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
 
-  const canManageReleases = isAdmin || isLabel;
+  const canManageReleases = isAdmin || isLabel || isWhitelabel;
+  
+  // Determine edit capability based on status
+  // - Admin: can always fully edit
+  // - Label/Whitelabel: 
+  //   - pending status: can fully edit
+  //   - active status: can only edit lyrics
+  const isPending = release?.status === 'pending';
+  const canFullyEdit = isAdmin || ((isLabel || isWhitelabel) && isPending);
+  const canEditLyricsOnly = (isLabel || isWhitelabel) && release?.status === 'active';
   
   // Get tracks with audio
   const tracksWithAudio = tracks.filter(t => t.audio_url);
@@ -319,10 +328,10 @@ export default function ReleaseDetail() {
               <p className="text-muted-foreground">oleh {release.artist_name}</p>
             </div>
           </div>
-          {canManageReleases && (
+          {canManageReleases && (canFullyEdit || canEditLyricsOnly) && (
             <Button className="gradient-primary" onClick={() => setFormOpen(true)}>
               <Pencil className="h-4 w-4 mr-2" />
-              Edit Release
+              {canEditLyricsOnly ? 'Edit Lyrics' : 'Edit Release'}
             </Button>
           )}
         </div>
@@ -610,6 +619,7 @@ export default function ReleaseDetail() {
         onOpenChange={setFormOpen}
         release={release}
         onSuccess={fetchReleaseData}
+        lyricsOnlyMode={canEditLyricsOnly}
       />
     </DashboardLayout>
   );

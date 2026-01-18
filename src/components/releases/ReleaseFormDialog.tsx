@@ -166,6 +166,7 @@ interface ReleaseFormDialogProps {
   onOpenChange: (open: boolean) => void;
   release?: Release | null;
   onSuccess: () => void;
+  lyricsOnlyMode?: boolean;
 }
 
 export function ReleaseFormDialog({
@@ -173,6 +174,7 @@ export function ReleaseFormDialog({
   onOpenChange,
   release,
   onSuccess,
+  lyricsOnlyMode = false,
 }: ReleaseFormDialogProps) {
   const { user, isAdmin, isLabel, isWhitelabel } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -932,285 +934,208 @@ export function ReleaseFormDialog({
     );
   };
 
+  // Determine if fields should be disabled based on lyricsOnlyMode
+  const isFieldDisabled = lyricsOnlyMode && isEditMode;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] p-0">
         <DialogHeader className="p-6 pb-0">
           <DialogTitle>
-            {isEditMode ? 'Edit Release' : 'Tambah Release Baru'}
+            {lyricsOnlyMode ? 'Edit Lyrics' : isEditMode ? 'Edit Release' : 'Tambah Release Baru'}
           </DialogTitle>
           <DialogDescription>
-            {isEditMode
-              ? 'Edit informasi release dan tracks'
-              : 'Masukkan informasi release dan tracks'}
+            {lyricsOnlyMode
+              ? 'Release sudah aktif. Anda hanya dapat mengedit lirik track.'
+              : isEditMode
+                ? 'Edit informasi release dan tracks'
+                : 'Masukkan informasi release dan tracks'}
           </DialogDescription>
         </DialogHeader>
 
         <ScrollArea className="max-h-[calc(90vh-120px)]">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="p-6 space-y-6">
-              {/* Cover Upload */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Cover Art</label>
-                <div className="flex items-start gap-4">
-                  <div
-                    className="w-32 h-32 rounded-lg border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-muted/50 cursor-pointer hover:border-primary/50 transition-colors"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    {coverPreview ? (
-                      <img
-                        src={coverPreview}
-                        alt="Cover preview"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="text-center p-2">
-                        <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground mb-1" />
-                        <p className="text-xs text-muted-foreground">
-                          Upload Cover
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleCoverChange}
-                    className="hidden"
-                  />
-                  <div className="flex-1 space-y-2">
-                    <p className="text-sm text-muted-foreground">
-                      Upload cover art untuk release Anda. Format yang didukung:
-                      JPG, PNG, WebP. Maksimal 5MB.
-                    </p>
-                    {coverPreview && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setCoverFile(null);
-                          setCoverPreview(null);
-                        }}
-                      >
-                        <X className="h-4 w-4 mr-1" />
-                        Hapus Cover
-                      </Button>
-                    )}
+              {/* Cover Upload - Hidden in lyricsOnlyMode */}
+              {!lyricsOnlyMode && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Cover Art</label>
+                  <div className="flex items-start gap-4">
+                    <div
+                      className="w-32 h-32 rounded-lg border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-muted/50 cursor-pointer hover:border-primary/50 transition-colors"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      {coverPreview ? (
+                        <img
+                          src={coverPreview}
+                          alt="Cover preview"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="text-center p-2">
+                          <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground mb-1" />
+                          <p className="text-xs text-muted-foreground">
+                            Upload Cover
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleCoverChange}
+                      className="hidden"
+                    />
+                    <div className="flex-1 space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        Upload cover art untuk release Anda. Format yang didukung:
+                        JPG, PNG, WebP. Maksimal 5MB.
+                      </p>
+                      {coverPreview && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setCoverFile(null);
+                            setCoverPreview(null);
+                          }}
+                        >
+                          <X className="h-4 w-4 mr-1" />
+                          Hapus Cover
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <Separator />
+              {!lyricsOnlyMode && <Separator />}
 
-              {/* Release Info */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* UPC - Only visible/editable for Admin */}
-                {isAdmin && (
-                  <FormField
-                    control={form.control}
-                    name="upc"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>UPC (Opsional)</FormLabel>
-                        <FormControl>
-                          <Input placeholder="123456789012" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
-
-                <FormField
-                  control={form.control}
-                  name="title"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Judul Release *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Album/Single Title" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="artist_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nama Artist Utama *</FormLabel>
-                      {isLabel || isWhitelabel || (isAdmin && selectedLabelId) ? (
-                        loadingArtists ? (
-                          <div className="flex items-center gap-2 h-10 px-3 border rounded-md">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            <span className="text-sm text-muted-foreground">Loading artists...</span>
-                          </div>
-                        ) : labelArtists.length > 0 ? (
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <FormControl>
-                                <Button
-                                  variant="outline"
-                                  role="combobox"
-                                  className="w-full justify-between"
-                                >
-                                  {field.value || "Pilih artist..."}
-                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                </Button>
-                              </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-full p-0 z-50" align="start">
-                              <Command>
-                                <CommandInput placeholder="Cari artist..." />
-                                <CommandList>
-                                  <CommandEmpty>Tidak ada artist ditemukan.</CommandEmpty>
-                                  <CommandGroup>
-                                    {labelArtists.map((artist) => (
-                                      <CommandItem
-                                        key={artist.id}
-                                        value={artist.name}
-                                        onSelect={() => field.onChange(artist.name)}
-                                      >
-                                        <Check
-                                          className={cn(
-                                            "mr-2 h-4 w-4",
-                                            field.value === artist.name ? "opacity-100" : "opacity-0"
-                                          )}
-                                        />
-                                        {artist.name}
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
-                                </CommandList>
-                              </Command>
-                            </PopoverContent>
-                          </Popover>
-                        ) : (
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 p-3 rounded-md border border-dashed border-amber-500/50 bg-amber-500/10">
-                              <UserPlus className="h-4 w-4 text-amber-500" />
-                              <p className="text-sm text-amber-600 dark:text-amber-400">
-                                Belum ada artist. Tambahkan artist terlebih dahulu di halaman{' '}
-                                <a 
-                                  href="/dashboard/my-artists" 
-                                  className="underline font-medium hover:text-amber-700 dark:hover:text-amber-300"
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  My Artists
-                                </a>
-                              </p>
-                            </div>
-                            <FormControl>
-                              <Input placeholder="Atau ketik nama artist baru" {...field} />
-                            </FormControl>
-                          </div>
-                        )
-                      ) : (
-                        <FormControl>
-                          <Input placeholder="Artist Name" {...field} />
-                        </FormControl>
-                      )}
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="release_type"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tipe Release *</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Pilih tipe" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="z-50">
-                          <SelectItem value="single">Single</SelectItem>
-                          <SelectItem value="ep">EP</SelectItem>
-                          <SelectItem value="album">Album</SelectItem>
-                          <SelectItem value="compilation">Compilation</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="genre"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Genre</FormLabel>
-                      <GenreCombobox value={field.value || ''} onChange={field.onChange} />
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="release_date"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tanggal Release</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {isAdmin && (
-                  <FormField
-                    control={form.control}
-                    name="label_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Label *</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                        >
+              {/* Release Info - Hidden in lyricsOnlyMode */}
+              {!lyricsOnlyMode && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* UPC - Only visible/editable for Admin */}
+                  {isAdmin && (
+                    <FormField
+                      control={form.control}
+                      name="upc"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>UPC (Opsional)</FormLabel>
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder={loadingLabels ? "Loading..." : "Pilih label"} />
-                            </SelectTrigger>
+                            <Input placeholder="123456789012" {...field} />
                           </FormControl>
-                          <SelectContent className="z-50">
-                            {labels.map((label) => (
-                              <SelectItem key={label.id} value={label.id}>
-                                {label.full_name} ({label.email})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  <FormField
+                    control={form.control}
+                    name="title"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Judul Release *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Album/Single Title" {...field} />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                )}
 
-                {isAdmin && (
                   <FormField
                     control={form.control}
-                    name="status"
+                    name="artist_name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Status</FormLabel>
+                        <FormLabel>Nama Artist Utama *</FormLabel>
+                        {isLabel || isWhitelabel || (isAdmin && selectedLabelId) ? (
+                          loadingArtists ? (
+                            <div className="flex items-center gap-2 h-10 px-3 border rounded-md">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <span className="text-sm text-muted-foreground">Loading artists...</span>
+                            </div>
+                          ) : labelArtists.length > 0 ? (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <FormControl>
+                                  <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    className="w-full justify-between"
+                                  >
+                                    {field.value || "Pilih artist..."}
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                  </Button>
+                                </FormControl>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-full p-0 z-50" align="start">
+                                <Command>
+                                  <CommandInput placeholder="Cari artist..." />
+                                  <CommandList>
+                                    <CommandEmpty>Tidak ada artist ditemukan.</CommandEmpty>
+                                    <CommandGroup>
+                                      {labelArtists.map((artist) => (
+                                        <CommandItem
+                                          key={artist.id}
+                                          value={artist.name}
+                                          onSelect={() => field.onChange(artist.name)}
+                                        >
+                                          <Check
+                                            className={cn(
+                                              "mr-2 h-4 w-4",
+                                              field.value === artist.name ? "opacity-100" : "opacity-0"
+                                            )}
+                                          />
+                                          {artist.name}
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                          ) : (
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2 p-3 rounded-md border border-dashed border-amber-500/50 bg-amber-500/10">
+                                <UserPlus className="h-4 w-4 text-amber-500" />
+                                <p className="text-sm text-amber-600 dark:text-amber-400">
+                                  Belum ada artist. Tambahkan artist terlebih dahulu di halaman{' '}
+                                  <a 
+                                    href="/dashboard/my-artists" 
+                                    className="underline font-medium hover:text-amber-700 dark:hover:text-amber-300"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    My Artists
+                                  </a>
+                                </p>
+                              </div>
+                              <FormControl>
+                                <Input placeholder="Atau ketik nama artist baru" {...field} />
+                              </FormControl>
+                            </div>
+                          )
+                        ) : (
+                          <FormControl>
+                            <Input placeholder="Artist Name" {...field} />
+                          </FormControl>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="release_type"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tipe Release *</FormLabel>
                         <Select
                           onValueChange={field.onChange}
                           defaultValue={field.value}
@@ -1218,38 +1143,128 @@ export function ReleaseFormDialog({
                         >
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Pilih status" />
+                              <SelectValue placeholder="Pilih tipe" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent className="z-50">
-                            <SelectItem value="pending">Pending</SelectItem>
-                            <SelectItem value="active">Active</SelectItem>
-                            <SelectItem value="rejected">Rejected</SelectItem>
-                            <SelectItem value="inactive">Inactive</SelectItem>
+                            <SelectItem value="single">Single</SelectItem>
+                            <SelectItem value="ep">EP</SelectItem>
+                            <SelectItem value="album">Album</SelectItem>
+                            <SelectItem value="compilation">Compilation</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                )}
-              </div>
 
-              <Separator />
+                  <FormField
+                    control={form.control}
+                    name="genre"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Genre</FormLabel>
+                        <GenreCombobox value={field.value || ''} onChange={field.onChange} />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="release_date"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tanggal Release</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {isAdmin && (
+                    <FormField
+                      control={form.control}
+                      name="label_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Label *</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder={loadingLabels ? "Loading..." : "Pilih label"} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="z-50">
+                              {labels.map((label) => (
+                                <SelectItem key={label.id} value={label.id}>
+                                  {label.full_name} ({label.email})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  {isAdmin && (
+                    <FormField
+                      control={form.control}
+                      name="status"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Status</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Pilih status" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="z-50">
+                              <SelectItem value="pending">Pending</SelectItem>
+                              <SelectItem value="active">Active</SelectItem>
+                              <SelectItem value="rejected">Rejected</SelectItem>
+                              <SelectItem value="inactive">Inactive</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
+              )}
+
+              {!lyricsOnlyMode && <Separator />}
 
               {/* Tracks Section */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-semibold">Tracks</h3>
+                    <h3 className="font-semibold">{lyricsOnlyMode ? 'Edit Lyrics' : 'Tracks'}</h3>
                     <p className="text-sm text-muted-foreground">
-                      Tambahkan track untuk release ini
+                      {lyricsOnlyMode 
+                        ? 'Edit lirik untuk setiap track' 
+                        : 'Tambahkan track untuk release ini'}
                     </p>
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={addTrack}>
-                    <Plus className="h-4 w-4 mr-1" />
-                    Tambah Track
-                  </Button>
+                  {!lyricsOnlyMode && (
+                    <Button type="button" variant="outline" size="sm" onClick={addTrack}>
+                      <Plus className="h-4 w-4 mr-1" />
+                      Tambah Track
+                    </Button>
+                  )}
                 </div>
 
                 {form.formState.errors.tracks?.root && (
@@ -1262,6 +1277,7 @@ export function ReleaseFormDialog({
                   {trackFields.map((field, trackIndex) => {
                     const trackArtists = form.watch(`tracks.${trackIndex}.artists`) || [];
                     const trackContributors = form.watch(`tracks.${trackIndex}.contributors`) || [];
+                    const trackTitle = form.watch(`tracks.${trackIndex}.title`);
 
                     return (
                       <div
@@ -1271,9 +1287,11 @@ export function ReleaseFormDialog({
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <Music className="h-4 w-4 text-primary" />
-                            <span className="font-medium">Track {trackIndex + 1}</span>
+                            <span className="font-medium">
+                              {lyricsOnlyMode ? trackTitle || `Track ${trackIndex + 1}` : `Track ${trackIndex + 1}`}
+                            </span>
                           </div>
-                          {trackFields.length > 1 && (
+                          {!lyricsOnlyMode && trackFields.length > 1 && (
                             <Button
                               type="button"
                               variant="ghost"
@@ -1286,189 +1304,196 @@ export function ReleaseFormDialog({
                           )}
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* ISRC - Only visible/editable for Admin */}
-                          {isAdmin && (
+                        {/* Track Details - Hidden in lyricsOnlyMode */}
+                        {!lyricsOnlyMode && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* ISRC - Only visible/editable for Admin */}
+                            {isAdmin && (
+                              <FormField
+                                control={form.control}
+                                name={`tracks.${trackIndex}.isrc`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>ISRC (Opsional)</FormLabel>
+                                    <FormControl>
+                                      <Input placeholder="ISRC Code" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            )}
+
                             <FormField
                               control={form.control}
-                              name={`tracks.${trackIndex}.isrc`}
+                              name={`tracks.${trackIndex}.title`}
                               render={({ field }) => (
                                 <FormItem>
-                                  <FormLabel>ISRC (Opsional)</FormLabel>
+                                  <FormLabel>Judul Track *</FormLabel>
                                   <FormControl>
-                                    <Input placeholder="ISRC Code" {...field} />
+                                    <Input placeholder="Track Title" {...field} />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
                               )}
                             />
-                          )}
 
-                          <FormField
-                            control={form.control}
-                            name={`tracks.${trackIndex}.title`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Judul Track *</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="Track Title" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+                            <FormField
+                              control={form.control}
+                              name={`tracks.${trackIndex}.genre`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Genre</FormLabel>
+                                  <GenreCombobox value={field.value || ''} onChange={field.onChange} />
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
 
-                          <FormField
-                            control={form.control}
-                            name={`tracks.${trackIndex}.genre`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Genre</FormLabel>
-                                <GenreCombobox value={field.value || ''} onChange={field.onChange} />
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+                            <FormField
+                              control={form.control}
+                              name={`tracks.${trackIndex}.composer`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Composer</FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="Composer" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
 
-                          <FormField
-                            control={form.control}
-                            name={`tracks.${trackIndex}.composer`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Composer</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="Composer" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+                            <FormField
+                              control={form.control}
+                              name={`tracks.${trackIndex}.lyricist`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Lyricist</FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="Lyricist" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
 
-                          <FormField
-                            control={form.control}
-                            name={`tracks.${trackIndex}.lyricist`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Lyricist</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="Lyricist" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          {/* Explicit Lyrics */}
-                          <FormField
-                            control={form.control}
-                            name={`tracks.${trackIndex}.explicit_lyrics`}
-                            render={({ field }) => (
-                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                                <div className="space-y-0.5">
-                                  <FormLabel>Lirik Eksplisit</FormLabel>
-                                  <p className="text-xs text-muted-foreground">
-                                    Apakah lagu mengandung lirik eksplisit?
-                                  </p>
-                                </div>
-                                <FormControl>
-                                  <Switch
-                                    checked={field.value}
-                                    onCheckedChange={field.onChange}
-                                  />
-                                </FormControl>
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-
-                        {/* Artists Section */}
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <FormLabel>Artists *</FormLabel>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                const currentArtists = form.getValues(`tracks.${trackIndex}.artists`) || [];
-                                form.setValue(`tracks.${trackIndex}.artists`, [
-                                  ...currentArtists,
-                                  { name: '', type: 'Featured Artist' }
-                                ]);
-                              }}
-                            >
-                              <UserPlus className="h-4 w-4 mr-1" />
-                              Tambah Artist
-                            </Button>
+                            {/* Explicit Lyrics */}
+                            <FormField
+                              control={form.control}
+                              name={`tracks.${trackIndex}.explicit_lyrics`}
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                                  <div className="space-y-0.5">
+                                    <FormLabel>Lirik Eksplisit</FormLabel>
+                                    <p className="text-xs text-muted-foreground">
+                                      Apakah lagu mengandung lirik eksplisit?
+                                    </p>
+                                  </div>
+                                  <FormControl>
+                                    <Switch
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
                           </div>
-                          
+                        )}
+
+                        {/* Artists Section - Hidden in lyricsOnlyMode */}
+                        {!lyricsOnlyMode && (
                           <div className="space-y-2">
-                            {trackArtists.map((_, artistIndex) => (
-                              <ArtistSelector
-                                key={artistIndex}
-                                trackIndex={trackIndex}
-                                artistIndex={artistIndex}
-                                canRemove={trackArtists.length > 1}
-                                onRemove={() => {
-                                  const currentArtists = form.getValues(`tracks.${trackIndex}.artists`);
-                                  form.setValue(
-                                    `tracks.${trackIndex}.artists`,
-                                    currentArtists.filter((_, i) => i !== artistIndex)
-                                  );
+                            <div className="flex items-center justify-between">
+                              <FormLabel>Artists *</FormLabel>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const currentArtists = form.getValues(`tracks.${trackIndex}.artists`) || [];
+                                  form.setValue(`tracks.${trackIndex}.artists`, [
+                                    ...currentArtists,
+                                    { name: '', type: 'Featured Artist' }
+                                  ]);
                                 }}
-                              />
-                            ))}
-                          </div>
-                          {form.formState.errors.tracks?.[trackIndex]?.artists && (
-                            <p className="text-sm text-destructive">
-                              {form.formState.errors.tracks[trackIndex]?.artists?.message || 
-                               form.formState.errors.tracks[trackIndex]?.artists?.root?.message}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Contributors Section */}
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <FormLabel>Additional Contributors</FormLabel>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                const currentContributors = form.getValues(`tracks.${trackIndex}.contributors`) || [];
-                                form.setValue(`tracks.${trackIndex}.contributors`, [
-                                  ...currentContributors,
-                                  { name: '', type: '', role: '' }
-                                ]);
-                              }}
-                            >
-                              <Plus className="h-4 w-4 mr-1" />
-                              Tambah Contributor
-                            </Button>
-                          </div>
-                          
-                          {trackContributors.length > 0 && (
+                              >
+                                <UserPlus className="h-4 w-4 mr-1" />
+                                Tambah Artist
+                              </Button>
+                            </div>
+                            
                             <div className="space-y-2">
-                              {trackContributors.map((_, contributorIndex) => (
-                                <ContributorSelector
-                                  key={contributorIndex}
+                              {trackArtists.map((_, artistIndex) => (
+                                <ArtistSelector
+                                  key={artistIndex}
                                   trackIndex={trackIndex}
-                                  contributorIndex={contributorIndex}
+                                  artistIndex={artistIndex}
+                                  canRemove={trackArtists.length > 1}
                                   onRemove={() => {
-                                    const currentContributors = form.getValues(`tracks.${trackIndex}.contributors`) || [];
+                                    const currentArtists = form.getValues(`tracks.${trackIndex}.artists`);
                                     form.setValue(
-                                      `tracks.${trackIndex}.contributors`,
-                                      currentContributors.filter((_, i) => i !== contributorIndex)
+                                      `tracks.${trackIndex}.artists`,
+                                      currentArtists.filter((_, i) => i !== artistIndex)
                                     );
                                   }}
                                 />
                               ))}
                             </div>
-                          )}
-                        </div>
+                            {form.formState.errors.tracks?.[trackIndex]?.artists && (
+                              <p className="text-sm text-destructive">
+                                {form.formState.errors.tracks[trackIndex]?.artists?.message || 
+                                 form.formState.errors.tracks[trackIndex]?.artists?.root?.message}
+                              </p>
+                            )}
+                          </div>
+                        )}
 
-                        {/* Lyrics */}
+                        {/* Contributors Section - Hidden in lyricsOnlyMode */}
+                        {!lyricsOnlyMode && (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <FormLabel>Additional Contributors</FormLabel>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const currentContributors = form.getValues(`tracks.${trackIndex}.contributors`) || [];
+                                  form.setValue(`tracks.${trackIndex}.contributors`, [
+                                    ...currentContributors,
+                                    { name: '', type: '', role: '' }
+                                  ]);
+                                }}
+                              >
+                                <Plus className="h-4 w-4 mr-1" />
+                                Tambah Contributor
+                              </Button>
+                            </div>
+                            
+                            {trackContributors.length > 0 && (
+                              <div className="space-y-2">
+                                {trackContributors.map((_, contributorIndex) => (
+                                  <ContributorSelector
+                                    key={contributorIndex}
+                                    trackIndex={trackIndex}
+                                    contributorIndex={contributorIndex}
+                                    onRemove={() => {
+                                      const currentContributors = form.getValues(`tracks.${trackIndex}.contributors`) || [];
+                                      form.setValue(
+                                        `tracks.${trackIndex}.contributors`,
+                                        currentContributors.filter((_, i) => i !== contributorIndex)
+                                      );
+                                    }}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Lyrics - Always visible */}
                         <FormField
                           control={form.control}
                           name={`tracks.${trackIndex}.lyrics`}
@@ -1478,7 +1503,7 @@ export function ReleaseFormDialog({
                               <FormControl>
                                 <Textarea
                                   placeholder="Masukkan lirik lagu..."
-                                  className="min-h-[80px]"
+                                  className={lyricsOnlyMode ? "min-h-[200px]" : "min-h-[80px]"}
                                   {...field}
                                 />
                               </FormControl>
@@ -1487,17 +1512,19 @@ export function ReleaseFormDialog({
                           )}
                         />
 
-                        {/* Media Upload Section */}
-                        <MediaUploadSection
-                          trackIndex={trackIndex}
-                          audioUrl={form.watch(`tracks.${trackIndex}.audio_url`) || undefined}
-                          clipUrl={form.watch(`tracks.${trackIndex}.clip_url`) || undefined}
-                          duration={form.watch(`tracks.${trackIndex}.duration`) || undefined}
-                          onAudioChange={(url) => form.setValue(`tracks.${trackIndex}.audio_url`, url)}
-                          onClipChange={(url) => form.setValue(`tracks.${trackIndex}.clip_url`, url)}
-                          onDurationChange={(duration) => form.setValue(`tracks.${trackIndex}.duration`, duration)}
-                          disabled={loading}
-                        />
+                        {/* Media Upload Section - Hidden in lyricsOnlyMode */}
+                        {!lyricsOnlyMode && (
+                          <MediaUploadSection
+                            trackIndex={trackIndex}
+                            audioUrl={form.watch(`tracks.${trackIndex}.audio_url`) || undefined}
+                            clipUrl={form.watch(`tracks.${trackIndex}.clip_url`) || undefined}
+                            duration={form.watch(`tracks.${trackIndex}.duration`) || undefined}
+                            onAudioChange={(url) => form.setValue(`tracks.${trackIndex}.audio_url`, url)}
+                            onClipChange={(url) => form.setValue(`tracks.${trackIndex}.clip_url`, url)}
+                            onDurationChange={(duration) => form.setValue(`tracks.${trackIndex}.duration`, duration)}
+                            disabled={loading}
+                          />
+                        )}
                       </div>
                     );
                   })}
