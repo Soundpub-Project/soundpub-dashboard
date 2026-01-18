@@ -135,25 +135,36 @@ export function SuperAdminSettings() {
     try {
       // Check if GCS is enabled
       if (settings.gcs_enabled === 'true') {
-        // Upload to GCS
-        const reader = new FileReader();
-        reader.onload = async () => {
-          const base64 = (reader.result as string).split(',')[1];
-          
-          const { data, error } = await supabase.functions.invoke('gcs-upload', {
-            body: {
-              file_name: `logo-${type}-${Date.now()}.${file.name.split('.').pop()}`,
-              file_type: file.type,
-              file_data: base64,
-              folder: 'logos',
-            },
-          });
+        // Get signed URL from edge function
+        const fileName = `logo-${type}-${Date.now()}.${file.name.split('.').pop()}`;
+        
+        const { data, error } = await supabase.functions.invoke('gcs-upload', {
+          body: {
+            file_name: fileName,
+            file_type: file.type,
+            folder: 'logos',
+            file_size: file.size,
+          },
+        });
 
-          if (error) throw error;
+        if (error) throw error;
+        if (!data?.signedUrl) throw new Error('Tidak mendapat URL upload dari server');
 
-          await updateSettings(settingsKey, data.url);
-        };
-        reader.readAsDataURL(file);
+        // Upload file directly to GCS using signed URL
+        const uploadResponse = await fetch(data.signedUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': file.type,
+          },
+          body: file,
+        });
+
+        if (!uploadResponse.ok) {
+          const errorText = await uploadResponse.text().catch(() => '');
+          throw new Error(`Upload gagal: ${uploadResponse.status} - ${errorText || 'Unknown error'}`);
+        }
+
+        await updateSettings(settingsKey, data.publicUrl);
       } else {
         // Upload to Supabase Storage
         const fileName = `dashboard-logo-${type}-${Date.now()}.${file.name.split('.').pop()}`;
@@ -228,25 +239,37 @@ export function SuperAdminSettings() {
     setUploadingFavicon(true);
     try {
       if (settings.gcs_enabled === 'true') {
-        const reader = new FileReader();
-        reader.onload = async () => {
-          const base64 = (reader.result as string).split(',')[1];
-          
-          const { data, error } = await supabase.functions.invoke('gcs-upload', {
-            body: {
-              file_name: `favicon-${Date.now()}.${file.name.split('.').pop()}`,
-              file_type: file.type,
-              file_data: base64,
-              folder: 'favicons',
-            },
-          });
+        // Get signed URL from edge function
+        const fileName = `favicon-${Date.now()}.${file.name.split('.').pop()}`;
+        
+        const { data, error } = await supabase.functions.invoke('gcs-upload', {
+          body: {
+            file_name: fileName,
+            file_type: file.type,
+            folder: 'favicons',
+            file_size: file.size,
+          },
+        });
 
-          if (error) throw error;
+        if (error) throw error;
+        if (!data?.signedUrl) throw new Error('Tidak mendapat URL upload dari server');
 
-          await updateSettings('favicon', data.url);
-          updateFaviconLink(data.url);
-        };
-        reader.readAsDataURL(file);
+        // Upload file directly to GCS using signed URL
+        const uploadResponse = await fetch(data.signedUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': file.type,
+          },
+          body: file,
+        });
+
+        if (!uploadResponse.ok) {
+          const errorText = await uploadResponse.text().catch(() => '');
+          throw new Error(`Upload gagal: ${uploadResponse.status} - ${errorText || 'Unknown error'}`);
+        }
+
+        await updateSettings('favicon', data.publicUrl);
+        updateFaviconLink(data.publicUrl);
       } else {
         const fileName = `favicon-${Date.now()}.${file.name.split('.').pop()}`;
         

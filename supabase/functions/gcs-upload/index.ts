@@ -41,6 +41,16 @@ const FOLDER_VALIDATION: Record<string, {
     maxSizeMB: 50,
     description: 'Audio clips (30-60 seconds)',
   },
+  logos: {
+    allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/svg+xml'],
+    maxSizeMB: 1,
+    description: 'Logo images',
+  },
+  favicons: {
+    allowedTypes: ['image/png', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/svg+xml'],
+    maxSizeMB: 0.5,
+    description: 'Favicon images',
+  },
   test: {
     allowedTypes: ['text/plain', 'application/octet-stream'],
     maxSizeMB: 1,

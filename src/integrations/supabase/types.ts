@@ -201,6 +201,7 @@ export type Database = {
           address: string | null
           artist_revenue: number
           balance: number
+          composer_code: string | null
           created_at: string | null
           email: string
           full_name: string
@@ -221,6 +222,7 @@ export type Database = {
           address?: string | null
           artist_revenue?: number
           balance?: number
+          composer_code?: string | null
           created_at?: string | null
           email: string
           full_name: string
@@ -241,6 +243,7 @@ export type Database = {
           address?: string | null
           artist_revenue?: number
           balance?: number
+          composer_code?: string | null
           created_at?: string | null
           email?: string
           full_name?: string

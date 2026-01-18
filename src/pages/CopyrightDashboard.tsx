@@ -54,25 +54,34 @@ export default function CopyrightDashboard() {
   }, [isCopyright, authLoading, navigate]);
 
   useEffect(() => {
-    if (isCopyright && user) {
+    if (isCopyright && user && profile) {
       fetchData();
     }
-  }, [isCopyright, user]);
+  }, [isCopyright, user, profile]);
 
   const fetchData = async () => {
-    if (!user) return;
+    if (!user || !profile) return;
     
     try {
-      // Fetch composer royalties for this user
-      const { data, error } = await supabase
+      // Get user's full name and composer_code for matching
+      const userName = profile.full_name?.toUpperCase() || '';
+      const composerCode = (profile as any).composer_code || '';
+      
+      // Fetch all composer royalties first, then filter client-side
+      // This is because we need to match by either name OR code
+      const { data: allData, error } = await supabase
         .from('composer_royalties')
         .select('*')
-        .eq('composer_id', user.id)
         .order('period', { ascending: false });
 
       if (error) throw error;
 
-      const royaltyList = data || [];
+      // Filter royalties that match either by composer_name (case insensitive) or composer_id (code)
+      const royaltyList = (allData || []).filter(r => {
+        const matchByName = r.composer_name?.toUpperCase() === userName;
+        const matchByCode = composerCode && r.composer_id === composerCode;
+        return matchByName || matchByCode;
+      });
 
       // Calculate stats
       const totalRoyalties = royaltyList.reduce(
