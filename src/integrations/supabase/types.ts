@@ -543,6 +543,11 @@ export type Database = {
     }
     Functions: {
       get_user_full_name: { Args: { _user_id: string }; Returns: string }
+      get_user_parent_label_id: { Args: { _user_id: string }; Returns: string }
+      get_user_release_label_ids: {
+        Args: { _user_id: string }
+        Returns: string[]
+      }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
