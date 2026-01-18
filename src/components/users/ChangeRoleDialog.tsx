@@ -18,9 +18,9 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Loader2, Shield, Music, Building2, User } from 'lucide-react';
+import { Loader2, Shield, Music, Building2, User, Crown, ShieldCheck } from 'lucide-react';
 
-type AppRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user';
+type AppRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user' | 'copyright' | 'whitelabel';
 
 interface ChangeRoleDialogProps {
   open: boolean;
@@ -52,6 +52,18 @@ const ROLE_OPTIONS: { value: AppRole; label: string; icon: React.ReactNode; desc
     label: 'Label', 
     icon: <Building2 className="h-4 w-4" />,
     description: 'Dapat manage releases dan artis'
+  },
+  { 
+    value: 'whitelabel', 
+    label: 'White Label', 
+    icon: <Crown className="h-4 w-4 text-yellow-500" />,
+    description: 'Label dengan branding sendiri'
+  },
+  { 
+    value: 'copyright', 
+    label: 'Copyright', 
+    icon: <ShieldCheck className="h-4 w-4 text-blue-500" />,
+    description: 'Pemilik hak cipta'
   },
   { 
     value: 'admin', 

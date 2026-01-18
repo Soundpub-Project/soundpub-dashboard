@@ -250,6 +250,8 @@ export function AppSidebar() {
       label: 'bg-chart-4/20 text-chart-4',
       artist: 'bg-chart-3/20 text-chart-3',
       user: 'bg-muted text-muted-foreground',
+      copyright: 'bg-blue-500/20 text-blue-600',
+      whitelabel: 'bg-yellow-500/20 text-yellow-600',
     };
     return colors[role || 'user'] || colors.user;
   };

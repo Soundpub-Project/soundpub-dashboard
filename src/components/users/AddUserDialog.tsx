@@ -20,9 +20,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Shield, Music, Building2, User, UserPlus } from 'lucide-react';
+import { Loader2, Shield, Music, Building2, User, UserPlus, Crown, ShieldCheck } from 'lucide-react';
 
-type AppRole = 'admin' | 'label' | 'artist' | 'user' | 'copyright' | 'whitelabel';
+type AppRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user' | 'copyright' | 'whitelabel';
 
 interface LabelOption {
   id: string;
@@ -63,6 +63,18 @@ const ALL_ROLE_OPTIONS: RoleOption[] = [
     label: 'Label', 
     icon: <Building2 className="h-4 w-4" />,
     description: 'Dapat manage releases dan artis'
+  },
+  { 
+    value: 'whitelabel', 
+    label: 'White Label', 
+    icon: <Crown className="h-4 w-4 text-yellow-500" />,
+    description: 'Label dengan branding sendiri, artis tidak bisa login'
+  },
+  { 
+    value: 'copyright', 
+    label: 'Copyright (Hak Cipta)', 
+    icon: <ShieldCheck className="h-4 w-4 text-blue-500" />,
+    description: 'Pemilik hak cipta lagu, menerima royalty composer'
   },
   { 
     value: 'admin', 
