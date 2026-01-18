@@ -103,6 +103,39 @@ export type Database = {
         }
         Relationships: []
       }
+      composer_royalties: {
+        Row: {
+          composer_id: string
+          composer_name: string
+          created_at: string
+          id: string
+          period: string | null
+          total_net_royalti: number
+          updated_at: string
+          upload_id: string | null
+        }
+        Insert: {
+          composer_id: string
+          composer_name: string
+          created_at?: string
+          id?: string
+          period?: string | null
+          total_net_royalti?: number
+          updated_at?: string
+          upload_id?: string | null
+        }
+        Update: {
+          composer_id?: string
+          composer_name?: string
+          created_at?: string
+          id?: string
+          period?: string | null
+          total_net_royalti?: number
+          updated_at?: string
+          upload_id?: string | null
+        }
+        Relationships: []
+      }
       payout_requests: {
         Row: {
           account_holder_name: string
@@ -177,8 +210,11 @@ export type Database = {
           logo_url_dark: string | null
           logo_url_light: string | null
           parent_label_id: string | null
+          password_set: boolean | null
           phone: string | null
           status: string
+          subscription_status: string | null
+          subscription_upgraded_at: string | null
           updated_at: string | null
         }
         Insert: {
@@ -194,8 +230,11 @@ export type Database = {
           logo_url_dark?: string | null
           logo_url_light?: string | null
           parent_label_id?: string | null
+          password_set?: boolean | null
           phone?: string | null
           status?: string
+          subscription_status?: string | null
+          subscription_upgraded_at?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -211,8 +250,11 @@ export type Database = {
           logo_url_dark?: string | null
           logo_url_light?: string | null
           parent_label_id?: string | null
+          password_set?: boolean | null
           phone?: string | null
           status?: string
+          subscription_status?: string | null
+          subscription_upgraded_at?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -510,9 +552,17 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_whitelabel: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      app_role: "superadmin" | "admin" | "label" | "artist" | "user"
+      app_role:
+        | "superadmin"
+        | "admin"
+        | "label"
+        | "artist"
+        | "user"
+        | "copyright"
+        | "whitelabel"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -640,7 +690,15 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["superadmin", "admin", "label", "artist", "user"],
+      app_role: [
+        "superadmin",
+        "admin",
+        "label",
+        "artist",
+        "user",
+        "copyright",
+        "whitelabel",
+      ],
     },
   },
 } as const

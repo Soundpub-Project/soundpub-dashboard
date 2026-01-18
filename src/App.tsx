@@ -23,6 +23,7 @@ import Settings from "./pages/Settings";
 import UploadRoyalty from "./pages/UploadRoyalty";
 import MyArtists from "./pages/MyArtists";
 import Export from "./pages/Export";
+import ComposerRoyalties from "./pages/ComposerRoyalties";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -87,7 +88,7 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/dashboard/my-artists" element={
-                <ProtectedRoute requireLabel>
+                <ProtectedRoute>
                   <MyArtists />
                 </ProtectedRoute>
               } />
@@ -116,6 +117,11 @@ const App = () => (
               <Route path="/dashboard/export" element={
                 <ProtectedRoute requireAdmin>
                   <Export />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/composer-royalties" element={
+                <ProtectedRoute requireAdmin>
+                  <ComposerRoyalties />
                 </ProtectedRoute>
               } />
               
