@@ -3,12 +3,16 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
 
+type AllowedRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user' | 'copyright' | 'whitelabel';
+
 interface ProtectedRouteProps {
   children: ReactNode;
   requireAdmin?: boolean;
   requireLabel?: boolean;
   requireArtist?: boolean;
-  allowedRoles?: Array<'admin' | 'label' | 'artist' | 'user'>;
+  requireCopyright?: boolean;
+  requireWhitelabel?: boolean;
+  allowedRoles?: AllowedRole[];
 }
 
 /**
@@ -24,9 +28,11 @@ export function ProtectedRoute({
   requireAdmin = false,
   requireLabel = false,
   requireArtist = false,
+  requireCopyright = false,
+  requireWhitelabel = false,
   allowedRoles
 }: ProtectedRouteProps) {
-  const { user, loading, isAdmin, isLabel, isArtist, role } = useAuth();
+  const { user, loading, isAdmin, isLabel, isArtist, isCopyright, isWhitelabel, role } = useAuth();
 
   // Show loading state while checking authentication
   if (loading) {
@@ -47,20 +53,33 @@ export function ProtectedRoute({
     return <Navigate to="/dashboard" replace />;
   }
 
-  if (requireLabel && !isLabel && !isAdmin) {
+  if (requireLabel && !isLabel && !isAdmin && !isWhitelabel) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  if (requireArtist && !isArtist && !isLabel && !isAdmin) {
+  if (requireArtist && !isArtist && !isLabel && !isAdmin && !isWhitelabel) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (requireCopyright && !isCopyright && !isAdmin) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (requireWhitelabel && !isWhitelabel && !isAdmin) {
     return <Navigate to="/dashboard" replace />;
   }
 
   // Check against allowed roles list
   if (allowedRoles && allowedRoles.length > 0) {
-    const userRole = role as 'admin' | 'label' | 'artist' | 'user' | null;
+    const userRole = role as AllowedRole | null;
     
-    // Admins always have access unless explicitly excluded
-    if (!isAdmin && userRole && !allowedRoles.includes(userRole)) {
+    // Superadmin always has access
+    if (role === 'superadmin') {
+      return <>{children}</>;
+    }
+    
+    // Check if user's role is in allowed roles
+    if (userRole && !allowedRoles.includes(userRole)) {
       return <Navigate to="/dashboard" replace />;
     }
   }

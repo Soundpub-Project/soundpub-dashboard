@@ -2,7 +2,7 @@ import { useState, useEffect, createContext, useContext, ReactNode } from 'react
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
-type AppRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user';
+type AppRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user' | 'copyright' | 'whitelabel';
 
 interface Profile {
   id: string;
@@ -14,6 +14,9 @@ interface Profile {
   status: string;
   balance: number;
   logo_url: string | null;
+  password_set: boolean | null;
+  subscription_status: string | null;
+  subscription_upgraded_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -30,6 +33,8 @@ interface AuthContextType {
   isAdmin: boolean;
   isLabel: boolean;
   isArtist: boolean;
+  isCopyright: boolean;
+  isWhitelabel: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -145,6 +150,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = role === 'superadmin' || role === 'admin';
   const isLabel = role === 'label';
   const isArtist = role === 'artist';
+  const isCopyright = role === 'copyright';
+  const isWhitelabel = role === 'whitelabel';
 
   return (
     <AuthContext.Provider
@@ -160,6 +167,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdmin,
         isLabel,
         isArtist,
+        isCopyright,
+        isWhitelabel,
       }}
     >
       {children}
