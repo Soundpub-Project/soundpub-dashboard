@@ -552,6 +552,27 @@ export function ReleaseFormDialog({
 
     setLoading(true);
     try {
+      // In lyricsOnlyMode, only update lyrics for existing tracks
+      if (lyricsOnlyMode && isEditMode && release) {
+        for (const track of values.tracks) {
+          if (track.id) {
+            const { error } = await supabase
+              .from('tracks')
+              .update({
+                lyrics: track.lyrics || null,
+              })
+              .eq('id', track.id);
+
+            if (error) throw error;
+          }
+        }
+
+        toast.success('Lyrics berhasil diupdate');
+        onSuccess();
+        onOpenChange(false);
+        return;
+      }
+
       const coverUrl = await uploadCover();
 
       if (isEditMode && release) {
