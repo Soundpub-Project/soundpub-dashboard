@@ -59,13 +59,13 @@ export function LabelLogoSettings() {
       const fileName = `label-logo-${type}-${user.id}-${Date.now()}.${file.name.split('.').pop()}`;
       
       const { error: uploadError } = await supabase.storage
-        .from('release-covers')
+        .from('label-logos')
         .upload(fileName, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
       const { data: urlData } = supabase.storage
-        .from('release-covers')
+        .from('label-logos')
         .getPublicUrl(fileName);
 
       // Update profile with new logo
