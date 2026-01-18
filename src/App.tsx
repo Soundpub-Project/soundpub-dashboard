@@ -91,7 +91,7 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/dashboard/my-artists" element={
-                <ProtectedRoute allowedRoles={['label']}>
+                <ProtectedRoute allowedRoles={['label', 'whitelabel']}>
                   <MyArtists />
                 </ProtectedRoute>
               } />

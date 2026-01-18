@@ -174,7 +174,7 @@ export function ReleaseFormDialog({
   release,
   onSuccess,
 }: ReleaseFormDialogProps) {
-  const { user, isAdmin, isLabel } = useAuth();
+  const { user, isAdmin, isLabel, isWhitelabel } = useAuth();
   const [loading, setLoading] = useState(false);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
@@ -229,12 +229,12 @@ export function ReleaseFormDialog({
     }
   }, [open, isAdmin]);
 
-  // Fetch artists for label
+  // Fetch artists for label or whitelabel
   useEffect(() => {
-    if (open && isLabel && user) {
+    if (open && (isLabel || isWhitelabel) && user) {
       fetchLabelArtists(user.id);
     }
-  }, [open, isLabel, user]);
+  }, [open, isLabel, isWhitelabel, user]);
 
   // Fetch artists when label is selected by admin
   const selectedLabelId = form.watch('label_id');
@@ -302,7 +302,7 @@ export function ReleaseFormDialog({
         genre: '',
         release_date: '',
         status: 'pending',
-        label_id: isLabel && user ? user.id : '',
+        label_id: (isLabel || isWhitelabel) && user ? user.id : '',
         tracks: [
         {
           isrc: '',
@@ -1043,7 +1043,7 @@ export function ReleaseFormDialog({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Nama Artist Utama *</FormLabel>
-                      {isLabel || (isAdmin && selectedLabelId) ? (
+                      {isLabel || isWhitelabel || (isAdmin && selectedLabelId) ? (
                         loadingArtists ? (
                           <div className="flex items-center gap-2 h-10 px-3 border rounded-md">
                             <Loader2 className="h-4 w-4 animate-spin" />

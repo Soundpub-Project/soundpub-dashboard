@@ -129,7 +129,7 @@ const labelNavItems: NavItem[] = [
     title: 'My Artists', 
     url: '/dashboard/my-artists', 
     icon: Users,
-    roles: ['label'],
+    roles: ['label', 'whitelabel'],
   },
 ];
 
@@ -327,9 +327,9 @@ export function AppSidebar() {
         )}
 
         {/* Label Navigation */}
-        {isLabel && (
+        {(isLabel || isWhitelabel) && (
           <SidebarGroup>
-            <SidebarGroupLabel>Label</SidebarGroupLabel>
+            <SidebarGroupLabel>{isWhitelabel ? 'Whitelabel' : 'Label'}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {labelNavItems.map((item) => (
