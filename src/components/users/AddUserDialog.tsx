@@ -226,7 +226,7 @@ export function AddUserDialog({
             email,
             password,
             full_name: fullName,
-            phone: phone || null,
+            phone: phone || '',
             role: selectedRole,
             parent_label_id: parentLabelId,
           },
