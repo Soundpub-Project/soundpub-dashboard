@@ -6,6 +6,82 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+async function ensureBucketCorsForBrowserUploads(params: {
+  accessToken: string;
+  bucketName: string;
+  requestOrigin: string;
+}): Promise<void> {
+  const { accessToken, bucketName } = params;
+
+  // Use a permissive origin to avoid breakage across preview/published domains.
+  // Anyone would still need a valid resumable upload URL to upload anything.
+  const desiredCorsRule = {
+    origin: ['*'],
+    method: ['GET', 'HEAD', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
+    responseHeader: [
+      'Content-Type',
+      'Content-Length',
+      'Content-Range',
+      'ETag',
+      'Location',
+      'Range',
+      'x-goog-resumable',
+      'x-goog-generation',
+      'x-goog-metageneration',
+    ],
+    maxAgeSeconds: 3600,
+  };
+
+  const bucketInfoUrl = `https://storage.googleapis.com/storage/v1/b/${bucketName}?fields=cors`;
+
+  const getRes = await fetch(bucketInfoUrl, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!getRes.ok) {
+    const errorText = await getRes.text();
+    console.error('GCS bucket read error:', errorText);
+    throw new Error(`Failed to read bucket CORS config: ${getRes.status}`);
+  }
+
+  const bucketData = await getRes.json();
+  const existingCors: Array<{ origin?: string[]; method?: string[] }> | undefined = bucketData?.cors;
+
+  const hasWorkingRule = Array.isArray(existingCors)
+    ? existingCors.some((rule) => {
+        const origins = rule.origin ?? [];
+        const methods = (rule.method ?? []).map((m) => m.toUpperCase());
+        const originOk = origins.includes('*');
+        const methodsOk = methods.includes('PUT') && methods.includes('OPTIONS');
+        return originOk && methodsOk;
+      })
+    : false;
+
+  if (hasWorkingRule) return;
+
+  console.log(`Applying GCS CORS rules to bucket: ${bucketName}`);
+
+  const patchRes = await fetch(`https://storage.googleapis.com/storage/v1/b/${bucketName}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ cors: [desiredCorsRule] }),
+  });
+
+  if (!patchRes.ok) {
+    const errorText = await patchRes.text();
+    console.error('GCS bucket patch error:', errorText);
+    throw new Error(`Failed to update bucket CORS config: ${patchRes.status}`);
+  }
+
+  console.log(`GCS CORS configured for bucket: ${bucketName}`);
+}
+
 interface GCSSignedUrlRequest {
   file_name: string;
   file_type: string;
@@ -125,15 +201,23 @@ serve(async (req) => {
     });
 
     const tokenData = await tokenResponse.json();
-    
+
     if (!tokenData.access_token) {
       console.error('Token response:', tokenData);
       throw new Error('Failed to get GCS access token');
     }
 
+    // Ensure the bucket has CORS rules so browser uploads to GCS don't get blocked
+    const requestOrigin = req.headers.get('Origin') ?? '*';
+    await ensureBucketCorsForBrowserUploads({
+      accessToken: tokenData.access_token,
+      bucketName: gcsBucketName,
+      requestOrigin,
+    });
+
     // Generate object path
     const objectPath = folder ? `${folder}/${file_name}` : file_name;
-    
+
     // Create resumable upload session to get upload URL
     const initiateUrl = `https://storage.googleapis.com/upload/storage/v1/b/${gcsBucketName}/o?uploadType=resumable&name=${encodeURIComponent(objectPath)}`;
     
