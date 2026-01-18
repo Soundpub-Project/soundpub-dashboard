@@ -149,6 +149,8 @@
   - Daftar releases
 
 ### White Label Features (In Progress)
+- [x] **ProtectedRoute support untuk role whitelabel dan copyright**
+- [x] **StorageSettings terintegrasi ke SuperAdminSettings**
 - [ ] **Dashboard khusus untuk role Whitelabel**
 - [ ] **Set password untuk artist whitelabel** (setelah upgrade subscription)
 - [ ] **Subscription management UI untuk whitelabel**
