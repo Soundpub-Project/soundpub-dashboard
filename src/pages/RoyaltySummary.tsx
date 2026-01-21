@@ -270,35 +270,62 @@ export default function RoyaltySummary() {
       .sort((a, b) => b.revenue - a.revenue);
   }, [filteredRoyalties]);
 
-  // Artist breakdown
+  // Artist breakdown with revenue split
   const artistBreakdown = useMemo(() => {
-    const artistMap = new Map<string, { revenue: number; streams: number; tracks: Set<string> }>();
+    const artistMap = new Map<string, { 
+      revenue: number; 
+      streams: number; 
+      tracks: Set<string>;
+      labels: Set<string>;
+    }>();
     
     filteredRoyalties.forEach((r) => {
       if (!r.artist) return;
-      const existing = artistMap.get(r.artist) || { revenue: 0, streams: 0, tracks: new Set() };
+      const existing = artistMap.get(r.artist) || { 
+        revenue: 0, 
+        streams: 0, 
+        tracks: new Set(),
+        labels: new Set(),
+      };
       existing.revenue += Number(r.net_revenue || 0);
       existing.streams += Number(r.sales_unit || 0);
       existing.tracks.add(r.isrc);
+      existing.labels.add(r.label_name);
       artistMap.set(r.artist, existing);
     });
 
     return Array.from(artistMap.entries())
-      .map(([artist, data]) => ({
-        artist,
-        revenue: data.revenue,
-        streams: data.streams,
-        trackCount: data.tracks.size,
-      }))
+      .map(([artist, data]) => {
+        // Check if all labels are Soundpub Music
+        const isSoundpubOnly = data.labels.size === 1 && 
+          Array.from(data.labels)[0]?.toLowerCase() === 'soundpub music';
+        
+        // Calculate revenue split
+        const artistRevenue = isSoundpubOnly ? data.revenue * 0.70 : data.revenue * 0.49;
+        const labelRevenue = isSoundpubOnly ? data.revenue * 0.30 : data.revenue * 0.21;
+        const adminRevenue = isSoundpubOnly ? 0 : data.revenue * 0.30;
+        
+        return {
+          artist,
+          revenue: data.revenue,
+          streams: data.streams,
+          trackCount: data.tracks.size,
+          artistRevenue,
+          labelRevenue,
+          adminRevenue,
+          isSoundpubOnly,
+        };
+      })
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 20);
   }, [filteredRoyalties]);
 
-  // Track breakdown (for artists - shows per song summary)
+  // Track breakdown (for artists - shows per song summary) with revenue split
   const trackBreakdown = useMemo(() => {
     const trackMap = new Map<string, { 
       title: string; 
       isrc: string;
+      artist: string;
       revenue: number; 
       streams: number; 
       label: string;
@@ -311,6 +338,7 @@ export default function RoyaltySummary() {
       const existing = trackMap.get(key) || { 
         title: r.title || 'Unknown', 
         isrc: r.isrc,
+        artist: r.artist || 'Unknown',
         revenue: 0, 
         streams: 0, 
         label: r.label_name,
@@ -325,15 +353,27 @@ export default function RoyaltySummary() {
     });
 
     return Array.from(trackMap.entries())
-      .map(([isrc, data]) => ({
-        isrc,
-        title: data.title,
-        revenue: data.revenue,
-        streams: data.streams,
-        label: data.label,
-        platformCount: data.platforms.size,
-        countryCount: data.countries.size,
-      }))
+      .map(([isrc, data]) => {
+        const isSoundpub = data.label.toLowerCase() === 'soundpub music';
+        const artistRevenue = isSoundpub ? data.revenue * 0.70 : data.revenue * 0.49;
+        const labelRevenue = isSoundpub ? data.revenue * 0.30 : data.revenue * 0.21;
+        const adminRevenue = isSoundpub ? 0 : data.revenue * 0.30;
+        
+        return {
+          isrc,
+          title: data.title,
+          artist: data.artist,
+          revenue: data.revenue,
+          streams: data.streams,
+          label: data.label,
+          platformCount: data.platforms.size,
+          countryCount: data.countries.size,
+          artistRevenue,
+          labelRevenue,
+          adminRevenue,
+          isSoundpub,
+        };
+      })
       .sort((a, b) => b.revenue - a.revenue);
   }, [filteredRoyalties]);
 
@@ -856,8 +896,10 @@ export default function RoyaltySummary() {
               <TabsContent value="artists">
                 <Card className="bg-card/50 border-border/50">
                   <CardHeader>
-                    <CardTitle>Top 20 Artists</CardTitle>
-                    <CardDescription>Artists dengan revenue tertinggi</CardDescription>
+                    <CardTitle>Top 20 Artists dengan Revenue Split</CardTitle>
+                    <CardDescription>
+                      Artists dengan revenue tertinggi. Soundpub Music: 70% Artist, 30% Label | Label lain: 49% Artist, 21% Label, 30% Admin
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="overflow-x-auto">
@@ -866,24 +908,41 @@ export default function RoyaltySummary() {
                           <TableRow>
                             <TableHead>#</TableHead>
                             <TableHead>Artist</TableHead>
-                            <TableHead className="text-right">Revenue</TableHead>
+                            <TableHead className="text-right">Total Revenue</TableHead>
                             <TableHead className="text-right">Streams</TableHead>
                             <TableHead className="text-right">Tracks</TableHead>
-                            <TableHead className="text-right">Avg/Stream</TableHead>
+                            <TableHead className="text-right">Artist Share</TableHead>
+                            <TableHead className="text-right">Label Share</TableHead>
+                            <TableHead className="text-right">Admin Share</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {artistBreakdown.map((a, index) => (
                             <TableRow key={a.artist}>
                               <TableCell className="font-mono text-muted-foreground">{index + 1}</TableCell>
-                              <TableCell className="font-medium">{a.artist}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">{a.artist}</span>
+                                  {a.isSoundpubOnly && (
+                                    <Badge variant="outline" className="text-xs bg-primary/10 text-primary">
+                                      Soundpub
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
                               <TableCell className="text-right text-green-500 font-medium">
                                 {formatCurrency(a.revenue)}
                               </TableCell>
                               <TableCell className="text-right">{formatNumber(a.streams)}</TableCell>
                               <TableCell className="text-right">{a.trackCount}</TableCell>
-                              <TableCell className="text-right text-muted-foreground">
-                                {a.streams > 0 ? `Rp ${(a.revenue / a.streams).toFixed(2)}` : '-'}
+                              <TableCell className="text-right text-blue-400">
+                                {formatCurrency(a.artistRevenue)}
+                              </TableCell>
+                              <TableCell className="text-right text-purple-400">
+                                {formatCurrency(a.labelRevenue)}
+                              </TableCell>
+                              <TableCell className="text-right text-orange-400">
+                                {a.adminRevenue > 0 ? formatCurrency(a.adminRevenue) : '-'}
                               </TableCell>
                             </TableRow>
                           ))}
@@ -901,10 +960,10 @@ export default function RoyaltySummary() {
                     <div>
                       <CardTitle className="flex items-center gap-2">
                         <Disc3 className="h-5 w-5 text-primary" />
-                        Ringkasan Per Lagu
+                        Ringkasan Per Lagu dengan Revenue Split
                       </CardTitle>
                       <CardDescription>
-                        Detail performa setiap lagu dengan breakdown revenue dan streams
+                        Detail performa setiap lagu. Soundpub: 70% Artist, 30% Label | Label lain: 49% Artist, 21% Label, 30% Admin
                       </CardDescription>
                     </div>
                     <Button
@@ -929,34 +988,50 @@ export default function RoyaltySummary() {
                           <TableRow>
                             <TableHead>#</TableHead>
                             <TableHead>Judul Lagu</TableHead>
-                            <TableHead>ISRC</TableHead>
+                            <TableHead>Artist</TableHead>
                             <TableHead>Label</TableHead>
-                            <TableHead className="text-right">Revenue</TableHead>
+                            <TableHead className="text-right">Total Revenue</TableHead>
                             <TableHead className="text-right">Streams</TableHead>
-                            <TableHead className="text-right">Platforms</TableHead>
-                            <TableHead className="text-right">Negara</TableHead>
-                            <TableHead className="text-right">Avg/Stream</TableHead>
+                            <TableHead className="text-right">Artist Share</TableHead>
+                            <TableHead className="text-right">Label Share</TableHead>
+                            <TableHead className="text-right">Admin Share</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {trackBreakdown.map((track, index) => (
                             <TableRow key={track.isrc}>
                               <TableCell className="font-mono text-muted-foreground">{index + 1}</TableCell>
-                              <TableCell className="font-medium">{track.title}</TableCell>
-                              <TableCell className="font-mono text-xs">{track.isrc}</TableCell>
                               <TableCell>
-                                <Badge variant="outline" className="text-xs">
-                                  {track.label}
-                                </Badge>
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{track.title}</span>
+                                  <span className="text-xs text-muted-foreground font-mono">{track.isrc}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell>{track.artist}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <Badge variant="outline" className="text-xs">
+                                    {track.label}
+                                  </Badge>
+                                  {track.isSoundpub && (
+                                    <Badge variant="outline" className="text-xs bg-primary/10 text-primary">
+                                      70/30
+                                    </Badge>
+                                  )}
+                                </div>
                               </TableCell>
                               <TableCell className="text-right text-green-500 font-medium">
                                 {formatCurrency(track.revenue)}
                               </TableCell>
                               <TableCell className="text-right">{formatNumber(track.streams)}</TableCell>
-                              <TableCell className="text-right">{track.platformCount}</TableCell>
-                              <TableCell className="text-right">{track.countryCount}</TableCell>
-                              <TableCell className="text-right text-muted-foreground">
-                                {track.streams > 0 ? `Rp ${(track.revenue / track.streams).toFixed(2)}` : '-'}
+                              <TableCell className="text-right text-blue-400">
+                                {formatCurrency(track.artistRevenue)}
+                              </TableCell>
+                              <TableCell className="text-right text-purple-400">
+                                {formatCurrency(track.labelRevenue)}
+                              </TableCell>
+                              <TableCell className="text-right text-orange-400">
+                                {track.adminRevenue > 0 ? formatCurrency(track.adminRevenue) : '-'}
                               </TableCell>
                             </TableRow>
                           ))}
