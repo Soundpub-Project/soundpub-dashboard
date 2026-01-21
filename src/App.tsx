@@ -26,6 +26,8 @@ import Export from "./pages/Export";
 import ComposerRoyalties from "./pages/ComposerRoyalties";
 import WhitelabelDashboard from "./pages/WhitelabelDashboard";
 import CopyrightDashboard from "./pages/CopyrightDashboard";
+import CopyrightAnalytics from "./pages/CopyrightAnalytics";
+import CopyrightRoyaltySummary from "./pages/CopyrightRoyaltySummary";
 import MediaLibrary from "./pages/MediaLibrary";
 import NotFound from "./pages/NotFound";
 
@@ -109,6 +111,16 @@ const App = () => (
                   <CopyrightDashboard />
                 </ProtectedRoute>
               } />
+              <Route path="/dashboard/copyright-analytics" element={
+                <ProtectedRoute allowedRoles={['superadmin', 'admin', 'copyright']}>
+                  <CopyrightAnalytics />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/copyright-royalty-summary" element={
+                <ProtectedRoute allowedRoles={['superadmin', 'admin', 'copyright']}>
+                  <CopyrightRoyaltySummary />
+                </ProtectedRoute>
+              } />
               
               {/* Admin-only routes */}
               <Route path="/dashboard/users" element={
@@ -126,16 +138,6 @@ const App = () => (
                   <AdminPayouts />
                 </ProtectedRoute>
               } />
-              <Route path="/dashboard/audit-logs" element={
-                <ProtectedRoute requireAdmin>
-                  <AuditLogs />
-                </ProtectedRoute>
-              } />
-              <Route path="/dashboard/export" element={
-                <ProtectedRoute requireAdmin>
-                  <Export />
-                </ProtectedRoute>
-              } />
               <Route path="/dashboard/composer-royalties" element={
                 <ProtectedRoute requireAdmin>
                   <ComposerRoyalties />
@@ -144,6 +146,18 @@ const App = () => (
               <Route path="/dashboard/media-library" element={
                 <ProtectedRoute requireAdmin>
                   <MediaLibrary />
+                </ProtectedRoute>
+              } />
+              
+              {/* Superadmin-only routes */}
+              <Route path="/dashboard/audit-logs" element={
+                <ProtectedRoute allowedRoles={['superadmin']}>
+                  <AuditLogs />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/export" element={
+                <ProtectedRoute allowedRoles={['superadmin']}>
+                  <Export />
                 </ProtectedRoute>
               } />
               

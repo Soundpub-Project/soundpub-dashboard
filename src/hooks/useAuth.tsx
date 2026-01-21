@@ -30,6 +30,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  isSuperadmin: boolean;
   isAdmin: boolean;
   isLabel: boolean;
   isArtist: boolean;
@@ -147,6 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRole(null);
   };
 
+  const isSuperadmin = role === 'superadmin';
   const isAdmin = role === 'superadmin' || role === 'admin';
   const isLabel = role === 'label';
   const isArtist = role === 'artist';
@@ -164,6 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signIn,
         signUp,
         signOut,
+        isSuperadmin,
         isAdmin,
         isLabel,
         isArtist,
