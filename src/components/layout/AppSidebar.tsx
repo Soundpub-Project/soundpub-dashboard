@@ -18,7 +18,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   LayoutDashboard,
   Disc3,
@@ -46,10 +46,10 @@ interface NavItem {
   roles?: string[];
 }
 
-// Main navigation - NOT shown to copyright users
-const mainNavItems: NavItem[] = [
+// === DASBOR MUSIC ===
+const musicDashboardItems: NavItem[] = [
   { 
-    title: 'Dashboard', 
+    title: 'Dasbor', 
     url: '/dashboard', 
     icon: LayoutDashboard,
     roles: ['superadmin', 'admin', 'label', 'artist', 'user', 'whitelabel'],
@@ -86,7 +86,30 @@ const mainNavItems: NavItem[] = [
   },
 ];
 
-const adminNavItems: NavItem[] = [
+// === DASBOR HAK CIPTA ===
+const copyrightDashboardItems: NavItem[] = [
+  { 
+    title: 'Dasbor', 
+    url: '/dashboard/copyright', 
+    icon: Shield,
+    roles: ['copyright'],
+  },
+  { 
+    title: 'Analitik (Hak Cipta)', 
+    url: '/dashboard/copyright-analytics', 
+    icon: BarChart3,
+    roles: ['superadmin', 'admin', 'copyright'],
+  },
+  { 
+    title: 'Ringkasan Royalti (Hak Cipta)', 
+    url: '/dashboard/copyright-royalty-summary', 
+    icon: PieChart,
+    roles: ['superadmin', 'admin', 'copyright'],
+  },
+];
+
+// === ADMINISTRASI ===
+const administrationItems: NavItem[] = [
   { 
     title: 'Pengguna', 
     url: '/dashboard/users', 
@@ -115,13 +138,13 @@ const adminNavItems: NavItem[] = [
     title: 'Log Aktivitas', 
     url: '/dashboard/audit-logs', 
     icon: ScrollText,
-    roles: ['superadmin', 'admin'],
+    roles: ['superadmin'], // HANYA SUPERADMIN
   },
   { 
     title: 'Ekspor Data', 
     url: '/dashboard/export', 
     icon: FolderArchive,
-    roles: ['superadmin', 'admin'],
+    roles: ['superadmin'], // HANYA SUPERADMIN
   },
   { 
     title: 'Media Library', 
@@ -131,16 +154,14 @@ const adminNavItems: NavItem[] = [
   },
 ];
 
-const labelNavItems: NavItem[] = [
+// === MANAJEMEN LABEL & WHITELABEL ===
+const labelManagementItems: NavItem[] = [
   { 
     title: 'Artis Saya', 
     url: '/dashboard/my-artists', 
     icon: Users,
-    roles: ['label'], // Only label, not whitelabel
+    roles: ['label'],
   },
-];
-
-const whitelabelNavItems: NavItem[] = [
   { 
     title: 'Panel Whitelabel', 
     url: '/dashboard/whitelabel', 
@@ -149,25 +170,19 @@ const whitelabelNavItems: NavItem[] = [
   },
 ];
 
-const copyrightNavItems: NavItem[] = [
-  { 
-    title: 'Hak Cipta', 
-    url: '/dashboard/copyright', 
-    icon: Shield,
-    roles: ['copyright'],
-  },
-];
-
-const accountNavItems: NavItem[] = [
+// === AKUN PENGGUNA ===
+const accountItems: NavItem[] = [
   { 
     title: 'Pembayaran', 
     url: '/dashboard/payouts', 
-    icon: CreditCard 
+    icon: CreditCard,
+    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel', 'copyright', 'user'],
   },
   { 
     title: 'Pengaturan', 
     url: '/dashboard/settings', 
-    icon: Settings 
+    icon: Settings,
+    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel', 'copyright', 'user'],
   },
 ];
 
@@ -263,6 +278,11 @@ export function AppSidebar() {
     return colors[role || 'user'] || colors.user;
   };
 
+  // Helper to filter items by role
+  const filterByRole = (items: NavItem[]) => {
+    return items.filter(item => !item.roles || item.roles.includes(role || 'user'));
+  };
+
   return (
     <Sidebar collapsible="icon">
       {/* Header */}
@@ -283,15 +303,13 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        {/* Main Navigation - Only show to non-copyright users */}
+        {/* Dasbor Music - Only show to non-copyright users */}
         {!isCopyright && (
           <SidebarGroup>
-            <SidebarGroupLabel>Menu Utama</SidebarGroupLabel>
+            <SidebarGroupLabel>Dasbor Music</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {mainNavItems
-                  .filter(item => !item.roles || item.roles.includes(role || 'user'))
-                  .map((item) => (
+                {filterByRole(musicDashboardItems).map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive(item.url)}>
                       <NavLink 
@@ -311,13 +329,39 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* Admin Navigation */}
+        {/* Dasbor Hak Cipta - Show to copyright users and admin */}
+        {(isCopyright || isAdmin) && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Dasbor Hak Cipta</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {filterByRole(copyrightDashboardItems).map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                      <NavLink 
+                        to={item.url} 
+                        end 
+                        className="flex items-center gap-2"
+                        activeClassName="bg-sidebar-accent text-sidebar-accent-foreground"
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {/* Administrasi - Admin only */}
         {isAdmin && (
           <SidebarGroup>
-            <SidebarGroupLabel>Admin</SidebarGroupLabel>
+            <SidebarGroupLabel>Administrasi</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {adminNavItems.map((item) => (
+                {filterByRole(administrationItems).map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive(item.url)}>
                       <NavLink 
@@ -337,39 +381,13 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* Label Navigation - Only for label role */}
-        {isLabel && !isWhitelabel && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Label</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {labelNavItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                      <NavLink 
-                        to={item.url} 
-                        end 
-                        className="flex items-center gap-2"
-                        activeClassName="bg-sidebar-accent text-sidebar-accent-foreground"
-                      >
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-
-        {/* Whitelabel Navigation - Only for whitelabel role */}
-        {isWhitelabel && (
+        {/* Manajemen Label & Whitelabel */}
+        {(isLabel || isWhitelabel) && (
           <SidebarGroup>
             <SidebarGroupLabel>Manajemen</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {whitelabelNavItems.map((item) => (
+                {filterByRole(labelManagementItems).map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive(item.url)}>
                       <NavLink 
@@ -389,38 +407,12 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* Copyright Navigation */}
-        {isCopyright && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Copyright</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {copyrightNavItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                      <NavLink 
-                        to={item.url} 
-                        end 
-                        className="flex items-center gap-2"
-                        activeClassName="bg-sidebar-accent text-sidebar-accent-foreground"
-                      >
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-
-        {/* Account Navigation */}
+        {/* Akun Pengguna */}
         <SidebarGroup>
           <SidebarGroupLabel>Akun</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {accountNavItems.map((item) => (
+              {filterByRole(accountItems).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={isActive(item.url)}>
                     <NavLink 
