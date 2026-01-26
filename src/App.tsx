@@ -29,6 +29,7 @@ import CopyrightDashboard from "./pages/CopyrightDashboard";
 import CopyrightAnalytics from "./pages/CopyrightAnalytics";
 import CopyrightRoyaltySummary from "./pages/CopyrightRoyaltySummary";
 import MediaLibrary from "./pages/MediaLibrary";
+import LandingPage from "./pages/LandingPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -43,7 +44,7 @@ const App = () => (
           <AuthProvider>
             <Routes>
               {/* Public routes */}
-              <Route path="/" element={<Index />} />
+              <Route path="/" element={<LandingPage />} />
               <Route path="/auth" element={<Auth />} />
               
               {/* Protected dashboard routes - require authentication */}
