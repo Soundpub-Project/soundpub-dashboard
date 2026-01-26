@@ -39,13 +39,22 @@ interface RevenueDistribution {
 
 const SOUNDPUB_LABEL_NAME = 'Soundpub Music'
 
+// Normalize ISRC - remove dashes for consistent matching
+// This allows both formats: FR-X76-25-98330 and FRX762598330
+function normalizeISRC(isrc: string): string {
+  return isrc.replace(/-/g, '').toUpperCase()
+}
+
 // Validation functions
 function validatePeriod(period: string): boolean {
   return /^\d{4}-\d{2}$/.test(period)
 }
 
 function validateISRC(isrc: string): boolean {
-  return /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(isrc.toUpperCase())
+  // Normalize first, then validate
+  const normalized = normalizeISRC(isrc)
+  // Standard ISRC: 2 letters country + 3 alphanumeric + 7 digits = 12 chars
+  return normalized.length === 12 && /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(normalized)
 }
 
 function validateUPC(upc: string): boolean {
@@ -242,7 +251,7 @@ Deno.serve(async (req) => {
       const row = rows[i]
       const normalizedRow: RoyaltyRow = {
         period: (row.period || '').trim(),
-        isrc: (row.isrc || '').trim().toUpperCase(),
+        isrc: normalizeISRC((row.isrc || '').trim()), // Normalize ISRC - remove dashes
         upc: (row.upc || '').trim(),
         title: row.title?.trim() || undefined,
         artist: (row.artist || '').trim(),

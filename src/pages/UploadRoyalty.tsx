@@ -202,7 +202,7 @@ export default function UploadRoyalty() {
 
       try {
         const period = values[getIndex('period')] || '';
-        const isrc = values[getIndex('isrc')] || '';
+        const isrcRaw = values[getIndex('isrc')] || '';
         const upc = values[getIndex('upc')] || '';
         const artist = values[getIndex('artist')] || '';
         const label_name = values[getIndex('label_name')] || '';
@@ -217,13 +217,17 @@ export default function UploadRoyalty() {
           continue;
         }
         
-        // Validate ISRC format (should be 12 characters)
+        // Normalize ISRC - remove dashes for consistent matching
+        // This allows both formats: FR-X76-25-98330 and FRX762598330
+        const isrc = isrcRaw.replace(/-/g, '').toUpperCase();
+        
+        // Validate ISRC format (should be 12 characters after normalization)
         if (!isrc) {
           errors.push({ row: i + 1, field: 'isrc', message: 'ISRC tidak boleh kosong', severity: 'error' });
           continue;
         }
         if (isrc.length !== 12) {
-          errors.push({ row: i + 1, field: 'isrc', message: `ISRC "${isrc}" harus 12 karakter (saat ini: ${isrc.length})`, severity: 'warning' });
+          errors.push({ row: i + 1, field: 'isrc', message: `ISRC "${isrcRaw}" harus 12 karakter setelah normalisasi (saat ini: ${isrc.length})`, severity: 'warning' });
         }
         
         // Validate UPC format (should be 12-13 digits)
