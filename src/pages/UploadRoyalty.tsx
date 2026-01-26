@@ -85,6 +85,13 @@ interface UploadHistory {
   summary?: UploadSummary | null;
 }
 
+interface ISRCMatchResult {
+  isrc: string;
+  existsInTracks: boolean;
+  trackTitle?: string;
+  trackArtist?: string;
+}
+
 const REQUIRED_COLUMNS = [
   'period',
   'isrc',
@@ -118,6 +125,8 @@ export default function UploadRoyalty() {
     totalErrors: number;
     balanceUpdates: BalanceUpdate[];
   } | null>(null);
+  const [isrcMatchResults, setIsrcMatchResults] = useState<ISRCMatchResult[]>([]);
+  const [isCheckingISRC, setIsCheckingISRC] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -351,6 +360,57 @@ export default function UploadRoyalty() {
     }).sort((a, b) => b.totalRevenue - a.totalRevenue);
   };
 
+  // Check which ISRCs from CSV exist in the tracks database
+  const checkISRCsInDatabase = async (data: RoyaltyRow[]) => {
+    if (data.length === 0) return;
+    
+    setIsCheckingISRC(true);
+    try {
+      // Get unique ISRCs from parsed data (already normalized)
+      const uniqueIsrcs = [...new Set(data.map(row => row.isrc))];
+      
+      // Query tracks table - normalize database ISRCs for matching
+      const { data: tracks, error } = await supabase
+        .from('tracks')
+        .select('isrc, title, artist_name');
+      
+      if (error) {
+        console.error('Error checking ISRCs:', error);
+        return;
+      }
+      
+      // Create a map of normalized database ISRCs to track info
+      const trackMap = new Map<string, { title: string; artist: string }>();
+      (tracks || []).forEach(track => {
+        if (track.isrc) {
+          // Normalize database ISRC (remove dashes) for matching
+          const normalizedDbIsrc = track.isrc.replace(/-/g, '').toUpperCase();
+          trackMap.set(normalizedDbIsrc, {
+            title: track.title,
+            artist: track.artist_name,
+          });
+        }
+      });
+      
+      // Check each unique ISRC from CSV
+      const results: ISRCMatchResult[] = uniqueIsrcs.map(isrc => {
+        const trackInfo = trackMap.get(isrc);
+        return {
+          isrc,
+          existsInTracks: !!trackInfo,
+          trackTitle: trackInfo?.title,
+          trackArtist: trackInfo?.artist,
+        };
+      });
+      
+      setIsrcMatchResults(results);
+    } catch (error) {
+      console.error('Error checking ISRCs:', error);
+    } finally {
+      setIsCheckingISRC(false);
+    }
+  };
+
   const handleFileSelect = (file: File) => {
     if (!file.name.toLowerCase().endsWith('.csv')) {
       toast({
@@ -375,9 +435,10 @@ export default function UploadRoyalty() {
     setParseErrors([]);
     setRevenueSplitPreview([]);
     setLastUploadResult(null);
+    setIsrcMatchResults([]);
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const text = e.target?.result as string;
       const { data, errors } = parseCSV(text);
       setParsedData(data);
@@ -386,6 +447,8 @@ export default function UploadRoyalty() {
       // Calculate revenue split preview
       if (data.length > 0) {
         setRevenueSplitPreview(calculateRevenueSplitPreview(data));
+        // Check ISRCs in database
+        await checkISRCsInDatabase(data);
       }
 
       const errorCount = errors.filter(e => e.severity === 'error').length;
@@ -811,6 +874,102 @@ export default function UploadRoyalty() {
                           )}
                         </ul>
                       </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ISRC Matching Results */}
+                {(isrcMatchResults.length > 0 || isCheckingISRC) && (
+                  <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
+                    <p className="font-medium mb-3 flex items-center gap-2">
+                      <FileSpreadsheet className="h-4 w-4" />
+                      Perbandingan ISRC dengan Database Tracks
+                    </p>
+                    
+                    {isCheckingISRC ? (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Memeriksa ISRC di database...</span>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Summary */}
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30">
+                            <div className="flex items-center gap-2 mb-1">
+                              <CheckCircle2 className="h-4 w-4 text-green-400" />
+                              <span className="text-sm font-medium text-green-400">ISRC Ditemukan</span>
+                            </div>
+                            <p className="text-2xl font-bold text-green-400">
+                              {isrcMatchResults.filter(r => r.existsInTracks).length}
+                            </p>
+                            <p className="text-xs text-muted-foreground">dari {isrcMatchResults.length} ISRC unik</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/30">
+                            <div className="flex items-center gap-2 mb-1">
+                              <AlertCircle className="h-4 w-4 text-orange-400" />
+                              <span className="text-sm font-medium text-orange-400">ISRC Tidak Ditemukan</span>
+                            </div>
+                            <p className="text-2xl font-bold text-orange-400">
+                              {isrcMatchResults.filter(r => !r.existsInTracks).length}
+                            </p>
+                            <p className="text-xs text-muted-foreground">tidak ada di database tracks</p>
+                          </div>
+                        </div>
+
+                        {/* Details - Matched ISRCs */}
+                        {isrcMatchResults.filter(r => r.existsInTracks).length > 0 && (
+                          <div className="mb-3">
+                            <p className="text-sm font-medium text-green-400 mb-2">
+                              ✓ ISRC yang cocok dengan database:
+                            </p>
+                            <div className="max-h-32 overflow-y-auto space-y-1">
+                              {isrcMatchResults.filter(r => r.existsInTracks).slice(0, 10).map((result, idx) => (
+                                <div key={idx} className="flex items-center gap-2 text-sm bg-green-500/5 p-2 rounded">
+                                  <code className="font-mono text-xs bg-green-500/20 px-1.5 py-0.5 rounded text-green-400">
+                                    {result.isrc}
+                                  </code>
+                                  <span className="text-muted-foreground">→</span>
+                                  <span className="truncate">
+                                    {result.trackTitle} - {result.trackArtist}
+                                  </span>
+                                </div>
+                              ))}
+                              {isrcMatchResults.filter(r => r.existsInTracks).length > 10 && (
+                                <p className="text-xs text-muted-foreground pl-2">
+                                  ...dan {isrcMatchResults.filter(r => r.existsInTracks).length - 10} ISRC lainnya
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Details - Unmatched ISRCs */}
+                        {isrcMatchResults.filter(r => !r.existsInTracks).length > 0 && (
+                          <div>
+                            <p className="text-sm font-medium text-orange-400 mb-2">
+                              ⚠ ISRC yang tidak ditemukan di database:
+                            </p>
+                            <div className="max-h-32 overflow-y-auto">
+                              <div className="flex flex-wrap gap-1">
+                                {isrcMatchResults.filter(r => !r.existsInTracks).slice(0, 20).map((result, idx) => (
+                                  <code key={idx} className="font-mono text-xs bg-orange-500/20 px-1.5 py-0.5 rounded text-orange-400">
+                                    {result.isrc}
+                                  </code>
+                                ))}
+                                {isrcMatchResults.filter(r => !r.existsInTracks).length > 20 && (
+                                  <span className="text-xs text-muted-foreground">
+                                    +{isrcMatchResults.filter(r => !r.existsInTracks).length - 20} lainnya
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              ISRC ini akan tetap diupload, namun tidak terhubung dengan track yang ada.
+                            </p>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
