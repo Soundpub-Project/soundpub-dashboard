@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.gcs-manage]
 verify_jwt = false
+
+[functions.get-catalog-tracks]
+verify_jwt = false
