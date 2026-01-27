@@ -17,12 +17,12 @@ serve(async (req) => {
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      { auth: { persistSession: false } }
+      { auth: { persistSession: false } },
     );
 
     // Parse query params from URL
     const url = new URL(req.url);
-    const limit = Math.min(parseInt(url.searchParams.get("limit") || "50"), 100); // Max 100
+    const limit = Math.min(parseInt(url.searchParams.get("limit") || "50"), 200); // Max 100
     const offset = parseInt(url.searchParams.get("offset") || "0");
     const genre = url.searchParams.get("genre");
     const search = url.searchParams.get("search");
@@ -30,7 +30,8 @@ serve(async (req) => {
     // Build query for active releases with tracks
     let query = supabaseAdmin
       .from("releases")
-      .select(`
+      .select(
+        `
         id,
         title,
         artist_name,
@@ -49,7 +50,8 @@ serve(async (req) => {
           clip_url,
           duration
         )
-      `)
+      `,
+      )
       .eq("status", "active")
       .is("archived_at", null)
       .order("release_date", { ascending: false });
@@ -106,22 +108,22 @@ serve(async (req) => {
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
-      }
+      },
     );
   } catch (error: unknown) {
     console.error("Edge function error:", error);
     const errorMessage = error instanceof Error ? error.message : "Internal server error";
     return new Response(
-      JSON.stringify({ 
-        success: false, 
+      JSON.stringify({
+        success: false,
         error: errorMessage,
         data: [],
-        pagination: { total: 0, limit: 50, offset: 0, hasMore: false }
+        pagination: { total: 0, limit: 50, offset: 0, hasMore: false },
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400,
-      }
+      },
     );
   }
 });
