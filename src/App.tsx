@@ -44,8 +44,10 @@ const App = () => (
           <AuthProvider>
             <Routes>
               {/* Public routes */}
-              <Route path="/" element={<LandingPage />} />
+              <Route path="/" element={<Auth />} />
               <Route path="/auth" element={<Auth />} />
+              {/* Archived: LandingPage tersedia di /catalog untuk penggunaan di masa depan */}
+              <Route path="/catalog" element={<LandingPage />} />
               
               {/* Protected dashboard routes - require authentication */}
               <Route path="/dashboard" element={
