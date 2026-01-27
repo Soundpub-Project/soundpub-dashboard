@@ -118,7 +118,7 @@ serve(async (req) => {
         success: false,
         error: errorMessage,
         data: [],
-        pagination: { total: 0, limit: 50, offset: 0, hasMore: false },
+        pagination: { total: 0, limit: 50, offset: 0, hasMore: true },
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
