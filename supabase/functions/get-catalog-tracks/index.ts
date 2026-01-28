@@ -48,7 +48,8 @@ serve(async (req) => {
           genre,
           audio_url,
           clip_url,
-          duration
+          duration,
+          explicit_lyrics
         )
       `,
       )
