@@ -1,102 +1,59 @@
-
-
 # Rencana Migrasi Storage: GCS ke Supabase Storage + VPS
 
-## Ringkasan Masalah
-GCS tidak bisa diakses karena masalah metode pembayaran. Solusi: gunakan **Supabase Storage** sebagai pengganti GCS untuk upload, dan **VPS** untuk serving file ke website eksternal (opsional).
+## Status: ✅ Langkah 1-2 Selesai
 
 ---
 
-## Langkah 1: Ubah Upload dari GCS ke Supabase Storage
+## Ringkasan Perubahan
 
-### Yang Perlu Diubah
+### ✅ Langkah 1: Upload Diubah ke Supabase Storage
 
-| File | Perubahan |
-|------|-----------|
-| `src/components/releases/MediaUploadSection.tsx` | Ganti `uploadToGCS()` dengan upload ke Supabase Storage |
-| `src/components/settings/SuperAdminSettings.tsx` | Sudah pakai GCS untuk logo/favicon, perlu ubah ke Supabase Storage |
+| File | Perubahan | Status |
+|------|-----------|--------|
+| `src/components/releases/MediaUploadSection.tsx` | `uploadToGCS()` → `uploadToSupabaseStorage()` | ✅ Selesai |
+| `src/components/settings/SuperAdminSettings.tsx` | GCS logic dihapus, selalu pakai Supabase Storage | ✅ Selesai |
 
-### Logic Baru untuk MediaUploadSection
+### ✅ Langkah 2: RLS Policies Dibuat
 
-```text
-Browser -> Supabase Storage (bucket: track-audio, audio-clips)
-         -> Dapat public URL dari Supabase
-         -> Simpan URL ke database
-```
-
-### Buckets yang Sudah Tersedia
+Policies dibuat untuk bucket:
 - `track-audio` (private) - untuk full audio
-- `audio-clips` (public) - untuk audio clips 30-60 detik
+- `audio-clips` (public) - untuk audio clips 30-60 detik  
 - `release-covers` (private) - untuk cover images
+- `label-logos` (public) - untuk logo dashboard dan favicon
+
+Roles yang bisa upload:
+- `superadmin`, `admin` - semua bucket
+- `label`, `whitelabel` - track-audio, audio-clips, release-covers
 
 ---
 
-## Langkah 2: Update RLS Policies untuk Storage Buckets
+## Langkah Selanjutnya (Opsional)
 
-Perlu pastikan policies storage mengizinkan upload oleh user dengan role yang tepat (superadmin, admin, label, whitelabel).
+### Langkah 3: Sync ke VPS
 
----
+Ada 2 opsi jika ingin file tersedia di VPS:
 
-## Langkah 3: (Opsional) Sync ke VPS
+#### Opsi A: Manual Sync (Sederhana)
+1. Download file dari Supabase Storage dashboard
+2. Upload manual via FTP ke VPS
+3. Update URL di database jika diperlukan
 
-Jika kamu tetap ingin file tersedia di VPS untuk website eksternal, ada 2 opsi:
-
-### Opsi A: Manual Sync (Sederhana)
-- Download file dari Supabase Storage
-- Upload manual via FTP ke VPS
-- Update URL di database
-
-### Opsi B: Automated Sync via Edge Function (Advanced)
+#### Opsi B: Automated Sync via Edge Function (Advanced)
 Butuh setup di VPS:
 1. Install web server (Nginx/Apache)
 2. Buat API endpoint untuk menerima file
 3. Edge Function akan POST file ke VPS setelah upload ke Supabase
 
----
-
-## Langkah 4: Cleanup (Opsional)
-- Hapus secrets GCS jika sudah tidak dipakai
-- Archive edge function `gcs-upload` dan `gcs-manage`
-
----
-
-## Technical Details
-
-### Perubahan di MediaUploadSection.tsx
-
-```text
-BEFORE (GCS):
-1. Call gcs-upload edge function
-2. Get signed URL
-3. PUT file to GCS
-4. Return public URL
-
-AFTER (Supabase Storage):
-1. supabase.storage.from('track-audio').upload(path, file)
-2. Get public URL with getPublicUrl()
-3. Return URL
-```
-
-### Perubahan di SuperAdminSettings.tsx
-
-Logo dan favicon upload akan menggunakan Supabase Storage bucket `release-covers` atau bucket baru `app-assets`.
-
-### Bucket Access Configuration
-
-Untuk bucket yang private (`track-audio`, `release-covers`), perlu signed URLs untuk akses dari website eksternal. Bucket public (`audio-clips`) bisa diakses langsung.
-
----
-
-## Estimasi Waktu
-- Langkah 1-2: ~30 menit (code changes + migration)
-- Langkah 3: Tergantung opsi (A: manual, B: 1-2 jam)
-- Langkah 4: ~10 menit
+### Langkah 4: Cleanup (Opsional)
+- ❌ Hapus secrets GCS jika sudah tidak dipakai (`GCS_PROJECT_ID`, `GCS_BUCKET_NAME`, `GCS_SERVICE_ACCOUNT_KEY`)
+- ❌ Hapus edge function `gcs-upload` dan `gcs-manage` jika tidak diperlukan
+- ❌ Hapus `test-gcs` edge function
 
 ---
 
 ## Catatan Penting
 
-1. **File yang sudah ada di GCS** tidak akan otomatis pindah. URL lama tetap di database dan akan error jika GCS tetap tidak bisa diakses.
+1. **File lama di GCS** tidak otomatis pindah. URL lama tetap di database dan akan error jika GCS tidak bisa diakses.
 
 2. **Untuk migrasi data lama**, kamu perlu:
    - Download file dari GCS (jika masih bisa akses)
@@ -105,3 +62,6 @@ Untuk bucket yang private (`track-audio`, `release-covers`), perlu signed URLs u
 
 3. **Supabase Storage gratis** hingga 1GB storage dan 2GB bandwidth per bulan.
 
+4. **Bucket Access:**
+   - `audio-clips` dan `label-logos` = PUBLIC (bisa diakses langsung)
+   - `track-audio` dan `release-covers` = PRIVATE (perlu signed URL untuk akses eksternal)
