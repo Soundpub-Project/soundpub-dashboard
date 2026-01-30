@@ -1,240 +1,107 @@
 
-# Rencana: Memisahkan Akses Public Landing Page dan Dashboard dengan Edge Function
+
+# Rencana Migrasi Storage: GCS ke Supabase Storage + VPS
 
 ## Ringkasan Masalah
-
-RLS policy "Public can view active releases" yang ditambahkan menyebabkan semua user authenticated (artis, label, whitelabel, hak cipta) dapat melihat SEMUA data releases/tracks yang berstatus `active`, bukan hanya data milik mereka sendiri.
-
-**Penyebab:** RLS policies bersifat **ADDITIVE (OR)**. Jika satu policy return `true`, user mendapat akses ke data tersebut.
+GCS tidak bisa diakses karena masalah metode pembayaran. Solusi: gunakan **Supabase Storage** sebagai pengganti GCS untuk upload, dan **VPS** untuk serving file ke website eksternal (opsional).
 
 ---
 
-## Solusi: Edge Function untuk Public Catalog
+## Langkah 1: Ubah Upload dari GCS ke Supabase Storage
 
-Membuat edge function `get-catalog-tracks` yang bypass RLS menggunakan service role, khusus untuk landing page public.
+### Yang Perlu Diubah
 
-**Alur Data:**
+| File | Perubahan |
+|------|-----------|
+| `src/components/releases/MediaUploadSection.tsx` | Ganti `uploadToGCS()` dengan upload ke Supabase Storage |
+| `src/components/settings/SuperAdminSettings.tsx` | Sudah pakai GCS untuk logo/favicon, perlu ubah ke Supabase Storage |
+
+### Logic Baru untuk MediaUploadSection
 
 ```text
-+------------------+     +-------------------+     +------------------+
-|  Landing Page    | --> | get-catalog-tracks| --> | Database         |
-|  (Public/Guest)  |     | (Edge Function)   |     | (Service Role)   |
-+------------------+     +-------------------+     +------------------+
-                              |
-                              v
-                         Returns only:
-                         - status = 'active'
-                         - Selected fields only
-
-+------------------+     +-------------------+     +------------------+
-|  Dashboard       | --> | Supabase Client   | --> | Database         |
-|  (Authenticated) |     | (RLS Enabled)     |     | (User's JWT)     |
-+------------------+     +-------------------+     +------------------+
-                              |
-                              v
-                         Returns data per role:
-                         - Admin: all data
-                         - Label: own releases
-                         - Artist: own releases
+Browser -> Supabase Storage (bucket: track-audio, audio-clips)
+         -> Dapat public URL dari Supabase
+         -> Simpan URL ke database
 ```
+
+### Buckets yang Sudah Tersedia
+- `track-audio` (private) - untuk full audio
+- `audio-clips` (public) - untuk audio clips 30-60 detik
+- `release-covers` (private) - untuk cover images
 
 ---
 
-## Langkah Implementasi
+## Langkah 2: Update RLS Policies untuk Storage Buckets
 
-### 1. Hapus RLS Policies Public
-
-Menghapus 2 policy yang menyebabkan masalah:
-
-```sql
--- Hapus policy dari releases
-DROP POLICY IF EXISTS "Public can view active releases" ON public.releases;
-
--- Hapus policy dari tracks
-DROP POLICY IF EXISTS "Public can view tracks in active releases" ON public.tracks;
-```
-
-### 2. Buat Edge Function `get-catalog-tracks`
-
-File: `supabase/functions/get-catalog-tracks/index.ts`
-
-```typescript
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
-
-  try {
-    // Use service role to bypass RLS
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      { auth: { persistSession: false } }
-    );
-
-    // Parse query params
-    const url = new URL(req.url);
-    const limit = parseInt(url.searchParams.get("limit") || "50");
-    const offset = parseInt(url.searchParams.get("offset") || "0");
-
-    // Fetch active releases with tracks
-    const { data: releases, error: releasesError } = await supabaseAdmin
-      .from("releases")
-      .select(`
-        id,
-        title,
-        artist_name,
-        cover_url,
-        genre,
-        release_type,
-        release_date,
-        upc,
-        tracks (
-          id,
-          title,
-          artist_name,
-          isrc,
-          genre,
-          audio_url,
-          clip_url,
-          duration
-        )
-      `)
-      .eq("status", "active")
-      .is("archived_at", null)
-      .order("release_date", { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    if (releasesError) throw releasesError;
-
-    // Get total count
-    const { count } = await supabaseAdmin
-      .from("releases")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "active")
-      .is("archived_at", null);
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        data: releases,
-        pagination: {
-          total: count,
-          limit,
-          offset,
-          hasMore: offset + limit < (count || 0),
-        },
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      }
-    );
-  } catch (error) {
-    return new Response(
-      JSON.stringify({ success: false, error: error.message }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 400,
-      }
-    );
-  }
-});
-```
-
-### 3. Buat Landing Page Component
-
-File: `src/pages/LandingPage.tsx` (atau update sesuai kebutuhan)
-
-```typescript
-import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-
-interface CatalogRelease {
-  id: string;
-  title: string;
-  artist_name: string;
-  cover_url: string | null;
-  genre: string | null;
-  release_type: string;
-  release_date: string | null;
-  tracks: CatalogTrack[];
-}
-
-interface CatalogTrack {
-  id: string;
-  title: string;
-  artist_name: string;
-  isrc: string | null;
-  clip_url: string | null;
-  duration: number | null;
-}
-
-export default function LandingPage() {
-  const [releases, setReleases] = useState<CatalogRelease[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchCatalog();
-  }, []);
-
-  const fetchCatalog = async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('get-catalog-tracks', {
-        body: { limit: 50, offset: 0 }
-      });
-
-      if (error) throw error;
-      setReleases(data.data || []);
-    } catch (error) {
-      console.error('Error fetching catalog:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ... render UI
-}
-```
-
-### 4. Update Route di App.tsx
-
-Menambahkan route untuk landing page yang bisa diakses public.
+Perlu pastikan policies storage mengizinkan upload oleh user dengan role yang tepat (superadmin, admin, label, whitelabel).
 
 ---
 
-## Hasil Akhir
+## Langkah 3: (Opsional) Sync ke VPS
 
-| Halaman | Method | Akses Data |
-|---------|--------|------------|
-| **Landing Page** | Edge Function `get-catalog-tracks` | Semua releases dengan status `active` |
-| **Dashboard - Admin** | Supabase Client + RLS | Semua data |
-| **Dashboard - Label** | Supabase Client + RLS | Hanya releases milik label tersebut |
-| **Dashboard - Artist** | Supabase Client + RLS | Hanya releases dengan nama artis tersebut |
-| **Dashboard - Whitelabel** | Supabase Client + RLS | Hanya releases milik whitelabel tersebut |
-| **Dashboard - Copyright** | Supabase Client + RLS | Sesuai policy yang ada |
+Jika kamu tetap ingin file tersedia di VPS untuk website eksternal, ada 2 opsi:
+
+### Opsi A: Manual Sync (Sederhana)
+- Download file dari Supabase Storage
+- Upload manual via FTP ke VPS
+- Update URL di database
+
+### Opsi B: Automated Sync via Edge Function (Advanced)
+Butuh setup di VPS:
+1. Install web server (Nginx/Apache)
+2. Buat API endpoint untuk menerima file
+3. Edge Function akan POST file ke VPS setelah upload ke Supabase
 
 ---
 
-## Keuntungan Solusi Ini
+## Langkah 4: Cleanup (Opsional)
+- Hapus secrets GCS jika sudah tidak dipakai
+- Archive edge function `gcs-upload` dan `gcs-manage`
 
-1. **Tidak mengubah RLS policies existing** - Dashboard tetap bekerja dengan benar per role
-2. **Keamanan terjaga** - Edge function hanya return field yang diperlukan untuk public
-3. **Fleksibel** - Bisa menambahkan filter, sorting, atau pagination sesuai kebutuhan landing page
-4. **Performa** - Edge function bisa di-cache jika diperlukan
+---
+
+## Technical Details
+
+### Perubahan di MediaUploadSection.tsx
+
+```text
+BEFORE (GCS):
+1. Call gcs-upload edge function
+2. Get signed URL
+3. PUT file to GCS
+4. Return public URL
+
+AFTER (Supabase Storage):
+1. supabase.storage.from('track-audio').upload(path, file)
+2. Get public URL with getPublicUrl()
+3. Return URL
+```
+
+### Perubahan di SuperAdminSettings.tsx
+
+Logo dan favicon upload akan menggunakan Supabase Storage bucket `release-covers` atau bucket baru `app-assets`.
+
+### Bucket Access Configuration
+
+Untuk bucket yang private (`track-audio`, `release-covers`), perlu signed URLs untuk akses dari website eksternal. Bucket public (`audio-clips`) bisa diakses langsung.
+
+---
+
+## Estimasi Waktu
+- Langkah 1-2: ~30 menit (code changes + migration)
+- Langkah 3: Tergantung opsi (A: manual, B: 1-2 jam)
+- Langkah 4: ~10 menit
 
 ---
 
 ## Catatan Penting
 
-- Secrets `SUPABASE_URL` dan `SUPABASE_SERVICE_ROLE_KEY` sudah tersedia
-- Edge function akan otomatis di-deploy
-- Jangan expose field sensitif seperti `label_id` atau internal IDs di response public
+1. **File yang sudah ada di GCS** tidak akan otomatis pindah. URL lama tetap di database dan akan error jika GCS tetap tidak bisa diakses.
+
+2. **Untuk migrasi data lama**, kamu perlu:
+   - Download file dari GCS (jika masih bisa akses)
+   - Re-upload ke Supabase Storage
+   - Update URL di database
+
+3. **Supabase Storage gratis** hingga 1GB storage dan 2GB bandwidth per bulan.
+
