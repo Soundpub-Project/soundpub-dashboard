@@ -29,9 +29,10 @@ interface MediaUploadSectionProps {
 
 type MediaType = 'audio' | 'clip';
 
-const GCS_FOLDER_MAP: Record<MediaType, string> = {
-  audio: 'audio',
-  clip: 'clips',
+// Map media type to Supabase Storage bucket
+const BUCKET_MAP: Record<MediaType, string> = {
+  audio: 'track-audio',
+  clip: 'audio-clips',
 };
 
 const ACCEPT_MAP: Record<MediaType, string> = {
@@ -103,58 +104,11 @@ export function MediaUploadSection({
     return mimeTypes[ext || ''] || 'audio/mpeg';
   };
 
-  // Upload with retry logic for CORS issues
-  const uploadWithRetry = async (
-    uploadUrl: string, 
-    file: File, 
-    mimeType: string,
-    maxRetries = 3
-  ): Promise<Response> => {
-    let lastError: Error | null = null;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`Upload attempt ${attempt}/${maxRetries}`);
-        
-        const uploadResponse = await fetch(uploadUrl, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': mimeType,
-          },
-          body: file,
-        });
-
-        if (uploadResponse.ok) {
-          return uploadResponse;
-        }
-
-        // If we get a response but it's not ok, check if it's a CORS-related issue
-        const errorText = await uploadResponse.text();
-        console.error(`Upload attempt ${attempt} failed:`, uploadResponse.status, errorText);
-        lastError = new Error(`Upload failed: ${uploadResponse.status}`);
-        
-      } catch (error: any) {
-        console.error(`Upload attempt ${attempt} error:`, error);
-        lastError = error;
-        
-        // If it's a network/CORS error and we have retries left, wait before retrying
-        if (attempt < maxRetries) {
-          const waitTime = attempt * 1000; // 1s, 2s, 3s
-          console.log(`Waiting ${waitTime}ms before retry...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-        }
-      }
-    }
-
-    throw lastError || new Error('Upload failed after retries');
-  };
-
-  // All audio uploads go to GCS using Signed URL V4
-  const uploadToGCS = async (file: File, type: MediaType): Promise<string> => {
+  // Upload to Supabase Storage
+  const uploadToSupabaseStorage = async (file: File, type: MediaType): Promise<string> => {
     const fileExt = file.name.split('.').pop()?.toLowerCase();
     const fileName = `${type}-${trackIndex}-${Date.now()}.${fileExt}`;
-    const folder = GCS_FOLDER_MAP[type];
-    const mimeType = file.type || getAudioMimeType(file.name);
+    const bucket = BUCKET_MAP[type];
 
     // Get the session from Supabase
     const { data: sessionData } = await supabase.auth.getSession();
@@ -162,76 +116,55 @@ export function MediaUploadSection({
       throw new Error('Not authenticated');
     }
 
-    // Step 1: Get signed URL from edge function
-    const { data, error } = await supabase.functions.invoke('gcs-upload', {
-      body: {
-        file_name: fileName,
-        file_type: mimeType,
-        folder: folder,
-        file_size: file.size,
-      },
-    });
+    console.log(`Uploading to Supabase Storage bucket: ${bucket}, file: ${fileName}`);
 
-    if (error || data?.error) {
-      const errorData = data || {};
-      const errorCode = errorData.code;
-      const errorMessage = errorData.error || error?.message;
-      
-      console.error('GCS Upload Function Error:', { error, data: errorData });
+    // Upload file to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false,
+      });
+
+    if (error) {
+      console.error('Supabase Storage upload error:', error);
       
       // Handle specific error codes
-      if (errorCode === 'INSUFFICIENT_ROLE') {
-        throw new Error(`Role "${errorData.currentRole}" tidak diizinkan upload. Hubungi admin.`);
+      if (error.message?.includes('row-level security')) {
+        throw new Error('Anda tidak memiliki izin untuk upload. Hubungi admin.');
       }
-      if (errorMessage?.includes('GCS configuration is missing')) {
-        throw new Error('Konfigurasi storage belum lengkap. Hubungi admin.');
+      if (error.message?.includes('duplicate')) {
+        throw new Error('File dengan nama yang sama sudah ada.');
       }
-      throw new Error(errorMessage || 'Gagal mendapatkan upload URL');
-    }
-    
-    // Use signedUrl (new) or uploadUrl (backward compat)
-    const uploadUrl = data?.signedUrl || data?.uploadUrl;
-    if (!uploadUrl) throw new Error('Failed to get upload URL');
-
-    // Step 2: Upload file directly to GCS using signed URL
-    try {
-      const uploadResponse = await uploadWithRetry(uploadUrl, file, mimeType, 3);
-      console.log('Upload successful:', uploadResponse.status);
-    } catch (uploadError: any) {
-      console.error('All upload attempts failed:', uploadError);
-      
-      const errorMsg = uploadError.message || '';
-      
-      // True network/CORS error - browser blocked before getting any response
-      if (uploadError.name === 'TypeError' && errorMsg.includes('Failed to fetch')) {
-        throw new Error(
-          'Upload gagal (network error). Pastikan koneksi internet stabil dan CORS bucket sudah dikonfigurasi.'
-        );
-      }
-      
-      // HTTP status code errors from GCS
-      if (errorMsg.includes('Upload failed:')) {
-        const statusMatch = errorMsg.match(/Upload failed: (\d+)/);
-        const status = statusMatch ? parseInt(statusMatch[1]) : 0;
-        
-        if (status === 400) {
-          throw new Error('Upload ditolak (400). Signed URL mungkin sudah expired atau Content-Type tidak cocok.');
-        }
-        if (status === 403) {
-          throw new Error('Upload ditolak (403). Service account tidak punya akses write ke bucket.');
-        }
-        if (status === 404) {
-          throw new Error('Bucket tidak ditemukan (404). Pastikan GCS_BUCKET_NAME sudah benar.');
-        }
-        if (status >= 500) {
-          throw new Error(`Server GCS error (${status}). Coba lagi dalam beberapa saat.`);
-        }
-      }
-      
-      throw uploadError;
+      throw new Error(error.message || 'Gagal mengupload file');
     }
 
-    return data.publicUrl;
+    console.log('Upload successful:', data.path);
+
+    // Get public URL for public buckets (audio-clips)
+    // For private buckets (track-audio), we'll use signed URL
+    if (bucket === 'audio-clips') {
+      const { data: urlData } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(data.path);
+      return urlData.publicUrl;
+    } else {
+      // For private buckets, create a signed URL with long expiry
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(data.path, 60 * 60 * 24 * 365); // 1 year expiry
+
+      if (signedUrlError) {
+        console.error('Error creating signed URL:', signedUrlError);
+        // Fallback to public URL format (won't work for private buckets without signed URL)
+        const { data: urlData } = supabase.storage
+          .from(bucket)
+          .getPublicUrl(data.path);
+        return urlData.publicUrl;
+      }
+
+      return signedUrlData.signedUrl;
+    }
   };
 
   // Get audio duration from file
@@ -317,8 +250,8 @@ export function MediaUploadSection({
         setProgress((prev) => Math.min(prev + 10, 90));
       }, 200);
 
-      // All audio uploads go to GCS
-      const url = await uploadToGCS(file, type);
+      // Upload to Supabase Storage
+      const url = await uploadToSupabaseStorage(file, type);
 
       clearInterval(progressInterval);
       setProgress(100);

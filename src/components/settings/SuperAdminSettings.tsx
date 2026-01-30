@@ -21,7 +21,6 @@ interface AppSettings {
   dashboard_logo_light: string | null;
   dashboard_logo_dark: string | null;
   favicon: string | null;
-  gcs_enabled: string;
 }
 
 export function SuperAdminSettings() {
@@ -34,7 +33,6 @@ export function SuperAdminSettings() {
     dashboard_logo_light: null,
     dashboard_logo_dark: null,
     favicon: null,
-    gcs_enabled: 'false',
   });
   const logoLightInputRef = useRef<HTMLInputElement>(null);
   const logoDarkInputRef = useRef<HTMLInputElement>(null);
@@ -61,7 +59,6 @@ export function SuperAdminSettings() {
         dashboard_logo_light: settingsMap.dashboard_logo_light || settingsMap.dashboard_logo || null,
         dashboard_logo_dark: settingsMap.dashboard_logo_dark || null,
         favicon: settingsMap.favicon || null,
-        gcs_enabled: settingsMap.gcs_enabled || 'false',
       });
 
       // Apply favicon if exists
@@ -133,54 +130,20 @@ export function SuperAdminSettings() {
 
     setUploading(true);
     try {
-      // Check if GCS is enabled
-      if (settings.gcs_enabled === 'true') {
-        // Get signed URL from edge function
-        const fileName = `logo-${type}-${Date.now()}.${file.name.split('.').pop()}`;
-        
-        const { data, error } = await supabase.functions.invoke('gcs-upload', {
-          body: {
-            file_name: fileName,
-            file_type: file.type,
-            folder: 'logos',
-            file_size: file.size,
-          },
-        });
+      // Upload to Supabase Storage (label-logos bucket)
+      const fileName = `dashboard-logo-${type}-${Date.now()}.${file.name.split('.').pop()}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('label-logos')
+        .upload(fileName, file, { upsert: true });
 
-        if (error) throw error;
-        if (!data?.signedUrl) throw new Error('Tidak mendapat URL upload dari server');
+      if (uploadError) throw uploadError;
 
-        // Upload file directly to GCS using signed URL
-        const uploadResponse = await fetch(data.signedUrl, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': file.type,
-          },
-          body: file,
-        });
+      const { data: urlData } = supabase.storage
+        .from('label-logos')
+        .getPublicUrl(fileName);
 
-        if (!uploadResponse.ok) {
-          const errorText = await uploadResponse.text().catch(() => '');
-          throw new Error(`Upload gagal: ${uploadResponse.status} - ${errorText || 'Unknown error'}`);
-        }
-
-        await updateSettings(settingsKey, data.publicUrl);
-      } else {
-        // Upload to Supabase Storage
-        const fileName = `dashboard-logo-${type}-${Date.now()}.${file.name.split('.').pop()}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('release-covers')
-          .upload(fileName, file, { upsert: true });
-
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage
-          .from('release-covers')
-          .getPublicUrl(fileName);
-
-        await updateSettings(settingsKey, urlData.publicUrl);
-      }
+      await updateSettings(settingsKey, urlData.publicUrl);
     } catch (error: any) {
       console.error('Error uploading logo:', error);
       toast({
@@ -238,54 +201,21 @@ export function SuperAdminSettings() {
 
     setUploadingFavicon(true);
     try {
-      if (settings.gcs_enabled === 'true') {
-        // Get signed URL from edge function
-        const fileName = `favicon-${Date.now()}.${file.name.split('.').pop()}`;
-        
-        const { data, error } = await supabase.functions.invoke('gcs-upload', {
-          body: {
-            file_name: fileName,
-            file_type: file.type,
-            folder: 'favicons',
-            file_size: file.size,
-          },
-        });
+      // Upload to Supabase Storage (label-logos bucket)
+      const fileName = `favicon-${Date.now()}.${file.name.split('.').pop()}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('label-logos')
+        .upload(fileName, file, { upsert: true });
 
-        if (error) throw error;
-        if (!data?.signedUrl) throw new Error('Tidak mendapat URL upload dari server');
+      if (uploadError) throw uploadError;
 
-        // Upload file directly to GCS using signed URL
-        const uploadResponse = await fetch(data.signedUrl, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': file.type,
-          },
-          body: file,
-        });
+      const { data: urlData } = supabase.storage
+        .from('label-logos')
+        .getPublicUrl(fileName);
 
-        if (!uploadResponse.ok) {
-          const errorText = await uploadResponse.text().catch(() => '');
-          throw new Error(`Upload gagal: ${uploadResponse.status} - ${errorText || 'Unknown error'}`);
-        }
-
-        await updateSettings('favicon', data.publicUrl);
-        updateFaviconLink(data.publicUrl);
-      } else {
-        const fileName = `favicon-${Date.now()}.${file.name.split('.').pop()}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('release-covers')
-          .upload(fileName, file, { upsert: true });
-
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage
-          .from('release-covers')
-          .getPublicUrl(fileName);
-
-        await updateSettings('favicon', urlData.publicUrl);
-        updateFaviconLink(urlData.publicUrl);
-      }
+      await updateSettings('favicon', urlData.publicUrl);
+      updateFaviconLink(urlData.publicUrl);
     } catch (error: any) {
       console.error('Error uploading favicon:', error);
       toast({
