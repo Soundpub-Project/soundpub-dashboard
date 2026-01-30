@@ -65,3 +65,34 @@ Butuh setup di VPS:
 4. **Bucket Access:**
    - `audio-clips` dan `label-logos` = PUBLIC (bisa diakses langsung)
    - `track-audio` dan `release-covers` = PRIVATE (perlu signed URL untuk akses eksternal)
+
+---
+
+## 📚 Dokumentasi VPS Migration (BARU)
+
+### Files yang Tersedia
+
+| File | Deskripsi |
+|------|-----------|
+| `public/exports/VPS-SETUP-GUIDE.md` | Panduan lengkap setup Supabase Self-Hosted di VPS |
+| `public/exports/full-schema-v2.sql` | Schema database lengkap dengan semua RLS policies |
+| `public/exports/MIGRATION-CHECKLIST.md` | Checklist untuk memastikan migrasi lengkap |
+| `public/exports/MIGRATION-GUIDE.md` | Panduan migrasi dari Lovable Cloud |
+| `public/exports/migration-scripts/` | Script automasi migrasi data |
+
+### Quick Start
+
+1. **Baca VPS-SETUP-GUIDE.md** - Panduan step-by-step setup Supabase di VPS
+2. **Jalankan full-schema-v2.sql** - Schema database terbaru
+3. **Ikuti MIGRATION-CHECKLIST.md** - Pastikan semua langkah selesai
+4. **Gunakan migration-scripts/** - Untuk migrasi data
+
+### Apa yang Disertakan
+
+- ✅ Schema database lengkap (11 tables)
+- ✅ 10 database functions (security definer)
+- ✅ 10 triggers
+- ✅ 40+ RLS policies
+- ✅ 5 storage buckets dengan policies
+- ✅ Indexes untuk performa
+- ✅ Default app settings

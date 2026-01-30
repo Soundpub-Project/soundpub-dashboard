@@ -1,6 +1,17 @@
 # SoundPub Dashboard - Migration Guide
 
-Panduan lengkap untuk migrasi dari Lovable Cloud ke Supabase eksternal.
+Panduan lengkap untuk migrasi dari Lovable Cloud ke Supabase eksternal atau Self-Hosted di VPS.
+
+## 📚 Dokumentasi Terkait
+
+| Dokumen | Deskripsi |
+|---------|-----------|
+| **[VPS-SETUP-GUIDE.md](./VPS-SETUP-GUIDE.md)** | Panduan lengkap setup Supabase Self-Hosted di VPS |
+| **[full-schema-v2.sql](./full-schema-v2.sql)** | Schema database terbaru dengan semua RLS policies |
+| **[MIGRATION-CHECKLIST.md](./MIGRATION-CHECKLIST.md)** | Checklist untuk memastikan migrasi lengkap |
+| **[migration-scripts/](./migration-scripts/)** | Script automasi migrasi data |
+
+---
 
 ## Daftar Isi
 
