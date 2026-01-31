@@ -536,6 +536,9 @@ export function ReleaseFormDialog({
       const coverUrl = await uploadCover();
 
       if (isEditMode && release) {
+        // Determine label_id for update - admin can change it, others keep the original
+        const updateLabelId = isAdmin && values.label_id ? values.label_id : release.label_id;
+        
         const { error: releaseError } = await supabase
           .from('releases')
           .update({
@@ -547,6 +550,7 @@ export function ReleaseFormDialog({
             release_date: values.release_date || null,
             status: values.status,
             cover_url: coverUrl,
+            label_id: updateLabelId,
           })
           .eq('id', release.id);
 
