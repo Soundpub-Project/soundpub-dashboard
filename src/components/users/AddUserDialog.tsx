@@ -113,11 +113,11 @@ export function AddUserDialog({
   const fetchLabels = async () => {
     setLoadingLabels(true);
     try {
-      // Fetch all users with label role
+      // Fetch all users with label or whitelabel role
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
-        .select('user_id')
-        .eq('role', 'label');
+        .select('user_id, role')
+        .in('role', ['label', 'whitelabel']);
 
       if (rolesError) throw rolesError;
 
@@ -132,7 +132,18 @@ export function AddUserDialog({
 
         if (profilesError) throw profilesError;
 
-        setLabels(profiles || []);
+        // Add role info to distinguish labels from whitelabels
+        const profilesWithRole = (profiles || []).map(profile => {
+          const roleInfo = roles?.find(r => r.user_id === profile.id);
+          return {
+            ...profile,
+            full_name: roleInfo?.role === 'whitelabel' 
+              ? `${profile.full_name} (Whitelabel)` 
+              : profile.full_name
+          };
+        });
+
+        setLabels(profilesWithRole);
       } else {
         setLabels([]);
       }
