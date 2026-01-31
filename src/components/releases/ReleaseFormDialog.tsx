@@ -424,130 +424,65 @@ export function ReleaseFormDialog({
     setCoverPreview(URL.createObjectURL(file));
   };
 
-  // Upload with retry logic for CORS issues
-  const uploadWithRetry = async (
-    uploadUrl: string, 
-    file: File, 
-    mimeType: string,
-    maxRetries = 3
-  ): Promise<Response> => {
-    let lastError: Error | null = null;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`Cover upload attempt ${attempt}/${maxRetries}`);
-        
-        const uploadResponse = await fetch(uploadUrl, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': mimeType,
-          },
-          body: file,
-        });
-
-        if (uploadResponse.ok) {
-          return uploadResponse;
-        }
-
-        const errorText = await uploadResponse.text();
-        console.error(`Cover upload attempt ${attempt} failed:`, uploadResponse.status, errorText);
-        lastError = new Error(`Upload failed: ${uploadResponse.status}`);
-        
-      } catch (error: any) {
-        console.error(`Cover upload attempt ${attempt} error:`, error);
-        lastError = error;
-        
-        if (attempt < maxRetries) {
-          const waitTime = attempt * 1000;
-          console.log(`Waiting ${waitTime}ms before retry...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-        }
-      }
-    }
-
-    throw lastError || new Error('Upload failed after retries');
-  };
-
+  // Upload cover to Supabase Storage
   const uploadCover = async (): Promise<string | null> => {
     if (!coverFile) return release?.cover_url || null;
 
     setUploadingCover(true);
     try {
-      const fileExt = coverFile.name.split('.').pop();
+      const fileExt = coverFile.name.split('.').pop()?.toLowerCase();
       const fileName = `cover-${Date.now()}.${fileExt}`;
+      const bucket = 'release-covers';
 
       // Get the session from Supabase
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData?.session?.access_token) {
-        throw new Error('Not authenticated');
+        throw new Error('Anda harus login terlebih dahulu');
       }
 
-      // Step 1: Get signed URL from edge function
-      const { data, error } = await supabase.functions.invoke('gcs-upload', {
-        body: {
-          file_name: fileName,
-          file_type: coverFile.type,
-          folder: 'covers',
-          file_size: coverFile.size,
-        },
-      });
+      console.log(`Uploading cover to Supabase Storage bucket: ${bucket}, file: ${fileName}`);
 
-      if (error || data?.error) {
-        const errorData = data || {};
-        const errorCode = errorData.code;
-        const errorMessage = errorData.error || error?.message;
-        
-        console.error('Cover upload function error:', { error, data: errorData });
-        
-        if (errorCode === 'INSUFFICIENT_ROLE') {
-          throw new Error(`Role "${errorData.currentRole}" tidak diizinkan upload. Hubungi admin.`);
-        }
-        if (errorMessage?.includes('GCS configuration is missing')) {
-          throw new Error('Konfigurasi storage belum lengkap. Hubungi admin.');
-        }
-        throw new Error(errorMessage || 'Gagal mendapatkan upload URL');
-      }
-      
-      // Use signedUrl (new) or uploadUrl (backward compat)
-      const uploadUrl = data?.signedUrl || data?.uploadUrl;
-      if (!uploadUrl) throw new Error('Failed to get upload URL');
+      // Upload file to Supabase Storage
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .upload(fileName, coverFile, {
+          cacheControl: '3600',
+          upsert: false,
+        });
 
-      // Step 2: Upload file directly to GCS using signed URL
-      try {
-        const uploadResponse = await uploadWithRetry(uploadUrl, coverFile, coverFile.type, 3);
-        console.log('Cover upload successful:', uploadResponse.status);
-      } catch (uploadError: any) {
-        console.error('All cover upload attempts failed:', uploadError);
+      if (error) {
+        console.error('Supabase Storage upload error:', error);
         
-        const errorMsg = uploadError.message || '';
-        
-        // True network error
-        if (uploadError.name === 'TypeError' && errorMsg.includes('Failed to fetch')) {
-          throw new Error(
-            'Upload gagal (network error). Pastikan koneksi internet stabil dan CORS bucket sudah dikonfigurasi.'
-          );
+        // Handle specific error codes
+        if (error.message?.includes('row-level security')) {
+          throw new Error('Anda tidak memiliki izin untuk upload. Hubungi admin.');
         }
-        
-        // HTTP status code errors from GCS
-        if (errorMsg.includes('Upload failed:')) {
-          const statusMatch = errorMsg.match(/Upload failed: (\d+)/);
-          const status = statusMatch ? parseInt(statusMatch[1]) : 0;
-          
-          if (status === 400) {
-            throw new Error('Upload ditolak (400). Signed URL mungkin expired atau Content-Type tidak cocok.');
-          }
-          if (status === 403) {
-            throw new Error('Upload ditolak (403). Service account tidak punya akses write ke bucket.');
-          }
-          if (status === 404) {
-            throw new Error('Bucket tidak ditemukan (404). Pastikan GCS_BUCKET_NAME sudah benar.');
-          }
+        if (error.message?.includes('duplicate')) {
+          throw new Error('File dengan nama yang sama sudah ada.');
         }
-        
-        throw uploadError;
+        if (error.message?.includes('Payload too large')) {
+          throw new Error('Ukuran file terlalu besar. Maksimal 5MB.');
+        }
+        throw new Error(error.message || 'Gagal mengupload cover');
       }
 
-      return data.publicUrl;
+      console.log('Cover upload successful:', data.path);
+
+      // For private bucket (release-covers), create a signed URL with long expiry
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(data.path, 60 * 60 * 24 * 365); // 1 year expiry
+
+      if (signedUrlError) {
+        console.error('Error creating signed URL:', signedUrlError);
+        // Fallback to public URL format
+        const { data: urlData } = supabase.storage
+          .from(bucket)
+          .getPublicUrl(data.path);
+        return urlData.publicUrl;
+      }
+
+      return signedUrlData.signedUrl;
     } catch (error: any) {
       console.error('Error uploading cover:', error);
       toast.error(error.message || 'Gagal mengupload cover');
