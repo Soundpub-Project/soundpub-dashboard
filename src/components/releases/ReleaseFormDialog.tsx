@@ -305,40 +305,50 @@ export function ReleaseFormDialog({
     }
   };
 
+  // Reset all state when dialog opens or release prop changes
   useEffect(() => {
-    if (open && release) {
-      loadReleaseData();
-    } else if (open && !release) {
-      form.reset({
-        upc: '',
-        title: '',
-        artist_name: '',
-        release_type: 'single',
-        genre: '',
-        release_date: '',
-        status: 'pending',
-        label_id: (isLabel || isWhitelabel) && user ? user.id : '',
-        tracks: [
-        {
-          isrc: '',
-          title: '',
-          artists: [{ name: '', type: 'Main Artist' }],
-          composer: '',
-          lyricist: '',
-          genre: '',
-          lyrics: '',
-          explicit_lyrics: false,
-          contributors: [],
-          audio_url: null,
-          clip_url: null,
-          duration: null,
-        },
-        ],
-      });
+    if (open) {
+      // Always reset cover state first when dialog opens
       setCoverFile(null);
       setCoverPreview(null);
+      
+      if (release) {
+        loadReleaseData();
+      } else {
+        form.reset({
+          upc: '',
+          title: '',
+          artist_name: '',
+          release_type: 'single',
+          genre: '',
+          release_date: '',
+          status: 'pending',
+          label_id: (isLabel || isWhitelabel) && user ? user.id : '',
+          tracks: [
+            {
+              isrc: '',
+              title: '',
+              artists: [{ name: '', type: 'Main Artist' }],
+              composer: '',
+              lyricist: '',
+              genre: '',
+              lyrics: '',
+              explicit_lyrics: false,
+              contributors: [],
+              audio_url: null,
+              clip_url: null,
+              duration: null,
+            },
+          ],
+        });
+      }
+    } else {
+      // Reset everything when dialog closes
+      setCoverFile(null);
+      setCoverPreview(null);
+      setLabelArtists([]);
     }
-  }, [open, release]);
+  }, [open, release?.id]);
 
   const loadReleaseData = async () => {
     if (!release) return;
@@ -352,6 +362,7 @@ export function ReleaseFormDialog({
 
       if (error) throw error;
 
+      // Reset form with release data - ensure label_id is properly set
       form.reset({
         upc: release.upc || '',
         title: release.title,
@@ -360,7 +371,7 @@ export function ReleaseFormDialog({
         genre: release.genre || '',
         release_date: release.release_date || '',
         status: release.status,
-        label_id: release.label_id,
+        label_id: release.label_id || '',
         tracks: tracks && tracks.length > 0
           ? tracks.map((t: any) => ({
               id: t.id,
@@ -397,6 +408,7 @@ export function ReleaseFormDialog({
             ],
       });
 
+      // Set cover preview from release data (after reset to avoid stale state)
       if (release.cover_url) {
         setCoverPreview(release.cover_url);
       }
