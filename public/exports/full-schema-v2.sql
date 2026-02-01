@@ -1,6 +1,6 @@
 -- =====================================================
 -- SoundPub Dashboard - Full Database Schema Export v2
--- Updated: January 2026
+-- Updated: February 2026
 -- Untuk migrasi ke Supabase Self-Hosted di VPS
 -- =====================================================
 
@@ -787,7 +787,7 @@ BEGIN
     END LOOP;
 END $$;
 
--- release-covers policies
+-- release-covers policies (private bucket)
 CREATE POLICY "Authenticated users can view release covers" ON storage.objects
   FOR SELECT TO authenticated USING (bucket_id = 'release-covers');
 
@@ -804,7 +804,11 @@ CREATE POLICY "Labels can update release covers" ON storage.objects
   FOR UPDATE TO authenticated 
   USING (bucket_id = 'release-covers' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel')));
 
--- track-audio policies
+CREATE POLICY "Labels can delete release covers" ON storage.objects
+  FOR DELETE TO authenticated 
+  USING (bucket_id = 'release-covers' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR is_admin(auth.uid())));
+
+-- track-audio policies (private bucket)
 CREATE POLICY "Authenticated users can view track audio" ON storage.objects
   FOR SELECT TO authenticated USING (bucket_id = 'track-audio');
 
@@ -821,7 +825,11 @@ CREATE POLICY "Labels can update track audio" ON storage.objects
   FOR UPDATE TO authenticated 
   USING (bucket_id = 'track-audio' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel')));
 
--- track-video policies
+CREATE POLICY "Labels can delete track audio" ON storage.objects
+  FOR DELETE TO authenticated 
+  USING (bucket_id = 'track-audio' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR is_admin(auth.uid())));
+
+-- track-video policies (private bucket)
 CREATE POLICY "Authenticated users can view track video" ON storage.objects
   FOR SELECT TO authenticated USING (bucket_id = 'track-video');
 
@@ -833,6 +841,10 @@ CREATE POLICY "Admins can manage track video" ON storage.objects
 CREATE POLICY "Labels can upload track video" ON storage.objects
   FOR INSERT TO authenticated 
   WITH CHECK (bucket_id = 'track-video' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel')));
+
+CREATE POLICY "Labels can delete track video" ON storage.objects
+  FOR DELETE TO authenticated 
+  USING (bucket_id = 'track-video' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR is_admin(auth.uid())));
 
 -- audio-clips policies (public bucket)
 CREATE POLICY "Anyone can view audio clips" ON storage.objects
@@ -846,6 +858,10 @@ CREATE POLICY "Admins can manage audio clips" ON storage.objects
 CREATE POLICY "Labels can upload audio clips" ON storage.objects
   FOR INSERT TO authenticated 
   WITH CHECK (bucket_id = 'audio-clips' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel')));
+
+CREATE POLICY "Labels can delete audio clips" ON storage.objects
+  FOR DELETE TO authenticated 
+  USING (bucket_id = 'audio-clips' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR is_admin(auth.uid())));
 
 -- label-logos policies (public bucket)
 CREATE POLICY "Anyone can view label logos" ON storage.objects
@@ -864,6 +880,10 @@ CREATE POLICY "Labels can update label logos" ON storage.objects
   FOR UPDATE TO authenticated 
   USING (bucket_id = 'label-logos' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel')));
 
+CREATE POLICY "Labels can delete label logos" ON storage.objects
+  FOR DELETE TO authenticated 
+  USING (bucket_id = 'label-logos' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR is_admin(auth.uid())));
+
 -- =====================================================
 -- BAGIAN 21: DEFAULT APP SETTINGS
 -- =====================================================
@@ -873,6 +893,31 @@ INSERT INTO public.app_settings (key, value) VALUES
   ('app_name', 'SoundPub Dashboard'),
   ('storage_provider', 'supabase')
 ON CONFLICT (key) DO NOTHING;
+
+-- =====================================================
+-- BAGIAN 22: MIGRASI GCS KE SUPABASE STORAGE
+-- =====================================================
+-- 
+-- Catatan: Sistem sudah bermigrasi dari GCS ke Supabase Storage.
+-- Jika masih ada data di GCS, ikuti langkah berikut:
+--
+-- 1. Download semua file dari GCS bucket
+-- 2. Upload ke Supabase Storage bucket yang sesuai:
+--    - covers/ -> release-covers
+--    - audio/  -> track-audio
+--    - clips/  -> audio-clips
+--    - logos/  -> label-logos
+--
+-- 3. Update URL di database:
+--    UPDATE releases 
+--    SET cover_url = REPLACE(cover_url, 'storage.googleapis.com/YOUR_BUCKET/', 'YOUR_SUPABASE_URL/storage/v1/object/sign/release-covers/')
+--    WHERE cover_url LIKE '%storage.googleapis.com%';
+--
+-- 4. Untuk private buckets, generate signed URLs dengan expiry panjang (1 tahun):
+--    - Gunakan supabase.storage.from('bucket').createSignedUrl(path, 31536000)
+--
+-- Edge functions GCS (gcs-upload, gcs-manage) sudah di-disable tapi tidak dihapus.
+-- Untuk mengaktifkan kembali, ubah GCS_DISABLED = false di file edge function.
 
 -- =====================================================
 -- END OF SCHEMA EXPORT v2
