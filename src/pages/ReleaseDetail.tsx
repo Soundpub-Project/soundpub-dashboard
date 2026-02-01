@@ -33,7 +33,8 @@ import {
   Volume2,
   VolumeX,
   SkipBack,
-  SkipForward
+  SkipForward,
+  Download
 } from 'lucide-react';
 import { ReleaseFormDialog } from '@/components/releases/ReleaseFormDialog';
 import { format } from 'date-fns';
@@ -477,6 +478,7 @@ export default function ReleaseDetail() {
                           <TableHead>Composer</TableHead>
                           <TableHead>Genre</TableHead>
                           <TableHead className="w-16">Audio</TableHead>
+                          {isAdmin && <TableHead className="w-16">Download</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -525,6 +527,29 @@ export default function ReleaseDetail() {
                                   <span className="text-xs text-muted-foreground">-</span>
                                 )}
                               </TableCell>
+                              {isAdmin && (
+                                <TableCell>
+                                  {track.audio_url ? (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => {
+                                        const link = document.createElement('a');
+                                        link.href = track.audio_url!;
+                                        link.download = `${track.title} - ${track.artist_name}.mp3`;
+                                        link.target = '_blank';
+                                        link.click();
+                                      }}
+                                      title="Download audio"
+                                    >
+                                      <Download className="h-4 w-4" />
+                                    </Button>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">-</span>
+                                  )}
+                                </TableCell>
+                              )}
                             </TableRow>
                           );
                         })}

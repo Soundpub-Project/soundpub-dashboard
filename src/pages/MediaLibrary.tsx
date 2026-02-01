@@ -38,71 +38,104 @@ import {
   ExternalLink,
   FolderOpen,
   HardDrive,
+  Download,
 } from 'lucide-react';
 
-interface GCSFile {
+interface StorageFile {
   name: string;
   size: number;
-  contentType: string;
+  contentType: string | undefined;
   created: string;
   updated: string;
   publicUrl: string;
   folder: string | null;
+  bucket: string;
 }
 
-interface OrphanFile extends GCSFile {
+interface OrphanFile extends StorageFile {
   reason: string;
 }
 
-const FOLDERS = ['covers', 'audio', 'clips'] as const;
-type FolderType = typeof FOLDERS[number];
+// Supabase Storage buckets
+const BUCKETS = ['release-covers', 'track-audio', 'audio-clips'] as const;
+type BucketType = typeof BUCKETS[number];
 
-const FOLDER_CONFIG: Record<FolderType, { label: string; icon: React.ReactNode; color: string }> = {
-  covers: { label: 'Cover Images', icon: <ImageIcon className="h-4 w-4" />, color: 'bg-blue-500' },
-  audio: { label: 'Full Audio', icon: <Music className="h-4 w-4" />, color: 'bg-green-500' },
-  clips: { label: 'Audio Clips', icon: <FileAudio className="h-4 w-4" />, color: 'bg-purple-500' },
+const BUCKET_CONFIG: Record<BucketType, { label: string; icon: React.ReactNode; color: string; isPublic: boolean }> = {
+  'release-covers': { label: 'Cover Images', icon: <ImageIcon className="h-4 w-4" />, color: 'bg-blue-500', isPublic: false },
+  'track-audio': { label: 'Full Audio', icon: <Music className="h-4 w-4" />, color: 'bg-green-500', isPublic: false },
+  'audio-clips': { label: 'Audio Clips', icon: <FileAudio className="h-4 w-4" />, color: 'bg-purple-500', isPublic: true },
 };
 
 export default function MediaLibrary() {
   const { isAdmin } = useAuth();
   const { toast } = useToast();
   
-  const [activeFolder, setActiveFolder] = useState<FolderType>('covers');
-  const [files, setFiles] = useState<GCSFile[]>([]);
+  const [activeBucket, setActiveBucket] = useState<BucketType>('release-covers');
+  const [files, setFiles] = useState<StorageFile[]>([]);
   const [orphanFiles, setOrphanFiles] = useState<OrphanFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [deletingFile, setDeletingFile] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [fileToDelete, setFileToDelete] = useState<GCSFile | null>(null);
+  const [fileToDelete, setFileToDelete] = useState<StorageFile | null>(null);
   const [scanningOrphans, setScanningOrphans] = useState(false);
-  const [stats, setStats] = useState<Record<FolderType, { count: number; size: number }>>({
-    covers: { count: 0, size: 0 },
-    audio: { count: 0, size: 0 },
-    clips: { count: 0, size: 0 },
+  const [stats, setStats] = useState<Record<BucketType, { count: number; size: number }>>({
+    'release-covers': { count: 0, size: 0 },
+    'track-audio': { count: 0, size: 0 },
+    'audio-clips': { count: 0, size: 0 },
   });
 
   useEffect(() => {
-    loadFiles(activeFolder);
-  }, [activeFolder]);
+    loadFiles(activeBucket);
+  }, [activeBucket]);
 
-  const loadFiles = async (folder: FolderType) => {
+  const loadFiles = async (bucket: BucketType) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('gcs-manage', {
-        body: { action: 'list_files', folder, max_results: 500 },
-      });
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .list('', { limit: 500, sortBy: { column: 'created_at', order: 'desc' } });
 
       if (error) throw error;
 
-      const filesList = data?.files || [];
+      const bucketConfig = BUCKET_CONFIG[bucket];
+      
+      // Transform to our file format
+      const filesList: StorageFile[] = await Promise.all(
+        (data || []).filter(item => item.name).map(async (item) => {
+          let publicUrl = '';
+          
+          if (bucketConfig.isPublic) {
+            const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(item.name);
+            publicUrl = urlData.publicUrl;
+          } else {
+            // Generate signed URL for private buckets
+            const { data: signedData } = await supabase.storage
+              .from(bucket)
+              .createSignedUrl(item.name, 3600); // 1 hour validity
+            publicUrl = signedData?.signedUrl || '';
+          }
+          
+          return {
+            name: item.name,
+            size: item.metadata?.size || 0,
+            contentType: item.metadata?.mimetype,
+            created: item.created_at || '',
+            updated: item.updated_at || item.created_at || '',
+            publicUrl,
+            folder: null,
+            bucket,
+          };
+        })
+      );
+      
       setFiles(filesList);
 
-      // Update stats for this folder
-      const totalSize = filesList.reduce((sum: number, f: GCSFile) => sum + f.size, 0);
+      // Update stats for this bucket
+      const totalSize = filesList.reduce((sum, f) => sum + f.size, 0);
       setStats(prev => ({
         ...prev,
-        [folder]: { count: filesList.length, size: totalSize },
+        [bucket]: { count: filesList.length, size: totalSize },
       }));
 
     } catch (error: any) {
@@ -120,21 +153,42 @@ export default function MediaLibrary() {
   const scanOrphanFiles = async () => {
     setScanningOrphans(true);
     try {
-      // Load all files from all folders
-      const allFilesPromises = FOLDERS.map(folder =>
-        supabase.functions.invoke('gcs-manage', {
-          body: { action: 'list_files', folder, max_results: 1000 },
-        })
-      );
+      // Load all files from all buckets
+      const allFilesPromises = BUCKETS.map(async (bucket) => {
+        const { data } = await supabase.storage.from(bucket).list('', { limit: 1000 });
+        
+        const bucketConfig = BUCKET_CONFIG[bucket];
+        
+        return Promise.all(
+          (data || []).filter(item => item.name).map(async (item) => {
+            let publicUrl = '';
+            
+            if (bucketConfig.isPublic) {
+              const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(item.name);
+              publicUrl = urlData.publicUrl;
+            } else {
+              const { data: signedData } = await supabase.storage
+                .from(bucket)
+                .createSignedUrl(item.name, 3600);
+              publicUrl = signedData?.signedUrl || '';
+            }
+            
+            return {
+              name: item.name,
+              size: item.metadata?.size || 0,
+              contentType: item.metadata?.mimetype,
+              created: item.created_at || '',
+              updated: item.updated_at || item.created_at || '',
+              publicUrl,
+              folder: null,
+              bucket,
+            } as StorageFile;
+          })
+        );
+      });
 
       const results = await Promise.all(allFilesPromises);
-      
-      let allFiles: GCSFile[] = [];
-      results.forEach((result, index) => {
-        if (result.data?.files) {
-          allFiles = allFiles.concat(result.data.files);
-        }
-      });
+      const allFiles = results.flat();
 
       // Get all referenced URLs from database
       const [releasesResult, tracksResult] = await Promise.all([
@@ -144,18 +198,33 @@ export default function MediaLibrary() {
 
       const referencedUrls = new Set<string>();
       
+      // Extract file names from URLs for comparison
+      const extractFileName = (url: string | null) => {
+        if (!url) return null;
+        try {
+          const urlObj = new URL(url);
+          const pathParts = urlObj.pathname.split('/');
+          return pathParts[pathParts.length - 1];
+        } catch {
+          return url.split('/').pop() || null;
+        }
+      };
+      
       releasesResult.data?.forEach(r => {
-        if (r.cover_url) referencedUrls.add(r.cover_url);
+        const fileName = extractFileName(r.cover_url);
+        if (fileName) referencedUrls.add(fileName);
       });
       
       tracksResult.data?.forEach(t => {
-        if (t.audio_url) referencedUrls.add(t.audio_url);
-        if (t.clip_url) referencedUrls.add(t.clip_url);
+        const audioName = extractFileName(t.audio_url);
+        const clipName = extractFileName(t.clip_url);
+        if (audioName) referencedUrls.add(audioName);
+        if (clipName) referencedUrls.add(clipName);
       });
 
       // Find orphan files
       const orphans: OrphanFile[] = allFiles
-        .filter(file => !referencedUrls.has(file.publicUrl))
+        .filter(file => !referencedUrls.has(file.name))
         .map(file => ({
           ...file,
           reason: 'Tidak ada referensi di database',
@@ -185,9 +254,9 @@ export default function MediaLibrary() {
 
     setDeletingFile(fileToDelete.name);
     try {
-      const { error } = await supabase.functions.invoke('gcs-manage', {
-        body: { action: 'delete_file', file_path: fileToDelete.name },
-      });
+      const { error } = await supabase.storage
+        .from(fileToDelete.bucket)
+        .remove([fileToDelete.name]);
 
       if (error) throw error;
 
@@ -224,19 +293,30 @@ export default function MediaLibrary() {
     let deleted = 0;
     let failed = 0;
 
-    for (const file of orphanFiles) {
+    // Group files by bucket for efficient deletion
+    const filesByBucket: Record<string, string[]> = {};
+    orphanFiles.forEach(file => {
+      if (!filesByBucket[file.bucket]) {
+        filesByBucket[file.bucket] = [];
+      }
+      filesByBucket[file.bucket].push(file.name);
+    });
+
+    for (const [bucket, fileNames] of Object.entries(filesByBucket)) {
       try {
-        await supabase.functions.invoke('gcs-manage', {
-          body: { action: 'delete_file', file_path: file.name },
-        });
-        deleted++;
+        const { error } = await supabase.storage.from(bucket).remove(fileNames);
+        if (!error) {
+          deleted += fileNames.length;
+        } else {
+          failed += fileNames.length;
+        }
       } catch {
-        failed++;
+        failed += fileNames.length;
       }
     }
 
     setOrphanFiles([]);
-    loadFiles(activeFolder);
+    loadFiles(activeBucket);
 
     toast({
       title: 'Cleanup Selesai',
@@ -253,6 +333,7 @@ export default function MediaLibrary() {
   };
 
   const formatDate = (dateStr: string) => {
+    if (!dateStr) return '-';
     return new Date(dateStr).toLocaleDateString('id-ID', {
       year: 'numeric',
       month: 'short',
@@ -284,7 +365,7 @@ export default function MediaLibrary() {
           <div>
             <h1 className="text-2xl font-bold">Media Library</h1>
             <p className="text-muted-foreground">
-              Kelola semua file media di Google Cloud Storage
+              Kelola semua file media di Supabase Storage
             </p>
           </div>
           <Button
@@ -303,22 +384,22 @@ export default function MediaLibrary() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {FOLDERS.map(folder => (
-            <Card key={folder} className="bg-card/50">
+          {BUCKETS.map(bucket => (
+            <Card key={bucket} className="bg-card/50">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${FOLDER_CONFIG[folder].color}`}>
-                      {FOLDER_CONFIG[folder].icon}
+                    <div className={`p-2 rounded-lg ${BUCKET_CONFIG[bucket].color}`}>
+                      {BUCKET_CONFIG[bucket].icon}
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">{FOLDER_CONFIG[folder].label}</p>
-                      <p className="text-2xl font-bold">{stats[folder].count}</p>
+                      <p className="text-sm text-muted-foreground">{BUCKET_CONFIG[bucket].label}</p>
+                      <p className="text-2xl font-bold">{stats[bucket].count}</p>
                     </div>
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-muted-foreground">Size</p>
-                    <p className="font-medium">{formatFileSize(stats[folder].size)}</p>
+                    <p className="font-medium">{formatFileSize(stats[bucket].size)}</p>
                   </div>
                 </div>
               </CardContent>
@@ -354,6 +435,7 @@ export default function MediaLibrary() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Nama File</TableHead>
+                      <TableHead>Bucket</TableHead>
                       <TableHead>Ukuran</TableHead>
                       <TableHead>Alasan</TableHead>
                       <TableHead className="w-20">Aksi</TableHead>
@@ -361,9 +443,12 @@ export default function MediaLibrary() {
                   </TableHeader>
                   <TableBody>
                     {orphanFiles.slice(0, 10).map(file => (
-                      <TableRow key={file.name}>
+                      <TableRow key={`${file.bucket}-${file.name}`}>
                         <TableCell className="font-mono text-xs truncate max-w-[200px]">
                           {file.name}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{file.bucket}</Badge>
                         </TableCell>
                         <TableCell>{formatFileSize(file.size)}</TableCell>
                         <TableCell className="text-muted-foreground text-sm">
@@ -421,7 +506,7 @@ export default function MediaLibrary() {
                 <Button
                   variant="outline"
                   size="icon"
-                  onClick={() => loadFiles(activeFolder)}
+                  onClick={() => loadFiles(activeBucket)}
                   disabled={loading}
                 >
                   <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -430,21 +515,21 @@ export default function MediaLibrary() {
             </div>
           </CardHeader>
           <CardContent>
-            <Tabs value={activeFolder} onValueChange={(v) => setActiveFolder(v as FolderType)}>
+            <Tabs value={activeBucket} onValueChange={(v) => setActiveBucket(v as BucketType)}>
               <TabsList className="grid w-full grid-cols-3">
-                {FOLDERS.map(folder => (
-                  <TabsTrigger key={folder} value={folder} className="gap-2">
-                    {FOLDER_CONFIG[folder].icon}
-                    <span className="hidden sm:inline">{FOLDER_CONFIG[folder].label}</span>
+                {BUCKETS.map(bucket => (
+                  <TabsTrigger key={bucket} value={bucket} className="gap-2">
+                    {BUCKET_CONFIG[bucket].icon}
+                    <span className="hidden sm:inline">{BUCKET_CONFIG[bucket].label}</span>
                     <Badge variant="secondary" className="ml-1">
-                      {stats[folder].count}
+                      {stats[bucket].count}
                     </Badge>
                   </TabsTrigger>
                 ))}
               </TabsList>
 
-              {FOLDERS.map(folder => (
-                <TabsContent key={folder} value={folder} className="mt-4">
+              {BUCKETS.map(bucket => (
+                <TabsContent key={bucket} value={bucket} className="mt-4">
                   {loading ? (
                     <div className="flex items-center justify-center py-12">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -452,7 +537,7 @@ export default function MediaLibrary() {
                   ) : filteredFiles.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                       <HardDrive className="h-12 w-12 mb-4" />
-                      <p>Tidak ada file di folder ini</p>
+                      <p>Tidak ada file di bucket ini</p>
                     </div>
                   ) : (
                     <div className="rounded-md border overflow-hidden">
@@ -471,7 +556,7 @@ export default function MediaLibrary() {
                             <TableRow key={file.name}>
                               <TableCell>
                                 <div className="flex items-center gap-2">
-                                  {activeFolder === 'covers' ? (
+                                  {activeBucket === 'release-covers' ? (
                                     <img
                                       src={file.publicUrl}
                                       alt={file.name}
@@ -486,27 +571,40 @@ export default function MediaLibrary() {
                                     </div>
                                   )}
                                   <span className="font-mono text-xs truncate max-w-[200px]">
-                                    {file.name.split('/').pop()}
+                                    {file.name}
                                   </span>
                                 </div>
                               </TableCell>
                               <TableCell>
-                                <Badge variant="outline" className="font-mono text-xs">
-                                  {file.contentType.split('/').pop()}
+                                <Badge variant="outline" className="text-xs">
+                                  {file.contentType?.split('/')[1]?.toUpperCase() || 'Unknown'}
                                 </Badge>
                               </TableCell>
                               <TableCell>{formatFileSize(file.size)}</TableCell>
-                              <TableCell className="text-muted-foreground text-sm">
-                                {formatDate(file.created)}
-                              </TableCell>
+                              <TableCell>{formatDate(file.created)}</TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-1">
                                   <Button
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => window.open(file.publicUrl, '_blank')}
+                                    title="Lihat file"
                                   >
                                     <ExternalLink className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                      const link = document.createElement('a');
+                                      link.href = file.publicUrl;
+                                      link.download = file.name;
+                                      link.target = '_blank';
+                                      link.click();
+                                    }}
+                                    title="Download file"
+                                  >
+                                    <Download className="h-4 w-4" />
                                   </Button>
                                   <Button
                                     variant="ghost"
@@ -544,7 +642,8 @@ export default function MediaLibrary() {
           <AlertDialogHeader>
             <AlertDialogTitle>Hapus File?</AlertDialogTitle>
             <AlertDialogDescription>
-              File <strong>{fileToDelete?.name.split('/').pop()}</strong> akan dihapus permanen.
+              Apakah Anda yakin ingin menghapus file <strong>{fileToDelete?.name}</strong>?
+              <br />
               Aksi ini tidak dapat dibatalkan.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -552,7 +651,7 @@ export default function MediaLibrary() {
             <AlertDialogCancel>Batal</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteFile}
-              className="bg-destructive hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Hapus
             </AlertDialogAction>
