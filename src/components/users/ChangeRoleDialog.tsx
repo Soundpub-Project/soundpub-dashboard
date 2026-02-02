@@ -192,6 +192,31 @@ export function ChangeRoleDialog({
 
       if (profileError) throw profileError;
 
+      // CRITICAL: Sync to artists table for immediate integration
+      // This ensures artist appears in release forms without manual re-adding
+      if (selectedRole === 'artist' && selectedLabelId) {
+        // Check if artist already exists in artists table
+        const { data: existingArtist } = await supabase
+          .from('artists')
+          .select('id')
+          .eq('name', user.full_name)
+          .eq('label_id', selectedLabelId)
+          .maybeSingle();
+
+        if (!existingArtist) {
+          const { error: artistError } = await supabase
+            .from('artists')
+            .insert({
+              name: user.full_name,
+              label_id: selectedLabelId,
+            });
+
+          if (artistError) {
+            console.error('Error syncing to artists table:', artistError);
+          }
+        }
+      }
+
       toast.success(`Role ${user.full_name} berhasil diubah menjadi ${selectedRole}`);
       onSuccess();
       onOpenChange(false);

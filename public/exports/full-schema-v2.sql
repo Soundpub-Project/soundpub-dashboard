@@ -920,5 +920,37 @@ ON CONFLICT (key) DO NOTHING;
 -- Untuk mengaktifkan kembali, ubah GCS_DISABLED = false di file edge function.
 
 -- =====================================================
+-- BAGIAN 23: ARTIST INTEGRATION & SYNC
+-- =====================================================
+--
+-- Sistem sinkronisasi artis antara profiles dan artists table:
+--
+-- 1. Ketika Admin/Superadmin menambahkan user dengan role 'artist' dan parent_label_id:
+--    - Edge function 'create-user' otomatis insert ke tabel 'artists' dengan label_id = parent_label_id
+--
+-- 2. Ketika Admin mengubah role user menjadi 'artist' di ChangeRoleDialog:
+--    - Client-side code sinkronkan ke tabel 'artists'
+--
+-- 3. Ketika Label/Whitelabel menambahkan artist di AddUserDialog:
+--    - Untuk Whitelabel: edge function 'create-whitelabel-artist' otomatis insert ke 'artists'
+--    - Untuk Label biasa: client-side code sinkronkan ke 'artists'
+--
+-- Ini memastikan artis langsung muncul di dropdown releases tanpa perlu dihapus dan ditambahkan ulang.
+--
+-- Untuk migrasi data lama, jalankan query berikut:
+-- 
+-- INSERT INTO artists (name, label_id)
+-- SELECT p.full_name, p.parent_label_id
+-- FROM profiles p
+-- JOIN user_roles ur ON p.id = ur.user_id
+-- WHERE ur.role = 'artist' 
+--   AND p.parent_label_id IS NOT NULL
+--   AND NOT EXISTS (
+--     SELECT 1 FROM artists a 
+--     WHERE a.name = p.full_name 
+--     AND a.label_id = p.parent_label_id
+--   );
+
+-- =====================================================
 -- END OF SCHEMA EXPORT v2
 -- =====================================================
