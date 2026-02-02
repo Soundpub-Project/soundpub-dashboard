@@ -306,7 +306,7 @@ export function AppSidebar() {
         {/* Dasbor Music - Only show to non-copyright users */}
         {!isCopyright && (
           <SidebarGroup>
-            <SidebarGroupLabel>Dasbor Music</SidebarGroupLabel>
+            <SidebarGroupLabel>Dasbor DSP</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {filterByRole(musicDashboardItems).map((item) => (
