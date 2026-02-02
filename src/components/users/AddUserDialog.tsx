@@ -250,6 +250,31 @@ export function AddUserDialog({
         if (!response.data.success) {
           throw new Error(response.data.error || 'Gagal membuat user');
         }
+
+        // CRITICAL: For Label users adding artists, also sync to artists table
+        // Edge function handles this for admin, but Labels call this directly
+        if (selectedRole === 'artist' && (isLabel || isWhitelabel) && currentUser) {
+          // Check if artist already exists in artists table
+          const { data: existingArtist } = await supabase
+            .from('artists')
+            .select('id')
+            .eq('name', fullName)
+            .eq('label_id', currentUser.id)
+            .maybeSingle();
+
+          if (!existingArtist) {
+            const { error: artistError } = await supabase
+              .from('artists')
+              .insert({
+                name: fullName,
+                label_id: currentUser.id,
+              });
+
+            if (artistError) {
+              console.error('Error syncing to artists table:', artistError);
+            }
+          }
+        }
       }
 
       toast.success(`${isWhitelabelMode ? 'Artist' : 'User'} ${fullName} berhasil ditambahkan${isWhitelabelMode ? '' : ` sebagai ${selectedRole}`}`);

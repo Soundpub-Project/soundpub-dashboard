@@ -14,7 +14,7 @@ import { SuperAdminSettings } from '@/components/settings/SuperAdminSettings';
 import { LabelLogoSettings } from '@/components/settings/LabelLogoSettings';
 
 export default function Settings() {
-  const { profile, user, role, isLabel } = useAuth();
+  const { profile, user, role, isLabel, isWhitelabel } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -135,8 +135,8 @@ export default function Settings() {
           </>
         )}
 
-        {/* Label Logo Settings */}
-        {isLabel && (
+        {/* Label/Whitelabel Logo Settings */}
+        {(isLabel || isWhitelabel) && (
           <>
             <LabelLogoSettings />
             <Separator className="my-6" />

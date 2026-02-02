@@ -59,6 +59,7 @@ import { Badge } from '@/components/ui/badge';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MediaUploadSection } from './MediaUploadSection';
+import { ArtistSelector } from './ArtistSelector';
 
 // Genre list
 const GENRE_LIST = [
@@ -705,107 +706,8 @@ export function ReleaseFormDialog({
     });
   };
 
-  // Component for artist selector with dropdown for label
-  const ArtistSelector = ({ 
-    trackIndex, 
-    artistIndex,
-    onRemove,
-    canRemove
-  }: { 
-    trackIndex: number; 
-    artistIndex: number;
-    onRemove: () => void;
-    canRemove: boolean;
-  }) => {
-    const [artistOpen, setArtistOpen] = useState(false);
-    const artistName = form.watch(`tracks.${trackIndex}.artists.${artistIndex}.name`);
-    const artistType = form.watch(`tracks.${trackIndex}.artists.${artistIndex}.type`);
-
-    return (
-      <div className="flex items-center gap-2 p-2 rounded-lg border bg-background">
-        <div className="flex-1 grid grid-cols-2 gap-2">
-          {/* Artist Name - Dropdown for Label, Input for Admin */}
-          {isLabel && labelArtists.length > 0 ? (
-            <Popover open={artistOpen} onOpenChange={setArtistOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={artistOpen}
-                  className="justify-between h-9 text-sm"
-                >
-                  {artistName || "Pilih artist..."}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[200px] p-0 z-50" align="start">
-                <Command>
-                  <CommandInput placeholder="Cari artist..." />
-                  <CommandList>
-                    <CommandEmpty>Tidak ada artist.</CommandEmpty>
-                    <CommandGroup>
-                      {labelArtists.map((artist) => (
-                        <CommandItem
-                          key={artist.id}
-                          value={artist.name}
-                          onSelect={() => {
-                            form.setValue(`tracks.${trackIndex}.artists.${artistIndex}.name`, artist.name);
-                            setArtistOpen(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              artistName === artist.name ? "opacity-100" : "opacity-0"
-                            )}
-                          />
-                          {artist.name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          ) : (
-            <Input
-              placeholder="Nama artist"
-              value={artistName}
-              onChange={(e) => form.setValue(`tracks.${trackIndex}.artists.${artistIndex}.name`, e.target.value)}
-              className="h-9"
-            />
-          )}
-
-          {/* Artist Type */}
-          <Select
-            value={artistType}
-            onValueChange={(value) => form.setValue(`tracks.${trackIndex}.artists.${artistIndex}.type`, value as 'Main Artist' | 'Featured Artist')}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="Tipe" />
-            </SelectTrigger>
-            <SelectContent className="z-50">
-              {ARTIST_TYPES.map((type) => (
-                <SelectItem key={type} value={type}>{type}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        {canRemove && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 text-destructive hover:text-destructive"
-            onClick={onRemove}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
-    );
-  };
+  // NOTE: ArtistSelector component is now imported from ./ArtistSelector.tsx
+  // to prevent focus loss issues caused by inline component re-creation on every render
 
   // Component for contributor selector
   const ContributorSelector = ({ 
@@ -1444,11 +1346,17 @@ export function ReleaseFormDialog({
                             </div>
                             
                             <div className="space-y-2">
-                              {trackArtists.map((_, artistIndex) => (
+                              {trackArtists.map((artist, artistIndex) => (
                                 <ArtistSelector
-                                  key={artistIndex}
-                                  trackIndex={trackIndex}
-                                  artistIndex={artistIndex}
+                                  key={`${trackIndex}-${artistIndex}`}
+                                  artistName={artist.name || ''}
+                                  artistType={artist.type as 'Main Artist' | 'Featured Artist' || 'Main Artist'}
+                                  onNameChange={(name) => {
+                                    form.setValue(`tracks.${trackIndex}.artists.${artistIndex}.name`, name);
+                                  }}
+                                  onTypeChange={(type) => {
+                                    form.setValue(`tracks.${trackIndex}.artists.${artistIndex}.type`, type);
+                                  }}
                                   canRemove={trackArtists.length > 1}
                                   onRemove={() => {
                                     const currentArtists = form.getValues(`tracks.${trackIndex}.artists`);
@@ -1457,6 +1365,8 @@ export function ReleaseFormDialog({
                                       currentArtists.filter((_, i) => i !== artistIndex)
                                     );
                                   }}
+                                  isLabelMode={isLabel || isWhitelabel}
+                                  labelArtists={labelArtists}
                                 />
                               ))}
                             </div>

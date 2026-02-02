@@ -172,6 +172,33 @@ Deno.serve(async (req) => {
       }
     }
 
+    // CRITICAL: Sync to artists table for label/whitelabel integration
+    // This ensures artists appear in release forms immediately without manual re-adding
+    if (role === 'artist' && labelId) {
+      // Check if artist already exists in artists table
+      const { data: existingArtist } = await supabaseAdmin
+        .from('artists')
+        .select('id')
+        .eq('name', full_name)
+        .eq('label_id', labelId)
+        .maybeSingle()
+
+      if (!existingArtist) {
+        const { error: artistError } = await supabaseAdmin
+          .from('artists')
+          .insert({
+            name: full_name,
+            label_id: labelId,
+          })
+
+        if (artistError) {
+          console.error('Error syncing to artists table:', artistError)
+        } else {
+          console.log(`Artist "${full_name}" synced to artists table for label ${labelId}`)
+        }
+      }
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true, 
