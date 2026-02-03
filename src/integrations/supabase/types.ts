@@ -274,6 +274,7 @@ export type Database = {
         Row: {
           archived_at: string | null
           artist_name: string
+          artist_user_id: string | null
           cover_url: string | null
           created_at: string | null
           created_by: string | null
@@ -290,6 +291,7 @@ export type Database = {
         Insert: {
           archived_at?: string | null
           artist_name: string
+          artist_user_id?: string | null
           cover_url?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -306,6 +308,7 @@ export type Database = {
         Update: {
           archived_at?: string | null
           artist_name?: string
+          artist_user_id?: string | null
           cover_url?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -320,6 +323,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "releases_artist_user_id_fkey"
+            columns: ["artist_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "releases_created_by_fkey"
             columns: ["created_by"]
@@ -339,6 +349,7 @@ export type Database = {
       royalties: {
         Row: {
           artist: string | null
+          artist_user_id: string | null
           country: string
           created_at: string | null
           id: string
@@ -355,6 +366,7 @@ export type Database = {
         }
         Insert: {
           artist?: string | null
+          artist_user_id?: string | null
           country: string
           created_at?: string | null
           id?: string
@@ -371,6 +383,7 @@ export type Database = {
         }
         Update: {
           artist?: string | null
+          artist_user_id?: string | null
           country?: string
           created_at?: string | null
           id?: string
@@ -448,6 +461,7 @@ export type Database = {
       tracks: {
         Row: {
           artist_name: string
+          artist_user_id: string | null
           artists: Json | null
           audio_url: string | null
           clip_url: string | null
@@ -468,6 +482,7 @@ export type Database = {
         }
         Insert: {
           artist_name: string
+          artist_user_id?: string | null
           artists?: Json | null
           audio_url?: string | null
           clip_url?: string | null
@@ -488,6 +503,7 @@ export type Database = {
         }
         Update: {
           artist_name?: string
+          artist_user_id?: string | null
           artists?: Json | null
           audio_url?: string | null
           clip_url?: string | null
@@ -507,6 +523,13 @@ export type Database = {
           video_url?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "tracks_artist_user_id_fkey"
+            columns: ["artist_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tracks_release_id_fkey"
             columns: ["release_id"]
@@ -542,6 +565,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_artist_user_id_by_name: {
+        Args: { _artist_name: string; _label_id?: string }
+        Returns: string
+      }
       get_user_full_name: { Args: { _user_id: string }; Returns: string }
       get_user_parent_label_id: { Args: { _user_id: string }; Returns: string }
       get_user_release_label_ids: {

@@ -129,6 +129,7 @@ interface Artist {
   id: string;
   name: string;
   label_id: string;
+  user_id?: string; // NEW: Link to profiles.id for artist users
 }
 
 interface Release {
@@ -290,14 +291,37 @@ export function ReleaseFormDialog({
   const fetchLabelArtists = async (labelId: string) => {
     setLoadingArtists(true);
     try {
-      const { data, error } = await supabase
+      // Fetch artists from artists table
+      const { data: artistsData, error: artistsError } = await supabase
         .from('artists')
         .select('id, name, label_id')
         .eq('label_id', labelId)
         .order('name');
 
-      if (error) throw error;
-      setLabelArtists(data || []);
+      if (artistsError) throw artistsError;
+
+      // Also fetch artist profiles to get user_id for ID-based matching
+      const { data: artistProfiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .eq('parent_label_id', labelId);
+
+      if (profilesError) {
+        console.error('Error fetching artist profiles:', profilesError);
+      }
+
+      // Merge artist data with user_id from profiles
+      const artistsWithUserId = (artistsData || []).map(artist => {
+        const matchingProfile = (artistProfiles || []).find(
+          p => p.full_name.toLowerCase().trim() === artist.name.toLowerCase().trim()
+        );
+        return {
+          ...artist,
+          user_id: matchingProfile?.id || undefined
+        };
+      });
+
+      setLabelArtists(artistsWithUserId);
     } catch (error) {
       console.error('Error fetching artists:', error);
       setLabelArtists([]);
@@ -540,12 +564,18 @@ export function ReleaseFormDialog({
         // Determine label_id for update - admin can change it, others keep the original
         const updateLabelId = isAdmin && values.label_id ? values.label_id : release.label_id;
         
+        // Find artist_user_id from selected artist name
+        const selectedArtist = labelArtists.find(
+          a => a.name.toLowerCase().trim() === values.artist_name.toLowerCase().trim()
+        );
+        
         const { error: releaseError } = await supabase
           .from('releases')
           .update({
             upc: values.upc || null,
             title: values.title,
             artist_name: values.artist_name,
+            artist_user_id: selectedArtist?.user_id || null, // NEW: Save artist_user_id
             release_type: values.release_type,
             genre: values.genre || null,
             release_date: values.release_date || null,
@@ -631,12 +661,18 @@ export function ReleaseFormDialog({
           return;
         }
 
+        // Find artist_user_id from selected artist name
+        const selectedArtist = labelArtists.find(
+          a => a.name.toLowerCase().trim() === values.artist_name.toLowerCase().trim()
+        );
+
         const { data: newRelease, error: releaseError } = await supabase
           .from('releases')
           .insert({
             upc: values.upc || null,
             title: values.title,
             artist_name: values.artist_name,
+            artist_user_id: selectedArtist?.user_id || null, // NEW: Save artist_user_id
             release_type: values.release_type,
             genre: values.genre || null,
             release_date: values.release_date || null,

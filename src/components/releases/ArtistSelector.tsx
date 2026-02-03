@@ -30,12 +30,13 @@ interface Artist {
   id: string;
   name: string;
   label_id: string;
+  user_id?: string; // NEW: Link to profiles.id for artist users
 }
 
 interface ArtistSelectorProps {
   artistName: string;
   artistType: 'Main Artist' | 'Featured Artist';
-  onNameChange: (name: string) => void;
+  onNameChange: (name: string, userId?: string) => void;
   onTypeChange: (type: 'Main Artist' | 'Featured Artist') => void;
   onRemove: () => void;
   canRemove: boolean;
@@ -65,7 +66,7 @@ export function ArtistSelector({
   }, [artistName]);
 
   // Debounced update to parent
-  const handleNameInputChange = useCallback((value: string) => {
+  const handleNameInputChange = useCallback((value: string, userId?: string) => {
     setLocalName(value);
     
     // Clear existing timeout
@@ -75,7 +76,7 @@ export function ArtistSelector({
     
     // Debounce the parent update to prevent re-render issues
     debounceRef.current = setTimeout(() => {
-      onNameChange(value);
+      onNameChange(value, userId);
     }, 150);
   }, [onNameChange]);
 
@@ -124,7 +125,8 @@ export function ArtistSelector({
                         key={artist.id}
                         value={artist.name}
                         onSelect={() => {
-                          onNameChange(artist.name);
+                          // Pass user_id when selecting from dropdown
+                          onNameChange(artist.name, artist.user_id);
                           setLocalName(artist.name);
                           setArtistOpen(false);
                         }}
