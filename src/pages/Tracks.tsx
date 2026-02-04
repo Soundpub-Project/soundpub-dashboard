@@ -35,6 +35,7 @@ interface Track {
   isrc: string;
   title: string;
   artist_name: string;
+  artist_user_id: string | null;
   genre: string | null;
   composer: string | null;
   audio_url: string | null;
