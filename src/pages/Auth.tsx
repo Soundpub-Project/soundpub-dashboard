@@ -220,17 +220,17 @@ export default function Auth() {
         <Card className="border-border bg-card">
           <Tabs defaultValue="login" className="w-full">
             <CardHeader className="pb-4">
-              <TabsList className="grid w-full grid-cols-2">
+              {/* <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="login">Login</TabsTrigger>
                 <TabsTrigger value="signup">Daftar</TabsTrigger>
-              </TabsList>
+              </TabsList> */}
             </CardHeader>
 
             <CardContent>
               {/* Login Tab */}
               <TabsContent value="login" className="mt-0">
-                <CardTitle className="text-xl mb-1">Selamat Datang</CardTitle>
-                <CardDescription className="mb-6">
+                <CardTitle className="text-center text-xl mb-3">Selamat Datang</CardTitle>
+                <CardDescription className="text-center mb-6">
                   Masuk ke akun SoundPub Anda
                 </CardDescription>
 
