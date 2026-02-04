@@ -339,12 +339,13 @@ export function ArtistReleaseFormDialog({
 
         toast.success('Release berhasil diperbarui');
       } else {
-        // Create new release
+        // Create new release with artist_user_id for ID-based matching
         const { data: newRelease, error: releaseError } = await supabase
           .from('releases')
           .insert({
             title: values.title,
             artist_name: values.artist_name,
+            artist_user_id: user.id, // NEW: Include artist's user ID for reliable matching
             release_type: values.release_type,
             genre: values.genre || null,
             release_date: values.release_date || null,
@@ -358,12 +359,13 @@ export function ArtistReleaseFormDialog({
 
         if (releaseError) throw releaseError;
 
-        // Insert tracks
+        // Insert tracks with artist_user_id
         for (const track of values.tracks) {
           await supabase.from('tracks').insert({
             release_id: newRelease.id,
             title: track.title,
             artist_name: values.artist_name,
+            artist_user_id: user.id, // NEW: Include artist's user ID
             composer: track.composer || null,
             lyricist: track.lyricist || null,
             genre: track.genre || null,

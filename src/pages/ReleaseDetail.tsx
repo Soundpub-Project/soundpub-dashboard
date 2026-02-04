@@ -51,6 +51,7 @@ interface Release {
   upc: string;
   title: string;
   artist_name: string;
+  artist_user_id: string | null;
   release_date: string | null;
   cover_url: string | null;
   genre: string | null;
@@ -65,6 +66,7 @@ interface Track {
   isrc: string;
   title: string;
   artist_name: string;
+  artist_user_id: string | null;
   composer: string | null;
   lyricist: string | null;
   genre: string | null;
