@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Create Supabase client with user's token
+    // Create Supabase client with user's token for authentication check
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -40,8 +40,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check if user is a label
-    const { data: roleData, error: roleError } = await supabase
+    // Create admin client for operations that bypass RLS
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    );
+
+    // Check user role using admin client
+    const { data: roleData, error: roleError } = await supabaseAdmin
       .from('user_roles')
       .select('role')
       .eq('user_id', user.id)
@@ -56,11 +68,12 @@ Deno.serve(async (req) => {
     }
 
     const isLabel = roleData?.role === 'label';
+    const isWhitelabel = roleData?.role === 'whitelabel';
     const isAdmin = roleData?.role === 'admin' || roleData?.role === 'superadmin';
 
-    if (!isLabel && !isAdmin) {
+    if (!isLabel && !isWhitelabel && !isAdmin) {
       return new Response(
-        JSON.stringify({ error: 'Only labels can remove artists' }),
+        JSON.stringify({ error: 'Only labels or whitelabels can remove artists' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -75,8 +88,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get artist info before removal
-    const { data: artistData, error: artistError } = await supabase
+    // Get artist info using admin client
+    const { data: artistData, error: artistError } = await supabaseAdmin
       .from('profiles')
       .select('id, full_name, email, parent_label_id')
       .eq('id', artist_id)
@@ -89,23 +102,23 @@ Deno.serve(async (req) => {
       );
     }
 
-    // If label, verify the artist belongs to them
-    if (isLabel && artistData.parent_label_id !== user.id) {
+    // Verify the artist belongs to the label/whitelabel (unless admin)
+    if ((isLabel || isWhitelabel) && artistData.parent_label_id !== user.id) {
       return new Response(
         JSON.stringify({ error: 'This artist is not under your label' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Get label info for audit log
-    const { data: labelData } = await supabase
+    // Get label/whitelabel info for audit log
+    const { data: labelData } = await supabaseAdmin
       .from('profiles')
       .select('full_name, email')
       .eq('id', user.id)
       .maybeSingle();
 
-    // Remove artist from label
-    const { error: updateError } = await supabase
+    // Remove artist from label using admin client (bypasses RLS)
+    const { error: updateError } = await supabaseAdmin
       .from('profiles')
       .update({ parent_label_id: null })
       .eq('id', artist_id);
@@ -117,12 +130,6 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    // Create admin client for audit log
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
 
     // Log the action
     await supabaseAdmin.from('audit_logs').insert({

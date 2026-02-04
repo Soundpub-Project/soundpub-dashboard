@@ -312,11 +312,34 @@ Deno.serve(async (req) => {
     const artistRevenueMap: Record<string, number> = {}
     let totalSoundpubAdminRevenue = 0
 
+    // Pre-fetch artist user IDs for auto-matching
+    const artistNames = [...new Set(validRows.map(r => r.artist.toLowerCase().trim()))]
+    const { data: artistProfiles } = await supabaseAdmin
+      .from('profiles')
+      .select('id, full_name')
+      .in('full_name', validRows.map(r => r.artist))
+    
+    // Create lookup map for artist name -> user_id
+    const artistUserIdMap: Record<string, string> = {}
+    if (artistProfiles) {
+      for (const profile of artistProfiles) {
+        artistUserIdMap[profile.full_name.toLowerCase().trim()] = profile.id
+      }
+    }
+
+    console.log(`Found ${Object.keys(artistUserIdMap).length} artist profiles for ID matching`)
+
     for (let i = 0; i < validRows.length; i += batchSize) {
-      const batch = validRows.slice(i, i + batchSize).map(row => ({
-        ...row,
-        upload_id: uploadRecord.id,
-      }))
+      const batch = validRows.slice(i, i + batchSize).map(row => {
+        // Auto-match artist_user_id from name
+        const artistUserId = artistUserIdMap[row.artist.toLowerCase().trim()] || null
+        
+        return {
+          ...row,
+          upload_id: uploadRecord.id,
+          artist_user_id: artistUserId, // NEW: Include artist_user_id
+        }
+      })
 
       const { error: insertError } = await supabaseAdmin
         .from('royalties')
