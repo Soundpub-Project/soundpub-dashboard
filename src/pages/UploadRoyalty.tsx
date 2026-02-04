@@ -34,8 +34,8 @@ interface RoyaltyRow {
   isrc: string;
   upc: string;
   title?: string;
-  artist: string;
-  label_name: string;
+  artist?: string;
+  label_name?: string; // Now optional - will be auto-filled from UPC match
   platform: string;
   country: string;
   sales_type?: string;
@@ -87,22 +87,30 @@ interface UploadHistory {
 
 interface ISRCMatchResult {
   isrc: string;
+  upc: string;
   existsInTracks: boolean;
+  existsInReleases: boolean;
   trackTitle?: string;
   trackArtist?: string;
+  releaseTitle?: string;
+  labelName?: string;
+  labelId?: string;
+  artistUserId?: string;
 }
 
+// UPC and ISRC are the primary keys for matching
 const REQUIRED_COLUMNS = [
   'period',
   'isrc',
   'upc',
-  'artist',
-  'label_name',
   'platform',
   'country',
   'sales_unit',
   'net_revenue',
 ];
+
+// Optional columns that can be auto-filled from database
+const OPTIONAL_COLUMNS = ['artist', 'label_name', 'title', 'sales_type'];
 
 export default function UploadRoyalty() {
   const navigate = useNavigate();
@@ -248,16 +256,14 @@ export default function UploadRoyalty() {
           errors.push({ row: i + 1, field: 'upc', message: `UPC "${upc}" harus 12-13 digit angka`, severity: 'warning' });
         }
         
-        // Validate artist
+        // Artist and label_name are now optional (will be auto-filled from UPC/ISRC match)
+        // Just add warning if empty
         if (!artist) {
-          errors.push({ row: i + 1, field: 'artist', message: 'Nama artist tidak boleh kosong', severity: 'error' });
-          continue;
+          errors.push({ row: i + 1, field: 'artist', message: 'Nama artist kosong, akan diisi dari database jika ISRC cocok', severity: 'warning' });
         }
         
-        // Validate label_name
         if (!label_name) {
-          errors.push({ row: i + 1, field: 'label_name', message: 'Nama label tidak boleh kosong', severity: 'error' });
-          continue;
+          errors.push({ row: i + 1, field: 'label_name', message: 'Nama label kosong, akan diisi dari database jika UPC cocok', severity: 'warning' });
         }
         
         // Validate platform
@@ -296,8 +302,8 @@ export default function UploadRoyalty() {
           isrc,
           upc,
           title: headers.includes('title') ? values[getIndex('title')] : undefined,
-          artist,
-          label_name,
+          artist: artist || undefined, // Optional now
+          label_name: label_name || undefined, // Optional now
           platform,
           country,
           sales_type: headers.includes('sales_type') ? values[getIndex('sales_type')] : undefined,
@@ -360,52 +366,91 @@ export default function UploadRoyalty() {
     }).sort((a, b) => b.totalRevenue - a.totalRevenue);
   };
 
-  // Check which ISRCs from CSV exist in the tracks database
+  // Check which UPCs/ISRCs from CSV exist in the database
   const checkISRCsInDatabase = async (data: RoyaltyRow[]) => {
     if (data.length === 0) return;
     
     setIsCheckingISRC(true);
     try {
-      // Get unique ISRCs from parsed data (already normalized)
+      // Get unique UPCs and ISRCs from parsed data
+      const uniqueUpcs = [...new Set(data.map(row => row.upc))];
       const uniqueIsrcs = [...new Set(data.map(row => row.isrc))];
       
-      // Query tracks table - normalize database ISRCs for matching
-      const { data: tracks, error } = await supabase
+      // Query releases table for UPC matching
+      const { data: releases, error: releasesError } = await supabase
+        .from('releases')
+        .select('upc, title, label_id, artist_user_id, artist_name');
+      
+      // Query tracks table for ISRC matching
+      const { data: tracks, error: tracksError } = await supabase
         .from('tracks')
-        .select('isrc, title, artist_name');
+        .select('isrc, title, artist_name, artist_user_id');
       
-      if (error) {
-        console.error('Error checking ISRCs:', error);
-        return;
-      }
+      // Query profiles for label names
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name');
       
-      // Create a map of normalized database ISRCs to track info
-      const trackMap = new Map<string, { title: string; artist: string }>();
-      (tracks || []).forEach(track => {
-        if (track.isrc) {
-          // Normalize database ISRC (remove dashes) for matching
-          const normalizedDbIsrc = track.isrc.replace(/-/g, '').toUpperCase();
-          trackMap.set(normalizedDbIsrc, {
-            title: track.title,
-            artist: track.artist_name,
+      if (releasesError) console.error('Error checking releases:', releasesError);
+      if (tracksError) console.error('Error checking tracks:', tracksError);
+      
+      // Create maps for lookup
+      const releaseMap = new Map<string, { title: string; labelId: string; labelName: string; artistUserId: string | null; artistName: string }>();
+      const profileMap = new Map<string, string>();
+      
+      (profiles || []).forEach(p => profileMap.set(p.id, p.full_name));
+      
+      (releases || []).forEach(release => {
+        if (release.upc) {
+          releaseMap.set(release.upc, {
+            title: release.title,
+            labelId: release.label_id,
+            labelName: profileMap.get(release.label_id) || '',
+            artistUserId: release.artist_user_id,
+            artistName: release.artist_name,
           });
         }
       });
       
-      // Check each unique ISRC from CSV
-      const results: ISRCMatchResult[] = uniqueIsrcs.map(isrc => {
-        const trackInfo = trackMap.get(isrc);
+      const trackMap = new Map<string, { title: string; artist: string; artistUserId: string | null }>();
+      (tracks || []).forEach(track => {
+        if (track.isrc) {
+          const normalizedDbIsrc = track.isrc.replace(/-/g, '').toUpperCase();
+          trackMap.set(normalizedDbIsrc, {
+            title: track.title,
+            artist: track.artist_name,
+            artistUserId: track.artist_user_id,
+          });
+        }
+      });
+      
+      // Build results combining UPC and ISRC matches
+      const results: ISRCMatchResult[] = data.map(row => {
+        const releaseInfo = releaseMap.get(row.upc);
+        const trackInfo = trackMap.get(row.isrc);
+        
         return {
-          isrc,
+          isrc: row.isrc,
+          upc: row.upc,
           existsInTracks: !!trackInfo,
+          existsInReleases: !!releaseInfo,
           trackTitle: trackInfo?.title,
-          trackArtist: trackInfo?.artist,
+          trackArtist: trackInfo?.artist || releaseInfo?.artistName,
+          releaseTitle: releaseInfo?.title,
+          labelName: releaseInfo?.labelName,
+          labelId: releaseInfo?.labelId,
+          artistUserId: trackInfo?.artistUserId || releaseInfo?.artistUserId || undefined,
         };
       });
       
-      setIsrcMatchResults(results);
+      // Deduplicate by ISRC+UPC combination
+      const uniqueResults = Array.from(
+        new Map(results.map(r => [`${r.isrc}-${r.upc}`, r])).values()
+      );
+      
+      setIsrcMatchResults(uniqueResults);
     } catch (error) {
-      console.error('Error checking ISRCs:', error);
+      console.error('Error checking ISRCs/UPCs:', error);
     } finally {
       setIsCheckingISRC(false);
     }

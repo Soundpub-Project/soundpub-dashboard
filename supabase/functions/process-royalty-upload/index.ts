@@ -5,14 +5,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// New structure matching updated database schema
+// New structure - UPC and ISRC are primary keys for matching
 interface RoyaltyRow {
   period: string
   isrc: string
   upc: string
   title?: string
-  artist: string
-  label_name: string
+  artist?: string // Optional - can be auto-filled from database
+  label_name?: string // Optional - can be auto-filled from database
   platform: string
   country: string
   sales_type?: string
@@ -24,6 +24,15 @@ interface ValidationError {
   row: number
   field: string
   message: string
+}
+
+// Database match result for UPC/ISRC
+interface DatabaseMatch {
+  labelId?: string
+  labelName?: string
+  artistUserId?: string
+  artistName?: string
+  trackTitle?: string
 }
 
 // Revenue distribution result
@@ -68,7 +77,7 @@ function validateCountry(country: string): boolean {
 function validateRow(row: RoyaltyRow, rowNumber: number): ValidationError[] {
   const errors: ValidationError[] = []
 
-  // Required fields
+  // Required fields - UPC and ISRC are the primary keys
   if (!row.period || !row.period.trim()) {
     errors.push({ row: rowNumber, field: 'period', message: 'Period tidak boleh kosong' })
   } else if (!validatePeriod(row.period)) {
@@ -87,15 +96,13 @@ function validateRow(row: RoyaltyRow, rowNumber: number): ValidationError[] {
     errors.push({ row: rowNumber, field: 'upc', message: 'UPC harus 12-13 digit angka' })
   }
 
-  if (!row.artist || !row.artist.trim()) {
-    errors.push({ row: rowNumber, field: 'artist', message: 'Nama artis tidak boleh kosong' })
-  } else if (row.artist.length > 200) {
+  // Artist and label_name are now optional - will be auto-filled from database
+  // Only validate if provided
+  if (row.artist && row.artist.length > 200) {
     errors.push({ row: rowNumber, field: 'artist', message: 'Nama artis maksimal 200 karakter' })
   }
 
-  if (!row.label_name || !row.label_name.trim()) {
-    errors.push({ row: rowNumber, field: 'label_name', message: 'Nama label tidak boleh kosong' })
-  } else if (row.label_name.length > 200) {
+  if (row.label_name && row.label_name.length > 200) {
     errors.push({ row: rowNumber, field: 'label_name', message: 'Nama label maksimal 200 karakter' })
   }
 
@@ -254,8 +261,8 @@ Deno.serve(async (req) => {
         isrc: normalizeISRC((row.isrc || '').trim()), // Normalize ISRC - remove dashes
         upc: (row.upc || '').trim(),
         title: row.title?.trim() || undefined,
-        artist: (row.artist || '').trim(),
-        label_name: (row.label_name || '').trim(),
+        artist: row.artist?.trim() || undefined, // Now optional
+        label_name: row.label_name?.trim() || undefined, // Now optional
         platform: (row.platform || '').trim(),
         country: (row.country || '').trim().toUpperCase(),
         sales_type: row.sales_type?.trim() || undefined,
@@ -312,32 +319,91 @@ Deno.serve(async (req) => {
     const artistRevenueMap: Record<string, number> = {}
     let totalSoundpubAdminRevenue = 0
 
-    // Pre-fetch artist user IDs for auto-matching
-    const artistNames = [...new Set(validRows.map(r => r.artist.toLowerCase().trim()))]
-    const { data: artistProfiles } = await supabaseAdmin
-      .from('profiles')
-      .select('id, full_name')
-      .in('full_name', validRows.map(r => r.artist))
+    // Pre-fetch releases by UPC for auto-matching label_id and artist info
+    const uniqueUpcs = [...new Set(validRows.map(r => r.upc))]
+    const { data: releases } = await supabaseAdmin
+      .from('releases')
+      .select('upc, label_id, artist_user_id, artist_name, title')
+      .in('upc', uniqueUpcs)
     
-    // Create lookup map for artist name -> user_id
-    const artistUserIdMap: Record<string, string> = {}
-    if (artistProfiles) {
-      for (const profile of artistProfiles) {
-        artistUserIdMap[profile.full_name.toLowerCase().trim()] = profile.id
+    // Create UPC to release info map
+    const upcReleaseMap: Record<string, { labelId: string; artistUserId: string | null; artistName: string; title: string }> = {}
+    if (releases) {
+      for (const release of releases) {
+        if (release.upc) {
+          upcReleaseMap[release.upc] = {
+            labelId: release.label_id,
+            artistUserId: release.artist_user_id,
+            artistName: release.artist_name,
+            title: release.title
+          }
+        }
       }
     }
 
-    console.log(`Found ${Object.keys(artistUserIdMap).length} artist profiles for ID matching`)
+    // Pre-fetch tracks by normalized ISRC for auto-matching artist_user_id
+    const uniqueIsrcs = [...new Set(validRows.map(r => r.isrc))]
+    const { data: tracks } = await supabaseAdmin
+      .from('tracks')
+      .select('isrc, artist_user_id, artist_name, title')
+    
+    // Create normalized ISRC to track info map
+    const isrcTrackMap: Record<string, { artistUserId: string | null; artistName: string; title: string }> = {}
+    if (tracks) {
+      for (const track of tracks) {
+        if (track.isrc) {
+          const normalizedIsrc = normalizeISRC(track.isrc)
+          isrcTrackMap[normalizedIsrc] = {
+            artistUserId: track.artist_user_id,
+            artistName: track.artist_name,
+            title: track.title
+          }
+        }
+      }
+    }
+
+    // Pre-fetch profile names for label_id to label_name mapping
+    const labelIds = [...new Set(Object.values(upcReleaseMap).map(r => r.labelId))]
+    const { data: labelProfiles } = await supabaseAdmin
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', labelIds)
+    
+    const labelIdToName: Record<string, string> = {}
+    if (labelProfiles) {
+      for (const profile of labelProfiles) {
+        labelIdToName[profile.id] = profile.full_name
+      }
+    }
+
+    console.log(`Found ${Object.keys(upcReleaseMap).length} UPC matches, ${Object.keys(isrcTrackMap).length} ISRC matches`)
 
     for (let i = 0; i < validRows.length; i += batchSize) {
       const batch = validRows.slice(i, i + batchSize).map(row => {
-        // Auto-match artist_user_id from name
-        const artistUserId = artistUserIdMap[row.artist.toLowerCase().trim()] || null
+        // Auto-match from UPC (release) and ISRC (track)
+        const releaseInfo = upcReleaseMap[row.upc]
+        const trackInfo = isrcTrackMap[row.isrc]
+        
+        // Priority: CSV data > Track match > Release match
+        const artistUserId = trackInfo?.artistUserId || releaseInfo?.artistUserId || null
+        const artistName = row.artist || trackInfo?.artistName || releaseInfo?.artistName || ''
+        const labelName = row.label_name || (releaseInfo ? labelIdToName[releaseInfo.labelId] : '') || ''
+        const title = row.title || trackInfo?.title || releaseInfo?.title || ''
         
         return {
-          ...row,
+          period: row.period,
+          isrc: row.isrc,
+          upc: row.upc,
+          title: title || null,
+          artist: artistName || null,
+          label_name: labelName,
+          platform: row.platform,
+          country: row.country,
+          sales_type: row.sales_type || null,
+          sales_unit: row.sales_unit,
+          net_revenue: row.net_revenue,
           upload_id: uploadRecord.id,
-          artist_user_id: artistUserId, // NEW: Include artist_user_id
+          artist_user_id: artistUserId,
         }
       })
 
@@ -370,31 +436,34 @@ Deno.serve(async (req) => {
 
       // Calculate revenue distribution for each row
       for (const row of batch) {
+        const labelName = row.label_name || 'Unknown Label'
+        const artistName = row.artist || 'Unknown Artist'
+        
         const distribution = calculateRevenueDistribution(
-          row.label_name,
-          row.artist,
+          labelName,
+          artistName,
           row.net_revenue
         )
 
         // Initialize label entry if not exists
-        if (!labelRevenueMap[row.label_name]) {
-          labelRevenueMap[row.label_name] = { balance: 0, label_revenue: 0, artist_revenue: 0 }
+        if (!labelRevenueMap[labelName]) {
+          labelRevenueMap[labelName] = { balance: 0, label_revenue: 0, artist_revenue: 0 }
         }
 
         // Add label share to label_revenue
-        labelRevenueMap[row.label_name].label_revenue += distribution.label_share
+        labelRevenueMap[labelName].label_revenue += distribution.label_share
         
         // Add artist share to artist_revenue (tracked under label)
-        labelRevenueMap[row.label_name].artist_revenue += distribution.artist_share
+        labelRevenueMap[labelName].artist_revenue += distribution.artist_share
         
         // For balance, add both label and artist share (total for the label account)
-        labelRevenueMap[row.label_name].balance += distribution.label_share + distribution.artist_share
+        labelRevenueMap[labelName].balance += distribution.label_share + distribution.artist_share
 
         // Track individual artist revenue
-        if (!artistRevenueMap[row.artist]) {
-          artistRevenueMap[row.artist] = 0
+        if (!artistRevenueMap[artistName]) {
+          artistRevenueMap[artistName] = 0
         }
-        artistRevenueMap[row.artist] += distribution.artist_share
+        artistRevenueMap[artistName] += distribution.artist_share
 
         // Accumulate Soundpub Admin revenue (from whitelabel partners)
         totalSoundpubAdminRevenue += distribution.soundpub_admin_share
