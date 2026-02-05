@@ -47,18 +47,18 @@ Deno.serve(async (req) => {
     const { data: upload } = await supabaseAdmin.from('royalty_uploads').insert({ user_id: user.id, filename, original_filename: originalFilename, total_records: rows.length, status: 'processing' }).select().single()
     if (!upload) throw new Error('Failed to create upload record')
 
-    // Match ISRC to tracks for auto-fill
+    // Match ISRC to tracks for auto-fill (prioritize artist_user_id from tracks, fallback to releases)
     const { data: tracks } = await supabaseAdmin.from('tracks').select('isrc, artist_user_id, artist_name, title, release_id')
     const isrcMap: Record<string, any> = {}
     tracks?.forEach(t => { if (t.isrc) isrcMap[normalizeISRC(t.isrc)] = t })
 
-    const releaseIds = [...new Set(Object.values(isrcMap).map((t: any) => t.release_id))]
-    const { data: releases } = await supabaseAdmin.from('releases').select('id, label_id, upc').in('id', releaseIds)
+    const releaseIds = [...new Set(Object.values(isrcMap).map((t: any) => t.release_id).filter(Boolean))]
+    const { data: releases } = await supabaseAdmin.from('releases').select('id, label_id, upc, artist_user_id, artist_name').in('id', releaseIds.length ? releaseIds : ['_'])
     const relMap: Record<string, any> = {}
     releases?.forEach(r => relMap[r.id] = r)
 
-    const labelIds = [...new Set(releases?.map(r => r.label_id) || [])]
-    const { data: labels } = await supabaseAdmin.from('profiles').select('id, full_name').in('id', labelIds)
+    const labelIds = [...new Set(releases?.map(r => r.label_id).filter(Boolean) || [])]
+    const { data: labels } = await supabaseAdmin.from('profiles').select('id, full_name').in('id', labelIds.length ? labelIds : ['_'])
     const labelMap: Record<string, string> = {}
     labels?.forEach(l => labelMap[l.id] = l.full_name)
 
@@ -72,8 +72,10 @@ Deno.serve(async (req) => {
         const track = isrcMap[r.isrc]
         const rel = track ? relMap[track.release_id] : null
         const labelName = r.label_name || (rel ? labelMap[rel.label_id] : '') || ''
-        const artistName = r.artist || track?.artist_name || ''
-        const artistUserId = track?.artist_user_id || null
+        const artistName = r.artist || track?.artist_name || rel?.artist_name || ''
+        
+        // Priority: track.artist_user_id > release.artist_user_id (ISRC-based matching)
+        const artistUserId = track?.artist_user_id || rel?.artist_user_id || null
 
         // Revenue split: Soundpub=70/30, Whitelabel=30% admin + 70%*(70/30)
         const isSoundpub = labelName.toLowerCase() === 'soundpub music'
@@ -82,9 +84,13 @@ Deno.serve(async (req) => {
         const labelShare = remaining * 0.30
         const artistShare = remaining * 0.70
 
-        labelRev[labelName] = (labelRev[labelName] || 0) + labelShare
-        if (artistUserId) artistRev[artistUserId] = (artistRev[artistUserId] || 0) + artistShare
-        else labelRev[labelName] = (labelRev[labelName] || 0) + artistShare
+        if (labelName) labelRev[labelName] = (labelRev[labelName] || 0) + labelShare
+        if (artistUserId) {
+          artistRev[artistUserId] = (artistRev[artistUserId] || 0) + artistShare
+        } else if (labelName) {
+          // If no artist account, artist share goes to label
+          labelRev[labelName] = (labelRev[labelName] || 0) + artistShare
+        }
 
         return { ...r, upload_id: upload.id, artist_user_id: artistUserId, label_name: labelName, artist: artistName, upc: r.upc || rel?.upc || '', title: r.title || track?.title || null }
       })
