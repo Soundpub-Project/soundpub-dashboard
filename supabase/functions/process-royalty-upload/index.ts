@@ -77,22 +77,22 @@ function validateCountry(country: string): boolean {
 function validateRow(row: RoyaltyRow, rowNumber: number): ValidationError[] {
   const errors: ValidationError[] = []
 
-  // Required fields - UPC and ISRC are the primary keys
+  // Required fields - ISRC is the PRIMARY KEY (per track/song royalty)
   if (!row.period || !row.period.trim()) {
     errors.push({ row: rowNumber, field: 'period', message: 'Period tidak boleh kosong' })
   } else if (!validatePeriod(row.period)) {
     errors.push({ row: rowNumber, field: 'period', message: 'Format period harus YYYY-MM (contoh: 2024-01)' })
   }
 
+  // ISRC is REQUIRED - this is the main identifier for per-song royalties
   if (!row.isrc || !row.isrc.trim()) {
     errors.push({ row: rowNumber, field: 'isrc', message: 'ISRC tidak boleh kosong' })
   } else if (!validateISRC(row.isrc)) {
     errors.push({ row: rowNumber, field: 'isrc', message: 'Format ISRC tidak valid (contoh: IDABC1234567)' })
   }
 
-  if (!row.upc || !row.upc.trim()) {
-    errors.push({ row: rowNumber, field: 'upc', message: 'UPC tidak boleh kosong' })
-  } else if (!validateUPC(row.upc)) {
+  // UPC is now OPTIONAL - will be auto-filled from database if available
+  if (row.upc && row.upc.trim() && !validateUPC(row.upc)) {
     errors.push({ row: rowNumber, field: 'upc', message: 'UPC harus 12-13 digit angka' })
   }
 
@@ -314,8 +314,11 @@ Deno.serve(async (req) => {
     const batchSize = 100
     let insertedCount = 0
     
-    // Aggregate revenue by label and artist
+    // Aggregate revenue by label (profile full_name)
     const labelRevenueMap: Record<string, { balance: number; label_revenue: number; artist_revenue: number }> = {}
+    // Track artist revenue by artist_user_id (for updating individual artist profiles)
+    const artistUserRevenueMap: Record<string, number> = {}
+    // Track artist revenue by name (for reporting/summary)
     const artistRevenueMap: Record<string, number> = {}
     let totalSoundpubAdminRevenue = 0
 
@@ -438,6 +441,7 @@ Deno.serve(async (req) => {
       for (const row of batch) {
         const labelName = row.label_name || 'Unknown Label'
         const artistName = row.artist || 'Unknown Artist'
+        const artistUserId = row.artist_user_id
         
         const distribution = calculateRevenueDistribution(
           labelName,
@@ -450,16 +454,26 @@ Deno.serve(async (req) => {
           labelRevenueMap[labelName] = { balance: 0, label_revenue: 0, artist_revenue: 0 }
         }
 
-        // Add label share to label_revenue
+        // Add label share to label's balance and label_revenue
         labelRevenueMap[labelName].label_revenue += distribution.label_share
+        labelRevenueMap[labelName].balance += distribution.label_share
         
-        // Add artist share to artist_revenue (tracked under label)
-        labelRevenueMap[labelName].artist_revenue += distribution.artist_share
-        
-        // For balance, add both label and artist share (total for the label account)
-        labelRevenueMap[labelName].balance += distribution.label_share + distribution.artist_share
+        // If artist has their own account (artist_user_id exists), 
+        // their share goes directly to their profile
+        // Otherwise, it stays with the label's artist_revenue tracking
+        if (artistUserId) {
+          // Track revenue for this specific artist user
+          if (!artistUserRevenueMap[artistUserId]) {
+            artistUserRevenueMap[artistUserId] = 0
+          }
+          artistUserRevenueMap[artistUserId] += distribution.artist_share
+        } else {
+          // No artist account - add to label's artist_revenue pool
+          labelRevenueMap[labelName].artist_revenue += distribution.artist_share
+          labelRevenueMap[labelName].balance += distribution.artist_share
+        }
 
-        // Track individual artist revenue
+        // Track individual artist revenue by name (for reporting)
         if (!artistRevenueMap[artistName]) {
           artistRevenueMap[artistName] = 0
         }
@@ -545,6 +559,48 @@ Deno.serve(async (req) => {
           artist_revenue_added: revenue.artist_revenue,
           success: false 
         })
+      }
+    }
+
+    // Update individual artist profiles (artists with their own accounts)
+    for (const [artistUserId, artistShare] of Object.entries(artistUserRevenueMap)) {
+      const { data: artistProfile, error: artistProfileError } = await supabaseAdmin
+        .from('profiles')
+        .select('id, balance, artist_revenue, full_name')
+        .eq('id', artistUserId)
+        .maybeSingle()
+
+      if (artistProfileError) {
+        console.error(`Error finding artist profile ${artistUserId}:`, artistProfileError)
+        continue
+      }
+
+      if (artistProfile) {
+        const newBalance = (artistProfile.balance || 0) + artistShare
+        const newArtistRevenue = (artistProfile.artist_revenue || 0) + artistShare
+
+        const { error: updateError } = await supabaseAdmin
+          .from('profiles')
+          .update({ 
+            balance: newBalance,
+            artist_revenue: newArtistRevenue,
+          })
+          .eq('id', artistProfile.id)
+
+        if (updateError) {
+          console.error(`Error updating artist balance for ${artistProfile.full_name}:`, updateError)
+        } else {
+          console.log(`Updated artist ${artistProfile.full_name}: balance +${artistShare}`)
+          balanceUpdates.push({ 
+            label: `${artistProfile.full_name} (Artist)`,
+            balance_added: artistShare,
+            label_revenue_added: 0,
+            artist_revenue_added: artistShare,
+            success: true 
+          })
+        }
+      } else {
+        console.log(`Artist profile not found for ID: ${artistUserId}`)
       }
     }
 
