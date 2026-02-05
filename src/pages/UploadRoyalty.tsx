@@ -98,11 +98,10 @@ interface ISRCMatchResult {
   artistUserId?: string;
 }
 
-// UPC and ISRC are the primary keys for matching
+// ISRC is the primary key for matching (per-song royalties)
 const REQUIRED_COLUMNS = [
   'period',
   'isrc',
-  'upc',
   'platform',
   'country',
   'sales_unit',
@@ -110,7 +109,7 @@ const REQUIRED_COLUMNS = [
 ];
 
 // Optional columns that can be auto-filled from database
-const OPTIONAL_COLUMNS = ['artist', 'label_name', 'title', 'sales_type'];
+const OPTIONAL_COLUMNS = ['upc', 'artist', 'label_name', 'title', 'sales_type'];
 
 export default function UploadRoyalty() {
   const navigate = useNavigate();
@@ -247,24 +246,14 @@ export default function UploadRoyalty() {
           errors.push({ row: i + 1, field: 'isrc', message: `ISRC "${isrcRaw}" harus 12 karakter setelah normalisasi (saat ini: ${isrc.length})`, severity: 'warning' });
         }
         
-        // Validate UPC format (should be 12-13 digits)
-        if (!upc) {
-          errors.push({ row: i + 1, field: 'upc', message: 'UPC tidak boleh kosong', severity: 'error' });
-          continue;
-        }
-        if (!/^\d{12,13}$/.test(upc)) {
+        // UPC is now OPTIONAL - will be auto-filled from database
+        // Only validate format if provided
+        if (upc && !/^\d{12,13}$/.test(upc)) {
           errors.push({ row: i + 1, field: 'upc', message: `UPC "${upc}" harus 12-13 digit angka`, severity: 'warning' });
         }
         
-        // Artist and label_name are now optional (will be auto-filled from UPC/ISRC match)
-        // Just add warning if empty
-        if (!artist) {
-          errors.push({ row: i + 1, field: 'artist', message: 'Nama artist kosong, akan diisi dari database jika ISRC cocok', severity: 'warning' });
-        }
-        
-        if (!label_name) {
-          errors.push({ row: i + 1, field: 'label_name', message: 'Nama label kosong, akan diisi dari database jika UPC cocok', severity: 'warning' });
-        }
+        // Artist and label_name are optional (will be auto-filled from ISRC match)
+        // No warnings needed - system will auto-fill from database
         
         // Validate platform
         if (!platform) {
