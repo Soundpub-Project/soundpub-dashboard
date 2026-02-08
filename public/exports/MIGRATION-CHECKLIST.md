@@ -83,10 +83,10 @@ Checklist untuk memastikan semua langkah migrasi ke VPS selesai dengan benar.
   - [ ] profiles
   - [ ] user_roles
   - [ ] artists
-  - [ ] releases
-  - [ ] tracks
+  - [ ] releases (with artist_user_id column)
+  - [ ] tracks (with artist_user_id column)
   - [ ] royalty_uploads
-  - [ ] royalties
+  - [ ] royalties (with artist_user_id column)
   - [ ] composer_royalties
   - [ ] payout_requests
   - [ ] audit_logs
@@ -100,6 +100,7 @@ Checklist untuk memastikan semua langkah migrasi ke VPS selesai dengan benar.
   - [ ] get_user_full_name()
   - [ ] get_user_parent_label_id()
   - [ ] get_user_release_label_ids()
+  - [ ] get_artist_user_id_by_name()
   - [ ] handle_new_user()
   - [ ] update_timestamp()
   - [ ] update_balance_on_payout_status_change()
@@ -145,6 +146,7 @@ Checklist untuk memastikan semua langkah migrasi ke VPS selesai dengan benar.
 - [ ] track-video bucket created (private)
 - [ ] audio-clips bucket created (public)
 - [ ] label-logos bucket created (public)
+- [ ] klikus-biolink bucket created (public)
 
 ### Storage Policies
 
@@ -179,12 +181,15 @@ Checklist untuk memastikan semua langkah migrasi ke VPS selesai dengan benar.
   - [ ] create-user
   - [ ] create-whitelabel-artist
   - [ ] delete-user
+  - [ ] gcs-manage
+  - [ ] gcs-upload
   - [ ] get-catalog-tracks
   - [ ] get-ga4-config
   - [ ] process-royalty-upload
   - [ ] remove-artist-from-label
   - [ ] send-royalty-notification
   - [ ] set-artist-password
+  - [ ] test-gcs
   - [ ] update-app-settings
   - [ ] update-user-password
   - [ ] update-user-status
@@ -269,6 +274,13 @@ Checklist untuk memastikan semua langkah migrasi ke VPS selesai dengan benar.
 - [ ] Row counts match
 - [ ] Sample data spot-check passed
 - [ ] Foreign key relationships intact
+
+### Post-Migration: ID-Based Matching
+
+- [ ] Run artist_user_id population query for releases
+- [ ] Run artist_user_id population query for tracks
+- [ ] Run artist_user_id population query for royalties
+- [ ] Verify artist_user_id populated correctly (spot check)
 
 ---
 
