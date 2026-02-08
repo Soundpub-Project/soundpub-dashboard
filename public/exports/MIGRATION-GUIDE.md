@@ -46,8 +46,11 @@ Panduan lengkap untuk migrasi dari Lovable Cloud ke Supabase eksternal atau Self
 
 ```
 public/exports/
-├── full-schema.sql           # Schema lengkap database
+├── full-schema-v2.sql        # Schema lengkap database (terbaru)
+├── full-schema.sql           # Schema lama (legacy)
 ├── MIGRATION-GUIDE.md        # Panduan ini
+├── MIGRATION-CHECKLIST.md    # Checklist migrasi
+├── VPS-SETUP-GUIDE.md        # Panduan VPS setup
 └── migration-scripts/
     ├── migrate.js            # Script automasi migrasi
     ├── package.json          # Dependencies
@@ -84,9 +87,19 @@ Setelah project dibuat, catat:
 ### Jalankan Schema SQL
 
 1. Buka SQL Editor di Supabase Dashboard
-2. Copy seluruh isi file `full-schema.sql`
+2. Copy seluruh isi file `full-schema-v2.sql`
 3. Paste dan jalankan di SQL Editor
 4. Pastikan tidak ada error
+
+### Schema Highlights (v2)
+
+Schema v2 mencakup fitur-fitur terbaru:
+
+- **ID-based matching**: Kolom `artist_user_id` di tabel `releases`, `tracks`, `royalties`
+- **Hybrid RLS policies**: Primary ID-based, fallback name-based
+- **Function `get_artist_user_id_by_name()`**: Helper untuk artist matching
+- **7 roles**: superadmin, admin, label, whitelabel, artist, copyright, user
+- **SECURITY DEFINER functions**: Mencegah infinite recursion di RLS
 
 ### Verifikasi
 
@@ -122,9 +135,10 @@ WHERE schemaname = 'public';
 6. **tracks**
 7. **royalty_uploads**
 8. **royalties**
-9. **payout_requests**
-10. **audit_logs**
-11. **app_settings**
+9. **composer_royalties**
+10. **payout_requests**
+11. **audit_logs**
+12. **app_settings**
 
 ### Migrasi Users
 
@@ -157,6 +171,46 @@ Untuk tabel lainnya, gunakan Supabase Table Editor:
 
 Atau gunakan script automasi di `migration-scripts/migrate.js`.
 
+### Post-Migration: Populate artist_user_id
+
+Setelah data di-import, jalankan query berikut untuk mengisi `artist_user_id`:
+
+```sql
+-- Populate artist_user_id di releases
+UPDATE releases r
+SET artist_user_id = (
+  SELECT p.id 
+  FROM profiles p
+  JOIN user_roles ur ON p.id = ur.user_id
+  WHERE ur.role = 'artist'
+    AND LOWER(TRIM(r.artist_name)) = LOWER(TRIM(p.full_name))
+    AND (r.label_id = p.parent_label_id OR p.parent_label_id IS NULL)
+  LIMIT 1
+)
+WHERE r.artist_user_id IS NULL;
+
+-- Populate artist_user_id di tracks
+UPDATE tracks t
+SET artist_user_id = (
+  SELECT r.artist_user_id 
+  FROM releases r
+  WHERE r.id = t.release_id
+)
+WHERE t.artist_user_id IS NULL;
+
+-- Populate artist_user_id di royalties
+UPDATE royalties r
+SET artist_user_id = (
+  SELECT p.id 
+  FROM profiles p
+  JOIN user_roles ur ON p.id = ur.user_id
+  WHERE ur.role = 'artist'
+    AND LOWER(TRIM(r.artist)) = LOWER(TRIM(p.full_name))
+  LIMIT 1
+)
+WHERE r.artist_user_id IS NULL AND r.artist IS NOT NULL;
+```
+
 ### Menggunakan Script Automasi
 
 ```bash
@@ -185,6 +239,7 @@ node migrate.js
    - `track-audio/`
    - `track-video/`
    - `audio-clips/`
+   - `label-logos/`
 
 ### Upload ke Supabase Baru
 
@@ -231,25 +286,55 @@ supabase functions deploy
 
 ### Daftar Edge Functions
 
-1. `change-own-password` - User ganti password sendiri
-2. `create-user` - Admin/Label buat user baru
-3. `delete-user` - Admin hapus user
-4. `gcs-upload` - Upload ke Google Cloud Storage
-5. `get-ga4-config` - Get Google Analytics config
-6. `process-royalty-upload` - Process CSV royalty
-7. `remove-artist-from-label` - Hapus artist dari label
-8. `update-app-settings` - Update settings
-9. `update-user-password` - Admin reset password user
-10. `update-user-status` - Admin ubah status user
+| # | Function | Deskripsi |
+|---|----------|-----------|
+| 1 | `change-own-password` | User ganti password sendiri |
+| 2 | `create-user` | Admin/Label buat user baru |
+| 3 | `create-whitelabel-artist` | Buat artist whitelabel (tanpa password) |
+| 4 | `delete-user` | Admin hapus user |
+| 5 | `gcs-upload` | Upload ke Google Cloud Storage |
+| 6 | `gcs-manage` | Manage file di GCS (delete, list) |
+| 7 | `test-gcs` | Test koneksi GCS |
+| 8 | `get-catalog-tracks` | API publik katalog (releases + tracks + label) |
+| 9 | `get-ga4-config` | Get Google Analytics config |
+| 10 | `process-royalty-upload` | Process CSV royalty (auto-match artist_user_id) |
+| 11 | `remove-artist-from-label` | Hapus artist dari label |
+| 12 | `send-royalty-notification` | Kirim notifikasi royalty via email |
+| 13 | `set-artist-password` | Set password artist whitelabel |
+| 14 | `update-app-settings` | Update settings |
+| 15 | `update-user-password` | Admin reset password user |
+| 16 | `update-user-status` | Admin ubah status user |
+
+### Edge Function Standards
+
+⚠️ Semua edge functions harus mengikuti standar ini untuk menghindari bundle timeout:
+
+```typescript
+// 1. Pin version (WAJIB)
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+
+// 2. Full CORS headers (WAJIB)
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+}
+
+// 3. Handle preflight (WAJIB)
+if (req.method === 'OPTIONS') {
+  return new Response(null, { headers: corsHeaders })
+}
+```
 
 ### Setup Secrets
 
 ```bash
 # Set secrets untuk edge functions
+supabase secrets set RESEND_API_KEY=re_xxxxxxxxxx
+supabase secrets set GA4_MEASUREMENT_ID=G-XXXXXXXXXX
 supabase secrets set GCS_PROJECT_ID=your-project-id
 supabase secrets set GCS_BUCKET_NAME=your-bucket
 supabase secrets set GCS_SERVICE_ACCOUNT_KEY='{"type":"service_account",...}'
-supabase secrets set GA4_MEASUREMENT_ID=G-XXXXXXXXXX
 ```
 
 ---
@@ -271,6 +356,7 @@ Di Supabase Dashboard > Settings > Edge Functions > Secrets:
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `RESEND_API_KEY`
 - `GCS_PROJECT_ID`
 - `GCS_BUCKET_NAME`
 - `GCS_SERVICE_ACCOUNT_KEY`
@@ -292,6 +378,8 @@ Di Supabase Dashboard > Settings > Edge Functions > Secrets:
 - [ ] Payout request berfungsi
 - [ ] Audit logs tercatat
 - [ ] Role permissions benar
+- [ ] Edge functions tidak CORS error
+- [ ] `get-catalog-tracks` mengembalikan label info
 
 ### Test RLS Policies
 
@@ -314,6 +402,7 @@ UNION ALL SELECT 'artists', COUNT(*) FROM artists
 UNION ALL SELECT 'releases', COUNT(*) FROM releases
 UNION ALL SELECT 'tracks', COUNT(*) FROM tracks
 UNION ALL SELECT 'royalties', COUNT(*) FROM royalties
+UNION ALL SELECT 'composer_royalties', COUNT(*) FROM composer_royalties
 UNION ALL SELECT 'payout_requests', COUNT(*) FROM payout_requests
 UNION ALL SELECT 'audit_logs', COUNT(*) FROM audit_logs;
 ```
@@ -339,6 +428,19 @@ Import dalam urutan yang benar. Parent table harus diisi dulu.
 ### Error: "permission denied for table"
 
 RLS policies blocking. Gunakan service role key atau cek policy.
+
+### Error: "Bundle generation timed out" (Edge Functions)
+
+1. Pastikan `@supabase/supabase-js` di-pin ke versi `2.49.1`
+2. Jangan import dari shared files (`_shared/cors.ts`) — inline semua
+3. Minimasi dependensi eksternal
+4. Re-deploy function beberapa kali jika perlu
+
+### Error: CORS pada domain production
+
+1. Pastikan CORS headers lengkap termasuk `Access-Control-Allow-Methods`
+2. Pastikan handler `OPTIONS` mengembalikan `Response` dengan status 200
+3. Pastikan `verify_jwt = false` di `config.toml`
 
 ### Users Tidak Bisa Login
 
@@ -366,4 +468,4 @@ Jika ada masalah dalam migrasi, hubungi tim development.
 
 ---
 
-*Dokumen ini di-generate untuk SoundPub Dashboard migration.*
+*Dokumen ini di-generate untuk SoundPub Dashboard migration. Updated: February 2026*
