@@ -115,6 +115,12 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({ success: true, insertedCount: inserted, uploadId: upload.id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   } catch (e: any) {
-    return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    console.error('Process royalty upload error:', e)
+    const SAFE_MESSAGES = ['Auth required', 'Unauthorized', 'Admin only', 'No data', 'No valid rows', 'Failed to create upload']
+    let safeMessage = 'Failed to process royalty upload'
+    if (e instanceof Error && SAFE_MESSAGES.some((m: string) => e.message.startsWith(m) || e.message.includes(m))) {
+      safeMessage = e.message
+    }
+    return new Response(JSON.stringify({ success: false, error: safeMessage }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
 })
