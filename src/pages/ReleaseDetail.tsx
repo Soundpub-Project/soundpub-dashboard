@@ -73,6 +73,7 @@ interface Track {
   lyrics: string | null;
   created_at: string;
   audio_url: string | null;
+  clip_url: string | null;
 }
 
 export default function ReleaseDetail() {
@@ -480,7 +481,8 @@ export default function ReleaseDetail() {
                           <TableHead>Composer</TableHead>
                           <TableHead>Genre</TableHead>
                           <TableHead className="w-16">Audio</TableHead>
-                          {isAdmin && <TableHead className="w-16">Download</TableHead>}
+                          {isAdmin && <TableHead className="w-16">Full Audio</TableHead>}
+                          {isAdmin && <TableHead className="w-16">Clip</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -543,9 +545,32 @@ export default function ReleaseDetail() {
                                         link.target = '_blank';
                                         link.click();
                                       }}
-                                      title="Download audio"
+                                      title="Download full audio"
                                     >
                                       <Download className="h-4 w-4" />
+                                    </Button>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">-</span>
+                                  )}
+                                </TableCell>
+                              )}
+                              {isAdmin && (
+                                <TableCell>
+                                  {track.clip_url ? (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => {
+                                        const link = document.createElement('a');
+                                        link.href = track.clip_url!;
+                                        link.download = `${track.title} - ${track.artist_name} (clip).mp3`;
+                                        link.target = '_blank';
+                                        link.click();
+                                      }}
+                                      title="Download audio clip"
+                                    >
+                                      <Download className="h-4 w-4 text-muted-foreground" />
                                     </Button>
                                   ) : (
                                     <span className="text-xs text-muted-foreground">-</span>
