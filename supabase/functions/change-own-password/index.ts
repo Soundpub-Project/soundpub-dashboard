@@ -51,9 +51,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (new_password.length < 6) {
+    if (new_password.length < 6 || new_password.length > 128) {
       return new Response(
-        JSON.stringify({ error: 'Password must be at least 6 characters' }),
+        JSON.stringify({ error: 'Password must be 6-128 characters' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
     if (updateError) {
       console.error('Error updating password:', updateError);
       return new Response(
-        JSON.stringify({ error: updateError.message }),
+        JSON.stringify({ error: 'Failed to update password' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -115,9 +115,13 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Error in change-own-password:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
+    const SAFE_MESSAGES = ['Missing authorization', 'Unauthorized', 'new_password is required', 'Password must be']
+    let safeMessage = 'An error occurred'
+    if (error instanceof Error && SAFE_MESSAGES.some(m => error.message.startsWith(m) || error.message.includes(m))) {
+      safeMessage = error.message
+    }
     return new Response(
-      JSON.stringify({ error: message }),
+      JSON.stringify({ error: safeMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

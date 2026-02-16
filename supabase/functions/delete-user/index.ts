@@ -141,11 +141,15 @@ Deno.serve(async (req) => {
     )
   } catch (error: unknown) {
     console.error('Error deleting user:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Failed to delete user'
+    const SAFE_MESSAGES = ['Unauthorized', 'Only admins', 'Only superadmins', 'Missing required', 'Cannot delete your own']
+    let safeMessage = 'Failed to delete user'
+    if (error instanceof Error && SAFE_MESSAGES.some(m => error.message.startsWith(m) || error.message.includes(m))) {
+      safeMessage = error.message
+    }
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: errorMessage
+        error: safeMessage
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

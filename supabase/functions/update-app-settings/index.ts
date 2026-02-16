@@ -46,8 +46,20 @@ serve(async (req) => {
     const body: UpdateSettingsRequest = await req.json();
     const { settings } = body;
 
-    if (!settings || !Array.isArray(settings)) {
-      throw new Error('Settings array is required');
+    if (!settings || !Array.isArray(settings) || settings.length === 0 || settings.length > 50) {
+      throw new Error('Settings array must contain 1-50 items');
+    }
+
+    // Whitelist allowed setting keys
+    const ALLOWED_KEYS = ['dashboard_logo', 'dashboard_logo_light', 'dashboard_logo_dark', 'favicon', 'ga4_enabled', 'gcs_enabled', 'ga4_measurement_id', 'gcs_bucket_name', 'gcs_project_id', 'storage_provider'];
+
+    for (const setting of settings) {
+      if (!setting.key || !ALLOWED_KEYS.includes(setting.key)) {
+        throw new Error(`Invalid setting key: ${setting.key}`);
+      }
+      if (setting.value && setting.value.length > 2000) {
+        throw new Error(`Value too long for key: ${setting.key}`);
+      }
     }
 
     // Update each setting
@@ -83,10 +95,14 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Update App Settings Error:', error);
+    const SAFE_MESSAGES = ['No authorization', 'Unauthorized', 'Only superadmins', 'Settings array', 'Invalid setting key', 'Value too long']
+    let safeMessage = 'Failed to update settings'
+    if (error instanceof Error && SAFE_MESSAGES.some(m => error.message.startsWith(m) || error.message.includes(m))) {
+      safeMessage = error.message
+    }
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: safeMessage }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

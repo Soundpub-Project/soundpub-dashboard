@@ -216,11 +216,15 @@ Deno.serve(async (req) => {
     )
   } catch (error: unknown) {
     console.error('Error creating user:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Failed to create user'
+    const SAFE_MESSAGES = ['Unauthorized', 'Only admins', 'Labels can only', 'Failed to create user', 'User already registered']
+    let safeMessage = 'Failed to create user'
+    if (error instanceof Error && SAFE_MESSAGES.some(m => error.message.startsWith(m) || error.message.includes(m))) {
+      safeMessage = error.message
+    }
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: errorMessage
+        error: safeMessage
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

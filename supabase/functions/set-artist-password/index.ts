@@ -57,8 +57,8 @@ serve(async (req) => {
       throw new Error('Artist ID and password are required');
     }
 
-    if (password.length < 6) {
-      throw new Error('Password must be at least 6 characters');
+    if (password.length < 6 || password.length > 128) {
+      throw new Error('Password must be 6-128 characters');
     }
 
     // Check if the caller has permission
@@ -104,7 +104,7 @@ serve(async (req) => {
 
     if (updateError) {
       console.error('Error updating password:', updateError);
-      throw new Error(updateError.message);
+      throw new Error('Failed to set password');
     }
 
     // Update profile to mark password as set
@@ -140,8 +140,13 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error('Set artist password error:', error);
+    const SAFE_MESSAGES = ['Unauthorized', 'User role not found', 'Artist ID and password', 'Password must be', 'Artist not found', 'You do not have permission', 'Whitelabel profile not found', 'Upgrade subscription', 'Failed to set password']
+    let safeMessage = 'An error occurred'
+    if (error instanceof Error && SAFE_MESSAGES.some((m: string) => error.message.startsWith(m) || error.message.includes(m))) {
+      safeMessage = error.message
+    }
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: safeMessage }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

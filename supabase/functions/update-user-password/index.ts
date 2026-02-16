@@ -63,8 +63,8 @@ Deno.serve(async (req) => {
       throw new Error('Missing required fields: user_id and new_password')
     }
 
-    if (new_password.length < 6) {
-      throw new Error('Password must be at least 6 characters')
+    if (new_password.length < 6 || new_password.length > 128) {
+      throw new Error('Password must be 6-128 characters')
     }
 
     // If label, verify the target user is their artist
@@ -169,11 +169,17 @@ Deno.serve(async (req) => {
     )
   } catch (error: unknown) {
     console.error('Error updating password:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Failed to update password'
+    const SAFE_MESSAGES = ['Unauthorized', 'Password must be', 'Missing required', 'Only admins', 'Only superadmins', 'User not found', 'You can only update']
+    let safeMessage = 'Failed to update password'
+    if (error instanceof Error) {
+      if (SAFE_MESSAGES.some(m => error.message.startsWith(m) || error.message.includes(m))) {
+        safeMessage = error.message
+      }
+    }
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: errorMessage
+        error: safeMessage
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
