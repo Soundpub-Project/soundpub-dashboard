@@ -220,10 +220,10 @@ export default function Auth() {
         <Card className="border-border bg-card">
           <Tabs defaultValue="login" className="w-full">
             <CardHeader className="pb-4">
-              {/* <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="login">Login</TabsTrigger>
                 <TabsTrigger value="signup">Daftar</TabsTrigger>
-              </TabsList> */}
+              </TabsList>
             </CardHeader>
 
             <CardContent>
