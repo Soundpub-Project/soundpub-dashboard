@@ -82,120 +82,100 @@ export default function Dashboard() {
   const [monthlyRevenue, setMonthlyRevenue] = useState<MonthlyRevenue[]>([]);
   const [topPlatforms, setTopPlatforms] = useState<TopPlatform[]>([]);
   const [loading, setLoading] = useState(true);
+  const [royaltyLoading, setRoyaltyLoading] = useState(true);
 
   useEffect(() => {
     if (profile) {
-      fetchDashboardData();
+      fetchBasicStats();
+      fetchRoyaltyData();
     }
   }, [profile]);
 
-  const fetchDashboardData = async () => {
+  const fetchBasicStats = async () => {
     try {
-      // Fetch releases count
-      const { count: releasesCount } = await supabase
-        .from('releases')
-        .select('*', { count: 'exact', head: true });
-
-      // Fetch pending releases count
-      const { count: pendingReleasesCount } = await supabase
-        .from('releases')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending');
-
-      // Fetch tracks count
-      const { count: tracksCount } = await supabase
-        .from('tracks')
-        .select('*', { count: 'exact', head: true });
-
-      // Fetch royalties data (all rows via pagination)
-      const royaltiesData = await fetchAllRoyalties('net_revenue, sales_unit, period, platform');
-
-      const totalRevenue = royaltiesData?.reduce(
-        (sum, r) => sum + Number(r.net_revenue || 0),
-        0
-      ) || 0;
-
-      const totalStreams = royaltiesData?.reduce(
-        (sum, r) => sum + Number(r.sales_unit || 0),
-        0
-      ) || 0;
-
-      // Calculate monthly revenue
-      const monthlyData: Record<string, { revenue: number; streams: number }> = {};
-      royaltiesData?.forEach((r) => {
-        const period = r.period || 'Unknown';
-        if (!monthlyData[period]) {
-          monthlyData[period] = { revenue: 0, streams: 0 };
-        }
-        monthlyData[period].revenue += Number(r.net_revenue || 0);
-        monthlyData[period].streams += Number(r.sales_unit || 0);
-      });
-
-      const sortedMonthly = Object.entries(monthlyData)
-        .map(([month, data]) => ({ month, ...data }))
-        .sort((a, b) => a.month.localeCompare(b.month))
-        .slice(-6); // Last 6 months
-
-      setMonthlyRevenue(sortedMonthly);
-
-      // Calculate top platforms
-      const platformData: Record<string, { revenue: number; streams: number }> = {};
-      royaltiesData?.forEach((r) => {
-        const platform = r.platform || 'Unknown';
-        if (!platformData[platform]) {
-          platformData[platform] = { revenue: 0, streams: 0 };
-        }
-        platformData[platform].revenue += Number(r.net_revenue || 0);
-        platformData[platform].streams += Number(r.sales_unit || 0);
-      });
-
-      const sortedPlatforms = Object.entries(platformData)
-        .map(([platform, data]) => ({ platform, ...data }))
-        .sort((a, b) => b.revenue - a.revenue)
-        .slice(0, 5); // Top 5 platforms
-
-      setTopPlatforms(sortedPlatforms);
+      // Fetch counts in parallel - these are fast queries
+      const [releasesRes, pendingRes, tracksRes, recentReleasesRes] = await Promise.all([
+        supabase.from('releases').select('*', { count: 'exact', head: true }),
+        supabase.from('releases').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('tracks').select('*', { count: 'exact', head: true }),
+        supabase.from('releases').select('id, title, artist_name, cover_url, status, release_date, release_type').order('created_at', { ascending: false }).limit(5),
+      ]);
 
       // Admin-only stats
       let usersCount = 0;
       let pendingPayoutsCount = 0;
 
       if (isAdmin) {
-        const { count: userCount } = await supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true });
-        usersCount = userCount || 0;
-
-        const { count: payoutCount } = await supabase
-          .from('payout_requests')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'pending');
-        pendingPayoutsCount = payoutCount || 0;
+        const [userRes, payoutRes] = await Promise.all([
+          supabase.from('profiles').select('*', { count: 'exact', head: true }),
+          supabase.from('payout_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        ]);
+        usersCount = userRes.count || 0;
+        pendingPayoutsCount = payoutRes.count || 0;
       }
 
-      setStats({
-        totalReleases: releasesCount || 0,
-        totalTracks: tracksCount || 0,
-        totalRevenue,
+      setStats(prev => ({
+        ...prev,
+        totalReleases: releasesRes.count || 0,
+        totalTracks: tracksRes.count || 0,
         balance: profile?.balance || 0,
         totalUsers: usersCount,
         pendingPayouts: pendingPayoutsCount,
-        totalStreams,
-        pendingReleases: pendingReleasesCount || 0,
-      });
+        pendingReleases: pendingRes.count || 0,
+      }));
 
-      // Fetch recent releases
-      const { data: releases } = await supabase
-        .from('releases')
-        .select('id, title, artist_name, cover_url, status, release_date, release_type')
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      setRecentReleases(releases || []);
+      setRecentReleases(recentReleasesRes.data || []);
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+      console.error('Error fetching basic stats:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRoyaltyData = async () => {
+    try {
+      const royaltiesData = await fetchAllRoyalties('net_revenue, sales_unit, period, platform');
+
+      const totalRevenue = royaltiesData.reduce((sum, r) => sum + Number(r.net_revenue || 0), 0);
+      const totalStreams = royaltiesData.reduce((sum, r) => sum + Number(r.sales_unit || 0), 0);
+
+      // Calculate monthly revenue
+      const monthlyData: Record<string, { revenue: number; streams: number }> = {};
+      royaltiesData.forEach((r) => {
+        const period = r.period || 'Unknown';
+        if (!monthlyData[period]) monthlyData[period] = { revenue: 0, streams: 0 };
+        monthlyData[period].revenue += Number(r.net_revenue || 0);
+        monthlyData[period].streams += Number(r.sales_unit || 0);
+      });
+
+      setMonthlyRevenue(
+        Object.entries(monthlyData)
+          .map(([month, data]) => ({ month, ...data }))
+          .sort((a, b) => a.month.localeCompare(b.month))
+          .slice(-6)
+      );
+
+      // Calculate top platforms
+      const platformData: Record<string, { revenue: number; streams: number }> = {};
+      royaltiesData.forEach((r) => {
+        const platform = r.platform || 'Unknown';
+        if (!platformData[platform]) platformData[platform] = { revenue: 0, streams: 0 };
+        platformData[platform].revenue += Number(r.net_revenue || 0);
+        platformData[platform].streams += Number(r.sales_unit || 0);
+      });
+
+      setTopPlatforms(
+        Object.entries(platformData)
+          .map(([platform, data]) => ({ platform, ...data }))
+          .sort((a, b) => b.revenue - a.revenue)
+          .slice(0, 5)
+      );
+
+      setStats(prev => ({ ...prev, totalRevenue, totalStreams }));
+    } catch (error) {
+      console.error('Error fetching royalty data:', error);
+    } finally {
+      setRoyaltyLoading(false);
     }
   };
 
@@ -318,7 +298,7 @@ export default function Dashboard() {
               </div>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {royaltyLoading ? (
                 <Loader2 className="h-6 w-6 animate-spin" />
               ) : (
                 <>
@@ -423,7 +403,7 @@ export default function Dashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {royaltyLoading ? (
                 <div className="flex justify-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
@@ -486,7 +466,7 @@ export default function Dashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {royaltyLoading ? (
                 <div className="flex justify-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
