@@ -1,100 +1,95 @@
 
-# ✅ IMPLEMENTED: Migrasi Name-Based ke ID-Based Matching
 
-## Status: COMPLETE ✅
+## Perbaikan Tampilan Total Royalti & Halaman Admin All Royalties
 
-Sistem sekarang menggunakan **hybrid approach** — ID-based matching (`artist_user_id`) sebagai primary, dengan name-based matching sebagai fallback untuk backward compatibility.
+### Masalah yang Ditemukan
 
----
+Database memiliki **21,734 baris** data royalti, tetapi Supabase memiliki batas default **1,000 baris per query**. Semua halaman yang menampilkan royalti (`Royalties.tsx`, `RoyaltySummary.tsx`, `Dashboard.tsx`) menggunakan `.select('*')` tanpa menangani limit ini, sehingga hanya ~1,000 baris yang ditampilkan.
 
-## Ringkasan Implementasi
+### Solusi
 
-### Database Changes (Sudah Selesai)
-- ✅ Kolom `artist_user_id` (UUID, FK ke profiles.id) ditambahkan ke tabel `releases`, `tracks`, dan `royalties`
-- ✅ Indexes dibuat pada kolom baru
-- ✅ Data existing di-migrasi berdasarkan name matching
-- ✅ Function `get_artist_user_id_by_name()` dibuat untuk helper matching
+#### 1. Perbaiki Fetch Royalti - Pagination Loop (semua halaman terkait)
 
-### RLS Policies (Sudah Selesai)
-- ✅ Releases: Hybrid policy (`artist_user_id = auth.uid()` OR fallback name matching)
-- ✅ Tracks: Hybrid policy dengan dukungan `artists` JSONB array
-- ✅ Royalties: Hybrid policy (`artist_user_id` OR fallback `artist` name matching)
-
-### Frontend (Sudah Selesai)
-- ✅ `ReleaseFormDialog.tsx` menyimpan `artist_user_id` saat pilih artist dari dropdown
-- ✅ `ArtistSelector.tsx` mengembalikan `id` dan `name`
-- ✅ Releases page query berdasarkan `artist_user_id`
-
-### Backend (Sudah Selesai)
-- ✅ `process-royalty-upload` auto-match `artist_user_id` dari nama saat import CSV
-- ✅ `get-catalog-tracks` menyertakan label info (profiles join)
-
----
-
-## Arsitektur Saat Ini
+Membuat helper function yang melakukan fetch seluruh data royalti dengan loop pagination (batch 1000 baris per request) sampai semua data terambil:
 
 ```text
-+------------------+          +------------------+          +------------------+
-|     profiles     |          |     releases     |          |     tracks       |
-+------------------+          +------------------+          +------------------+
-| id (uuid) PK     |<---------| artist_user_id   |          | artist_user_id   |
-| full_name (text) |   FK     | artist_name (text)|         | artist_name (text)|
-| parent_label_id  |          | label_id (uuid)  |          | artists (jsonb)  |
-+------------------+          +------------------+          +------------------+
-        ^                              |                            |
-        |                              |                            |
-        +------------------------------+----------------------------+
-                       MATCH BY UUID (Primary) + Name (Fallback)
+fetchAllRoyalties():
+  allData = []
+  offset = 0
+  BATCH = 1000
+  loop:
+    fetch royalties range(offset, offset + BATCH - 1)
+    append to allData
+    if returned < BATCH -> break
+    offset += BATCH
+  return allData
 ```
 
----
+Halaman yang diperbaiki:
+- `src/pages/Royalties.tsx` - Halaman Royalty Overview
+- `src/pages/RoyaltySummary.tsx` - Halaman Ringkasan Royalti
+- `src/pages/Dashboard.tsx` - Halaman Dasbor (fetch royalti untuk chart & total)
+- `src/pages/Analytics.tsx` - Halaman Analitik
 
-## Backward Compatibility
+#### 2. Halaman Baru: All Royalties (Admin/Superadmin Only)
 
-1. Kolom `artist_name` (text) tetap ada dan terisi
-2. RLS policies menggunakan **hybrid approach**: cek `artist_user_id` dulu, fallback ke `artist_name`
-3. Data lama tanpa `artist_user_id` tetap accessible via name matching
-4. Data baru akan selalu memiliki `artist_user_id`
+Membuat halaman baru `src/pages/AllRoyalties.tsx` yang menampilkan semua data royalti secara komprehensif, khusus untuk Admin dan Superadmin.
 
----
+Fitur halaman:
+- **KPI Cards**: Total Revenue, Total Streams, Total Artis, Total Label, Total Tracks, Total Platform
+- **Filter**: Pencarian (ISRC, judul, artis, label, platform), filter periode, filter label, filter artis
+- **Tabel Detail**: Semua baris royalti dengan kolom Period, ISRC, Judul, Artis, Label, Platform, Negara, Tipe Sales, Streams, Revenue
+- **Pagination**: Tabel dengan paginasi client-side (10/20/50/100 per halaman)
+- **Breakdown Tabs**:
+  - Per Artis: daftar artis dengan total revenue, streams, jumlah lagu
+  - Per Label: daftar label dengan total revenue, streams, jumlah artis
+  - Per Track: daftar lagu (by ISRC) dengan total revenue, streams, platform count
+- **Export CSV**: Tombol export untuk semua data atau data yang sudah difilter
 
-## Edge Functions Status
+#### 3. Routing & Sidebar
 
-| Function | Status | Notes |
-|----------|--------|-------|
-| `create-user` | ✅ Active | Optimized CORS + pinned @2.49.1 |
-| `process-royalty-upload` | ✅ Active | Auto-match artist_user_id |
-| `delete-user` | ✅ Active | |
-| `update-user-status` | ✅ Active | |
-| `update-user-password` | ✅ Active | Optimized CORS + pinned @2.49.1 |
-| `change-own-password` | ✅ Active | Optimized CORS + pinned @2.49.1 |
-| `remove-artist-from-label` | ✅ Active | |
-| `gcs-upload` | ✅ Active | |
-| `gcs-manage` | ✅ Active | |
-| `test-gcs` | ✅ Active | |
-| `create-whitelabel-artist` | ✅ Active | |
-| `set-artist-password` | ✅ Active | |
-| `get-ga4-config` | ✅ Active | |
-| `update-app-settings` | ✅ Active | |
-| `send-royalty-notification` | ✅ Active | |
-| `get-catalog-tracks` | ✅ Active | Includes label info |
+- Route baru: `/dashboard/all-royalties`
+- Ditambahkan ke sidebar di grup **Administrasi** dengan ikon `ListMusic`
+- Dilindungi `ProtectedRoute` dengan `requireAdmin`
+- Hanya muncul untuk role `superadmin` dan `admin`
 
----
+### Detail Teknis
 
-## Edge Function Standards
+**File yang diubah:**
+1. `src/pages/Royalties.tsx` - Perbaiki fetch dengan pagination loop
+2. `src/pages/RoyaltySummary.tsx` - Perbaiki fetch dengan pagination loop
+3. `src/pages/Dashboard.tsx` - Perbaiki fetch royalti dengan pagination loop
+4. `src/pages/Analytics.tsx` - Perbaiki fetch dengan pagination loop
+5. `src/components/layout/AppSidebar.tsx` - Tambah menu "Semua Royalti" di grup Administrasi
+6. `src/App.tsx` - Tambah route `/dashboard/all-royalties`
 
-Semua edge functions mengikuti standar berikut untuk menghindari bundle timeout dan CORS errors:
-- Pin version: `@supabase/supabase-js@2.49.1`
-- CORS headers lengkap termasuk `Access-Control-Allow-Methods`
-- Inline CORS (tidak import dari shared)
-- `verify_jwt = false` di config.toml
+**File baru:**
+1. `src/pages/AllRoyalties.tsx` - Halaman lengkap all royalties untuk admin
 
----
+**Pagination helper pattern:**
+```typescript
+const fetchAllRoyalties = async () => {
+  const allData: Royalty[] = [];
+  const BATCH_SIZE = 1000;
+  let offset = 0;
+  let hasMore = true;
 
-## Halaman Tracks
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from('royalties')
+      .select('*')
+      .order('period', { ascending: true })
+      .range(offset, offset + BATCH_SIZE - 1);
 
-- ✅ Halaman `/tracks` untuk superadmin melihat semua tracks
-- ✅ Filter by artist, genre
-- ✅ Search by title, artist, ISRC
-- ✅ Pagination dengan pilihan page size
-- ✅ Label info per track (via release → profiles join)
+    if (error) throw error;
+    if (data) allData.push(...data);
+    hasMore = (data?.length || 0) === BATCH_SIZE;
+    offset += BATCH_SIZE;
+  }
+
+  return allData;
+};
+```
+
+Tidak ada perubahan database yang diperlukan - masalah ini murni di sisi frontend.
+
