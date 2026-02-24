@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchAllRoyalties } from '@/lib/fetchAllRoyalties';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -120,7 +120,7 @@ export default function Analytics() {
   });
 
   useEffect(() => {
-    fetchRoyalties();
+    fetchRoyaltiesData();
   }, []);
 
   useEffect(() => {
@@ -141,15 +141,10 @@ export default function Analytics() {
     }
   }, [comparisonType, dateRange]);
 
-  const fetchRoyalties = async () => {
+  const fetchRoyaltiesData = async () => {
     try {
-      const { data, error } = await supabase
-        .from('royalties')
-        .select('*')
-        .order('period', { ascending: true });
-
-      if (error) throw error;
-      setRoyalties(data || []);
+      const data = await fetchAllRoyalties();
+      setRoyalties(data as unknown as Royalty[]);
     } catch (error) {
       console.error('Error fetching royalties:', error);
     } finally {

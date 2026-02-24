@@ -37,6 +37,7 @@ import {
   Crown,
   Shield,
   HardDrive,
+  ListMusic,
 } from 'lucide-react';
 
 interface NavItem {
@@ -110,6 +111,12 @@ const copyrightDashboardItems: NavItem[] = [
 
 // === ADMINISTRASI ===
 const administrationItems: NavItem[] = [
+  { 
+    title: 'Semua Royalti', 
+    url: '/dashboard/all-royalties', 
+    icon: ListMusic,
+    roles: ['superadmin', 'admin'],
+  },
   { 
     title: 'Pengguna', 
     url: '/dashboard/users', 

@@ -30,6 +30,7 @@ import CopyrightAnalytics from "./pages/CopyrightAnalytics";
 import CopyrightRoyaltySummary from "./pages/CopyrightRoyaltySummary";
 import MediaLibrary from "./pages/MediaLibrary";
 import LandingPage from "./pages/LandingPage";
+import AllRoyalties from "./pages/AllRoyalties";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -149,6 +150,11 @@ const App = () => (
               <Route path="/dashboard/media-library" element={
                 <ProtectedRoute requireAdmin>
                   <MediaLibrary />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/all-royalties" element={
+                <ProtectedRoute requireAdmin>
+                  <AllRoyalties />
                 </ProtectedRoute>
               } />
               
