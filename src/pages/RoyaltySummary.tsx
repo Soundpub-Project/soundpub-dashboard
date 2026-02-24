@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { fetchAllRoyalties } from '@/lib/fetchAllRoyalties';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -113,18 +113,13 @@ export default function RoyaltySummary() {
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
-    fetchRoyalties();
+    fetchRoyaltiesData();
   }, []);
 
-  const fetchRoyalties = async () => {
+  const fetchRoyaltiesData = async () => {
     try {
-      const { data, error } = await supabase
-        .from('royalties')
-        .select('*')
-        .order('period', { ascending: true });
-
-      if (error) throw error;
-      setRoyalties(data || []);
+      const data = await fetchAllRoyalties();
+      setRoyalties(data as unknown as Royalty[]);
     } catch (error) {
       console.error('Error fetching royalties:', error);
     } finally {

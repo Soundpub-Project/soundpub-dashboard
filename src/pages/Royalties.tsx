@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchAllRoyalties } from '@/lib/fetchAllRoyalties';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -102,22 +102,17 @@ export default function Royalties() {
   const [totalStreams, setTotalStreams] = useState(0);
 
   useEffect(() => {
-    fetchRoyalties();
+    fetchRoyaltiesData();
   }, []);
 
-  const fetchRoyalties = async () => {
+  const fetchRoyaltiesData = async () => {
     try {
-      const { data, error } = await supabase
-        .from('royalties')
-        .select('*')
-        .order('period', { ascending: true });
-
-      if (error) throw error;
+      const data = await fetchAllRoyalties();
       
-      setRoyalties(data || []);
+      setRoyalties(data as unknown as Royalty[]);
       
-      const total = data?.reduce((sum, r) => sum + Number(r.net_revenue || 0), 0) || 0;
-      const streams = data?.reduce((sum, r) => sum + Number(r.sales_unit || 0), 0) || 0;
+      const total = data.reduce((sum, r) => sum + Number(r.net_revenue || 0), 0);
+      const streams = data.reduce((sum, r) => sum + Number(r.sales_unit || 0), 0);
       setTotalRevenue(total);
       setTotalStreams(streams);
     } catch (error) {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllRoyalties } from '@/lib/fetchAllRoyalties';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -106,10 +107,8 @@ export default function Dashboard() {
         .from('tracks')
         .select('*', { count: 'exact', head: true });
 
-      // Fetch royalties data
-      const { data: royaltiesData } = await supabase
-        .from('royalties')
-        .select('net_revenue, sales_unit, period, platform');
+      // Fetch royalties data (all rows via pagination)
+      const royaltiesData = await fetchAllRoyalties('net_revenue, sales_unit, period, platform');
 
       const totalRevenue = royaltiesData?.reduce(
         (sum, r) => sum + Number(r.net_revenue || 0),
