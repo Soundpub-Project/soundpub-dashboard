@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRoyalties } from '@/lib/fetchAllRoyalties';
+import { useRoyaltyStats, useRoyaltyMonthlySummary, useRoyaltyPlatformSummary, useRoyaltyCountrySummary } from '@/hooks/useRoyaltyData';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -98,59 +99,20 @@ const chartConfig = {
 export default function Royalties() {
   const [royalties, setRoyalties] = useState<Royalty[]>([]);
   const [loading, setLoading] = useState(true);
-  const [chartsLoading, setChartsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [totalRevenue, setTotalRevenue] = useState(0);
-  const [totalStreams, setTotalStreams] = useState(0);
-  const [monthlyDataRpc, setMonthlyDataRpc] = useState<MonthlyData[]>([]);
-  const [platformDataRpc, setPlatformDataRpc] = useState<PlatformData[]>([]);
-  const [countryDataRpc, setCountryDataRpc] = useState<CountryData[]>([]);
+
+  const { data: statsData, isLoading: statsLoading } = useRoyaltyStats();
+  const { data: monthlyDataRpc, isLoading: monthlyLoading } = useRoyaltyMonthlySummary();
+  const { data: platformDataRpc } = useRoyaltyPlatformSummary(10);
+  const { data: countryDataRpc } = useRoyaltyCountrySummary(10);
+
+  const chartsLoading = statsLoading || monthlyLoading;
+  const totalRevenue = statsData?.totalRevenue || 0;
+  const totalStreams = statsData?.totalStreams || 0;
 
   useEffect(() => {
-    fetchChartsData();
     fetchDetailData();
   }, []);
-
-  // Fast RPC calls for charts & KPIs
-  const fetchChartsData = async () => {
-    try {
-      const [statsRes, monthlyRes, platformRes, countryRes] = await Promise.all([
-        supabase.rpc('get_royalty_stats'),
-        supabase.rpc('get_royalty_monthly_summary'),
-        supabase.rpc('get_royalty_platform_summary', { _limit: 10 }),
-        supabase.rpc('get_royalty_country_summary', { _limit: 10 }),
-      ]);
-
-      if (statsRes.data?.[0]) {
-        setTotalRevenue(Number(statsRes.data[0].total_revenue || 0));
-        setTotalStreams(Number(statsRes.data[0].total_streams || 0));
-      }
-
-      if (monthlyRes.data) {
-        setMonthlyDataRpc(monthlyRes.data.map((d: any) => ({
-          month: d.period, revenue: Number(d.revenue), streams: Number(d.streams)
-        })));
-      }
-
-      if (platformRes.data) {
-        setPlatformDataRpc(platformRes.data.map((d: any, i: number) => ({
-          name: d.platform, revenue: Number(d.revenue), streams: Number(d.streams),
-          fill: CHART_COLORS[i % CHART_COLORS.length]
-        })));
-      }
-
-      if (countryRes.data) {
-        setCountryDataRpc(countryRes.data.map((d: any, i: number) => ({
-          name: d.country, revenue: Number(d.revenue), streams: Number(d.streams),
-          fill: CHART_COLORS[i % CHART_COLORS.length]
-        })));
-      }
-    } catch (error) {
-      console.error('Error fetching chart data:', error);
-    } finally {
-      setChartsLoading(false);
-    }
-  };
 
   // Detail data for the table (still uses batch fetch but only when viewing details)
   const fetchDetailData = async () => {
@@ -164,10 +126,9 @@ export default function Royalties() {
     }
   };
 
-  // Use RPC data for charts, fallback old useMemo removed
-  const monthlyData = monthlyDataRpc;
-  const platformData = platformDataRpc;
-  const countryData = countryDataRpc;
+  const monthlyData = monthlyDataRpc || [];
+  const platformData = platformDataRpc || [];
+  const countryData = countryDataRpc || [];
 
   const filteredRoyalties = royalties.filter(
     (royalty) =>
@@ -250,7 +211,7 @@ export default function Royalties() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {platformDataRpc.length}
+                {platformData.length}
               </div>
             </CardContent>
           </Card>
@@ -264,7 +225,7 @@ export default function Royalties() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {countryDataRpc.length}
+                {countryData.length}
               </div>
             </CardContent>
           </Card>
