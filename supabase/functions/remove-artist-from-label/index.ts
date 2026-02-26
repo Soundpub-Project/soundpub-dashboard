@@ -10,7 +10,6 @@ interface RemoveArtistRequest {
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -24,14 +23,12 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Create Supabase client with user's token for authentication check
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
       return new Response(
@@ -40,19 +37,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Create admin client for operations that bypass RLS
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      }
+      { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    // Check user role using admin client
+    // Check user role
     const { data: roleData, error: roleError } = await supabaseAdmin
       .from('user_roles')
       .select('role')
@@ -78,7 +69,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Parse request body
     const { artist_id }: RemoveArtistRequest = await req.json();
 
     if (!artist_id) {
@@ -88,7 +78,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get artist info using admin client
+    // Get artist info
     const { data: artistData, error: artistError } = await supabaseAdmin
       .from('profiles')
       .select('id, full_name, email, parent_label_id')
@@ -110,14 +100,49 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get label/whitelabel info for audit log
+    // Check if artist has active or pending releases
+    const labelId = artistData.parent_label_id;
+    const { data: activeReleases, error: releasesError } = await supabaseAdmin
+      .from('releases')
+      .select('id, title, status')
+      .or(`artist_user_id.eq.${artist_id},and(artist_user_id.is.null,artist_name.eq.${artistData.full_name})`)
+      .in('status', ['active', 'pending']);
+
+    if (releasesError) {
+      console.error('Error checking releases:', releasesError);
+    }
+
+    if (activeReleases && activeReleases.length > 0) {
+      const releaseNames = activeReleases.map(r => `${r.title} (${r.status})`).join(', ');
+      return new Response(
+        JSON.stringify({ 
+          error: `Artis ini memiliki ${activeReleases.length} release aktif/pending dan tidak bisa dihapus. Releases: ${releaseNames}` 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Get label info for audit log
     const { data: labelData } = await supabaseAdmin
       .from('profiles')
       .select('full_name, email')
       .eq('id', user.id)
       .maybeSingle();
 
-    // Remove artist from label using admin client (bypasses RLS)
+    // Remove from artists table (used by release forms)
+    if (labelId) {
+      const { error: deleteArtistError } = await supabaseAdmin
+        .from('artists')
+        .delete()
+        .eq('label_id', labelId)
+        .ilike('name', artistData.full_name);
+
+      if (deleteArtistError) {
+        console.error('Error deleting from artists table:', deleteArtistError);
+      }
+    }
+
+    // Remove artist from label (clear parent_label_id)
     const { error: updateError } = await supabaseAdmin
       .from('profiles')
       .update({ parent_label_id: null })

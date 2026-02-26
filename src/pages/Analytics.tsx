@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRoyalties } from '@/lib/fetchAllRoyalties';
+import { useRoyaltyStats, useRoyaltyMonthlySummary, useRoyaltyPlatformSummary, useRoyaltyCountrySummary } from '@/hooks/useRoyaltyData';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -109,7 +110,7 @@ type ComparisonType = 'mom' | 'yoy' | 'custom';
 
 export default function Analytics() {
   const [royalties, setRoyalties] = useState<Royalty[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(true);
   const [comparisonType, setComparisonType] = useState<ComparisonType>('mom');
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: subMonths(new Date(), 6),
@@ -120,12 +121,19 @@ export default function Analytics() {
     to: subMonths(new Date(), 6),
   });
 
+  // Use RPC hooks for quick summary data
+  const { data: rpcStats, isLoading: statsLoading } = useRoyaltyStats();
+  const { data: rpcMonthly = [] } = useRoyaltyMonthlySummary();
+  const { data: rpcPlatforms = [] } = useRoyaltyPlatformSummary(10);
+  const { data: rpcCountries = [] } = useRoyaltyCountrySummary(10);
+
+  const loading = statsLoading && detailLoading;
+
   useEffect(() => {
     fetchRoyaltiesData();
   }, []);
 
   useEffect(() => {
-    // Auto-set previous range based on comparison type
     if (comparisonType === 'mom' && dateRange?.from && dateRange?.to) {
       const monthsDiff = Math.ceil(
         (dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24 * 30)
@@ -149,7 +157,7 @@ export default function Analytics() {
     } catch (error) {
       console.error('Error fetching royalties:', error);
     } finally {
-      setLoading(false);
+      setDetailLoading(false);
     }
   };
 

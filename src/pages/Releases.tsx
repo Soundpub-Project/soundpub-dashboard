@@ -237,11 +237,7 @@ export default function Releases() {
   const handleAddRelease = () => {
     setSelectedRelease(null);
     setLyricsOnlyMode(false);
-    if (isArtist && !isAdmin && !isLabel && !isWhitelabel) {
-      setArtistFormOpen(true);
-    } else {
-      setFormOpen(true);
-    }
+    setFormOpen(true);
   };
 
   const handleEditRelease = (release: Release) => {
@@ -380,7 +376,7 @@ export default function Releases() {
           </div>
           {!authLoading && canCreateRelease && (
             <div className="flex items-center gap-2">
-              {isArtist && !isAdmin && !isLabel && (
+              {false && (
                 <Badge variant="secondary" className="bg-amber-500/10 text-amber-600 border-amber-500/30">
                   <Beaker className="h-3 w-3 mr-1" />
                   BETA
