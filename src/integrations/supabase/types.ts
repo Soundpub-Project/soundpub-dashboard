@@ -569,6 +569,47 @@ export type Database = {
         Args: { _artist_name: string; _label_id?: string }
         Returns: string
       }
+      get_royalty_country_summary: {
+        Args: { _limit?: number }
+        Returns: {
+          country: string
+          revenue: number
+          streams: number
+        }[]
+      }
+      get_royalty_monthly_summary: {
+        Args: never
+        Returns: {
+          period: string
+          revenue: number
+          streams: number
+        }[]
+      }
+      get_royalty_periods: {
+        Args: never
+        Returns: {
+          period: string
+        }[]
+      }
+      get_royalty_platform_summary: {
+        Args: { _limit?: number }
+        Returns: {
+          platform: string
+          revenue: number
+          streams: number
+        }[]
+      }
+      get_royalty_stats: {
+        Args: never
+        Returns: {
+          total_revenue: number
+          total_streams: number
+          unique_artists: number
+          unique_labels: number
+          unique_platforms: number
+          unique_tracks: number
+        }[]
+      }
       get_user_full_name: { Args: { _user_id: string }; Returns: string }
       get_user_parent_label_id: { Args: { _user_id: string }; Returns: string }
       get_user_release_label_ids: {

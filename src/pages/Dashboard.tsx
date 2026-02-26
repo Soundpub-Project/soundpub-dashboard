@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { fetchAllRoyalties } from '@/lib/fetchAllRoyalties';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -134,44 +133,34 @@ export default function Dashboard() {
 
   const fetchRoyaltyData = async () => {
     try {
-      const royaltiesData = await fetchAllRoyalties('net_revenue, sales_unit, period, platform');
+      const [statsRes, monthlyRes, platformRes] = await Promise.all([
+        supabase.rpc('get_royalty_stats'),
+        supabase.rpc('get_royalty_monthly_summary'),
+        supabase.rpc('get_royalty_platform_summary', { _limit: 5 }),
+      ]);
 
-      const totalRevenue = royaltiesData.reduce((sum, r) => sum + Number(r.net_revenue || 0), 0);
-      const totalStreams = royaltiesData.reduce((sum, r) => sum + Number(r.sales_unit || 0), 0);
+      if (statsRes.data && statsRes.data.length > 0) {
+        const s = statsRes.data[0];
+        setStats(prev => ({
+          ...prev,
+          totalRevenue: Number(s.total_revenue || 0),
+          totalStreams: Number(s.total_streams || 0),
+        }));
+      }
 
-      // Calculate monthly revenue
-      const monthlyData: Record<string, { revenue: number; streams: number }> = {};
-      royaltiesData.forEach((r) => {
-        const period = r.period || 'Unknown';
-        if (!monthlyData[period]) monthlyData[period] = { revenue: 0, streams: 0 };
-        monthlyData[period].revenue += Number(r.net_revenue || 0);
-        monthlyData[period].streams += Number(r.sales_unit || 0);
-      });
+      if (monthlyRes.data) {
+        setMonthlyRevenue(
+          monthlyRes.data
+            .map((d: any) => ({ month: d.period, revenue: Number(d.revenue), streams: Number(d.streams) }))
+            .slice(-6)
+        );
+      }
 
-      setMonthlyRevenue(
-        Object.entries(monthlyData)
-          .map(([month, data]) => ({ month, ...data }))
-          .sort((a, b) => a.month.localeCompare(b.month))
-          .slice(-6)
-      );
-
-      // Calculate top platforms
-      const platformData: Record<string, { revenue: number; streams: number }> = {};
-      royaltiesData.forEach((r) => {
-        const platform = r.platform || 'Unknown';
-        if (!platformData[platform]) platformData[platform] = { revenue: 0, streams: 0 };
-        platformData[platform].revenue += Number(r.net_revenue || 0);
-        platformData[platform].streams += Number(r.sales_unit || 0);
-      });
-
-      setTopPlatforms(
-        Object.entries(platformData)
-          .map(([platform, data]) => ({ platform, ...data }))
-          .sort((a, b) => b.revenue - a.revenue)
-          .slice(0, 5)
-      );
-
-      setStats(prev => ({ ...prev, totalRevenue, totalStreams }));
+      if (platformRes.data) {
+        setTopPlatforms(
+          platformRes.data.map((d: any) => ({ platform: d.platform, revenue: Number(d.revenue), streams: Number(d.streams) }))
+        );
+      }
     } catch (error) {
       console.error('Error fetching royalty data:', error);
     } finally {
