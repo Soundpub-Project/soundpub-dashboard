@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchAllRoyalties } from '@/lib/fetchAllRoyalties';
-import { useRoyaltyPeriods } from '@/hooks/useRoyaltyData';
+import { useRoyaltyPeriods, useRoyaltyStats, useRoyaltyMonthlySummary, useRoyaltyPlatformSummary } from '@/hooks/useRoyaltyData';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -108,11 +108,17 @@ const CHART_COLORS = [
 export default function RoyaltySummary() {
   const { isArtist, profile } = useAuth();
   const [royalties, setRoyalties] = useState<Royalty[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'overview' | 'platform' | 'label' | 'artist'>('overview');
   const [exporting, setExporting] = useState(false);
   const { data: periods = [] } = useRoyaltyPeriods();
+  const { data: rpcStats, isLoading: statsLoading } = useRoyaltyStats();
+  const { data: rpcMonthly = [], isLoading: monthlyLoading } = useRoyaltyMonthlySummary();
+  const { data: rpcPlatforms = [], isLoading: platformsLoading } = useRoyaltyPlatformSummary(10);
+
+  // Loading state: show content as soon as RPC data is available
+  const loading = statsLoading && detailLoading;
 
   useEffect(() => {
     fetchRoyaltiesData();
@@ -125,7 +131,7 @@ export default function RoyaltySummary() {
     } catch (error) {
       console.error('Error fetching royalties:', error);
     } finally {
-      setLoading(false);
+      setDetailLoading(false);
     }
   };
 
@@ -373,8 +379,18 @@ export default function RoyaltySummary() {
       .sort((a, b) => b.revenue - a.revenue);
   }, [filteredRoyalties]);
 
-  // Total stats for selected period
+  // Total stats: use RPC data when available, fallback to filtered royalties
   const totalStats = useMemo(() => {
+    if (selectedPeriod === 'all' && rpcStats) {
+      return {
+        totalRevenue: rpcStats.totalRevenue,
+        totalStreams: rpcStats.totalStreams,
+        uniqueTracks: rpcStats.uniqueTracks,
+        uniqueArtists: rpcStats.uniqueArtists,
+        uniqueLabels: rpcStats.uniqueLabels,
+        uniquePlatforms: rpcStats.uniquePlatforms,
+      };
+    }
     const totalRevenue = filteredRoyalties.reduce((sum, r) => sum + Number(r.net_revenue || 0), 0);
     const totalStreams = filteredRoyalties.reduce((sum, r) => sum + Number(r.sales_unit || 0), 0);
     const uniqueTracks = new Set(filteredRoyalties.map(r => r.isrc)).size;
@@ -383,7 +399,7 @@ export default function RoyaltySummary() {
     const uniquePlatforms = new Set(filteredRoyalties.map(r => r.platform)).size;
     
     return { totalRevenue, totalStreams, uniqueTracks, uniqueArtists, uniqueLabels, uniquePlatforms };
-  }, [filteredRoyalties]);
+  }, [filteredRoyalties, selectedPeriod, rpcStats]);
 
   const formatCurrency = (value: number) => {
     if (value >= 1000000000) {

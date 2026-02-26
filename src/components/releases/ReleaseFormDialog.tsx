@@ -178,7 +178,7 @@ export function ReleaseFormDialog({
   onSuccess,
   lyricsOnlyMode = false,
 }: ReleaseFormDialogProps) {
-  const { user, isAdmin, isLabel, isWhitelabel } = useAuth();
+  const { user, isAdmin, isLabel, isWhitelabel, isArtist, profile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
@@ -233,12 +233,14 @@ export function ReleaseFormDialog({
     }
   }, [open, isAdmin]);
 
-  // Fetch artists for label or whitelabel
+  // Fetch artists for label, whitelabel, or artist (using parent_label_id)
   useEffect(() => {
     if (open && (isLabel || isWhitelabel) && user) {
       fetchLabelArtists(user.id);
+    } else if (open && isArtist && profile?.parent_label_id) {
+      fetchLabelArtists(profile.parent_label_id);
     }
-  }, [open, isLabel, isWhitelabel, user]);
+  }, [open, isLabel, isWhitelabel, isArtist, user, profile?.parent_label_id]);
 
   // Fetch artists when label is selected by admin
   const selectedLabelId = form.watch('label_id');
@@ -340,15 +342,21 @@ export function ReleaseFormDialog({
       if (release) {
         loadReleaseData();
       } else {
+        // Determine default label_id and artist_name for different roles
+        const defaultLabelId = isArtist && profile?.parent_label_id
+          ? profile.parent_label_id
+          : (isLabel || isWhitelabel) && user ? user.id : '';
+        const defaultArtistName = isArtist && profile?.full_name ? profile.full_name : '';
+
         form.reset({
           upc: '',
           title: '',
-          artist_name: '',
+          artist_name: defaultArtistName,
           release_type: 'single',
           genre: '',
           release_date: '',
           status: 'pending',
-          label_id: (isLabel || isWhitelabel) && user ? user.id : '',
+          label_id: defaultLabelId,
           tracks: [
             {
               isrc: '',
@@ -653,7 +661,7 @@ export function ReleaseFormDialog({
 
         toast.success('Release berhasil diupdate');
       } else {
-        const labelId = isAdmin ? values.label_id : user.id;
+        const labelId = isAdmin ? values.label_id : isArtist && profile?.parent_label_id ? profile.parent_label_id : user.id;
         
         if (!labelId) {
           toast.error('Label wajib dipilih');
@@ -661,10 +669,10 @@ export function ReleaseFormDialog({
           return;
         }
 
-        // Find artist_user_id from selected artist name
-        const selectedArtist = labelArtists.find(
+        // Find artist_user_id: for artist role use own ID, otherwise match from label artists
+        const artistUserId = isArtist ? user.id : (labelArtists.find(
           a => a.name.toLowerCase().trim() === values.artist_name.toLowerCase().trim()
-        );
+        )?.user_id || null);
 
         const { data: newRelease, error: releaseError } = await supabase
           .from('releases')
@@ -672,7 +680,7 @@ export function ReleaseFormDialog({
             upc: values.upc || null,
             title: values.title,
             artist_name: values.artist_name,
-            artist_user_id: selectedArtist?.user_id || null, // NEW: Save artist_user_id
+            artist_user_id: artistUserId,
             release_type: values.release_type,
             genre: values.genre || null,
             release_date: values.release_date || null,
@@ -1010,7 +1018,11 @@ export function ReleaseFormDialog({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Nama Artist Utama *</FormLabel>
-                        {isLabel || isWhitelabel || (isAdmin && selectedLabelId) ? (
+                  {isArtist ? (
+                          <FormControl>
+                            <Input value={profile?.full_name || ''} disabled className="bg-muted" />
+                          </FormControl>
+                        ) : isLabel || isWhitelabel || (isAdmin && selectedLabelId) ? (
                           loadingArtists ? (
                             <div className="flex items-center gap-2 h-10 px-3 border rounded-md">
                               <Loader2 className="h-4 w-4 animate-spin" />
