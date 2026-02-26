@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRoyalties } from '@/lib/fetchAllRoyalties';
+import { useRoyaltyPeriods } from '@/hooks/useRoyaltyData';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -112,21 +112,9 @@ export default function RoyaltySummary() {
   const [selectedPeriod, setSelectedPeriod] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'overview' | 'platform' | 'label' | 'artist'>('overview');
   const [exporting, setExporting] = useState(false);
-  const [periods, setPeriods] = useState<string[]>([]);
+  const { data: periods = [] } = useRoyaltyPeriods();
 
   useEffect(() => {
-    // Fetch periods quickly via RPC, then load full data in background
-    const loadPeriodsFirst = async () => {
-      try {
-        const periodsRes = await supabase.rpc('get_royalty_periods');
-        if (periodsRes.data) {
-          setPeriods(periodsRes.data.map((d: any) => d.period));
-        }
-      } catch (e) {
-        console.error('Error fetching periods:', e);
-      }
-    };
-    loadPeriodsFirst();
     fetchRoyaltiesData();
   }, []);
 
@@ -141,7 +129,6 @@ export default function RoyaltySummary() {
     }
   };
 
-  // Use RPC periods if available, fallback to client-side
   const periodList = useMemo(() => {
     if (periods.length > 0) return periods;
     return [...new Set(royalties.map(r => r.period))].sort().reverse();

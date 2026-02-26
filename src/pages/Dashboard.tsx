@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { useRoyaltyStats, useRoyaltyMonthlySummary, useRoyaltyPlatformSummary } from '@/hooks/useRoyaltyData';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -78,15 +79,28 @@ export default function Dashboard() {
     pendingReleases: 0,
   });
   const [recentReleases, setRecentReleases] = useState<RecentRelease[]>([]);
-  const [monthlyRevenue, setMonthlyRevenue] = useState<MonthlyRevenue[]>([]);
-  const [topPlatforms, setTopPlatforms] = useState<TopPlatform[]>([]);
   const [loading, setLoading] = useState(true);
-  const [royaltyLoading, setRoyaltyLoading] = useState(true);
+
+  const { data: royaltyStats, isLoading: royaltyLoading } = useRoyaltyStats();
+  const { data: monthlyData } = useRoyaltyMonthlySummary();
+  const { data: platformData } = useRoyaltyPlatformSummary(5);
+
+  const monthlyRevenue = (monthlyData || []).slice(-6).map(d => ({ month: d.month, revenue: d.revenue, streams: d.streams }));
+  const topPlatforms = (platformData || []).map(d => ({ platform: d.platform, revenue: d.revenue, streams: d.streams }));
+
+  useEffect(() => {
+    if (royaltyStats) {
+      setStats(prev => ({
+        ...prev,
+        totalRevenue: royaltyStats.totalRevenue,
+        totalStreams: royaltyStats.totalStreams,
+      }));
+    }
+  }, [royaltyStats]);
 
   useEffect(() => {
     if (profile) {
       fetchBasicStats();
-      fetchRoyaltyData();
     }
   }, [profile]);
 
@@ -131,42 +145,7 @@ export default function Dashboard() {
     }
   };
 
-  const fetchRoyaltyData = async () => {
-    try {
-      const [statsRes, monthlyRes, platformRes] = await Promise.all([
-        supabase.rpc('get_royalty_stats'),
-        supabase.rpc('get_royalty_monthly_summary'),
-        supabase.rpc('get_royalty_platform_summary', { _limit: 5 }),
-      ]);
-
-      if (statsRes.data && statsRes.data.length > 0) {
-        const s = statsRes.data[0];
-        setStats(prev => ({
-          ...prev,
-          totalRevenue: Number(s.total_revenue || 0),
-          totalStreams: Number(s.total_streams || 0),
-        }));
-      }
-
-      if (monthlyRes.data) {
-        setMonthlyRevenue(
-          monthlyRes.data
-            .map((d: any) => ({ month: d.period, revenue: Number(d.revenue), streams: Number(d.streams) }))
-            .slice(-6)
-        );
-      }
-
-      if (platformRes.data) {
-        setTopPlatforms(
-          platformRes.data.map((d: any) => ({ platform: d.platform, revenue: Number(d.revenue), streams: Number(d.streams) }))
-        );
-      }
-    } catch (error) {
-      console.error('Error fetching royalty data:', error);
-    } finally {
-      setRoyaltyLoading(false);
-    }
-  };
+  // Royalty data now comes from React Query hooks above
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {

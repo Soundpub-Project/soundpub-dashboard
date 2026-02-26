@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRoyalties, type RoyaltyRecord } from '@/lib/fetchAllRoyalties';
+import { useRoyaltyStats } from '@/hooks/useRoyaltyData';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -40,10 +40,6 @@ import { toast } from 'sonner';
 export default function AllRoyalties() {
   const [royalties, setRoyalties] = useState<RoyaltyRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [quickStats, setQuickStats] = useState<{
-    totalRevenue: number; totalStreams: number; uniqueArtists: number;
-    uniqueLabels: number; uniqueTracks: number; uniquePlatforms: number;
-  } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPeriod, setSelectedPeriod] = useState<string>('all');
   const [selectedLabel, setSelectedLabel] = useState<string>('all');
@@ -51,19 +47,9 @@ export default function AllRoyalties() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
 
+  const { data: quickStats } = useRoyaltyStats();
+
   useEffect(() => {
-    // Load quick stats via RPC (instant)
-    supabase.rpc('get_royalty_stats').then(({ data }) => {
-      if (data?.[0]) {
-        const s = data[0];
-        setQuickStats({
-          totalRevenue: Number(s.total_revenue), totalStreams: Number(s.total_streams),
-          uniqueArtists: Number(s.unique_artists), uniqueLabels: Number(s.unique_labels),
-          uniqueTracks: Number(s.unique_tracks), uniquePlatforms: Number(s.unique_platforms),
-        });
-      }
-    });
-    // Load full data in background
     loadData();
   }, []);
 
@@ -107,7 +93,7 @@ export default function AllRoyalties() {
   // KPI stats - use quickStats for unfiltered, computed for filtered
   const hasFilters = selectedPeriod !== 'all' || selectedLabel !== 'all' || selectedArtist !== 'all' || searchTerm !== '';
   const stats = useMemo(() => {
-    if (!hasFilters && quickStats) return quickStats;
+    if (!hasFilters && quickStats) return { ...quickStats };
     const totalRevenue = filtered.reduce((s, r) => s + Number(r.net_revenue || 0), 0);
     const totalStreams = filtered.reduce((s, r) => s + Number(r.sales_unit || 0), 0);
     const uniqueArtists = new Set(filtered.filter(r => r.artist).map(r => r.artist!)).size;
