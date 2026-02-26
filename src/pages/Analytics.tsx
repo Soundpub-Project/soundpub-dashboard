@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRoyalties } from '@/lib/fetchAllRoyalties';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

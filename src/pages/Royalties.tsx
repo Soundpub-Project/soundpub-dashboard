@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRoyalties } from '@/lib/fetchAllRoyalties';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -97,24 +98,65 @@ const chartConfig = {
 export default function Royalties() {
   const [royalties, setRoyalties] = useState<Royalty[]>([]);
   const [loading, setLoading] = useState(true);
+  const [chartsLoading, setChartsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalStreams, setTotalStreams] = useState(0);
+  const [monthlyDataRpc, setMonthlyDataRpc] = useState<MonthlyData[]>([]);
+  const [platformDataRpc, setPlatformDataRpc] = useState<PlatformData[]>([]);
+  const [countryDataRpc, setCountryDataRpc] = useState<CountryData[]>([]);
 
   useEffect(() => {
-    fetchRoyaltiesData();
+    fetchChartsData();
+    fetchDetailData();
   }, []);
 
-  const fetchRoyaltiesData = async () => {
+  // Fast RPC calls for charts & KPIs
+  const fetchChartsData = async () => {
+    try {
+      const [statsRes, monthlyRes, platformRes, countryRes] = await Promise.all([
+        supabase.rpc('get_royalty_stats'),
+        supabase.rpc('get_royalty_monthly_summary'),
+        supabase.rpc('get_royalty_platform_summary', { _limit: 10 }),
+        supabase.rpc('get_royalty_country_summary', { _limit: 10 }),
+      ]);
+
+      if (statsRes.data?.[0]) {
+        setTotalRevenue(Number(statsRes.data[0].total_revenue || 0));
+        setTotalStreams(Number(statsRes.data[0].total_streams || 0));
+      }
+
+      if (monthlyRes.data) {
+        setMonthlyDataRpc(monthlyRes.data.map((d: any) => ({
+          month: d.period, revenue: Number(d.revenue), streams: Number(d.streams)
+        })));
+      }
+
+      if (platformRes.data) {
+        setPlatformDataRpc(platformRes.data.map((d: any, i: number) => ({
+          name: d.platform, revenue: Number(d.revenue), streams: Number(d.streams),
+          fill: CHART_COLORS[i % CHART_COLORS.length]
+        })));
+      }
+
+      if (countryRes.data) {
+        setCountryDataRpc(countryRes.data.map((d: any, i: number) => ({
+          name: d.country, revenue: Number(d.revenue), streams: Number(d.streams),
+          fill: CHART_COLORS[i % CHART_COLORS.length]
+        })));
+      }
+    } catch (error) {
+      console.error('Error fetching chart data:', error);
+    } finally {
+      setChartsLoading(false);
+    }
+  };
+
+  // Detail data for the table (still uses batch fetch but only when viewing details)
+  const fetchDetailData = async () => {
     try {
       const data = await fetchAllRoyalties();
-      
       setRoyalties(data as unknown as Royalty[]);
-      
-      const total = data.reduce((sum, r) => sum + Number(r.net_revenue || 0), 0);
-      const streams = data.reduce((sum, r) => sum + Number(r.sales_unit || 0), 0);
-      setTotalRevenue(total);
-      setTotalStreams(streams);
     } catch (error) {
       console.error('Error fetching royalties:', error);
     } finally {
@@ -122,73 +164,10 @@ export default function Royalties() {
     }
   };
 
-  // Process data for monthly trend chart
-  const monthlyData = useMemo((): MonthlyData[] => {
-    const monthMap = new Map<string, { revenue: number; streams: number }>();
-    
-    royalties.forEach((r) => {
-      const period = r.period; // Format: YYYY-MM or similar
-      const existing = monthMap.get(period) || { revenue: 0, streams: 0 };
-      monthMap.set(period, {
-        revenue: existing.revenue + Number(r.net_revenue || 0),
-        streams: existing.streams + Number(r.sales_unit || 0),
-      });
-    });
-
-    return Array.from(monthMap.entries())
-      .map(([month, data]) => ({
-        month,
-        revenue: data.revenue,
-        streams: data.streams,
-      }))
-      .sort((a, b) => a.month.localeCompare(b.month));
-  }, [royalties]);
-
-  // Process data for platform breakdown
-  const platformData = useMemo((): PlatformData[] => {
-    const platformMap = new Map<string, { revenue: number; streams: number }>();
-    
-    royalties.forEach((r) => {
-      const existing = platformMap.get(r.platform) || { revenue: 0, streams: 0 };
-      platformMap.set(r.platform, {
-        revenue: existing.revenue + Number(r.net_revenue || 0),
-        streams: existing.streams + Number(r.sales_unit || 0),
-      });
-    });
-
-    return Array.from(platformMap.entries())
-      .map(([name, data], index) => ({
-        name,
-        revenue: data.revenue,
-        streams: data.streams,
-        fill: CHART_COLORS[index % CHART_COLORS.length],
-      }))
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 10); // Top 10 platforms
-  }, [royalties]);
-
-  // Process data for country breakdown
-  const countryData = useMemo((): CountryData[] => {
-    const countryMap = new Map<string, { revenue: number; streams: number }>();
-    
-    royalties.forEach((r) => {
-      const existing = countryMap.get(r.country) || { revenue: 0, streams: 0 };
-      countryMap.set(r.country, {
-        revenue: existing.revenue + Number(r.net_revenue || 0),
-        streams: existing.streams + Number(r.sales_unit || 0),
-      });
-    });
-
-    return Array.from(countryMap.entries())
-      .map(([name, data], index) => ({
-        name,
-        revenue: data.revenue,
-        streams: data.streams,
-        fill: CHART_COLORS[index % CHART_COLORS.length],
-      }))
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 10); // Top 10 countries
-  }, [royalties]);
+  // Use RPC data for charts, fallback old useMemo removed
+  const monthlyData = monthlyDataRpc;
+  const platformData = platformDataRpc;
+  const countryData = countryDataRpc;
 
   const filteredRoyalties = royalties.filter(
     (royalty) =>
@@ -271,7 +250,7 @@ export default function Royalties() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {platformData.length}
+                {platformDataRpc.length}
               </div>
             </CardContent>
           </Card>
@@ -285,17 +264,17 @@ export default function Royalties() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {countryData.length}
+                {countryDataRpc.length}
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {loading ? (
+        {chartsLoading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
-        ) : royalties.length === 0 ? (
+        ) : (totalRevenue === 0 && totalStreams === 0) ? (
           <Card className="bg-card/50 border-border/50">
             <CardContent className="py-12">
               <div className="text-center text-muted-foreground">
