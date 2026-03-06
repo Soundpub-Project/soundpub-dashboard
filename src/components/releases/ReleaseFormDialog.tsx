@@ -1389,11 +1389,15 @@ export function ReleaseFormDialog({
                             
                             {trackContributors.length > 0 && (
                               <div className="space-y-2">
-                                {trackContributors.map((_, contributorIndex) => (
+                                {trackContributors.map((contributor, contributorIndex) => (
                                   <ContributorSelector
                                     key={contributorIndex}
-                                    trackIndex={trackIndex}
-                                    contributorIndex={contributorIndex}
+                                    name={contributor?.name || ''}
+                                    type={contributor?.type || ''}
+                                    role={contributor?.role || ''}
+                                    onNameChange={(value) => form.setValue(`tracks.${trackIndex}.contributors.${contributorIndex}.name`, value)}
+                                    onTypeChange={(value) => form.setValue(`tracks.${trackIndex}.contributors.${contributorIndex}.type`, value)}
+                                    onRoleChange={(value) => form.setValue(`tracks.${trackIndex}.contributors.${contributorIndex}.role`, value)}
                                     onRemove={() => {
                                       const currentContributors = form.getValues(`tracks.${trackIndex}.contributors`) || [];
                                       form.setValue(
