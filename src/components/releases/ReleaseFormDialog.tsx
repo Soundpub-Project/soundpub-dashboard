@@ -60,6 +60,7 @@ import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MediaUploadSection } from './MediaUploadSection';
 import { ArtistSelector } from './ArtistSelector';
+import { ContributorSelector } from './ContributorSelector';
 
 // Genre list
 const GENRE_LIST = [
@@ -753,71 +754,8 @@ export function ReleaseFormDialog({
   // NOTE: ArtistSelector component is now imported from ./ArtistSelector.tsx
   // to prevent focus loss issues caused by inline component re-creation on every render
 
-  // Component for contributor selector
-  const ContributorSelector = ({ 
-    trackIndex, 
-    contributorIndex,
-    onRemove
-  }: { 
-    trackIndex: number; 
-    contributorIndex: number;
-    onRemove: () => void;
-  }) => {
-    const contributorName = form.watch(`tracks.${trackIndex}.contributors.${contributorIndex}.name`);
-    const contributorType = form.watch(`tracks.${trackIndex}.contributors.${contributorIndex}.type`);
-    const contributorRole = form.watch(`tracks.${trackIndex}.contributors.${contributorIndex}.role`);
-
-    return (
-      <div className="flex items-center gap-2 p-2 rounded-lg border bg-background">
-        <div className="flex-1 grid grid-cols-3 gap-2">
-          <Input
-            placeholder="Nama"
-            value={contributorName || ''}
-            onChange={(e) => form.setValue(`tracks.${trackIndex}.contributors.${contributorIndex}.name`, e.target.value)}
-            className="h-9"
-          />
-
-          <Select
-            value={contributorType || ''}
-            onValueChange={(value) => form.setValue(`tracks.${trackIndex}.contributors.${contributorIndex}.type`, value)}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="Tipe" />
-            </SelectTrigger>
-            <SelectContent className="z-50">
-              {CONTRIBUTOR_TYPES.map((type) => (
-                <SelectItem key={type} value={type}>{type}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={contributorRole || ''}
-            onValueChange={(value) => form.setValue(`tracks.${trackIndex}.contributors.${contributorIndex}.role`, value)}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="Peran" />
-            </SelectTrigger>
-            <SelectContent className="z-50">
-              {CONTRIBUTOR_ROLES.map((role) => (
-                <SelectItem key={role} value={role}>{role}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-9 w-9 text-destructive hover:text-destructive"
-          onClick={onRemove}
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
-    );
-  };
+  // ContributorSelector is now imported from ./ContributorSelector.tsx
+  // to prevent focus loss issues caused by inline component re-creation on every render
 
   // Genre Combobox Component - with internal open state
   const GenreCombobox = ({ value, onChange }: { value: string; onChange: (value: string) => void }) => {
@@ -1451,11 +1389,15 @@ export function ReleaseFormDialog({
                             
                             {trackContributors.length > 0 && (
                               <div className="space-y-2">
-                                {trackContributors.map((_, contributorIndex) => (
+                                {trackContributors.map((contributor, contributorIndex) => (
                                   <ContributorSelector
                                     key={contributorIndex}
-                                    trackIndex={trackIndex}
-                                    contributorIndex={contributorIndex}
+                                    name={contributor?.name || ''}
+                                    type={contributor?.type || ''}
+                                    role={contributor?.role || ''}
+                                    onNameChange={(value) => form.setValue(`tracks.${trackIndex}.contributors.${contributorIndex}.name`, value)}
+                                    onTypeChange={(value) => form.setValue(`tracks.${trackIndex}.contributors.${contributorIndex}.type`, value)}
+                                    onRoleChange={(value) => form.setValue(`tracks.${trackIndex}.contributors.${contributorIndex}.role`, value)}
                                     onRemove={() => {
                                       const currentContributors = form.getValues(`tracks.${trackIndex}.contributors`) || [];
                                       form.setValue(
