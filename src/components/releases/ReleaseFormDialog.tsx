@@ -60,6 +60,7 @@ import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MediaUploadSection } from './MediaUploadSection';
 import { ArtistSelector } from './ArtistSelector';
+import { ContributorSelector } from './ContributorSelector';
 
 // Genre list
 const GENRE_LIST = [
