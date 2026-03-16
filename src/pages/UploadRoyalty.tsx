@@ -317,40 +317,20 @@ export default function UploadRoyalty() {
     });
     
     return Object.entries(labelTotals).map(([label, totalRevenue]) => {
-      const isSoundpubLabel = label.toLowerCase() === 'soundpub music';
-      
-      if (isSoundpubLabel) {
-        // Soundpub Music: 70% Artist, 30% Label (no admin fee)
-        const artistShare = totalRevenue * 0.70;
-        const labelShare = totalRevenue * 0.30;
-        return {
-          label,
-          isSoundpubLabel: true,
-          totalRevenue,
-          labelShare,
-          artistShare,
-          adminShare: 0,
-          labelPercentage: 30,
-          artistPercentage: 70,
-          adminPercentage: 0,
-        };
-      } else {
-        // Other labels: 30% Admin, 21% Label, 49% Artist
-        const adminShare = totalRevenue * 0.30;
-        const labelShare = totalRevenue * 0.21;
-        const artistShare = totalRevenue * 0.49;
-        return {
-          label,
-          isSoundpubLabel: false,
-          totalRevenue,
-          labelShare,
-          artistShare,
-          adminShare,
-          labelPercentage: 21,
-          artistPercentage: 49,
-          adminPercentage: 30,
-        };
-      }
+      // Flat split for all labels: 70% Artist, 21% Label, 9% Admin
+      const artistShare = totalRevenue * 0.70;
+      const labelShare = totalRevenue * 0.21;
+      const adminShare = totalRevenue * 0.09;
+      return {
+        label,
+        totalRevenue,
+        labelShare,
+        artistShare,
+        adminShare,
+        labelPercentage: 21,
+        artistPercentage: 70,
+        adminPercentage: 9,
+      };
     }).sort((a, b) => b.totalRevenue - a.totalRevenue);
   };
 
