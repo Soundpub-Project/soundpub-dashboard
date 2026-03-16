@@ -1023,7 +1023,7 @@ export default function UploadRoyalty() {
                       ))}
                     </div>
                     <p className="text-xs text-muted-foreground mt-3">
-                      * Soundpub Music: 70% Artist, 30% Label | Label lain: 49% Artist, 21% Label, 30% Admin
+                      * Semua label: 70% Artist, 21% Label, 9% Admin
                     </p>
                   </div>
                 )}

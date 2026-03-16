@@ -648,9 +648,7 @@ export default function RoyaltySummary() {
                                   <TableCell>
                                     <div className="flex items-center gap-1">
                                       <Badge variant="outline" className="text-xs">{track.label}</Badge>
-                                      {track.isSoundpub && (
-                                        <Badge variant="outline" className="text-xs bg-primary/10 text-primary">70/30</Badge>
-                                      )}
+                                    </div>
                                     </div>
                                   </TableCell>
                                   <TableCell className="text-right text-green-500 font-medium">{formatCurrency(track.revenue)}</TableCell>
