@@ -73,18 +73,6 @@ export default function AllRoyalties() {
     }
   };
 
-  // Show loading while auth is being determined
-  if (authLoading) {
-    return (
-      <DashboardLayout>
-        <div className="flex flex-col items-center justify-center py-24 gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Memuat...</p>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
   // Unique filter options
   const periods = useMemo(() => [...new Set(royalties.map(r => r.period))].sort().reverse(), [royalties]);
   const labels = useMemo(() => [...new Set(royalties.map(r => r.label_name))].sort(), [royalties]);
