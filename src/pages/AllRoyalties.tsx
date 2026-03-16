@@ -37,8 +37,9 @@ import {
   ListMusic,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
-export default function AllRoyalties() {
+function AllRoyaltiesContent() {
   const { user, loading: authLoading, isAdmin } = useAuth();
   const [royalties, setRoyalties] = useState<RoyaltyRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,14 +102,19 @@ export default function AllRoyalties() {
   // KPI stats - use quickStats for unfiltered, computed for filtered
   const hasFilters = selectedPeriod !== 'all' || selectedLabel !== 'all' || selectedArtist !== 'all' || searchTerm !== '';
   const stats = useMemo(() => {
-    if (!hasFilters && quickStats) return { ...quickStats };
-    const totalRevenue = filtered.reduce((s, r) => s + Number(r.net_revenue || 0), 0);
-    const totalStreams = filtered.reduce((s, r) => s + Number(r.sales_unit || 0), 0);
-    const uniqueArtists = new Set(filtered.filter(r => r.artist).map(r => r.artist!)).size;
-    const uniqueLabels = new Set(filtered.map(r => r.label_name)).size;
-    const uniqueTracks = new Set(filtered.map(r => r.isrc)).size;
-    const uniquePlatforms = new Set(filtered.map(r => r.platform)).size;
-    return { totalRevenue, totalStreams, uniqueArtists, uniqueLabels, uniqueTracks, uniquePlatforms };
+    const defaultStats = { totalRevenue: 0, totalStreams: 0, uniqueArtists: 0, uniqueLabels: 0, uniqueTracks: 0, uniquePlatforms: 0 };
+    try {
+      if (!hasFilters && quickStats) return { ...defaultStats, ...quickStats };
+      const totalRevenue = filtered.reduce((s, r) => s + Number(r.net_revenue || 0), 0);
+      const totalStreams = filtered.reduce((s, r) => s + Number(r.sales_unit || 0), 0);
+      const uniqueArtists = new Set(filtered.filter(r => r.artist).map(r => r.artist!)).size;
+      const uniqueLabels = new Set(filtered.map(r => r.label_name)).size;
+      const uniqueTracks = new Set(filtered.map(r => r.isrc)).size;
+      const uniquePlatforms = new Set(filtered.map(r => r.platform)).size;
+      return { totalRevenue, totalStreams, uniqueArtists, uniqueLabels, uniqueTracks, uniquePlatforms };
+    } catch {
+      return defaultStats;
+    }
   }, [filtered, hasFilters, quickStats]);
 
   // Breakdown: Per Artist
@@ -529,5 +535,13 @@ export default function AllRoyalties() {
         )}
       </div>
     </DashboardLayout>
+  );
+}
+
+export default function AllRoyalties() {
+  return (
+    <ErrorBoundary fallbackTitle="Gagal memuat halaman Semua Royalti">
+      <AllRoyaltiesContent />
+    </ErrorBoundary>
   );
 }
