@@ -1,6 +1,6 @@
 -- =====================================================
--- SoundPub Dashboard - Full Database Schema Export v2
--- Updated: February 2026
+-- SoundPub Dashboard - Full Database Schema Export v2.1
+-- Updated: March 2026
 -- Untuk migrasi ke Supabase Self-Hosted di VPS
 -- =====================================================
 
