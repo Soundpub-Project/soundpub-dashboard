@@ -600,7 +600,7 @@ export default function RoyaltySummary() {
                         Ringkasan Per Lagu dengan Revenue Split
                       </CardTitle>
                       <CardDescription>
-                        Detail performa setiap lagu. Soundpub: 70% Artist, 30% Label | Label lain: 49% Artist, 21% Label, 30% Admin
+                        Sistem Share: 70% Artist, 21% Label, 9% Admin
                       </CardDescription>
                     </div>
                     <Button
