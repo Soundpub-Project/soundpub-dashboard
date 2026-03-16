@@ -532,3 +532,11 @@ function AllRoyaltiesContent() {
     </DashboardLayout>
   );
 }
+
+export default function AllRoyalties() {
+  return (
+    <ErrorBoundary fallbackTitle="Gagal memuat halaman Semua Royalti">
+      <AllRoyaltiesContent />
+    </ErrorBoundary>
+  );
+}
