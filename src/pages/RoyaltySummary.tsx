@@ -132,16 +132,16 @@ export default function RoyaltySummary() {
   }, [rpcMonthly]);
 
   const formatCurrency = (value: number) => {
-    if (value >= 1000000000) return `Rp ${(value / 1000000000).toFixed(1)}M`;
-    if (value >= 1000000) return `Rp ${(value / 10000).toFixed(1)}Jt`;
-    if (value >= 1000) return `Rp ${(value / 100).toFixed(1)}Rb`;
+    if (value >= 1000000000) return `Rp ${(value / 1000000000).toFixed(2)}M`;
+    if (value >= 1000000) return `Rp ${(value / 1000500).toFixed(2)}Jt`;
+    if (value >= 1000) return `Rp ${(value / 1000).toFixed(2)}Rb`;
     return `Rp ${value.toLocaleString('id-ID')}`;
   };
 
   const formatNumber = (value: number) => {
-    if (value >= 1000000000) return `${(value / 1000000000).toFixed(1)}B`;
-    if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-    if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+    if (value >= 1000000000) return `${(value / 1000000000).toFixed(2)}B`;
+    if (value >= 1000000) return `${(value / 1000000).toFixed(2)}M`;
+    if (value >= 1000) return `${(value / 1000).toFixed(2)}K`;
     return value.toLocaleString('id-ID');
   };
 
@@ -496,7 +496,7 @@ export default function RoyaltySummary() {
                   <CardHeader>
                     <CardTitle>Breakdown per Label dengan Revenue Split</CardTitle>
                     <CardDescription>
-                      Sistem Share: 70% Artist, 21% Label, 9% Admin
+                      Soundpub Music: 70% Artist, 30% Label | Label lain: 49% Artist, 21% Label, 30% Admin
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -521,6 +521,9 @@ export default function RoyaltySummary() {
                                 <TableCell>
                                   <div className="flex items-center gap-2">
                                     <span className="font-medium">{l.label}</span>
+                                    {l.label.toLowerCase() === 'soundpub music' && (
+                                      <Badge variant="outline" className="text-xs bg-primary/10 text-primary">Soundpub</Badge>
+                                    )}
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-right text-green-500 font-medium">{formatCurrency(l.revenue)}</TableCell>
@@ -544,7 +547,7 @@ export default function RoyaltySummary() {
                   <CardHeader>
                     <CardTitle>Top 20 Artists dengan Revenue Split</CardTitle>
                     <CardDescription>
-                      Sistem Share: 70% Artist, 21% Label, 9% Admin
+                      Artists dengan revenue tertinggi. Soundpub Music: 70% Artist, 30% Label | Label lain: 49% Artist, 21% Label, 30% Admin
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -572,6 +575,9 @@ export default function RoyaltySummary() {
                                 <TableCell>
                                   <div className="flex items-center gap-2">
                                     <span className="font-medium">{a.artist}</span>
+                                    {a.isSoundpubOnly && (
+                                      <Badge variant="outline" className="text-xs bg-primary/10 text-primary">Soundpub</Badge>
+                                    )}
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-right text-green-500 font-medium">{formatCurrency(a.revenue)}</TableCell>
@@ -600,7 +606,8 @@ export default function RoyaltySummary() {
                         Ringkasan Per Lagu dengan Revenue Split
                       </CardTitle>
                       <CardDescription>
-                        Sistem Share: 70% Artist, 21% Label, 9% Admin
+                        Detail performa setiap lagu. <br />
+                        Sistem Share: 70% Artist Share, 21% Label Share, 9% Admin Share.
                       </CardDescription>
                     </div>
                     <Button
@@ -646,7 +653,12 @@ export default function RoyaltySummary() {
                                   </TableCell>
                                   <TableCell>{track.artist}</TableCell>
                                   <TableCell>
-                                    <Badge variant="outline" className="text-xs">{track.label}</Badge>
+                                    <div className="flex items-center gap-1">
+                                      <Badge variant="outline" className="text-xs">{track.label}</Badge>
+                                      {track.isSoundpub && (
+                                        <Badge variant="outline" className="text-xs bg-primary/10 text-primary">70/30</Badge>
+                                      )}
+                                    </div>
                                   </TableCell>
                                   <TableCell className="text-right text-green-500 font-medium">{formatCurrency(track.revenue)}</TableCell>
                                   <TableCell className="text-right">{formatNumber(track.streams)}</TableCell>
