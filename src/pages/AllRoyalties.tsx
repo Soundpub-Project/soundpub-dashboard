@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { fetchAllRoyalties, type RoyaltyRecord } from '@/lib/fetchAllRoyalties';
 import { useRoyaltyStats } from '@/hooks/useRoyaltyData';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -38,6 +39,7 @@ import {
 import { toast } from 'sonner';
 
 export default function AllRoyalties() {
+  const { user, loading: authLoading, isAdmin } = useAuth();
   const [royalties, setRoyalties] = useState<RoyaltyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,10 +52,16 @@ export default function AllRoyalties() {
   const { data: quickStats } = useRoyaltyStats();
 
   useEffect(() => {
-    loadData();
-  }, []);
+    // Only fetch data once auth is ready and user is confirmed
+    if (!authLoading && user && isAdmin) {
+      loadData();
+    } else if (!authLoading && !user) {
+      setLoading(false);
+    }
+  }, [authLoading, user, isAdmin]);
 
   const loadData = async () => {
+    setLoading(true);
     try {
       const data = await fetchAllRoyalties();
       setRoyalties(data);
@@ -197,6 +205,18 @@ export default function AllRoyalties() {
       Sales_Type: r.sales_type || '', Streams: r.sales_unit, Revenue: Number(r.net_revenue).toFixed(2),
     })), 'all-royalties');
   };
+
+  // Show loading while auth is being determined
+  if (authLoading || (loading && !royalties.length)) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center py-24 gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Memuat data royalti...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
