@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { fetchAllRoyalties, type RoyaltyRecord } from '@/lib/fetchAllRoyalties';
 import { useRoyaltyStats } from '@/hooks/useRoyaltyData';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -38,6 +39,7 @@ import {
 import { toast } from 'sonner';
 
 export default function AllRoyalties() {
+  const { user, loading: authLoading, isAdmin } = useAuth();
   const [royalties, setRoyalties] = useState<RoyaltyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,10 +52,16 @@ export default function AllRoyalties() {
   const { data: quickStats } = useRoyaltyStats();
 
   useEffect(() => {
-    loadData();
-  }, []);
+    // Only fetch data once auth is ready and user is confirmed
+    if (!authLoading && user && isAdmin) {
+      loadData();
+    } else if (!authLoading && !user) {
+      setLoading(false);
+    }
+  }, [authLoading, user, isAdmin]);
 
   const loadData = async () => {
+    setLoading(true);
     try {
       const data = await fetchAllRoyalties();
       setRoyalties(data);
@@ -64,6 +72,18 @@ export default function AllRoyalties() {
       setLoading(false);
     }
   };
+
+  // Show loading while auth is being determined
+  if (authLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center py-24 gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Memuat...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   // Unique filter options
   const periods = useMemo(() => [...new Set(royalties.map(r => r.period))].sort().reverse(), [royalties]);
