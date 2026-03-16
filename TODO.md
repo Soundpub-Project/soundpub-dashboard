@@ -195,6 +195,13 @@
 - [x] **Settings Page 2-Column Layout** - Layout desktop lebih optimal dengan 2 kolom
 - [x] **Theme Toggle** - Light/Dark mode toggle
 
+### Bug Fixes & Improvements (Maret 2026)
+- [x] **AllRoyalties White Screen Fix** - ErrorBoundary, null safety, SelectItem filter untuk mencegah crash
+- [x] **RoyaltySummary migrasi ke RPC hooks** - Tidak lagi menggunakan fetchAllRoyalties() yang lambat
+- [x] **Analytics migrasi ke RPC hooks** - KPI dan chart menggunakan RPC functions
+- [x] **Remove-artist-from-label: validasi releases** - Cek releases aktif/pending sebelum hapus artis
+- [x] **Remove-artist-from-label: hapus dari tabel artists** - Artis yang dihapus tidak lagi muncul di form releases
+
 ### Edge Function Standards ✅
 - [x] **Pin version `@supabase/supabase-js@2.49.1`** - Mencegah bundle timeout
 - [x] **Full CORS headers** termasuk `Access-Control-Allow-Methods`
