@@ -569,10 +569,43 @@ export type Database = {
         Args: { _artist_name: string; _label_id?: string }
         Returns: string
       }
+      get_royalty_artist_breakdown: {
+        Args: { _limit?: number; _period?: string }
+        Returns: {
+          admin_share: number
+          artist_name: string
+          artist_share: number
+          is_soundpub: boolean
+          label_share: number
+          revenue: number
+          streams: number
+          track_count: number
+        }[]
+      }
+      get_royalty_comparison: {
+        Args: { _current_periods: string[]; _previous_periods: string[] }
+        Returns: {
+          data_type: string
+          period: string
+          revenue: number
+          streams: number
+        }[]
+      }
       get_royalty_country_summary: {
         Args: { _limit?: number }
         Returns: {
           country: string
+          revenue: number
+          streams: number
+        }[]
+      }
+      get_royalty_label_breakdown: {
+        Args: { _period?: string }
+        Returns: {
+          admin_share: number
+          artist_share: number
+          label_name: string
+          label_share: number
           revenue: number
           streams: number
         }[]
@@ -583,6 +616,20 @@ export type Database = {
           period: string
           revenue: number
           streams: number
+        }[]
+      }
+      get_royalty_period_summary: {
+        Args: never
+        Returns: {
+          growth: number
+          period: string
+          revenue: number
+          streams: number
+          top_country: string
+          top_platform: string
+          unique_artists: number
+          unique_labels: number
+          unique_tracks: number
         }[]
       }
       get_royalty_periods: {
@@ -608,6 +655,37 @@ export type Database = {
           unique_labels: number
           unique_platforms: number
           unique_tracks: number
+        }[]
+      }
+      get_royalty_top_performers: {
+        Args: {
+          _current_periods: string[]
+          _group_by?: string
+          _limit?: number
+          _previous_periods: string[]
+        }
+        Returns: {
+          growth: number
+          name: string
+          revenue: number
+          streams: number
+        }[]
+      }
+      get_royalty_track_breakdown: {
+        Args: { _period?: string }
+        Returns: {
+          admin_share: number
+          artist_name: string
+          artist_share: number
+          country_count: number
+          is_soundpub: boolean
+          isrc: string
+          label: string
+          label_share: number
+          platform_count: number
+          revenue: number
+          streams: number
+          title: string
         }[]
       }
       get_user_full_name: { Args: { _user_id: string }; Returns: string }
