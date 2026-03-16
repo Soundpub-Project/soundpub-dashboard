@@ -37,8 +37,9 @@ import {
   ListMusic,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
-export default function AllRoyalties() {
+function AllRoyaltiesContent() {
   const { user, loading: authLoading, isAdmin } = useAuth();
   const [royalties, setRoyalties] = useState<RoyaltyRecord[]>([]);
   const [loading, setLoading] = useState(true);
