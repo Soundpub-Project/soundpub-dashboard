@@ -200,7 +200,7 @@
 - [x] **RoyaltySummary migrasi ke RPC hooks** - Tidak lagi menggunakan fetchAllRoyalties() yang lambat
 - [x] **Analytics migrasi ke RPC hooks** - KPI dan chart menggunakan RPC functions
 - [x] **Remove-artist-from-label: validasi releases** - Cek releases aktif/pending sebelum hapus artis
-- [x] **Remove-artist-from-label: hapus dari tabel artists** - Artis yang dihapus tidak lagi muncul di form releases
+- [x] **Samakan fitur releases untuk role artis** - Artis menggunakan ReleaseFormDialog lengkap dengan auto-set label_id dan artist_name, RLS policy INSERT/UPDATE sudah ada
 
 ### Edge Function Standards ✅
 - [x] **Pin version `@supabase/supabase-js@2.49.1`** - Mencegah bundle timeout
@@ -210,9 +210,6 @@
 ---
 
 ## ❌ Belum Dikerjakan
-
-### Medium Priority
-- [ ] **Samakan fitur releases untuk role artis** - Artis menggunakan ReleaseFormDialog lengkap (bukan ArtistReleaseFormDialog beta), dengan auto-set label_id dan artist_name, serta RLS policy INSERT/UPDATE
 
 ### Low Priority
 - [ ] **Artist Profile Page**

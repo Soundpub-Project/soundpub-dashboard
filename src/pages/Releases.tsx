@@ -40,7 +40,7 @@ import {
 } from '@/components/ui/pagination';
 import { Disc3, Search, Plus, Loader2, Pencil, Eye, MoreHorizontal, Trash2, Archive, ArchiveRestore, CheckSquare, Beaker, Filter, X } from 'lucide-react';
 import { ReleaseFormDialog } from '@/components/releases/ReleaseFormDialog';
-import { ArtistReleaseFormDialog } from '@/components/releases/ArtistReleaseFormDialog';
+
 import { DeleteReleaseDialog } from '@/components/releases/DeleteReleaseDialog';
 import { ArchiveReleaseDialog } from '@/components/releases/ArchiveReleaseDialog';
 import { toast } from 'sonner';
@@ -82,7 +82,7 @@ export default function Releases() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [formOpen, setFormOpen] = useState(false);
-  const [artistFormOpen, setArtistFormOpen] = useState(false);
+  
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
@@ -735,11 +735,6 @@ export default function Releases() {
           lyricsOnlyMode={lyricsOnlyMode}
         />
 
-        <ArtistReleaseFormDialog
-          open={artistFormOpen}
-          onOpenChange={setArtistFormOpen}
-          onSuccess={handleFormSuccess}
-        />
 
         <DeleteReleaseDialog
           open={deleteDialogOpen}
