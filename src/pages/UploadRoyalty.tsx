@@ -1006,12 +1006,10 @@ export default function UploadRoyalty() {
                             </span>
                           </div>
                           <div className="grid grid-cols-3 gap-2 text-sm">
-                            {split.adminPercentage > 0 && (
-                              <div className="p-2 rounded bg-red-500/10 border border-red-500/20">
-                                <p className="text-xs text-muted-foreground">Admin ({split.adminPercentage}%)</p>
-                                <p className="font-mono text-red-400">Rp {split.adminShare.toLocaleString('id-ID')}</p>
-                              </div>
-                            )}
+                            <div className="p-2 rounded bg-red-500/10 border border-red-500/20">
+                              <p className="text-xs text-muted-foreground">Admin ({split.adminPercentage}%)</p>
+                              <p className="font-mono text-red-400">Rp {split.adminShare.toLocaleString('id-ID')}</p>
+                            </div>
                             <div className="p-2 rounded bg-blue-500/10 border border-blue-500/20">
                               <p className="text-xs text-muted-foreground">Label ({split.labelPercentage}%)</p>
                               <p className="font-mono text-blue-400">Rp {split.labelShare.toLocaleString('id-ID')}</p>
