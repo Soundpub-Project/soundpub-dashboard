@@ -646,10 +646,7 @@ export default function RoyaltySummary() {
                                   </TableCell>
                                   <TableCell>{track.artist}</TableCell>
                                   <TableCell>
-                                    <div className="flex items-center gap-1">
-                                      <Badge variant="outline" className="text-xs">{track.label}</Badge>
-                                    </div>
-                                    </div>
+                                    <Badge variant="outline" className="text-xs">{track.label}</Badge>
                                   </TableCell>
                                   <TableCell className="text-right text-green-500 font-medium">{formatCurrency(track.revenue)}</TableCell>
                                   <TableCell className="text-right">{formatNumber(track.streams)}</TableCell>
