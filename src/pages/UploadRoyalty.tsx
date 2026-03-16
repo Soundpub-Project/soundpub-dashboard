@@ -65,7 +65,6 @@ interface UploadSummary {
 
 interface RevenueSplitPreview {
   label: string;
-  isSoundpubLabel: boolean;
   totalRevenue: number;
   labelShare: number;
   artistShare: number;
