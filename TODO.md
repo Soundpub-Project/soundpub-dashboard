@@ -211,6 +211,9 @@
 
 ## ❌ Belum Dikerjakan
 
+### Medium Priority
+- [ ] **Samakan fitur releases untuk role artis** - Artis menggunakan ReleaseFormDialog lengkap (bukan ArtistReleaseFormDialog beta), dengan auto-set label_id dan artist_name, serta RLS policy INSERT/UPDATE
+
 ### Low Priority
 - [ ] **Artist Profile Page**
   - Public profile page untuk artist
