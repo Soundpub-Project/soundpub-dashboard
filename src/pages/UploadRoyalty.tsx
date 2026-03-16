@@ -1000,11 +1000,6 @@ export default function UploadRoyalty() {
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
                               <span className="font-medium">{split.label}</span>
-                              {split.isSoundpubLabel && (
-                                <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/30">
-                                  Soundpub Label
-                                </Badge>
-                              )}
                             </div>
                             <span className="font-mono text-sm text-muted-foreground">
                               Total: Rp {split.totalRevenue.toLocaleString('id-ID')}
