@@ -133,8 +133,8 @@ export default function RoyaltySummary() {
 
   const formatCurrency = (value: number) => {
     if (value >= 1000000000) return `Rp ${(value / 1000000000).toFixed(1)}M`;
-    if (value >= 1000000) return `Rp ${(value / 1000000).toFixed(1)}Jt`;
-    if (value >= 1000) return `Rp ${(value / 1000).toFixed(1)}Rb`;
+    if (value >= 1000000) return `Rp ${(value / 10000).toFixed(1)}Jt`;
+    if (value >= 1000) return `Rp ${(value / 100).toFixed(1)}Rb`;
     return `Rp ${value.toLocaleString('id-ID')}`;
   };
 
