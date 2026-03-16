@@ -65,10 +65,11 @@ function AllRoyaltiesContent() {
     setLoading(true);
     try {
       const data = await fetchAllRoyalties();
-      setRoyalties(data);
-    } catch (error) {
-      console.error('Error fetching royalties:', error);
-      toast.error('Gagal memuat data royalti');
+      setRoyalties(data ?? []);
+    } catch (error: any) {
+      console.error('Error fetching royalties:', error?.message, error?.code, error?.details, error);
+      toast.error(`Gagal memuat data royalti: ${error?.message || 'Unknown error'}`);
+      setRoyalties([]);
     } finally {
       setLoading(false);
     }
