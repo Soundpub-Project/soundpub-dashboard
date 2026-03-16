@@ -544,7 +544,7 @@ export default function RoyaltySummary() {
                   <CardHeader>
                     <CardTitle>Top 20 Artists dengan Revenue Split</CardTitle>
                     <CardDescription>
-                      Artists dengan revenue tertinggi. Soundpub Music: 70% Artist, 30% Label | Label lain: 49% Artist, 21% Label, 30% Admin
+                      Sistem Share: 70% Artist, 21% Label, 9% Admin
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
