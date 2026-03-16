@@ -58,7 +58,7 @@ export function ArtistSelector({
   // Use local state for the input to prevent focus loss
   const [localName, setLocalName] = useState(artistName);
   const inputRef = useRef<HTMLInputElement>(null);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Sync local state when prop changes (from external updates)
   useEffect(() => {
