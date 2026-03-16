@@ -1,7 +1,15 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { fetchAllRoyalties } from '@/lib/fetchAllRoyalties';
-import { useRoyaltyPeriods, useRoyaltyStats, useRoyaltyMonthlySummary, useRoyaltyPlatformSummary } from '@/hooks/useRoyaltyData';
+import {
+  useRoyaltyPeriods,
+  useRoyaltyStats,
+  useRoyaltyMonthlySummary,
+  useRoyaltyPlatformSummary,
+  useRoyaltyPeriodSummary,
+  useRoyaltyLabelBreakdown,
+  useRoyaltyArtistBreakdown,
+  useRoyaltyTrackBreakdown,
+} from '@/hooks/useRoyaltyData';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -19,7 +27,6 @@ import { Button } from '@/components/ui/button';
 import { 
   Loader2, 
   TrendingUp, 
-  TrendingDown, 
   DollarSign, 
   Music2, 
   Globe, 
@@ -36,9 +43,6 @@ import { toast } from 'sonner';
 import {
   AreaChart,
   Area,
-  BarChart,
-  Bar,
-  LineChart,
   Line,
   PieChart,
   Pie,
@@ -52,48 +56,6 @@ import {
 } from 'recharts';
 import { cn } from '@/lib/utils';
 
-interface Royalty {
-  id: string;
-  period: string;
-  isrc: string;
-  title: string | null;
-  artist: string;
-  label_name: string;
-  platform: string;
-  country: string;
-  sales_type: string | null;
-  sales_unit: number;
-  net_revenue: number;
-}
-
-interface PeriodSummary {
-  period: string;
-  totalRevenue: number;
-  totalStreams: number;
-  uniqueTracks: number;
-  uniqueArtists: number;
-  uniqueLabels: number;
-  topPlatform: string;
-  topCountry: string;
-  growth: number;
-}
-
-interface PlatformBreakdown {
-  platform: string;
-  revenue: number;
-  streams: number;
-  percentage: number;
-}
-
-interface LabelBreakdown {
-  label: string;
-  revenue: number;
-  streams: number;
-  artistRevenue: number;
-  labelRevenue: number;
-  adminRevenue: number;
-}
-
 const CHART_COLORS = [
   'hsl(var(--chart-1))',
   'hsl(var(--chart-2))',
@@ -106,280 +68,34 @@ const CHART_COLORS = [
 ];
 
 export default function RoyaltySummary() {
-  const { isArtist, profile } = useAuth();
-  const [royalties, setRoyalties] = useState<Royalty[]>([]);
-  const [detailLoading, setDetailLoading] = useState(true);
+  const { isArtist } = useAuth();
   const [selectedPeriod, setSelectedPeriod] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'overview' | 'platform' | 'label' | 'artist'>('overview');
   const [exporting, setExporting] = useState(false);
+
+  // RPC hooks
   const { data: periods = [] } = useRoyaltyPeriods();
   const { data: rpcStats, isLoading: statsLoading } = useRoyaltyStats();
-  const { data: rpcMonthly = [], isLoading: monthlyLoading } = useRoyaltyMonthlySummary();
-  const { data: rpcPlatforms = [], isLoading: platformsLoading } = useRoyaltyPlatformSummary(10);
+  const { data: rpcMonthly = [] } = useRoyaltyMonthlySummary();
+  const { data: periodSummaries = [], isLoading: periodLoading } = useRoyaltyPeriodSummary();
+  const { data: rpcPlatforms = [] } = useRoyaltyPlatformSummary(10);
 
-  // Loading state: show content as soon as RPC data is available
-  const loading = statsLoading && detailLoading;
+  const filterPeriod = selectedPeriod === 'all' ? null : selectedPeriod;
+  const { data: labelBreakdown = [], isLoading: labelLoading } = useRoyaltyLabelBreakdown(filterPeriod);
+  const { data: artistBreakdown = [], isLoading: artistLoading } = useRoyaltyArtistBreakdown(filterPeriod, 20);
+  const { data: trackBreakdown = [], isLoading: trackLoading } = useRoyaltyTrackBreakdown(filterPeriod);
 
-  useEffect(() => {
-    fetchRoyaltiesData();
-  }, []);
+  const loading = statsLoading && periodLoading;
 
-  const fetchRoyaltiesData = async () => {
-    try {
-      const data = await fetchAllRoyalties();
-      setRoyalties(data as unknown as Royalty[]);
-    } catch (error) {
-      console.error('Error fetching royalties:', error);
-    } finally {
-      setDetailLoading(false);
-    }
-  };
-
-  const periodList = useMemo(() => {
-    if (periods.length > 0) return periods;
-    return [...new Set(royalties.map(r => r.period))].sort().reverse();
-  }, [royalties, periods]);
-
-  // Filter royalties by selected period
-  const filteredRoyalties = useMemo(() => {
-    if (selectedPeriod === 'all') return royalties;
-    return royalties.filter(r => r.period === selectedPeriod);
-  }, [royalties, selectedPeriod]);
-
-  // Period summary data
-  const periodSummaries = useMemo((): PeriodSummary[] => {
-    const periodMap = new Map<string, {
-      revenue: number;
-      streams: number;
-      tracks: Set<string>;
-      artists: Set<string>;
-      labels: Set<string>;
-      platforms: Map<string, number>;
-      countries: Map<string, number>;
-    }>();
-
-    royalties.forEach((r) => {
-      const period = r.period;
-      if (!periodMap.has(period)) {
-        periodMap.set(period, {
-          revenue: 0,
-          streams: 0,
-          tracks: new Set(),
-          artists: new Set(),
-          labels: new Set(),
-          platforms: new Map(),
-          countries: new Map(),
-        });
-      }
-      const data = periodMap.get(period)!;
-      data.revenue += Number(r.net_revenue || 0);
-      data.streams += Number(r.sales_unit || 0);
-      data.tracks.add(r.isrc);
-      if (r.artist) data.artists.add(r.artist);
-      data.labels.add(r.label_name);
-      data.platforms.set(r.platform, (data.platforms.get(r.platform) || 0) + Number(r.net_revenue || 0));
-      data.countries.set(r.country, (data.countries.get(r.country) || 0) + Number(r.net_revenue || 0));
-    });
-
-    const sortedPeriods = Array.from(periodMap.keys()).sort();
-    
-    return sortedPeriods.map((period, index) => {
-      const data = periodMap.get(period)!;
-      const prevPeriod = index > 0 ? sortedPeriods[index - 1] : null;
-      const prevRevenue = prevPeriod ? periodMap.get(prevPeriod)!.revenue : 0;
-      const growth = prevRevenue > 0 ? ((data.revenue - prevRevenue) / prevRevenue) * 100 : 0;
-      
-      const topPlatform = Array.from(data.platforms.entries())
-        .sort((a, b) => b[1] - a[1])[0]?.[0] || '-';
-      const topCountry = Array.from(data.countries.entries())
-        .sort((a, b) => b[1] - a[1])[0]?.[0] || '-';
-
-      return {
-        period,
-        totalRevenue: data.revenue,
-        totalStreams: data.streams,
-        uniqueTracks: data.tracks.size,
-        uniqueArtists: data.artists.size,
-        uniqueLabels: data.labels.size,
-        topPlatform,
-        topCountry,
-        growth,
-      };
-    }).reverse();
-  }, [royalties]);
-
-  // Revenue trend chart data
-  const revenueTrendData = useMemo(() => {
-    return periodSummaries.slice().reverse().map(p => ({
-      period: p.period,
-      revenue: p.totalRevenue,
-      streams: p.totalStreams,
+  // Platform breakdown from RPC (with percentage)
+  const platformBreakdown = useMemo(() => {
+    const totalRevenue = rpcPlatforms.reduce((sum, p) => sum + p.revenue, 0);
+    return rpcPlatforms.map(p => ({
+      ...p,
+      percentage: totalRevenue > 0 ? (p.revenue / totalRevenue) * 100 : 0,
     }));
-  }, [periodSummaries]);
+  }, [rpcPlatforms]);
 
-  // Platform breakdown for selected period
-  const platformBreakdown = useMemo((): PlatformBreakdown[] => {
-    const platformMap = new Map<string, { revenue: number; streams: number }>();
-    
-    filteredRoyalties.forEach((r) => {
-      const existing = platformMap.get(r.platform) || { revenue: 0, streams: 0 };
-      platformMap.set(r.platform, {
-        revenue: existing.revenue + Number(r.net_revenue || 0),
-        streams: existing.streams + Number(r.sales_unit || 0),
-      });
-    });
-
-    const totalRevenue = Array.from(platformMap.values()).reduce((sum, p) => sum + p.revenue, 0);
-
-    return Array.from(platformMap.entries())
-      .map(([platform, data]) => ({
-        platform,
-        revenue: data.revenue,
-        streams: data.streams,
-        percentage: totalRevenue > 0 ? (data.revenue / totalRevenue) * 100 : 0,
-      }))
-      .sort((a, b) => b.revenue - a.revenue);
-  }, [filteredRoyalties]);
-
-  // Label breakdown with revenue split
-  const labelBreakdown = useMemo((): LabelBreakdown[] => {
-    const labelMap = new Map<string, { revenue: number; streams: number }>();
-    
-    filteredRoyalties.forEach((r) => {
-      const existing = labelMap.get(r.label_name) || { revenue: 0, streams: 0 };
-      labelMap.set(r.label_name, {
-        revenue: existing.revenue + Number(r.net_revenue || 0),
-        streams: existing.streams + Number(r.sales_unit || 0),
-      });
-    });
-
-    return Array.from(labelMap.entries())
-      .map(([label, data]) => {
-        const isSoundpub = label.toLowerCase() === 'soundpub music';
-        const artistRevenue = isSoundpub ? data.revenue * 0.70 : data.revenue * 0.49;
-        const labelRevenue = isSoundpub ? data.revenue * 0.30 : data.revenue * 0.21;
-        const adminRevenue = isSoundpub ? 0 : data.revenue * 0.30;
-        
-        return {
-          label,
-          revenue: data.revenue,
-          streams: data.streams,
-          artistRevenue,
-          labelRevenue,
-          adminRevenue,
-        };
-      })
-      .sort((a, b) => b.revenue - a.revenue);
-  }, [filteredRoyalties]);
-
-  // Artist breakdown with revenue split
-  const artistBreakdown = useMemo(() => {
-    const artistMap = new Map<string, { 
-      revenue: number; 
-      streams: number; 
-      tracks: Set<string>;
-      labels: Set<string>;
-    }>();
-    
-    filteredRoyalties.forEach((r) => {
-      if (!r.artist) return;
-      const existing = artistMap.get(r.artist) || { 
-        revenue: 0, 
-        streams: 0, 
-        tracks: new Set(),
-        labels: new Set(),
-      };
-      existing.revenue += Number(r.net_revenue || 0);
-      existing.streams += Number(r.sales_unit || 0);
-      existing.tracks.add(r.isrc);
-      existing.labels.add(r.label_name);
-      artistMap.set(r.artist, existing);
-    });
-
-    return Array.from(artistMap.entries())
-      .map(([artist, data]) => {
-        // Check if all labels are Soundpub Music
-        const isSoundpubOnly = data.labels.size === 1 && 
-          Array.from(data.labels)[0]?.toLowerCase() === 'soundpub music';
-        
-        // Calculate revenue split
-        const artistRevenue = isSoundpubOnly ? data.revenue * 0.70 : data.revenue * 0.49;
-        const labelRevenue = isSoundpubOnly ? data.revenue * 0.30 : data.revenue * 0.21;
-        const adminRevenue = isSoundpubOnly ? 0 : data.revenue * 0.30;
-        
-        return {
-          artist,
-          revenue: data.revenue,
-          streams: data.streams,
-          trackCount: data.tracks.size,
-          artistRevenue,
-          labelRevenue,
-          adminRevenue,
-          isSoundpubOnly,
-        };
-      })
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 20);
-  }, [filteredRoyalties]);
-
-  // Track breakdown (for artists - shows per song summary) with revenue split
-  const trackBreakdown = useMemo(() => {
-    const trackMap = new Map<string, { 
-      title: string; 
-      isrc: string;
-      artist: string;
-      revenue: number; 
-      streams: number; 
-      label: string;
-      platforms: Set<string>;
-      countries: Set<string>;
-    }>();
-    
-    filteredRoyalties.forEach((r) => {
-      const key = r.isrc;
-      const existing = trackMap.get(key) || { 
-        title: r.title || 'Unknown', 
-        isrc: r.isrc,
-        artist: r.artist || 'Unknown',
-        revenue: 0, 
-        streams: 0, 
-        label: r.label_name,
-        platforms: new Set(),
-        countries: new Set(),
-      };
-      existing.revenue += Number(r.net_revenue || 0);
-      existing.streams += Number(r.sales_unit || 0);
-      existing.platforms.add(r.platform);
-      existing.countries.add(r.country);
-      trackMap.set(key, existing);
-    });
-
-    return Array.from(trackMap.entries())
-      .map(([isrc, data]) => {
-        const isSoundpub = data.label.toLowerCase() === 'soundpub music';
-        const artistRevenue = isSoundpub ? data.revenue * 0.70 : data.revenue * 0.49;
-        const labelRevenue = isSoundpub ? data.revenue * 0.30 : data.revenue * 0.21;
-        const adminRevenue = isSoundpub ? 0 : data.revenue * 0.30;
-        
-        return {
-          isrc,
-          title: data.title,
-          artist: data.artist,
-          revenue: data.revenue,
-          streams: data.streams,
-          label: data.label,
-          platformCount: data.platforms.size,
-          countryCount: data.countries.size,
-          artistRevenue,
-          labelRevenue,
-          adminRevenue,
-          isSoundpub,
-        };
-      })
-      .sort((a, b) => b.revenue - a.revenue);
-  }, [filteredRoyalties]);
-
-  // Total stats: use RPC data when available, fallback to filtered royalties
+  // Stats: use period-filtered data when a period is selected
   const totalStats = useMemo(() => {
     if (selectedPeriod === 'all' && rpcStats) {
       return {
@@ -391,63 +107,52 @@ export default function RoyaltySummary() {
         uniquePlatforms: rpcStats.uniquePlatforms,
       };
     }
-    const totalRevenue = filteredRoyalties.reduce((sum, r) => sum + Number(r.net_revenue || 0), 0);
-    const totalStreams = filteredRoyalties.reduce((sum, r) => sum + Number(r.sales_unit || 0), 0);
-    const uniqueTracks = new Set(filteredRoyalties.map(r => r.isrc)).size;
-    const uniqueArtists = new Set(filteredRoyalties.filter(r => r.artist).map(r => r.artist)).size;
-    const uniqueLabels = new Set(filteredRoyalties.map(r => r.label_name)).size;
-    const uniquePlatforms = new Set(filteredRoyalties.map(r => r.platform)).size;
-    
-    return { totalRevenue, totalStreams, uniqueTracks, uniqueArtists, uniqueLabels, uniquePlatforms };
-  }, [filteredRoyalties, selectedPeriod, rpcStats]);
+    // When period is selected, use the period summary data
+    const ps = periodSummaries.find(p => p.period === selectedPeriod);
+    if (ps) {
+      return {
+        totalRevenue: ps.totalRevenue,
+        totalStreams: ps.totalStreams,
+        uniqueTracks: ps.uniqueTracks,
+        uniqueArtists: ps.uniqueArtists,
+        uniqueLabels: ps.uniqueLabels,
+        uniquePlatforms: 0, // not in period summary
+      };
+    }
+    return { totalRevenue: 0, totalStreams: 0, uniqueTracks: 0, uniqueArtists: 0, uniqueLabels: 0, uniquePlatforms: 0 };
+  }, [selectedPeriod, rpcStats, periodSummaries]);
+
+  // Revenue trend chart data from monthly summary
+  const revenueTrendData = useMemo(() => {
+    return rpcMonthly.map(m => ({
+      period: m.period,
+      revenue: m.revenue,
+      streams: m.streams,
+    }));
+  }, [rpcMonthly]);
 
   const formatCurrency = (value: number) => {
-    if (value >= 1000000000) {
-      return `Rp ${(value / 1000000000).toFixed(1)}M`;
-    }
-    if (value >= 1000000) {
-      return `Rp ${(value / 1000000).toFixed(1)}Jt`;
-    }
-    if (value >= 1000) {
-      return `Rp ${(value / 1000).toFixed(1)}Rb`;
-    }
+    if (value >= 1000000000) return `Rp ${(value / 1000000000).toFixed(1)}M`;
+    if (value >= 1000000) return `Rp ${(value / 1000000).toFixed(1)}Jt`;
+    if (value >= 1000) return `Rp ${(value / 1000).toFixed(1)}Rb`;
     return `Rp ${value.toLocaleString('id-ID')}`;
   };
 
   const formatNumber = (value: number) => {
-    if (value >= 1000000000) {
-      return `${(value / 1000000000).toFixed(1)}B`;
-    }
-    if (value >= 1000000) {
-      return `${(value / 1000000).toFixed(1)}M`;
-    }
-    if (value >= 1000) {
-      return `${(value / 1000).toFixed(1)}K`;
-    }
+    if (value >= 1000000000) return `${(value / 1000000000).toFixed(1)}B`;
+    if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
     return value.toLocaleString('id-ID');
   };
 
-  // Export CSV function
   const exportTrackBreakdownCSV = () => {
     if (trackBreakdown.length === 0) {
       toast.error('Tidak ada data untuk diexport');
       return;
     }
-
     setExporting(true);
     try {
-      const headers = [
-        'No',
-        'Judul Lagu',
-        'ISRC',
-        'Label',
-        'Revenue (Rp)',
-        'Streams',
-        'Jumlah Platform',
-        'Jumlah Negara',
-        'Avg/Stream (Rp)'
-      ];
-
+      const headers = ['No','Judul Lagu','ISRC','Label','Revenue (Rp)','Streams','Jumlah Platform','Jumlah Negara','Avg/Stream (Rp)'];
       const csvRows = [
         headers.join(','),
         ...trackBreakdown.map((track, index) => {
@@ -461,12 +166,10 @@ export default function RoyaltySummary() {
             track.streams,
             track.platformCount,
             track.countryCount,
-            avgPerStream
+            avgPerStream,
           ].join(',');
-        })
+        }),
       ];
-
-      // Add summary row
       const totalRevenue = trackBreakdown.reduce((sum, t) => sum + t.revenue, 0);
       const totalStreams = trackBreakdown.reduce((sum, t) => sum + t.streams, 0);
       csvRows.push('');
@@ -476,18 +179,14 @@ export default function RoyaltySummary() {
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
-      
       const periodSuffix = selectedPeriod === 'all' ? 'all-periods' : selectedPeriod;
-      const filename = `royalty-per-lagu_${periodSuffix}_${new Date().toISOString().split('T')[0]}.csv`;
-      
       link.setAttribute('href', url);
-      link.setAttribute('download', filename);
+      link.setAttribute('download', `royalty-per-lagu_${periodSuffix}_${new Date().toISOString().split('T')[0]}.csv`);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-
       toast.success(`Berhasil export ${trackBreakdown.length} lagu ke CSV`);
     } catch (error) {
       console.error('Export error:', error);
@@ -522,6 +221,8 @@ export default function RoyaltySummary() {
     );
   }
 
+  const hasData = rpcStats && rpcStats.totalRevenue > 0;
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -539,7 +240,7 @@ export default function RoyaltySummary() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Semua Periode</SelectItem>
-                {periodList.map((period) => (
+                {periods.map((period) => (
                   <SelectItem key={period} value={period}>{period}</SelectItem>
                 ))}
               </SelectContent>
@@ -547,7 +248,7 @@ export default function RoyaltySummary() {
           </div>
         </div>
 
-        {royalties.length === 0 ? (
+        {!hasData ? (
           <Card className="bg-card/50 border-border/50">
             <CardContent className="py-12">
               <div className="text-center text-muted-foreground">
@@ -568,12 +269,9 @@ export default function RoyaltySummary() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-xl font-bold text-green-500">
-                    {formatCurrency(totalStats.totalRevenue)}
-                  </p>
+                  <p className="text-xl font-bold text-green-500">{formatCurrency(totalStats.totalRevenue)}</p>
                 </CardContent>
               </Card>
-              
               <Card className="bg-card/50 border-border/50">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-xs text-muted-foreground font-medium flex items-center gap-2">
@@ -582,12 +280,9 @@ export default function RoyaltySummary() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-xl font-bold">
-                    {formatNumber(totalStats.totalStreams)}
-                  </p>
+                  <p className="text-xl font-bold">{formatNumber(totalStats.totalStreams)}</p>
                 </CardContent>
               </Card>
-              
               <Card className="bg-card/50 border-border/50">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-xs text-muted-foreground font-medium flex items-center gap-2">
@@ -599,7 +294,6 @@ export default function RoyaltySummary() {
                   <p className="text-xl font-bold">{totalStats.uniqueTracks}</p>
                 </CardContent>
               </Card>
-              
               <Card className="bg-card/50 border-border/50">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-xs text-muted-foreground font-medium flex items-center gap-2">
@@ -611,7 +305,6 @@ export default function RoyaltySummary() {
                   <p className="text-xl font-bold">{totalStats.uniqueArtists}</p>
                 </CardContent>
               </Card>
-              
               <Card className="bg-card/50 border-border/50">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-xs text-muted-foreground font-medium flex items-center gap-2">
@@ -623,7 +316,6 @@ export default function RoyaltySummary() {
                   <p className="text-xl font-bold">{totalStats.uniqueLabels}</p>
                 </CardContent>
               </Card>
-              
               <Card className="bg-card/50 border-border/50">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-xs text-muted-foreground font-medium flex items-center gap-2">
@@ -632,7 +324,7 @@ export default function RoyaltySummary() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-xl font-bold">{totalStats.uniquePlatforms}</p>
+                  <p className="text-xl font-bold">{totalStats.uniquePlatforms || rpcStats?.uniquePlatforms || 0}</p>
                 </CardContent>
               </Card>
             </div>
@@ -657,57 +349,19 @@ export default function RoyaltySummary() {
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis 
-                        dataKey="period" 
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={12}
-                        tickLine={false}
-                      />
-                      <YAxis 
-                        yAxisId="left"
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={12}
-                        tickLine={false}
-                        tickFormatter={(value) => formatCurrency(value)}
-                      />
-                      <YAxis 
-                        yAxisId="right"
-                        orientation="right"
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={12}
-                        tickLine={false}
-                        tickFormatter={(value) => formatNumber(value)}
-                      />
+                      <XAxis dataKey="period" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} />
+                      <YAxis yAxisId="left" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} tickFormatter={(value) => formatCurrency(value)} />
+                      <YAxis yAxisId="right" orientation="right" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} tickFormatter={(value) => formatNumber(value)} />
                       <Tooltip 
-                        contentStyle={{
-                          backgroundColor: 'hsl(var(--card))',
-                          border: '1px solid hsl(var(--border))',
-                          borderRadius: '8px',
-                        }}
+                        contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
                         formatter={(value: number, name: string) => [
                           name === 'revenue' ? formatCurrency(value) : formatNumber(value),
                           name === 'revenue' ? 'Revenue' : 'Streams'
                         ]}
                       />
                       <Legend />
-                      <Area 
-                        yAxisId="left"
-                        type="monotone" 
-                        dataKey="revenue" 
-                        name="Revenue"
-                        stroke="hsl(var(--chart-1))" 
-                        fillOpacity={1} 
-                        fill="url(#colorRevenue)" 
-                      />
-                      <Line 
-                        yAxisId="right"
-                        type="monotone" 
-                        dataKey="streams" 
-                        name="Streams"
-                        stroke="hsl(var(--chart-2))" 
-                        strokeWidth={2}
-                        dot={false}
-                      />
+                      <Area yAxisId="left" type="monotone" dataKey="revenue" name="Revenue" stroke="hsl(var(--chart-1))" fillOpacity={1} fill="url(#colorRevenue)" />
+                      <Line yAxisId="right" type="monotone" dataKey="streams" name="Streams" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={false} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -736,44 +390,40 @@ export default function RoyaltySummary() {
                     <CardDescription>Detail performa setiap periode royalti</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Periode</TableHead>
-                            <TableHead className="text-right">Revenue</TableHead>
-                            <TableHead className="text-right">Streams</TableHead>
-                            <TableHead className="text-right">Tracks</TableHead>
-                            <TableHead className="text-right">Artists</TableHead>
-                            <TableHead>Top Platform</TableHead>
-                            <TableHead>Top Country</TableHead>
-                            <TableHead className="text-right">Growth</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {periodSummaries.map((summary) => (
-                            <TableRow key={summary.period}>
-                              <TableCell className="font-mono font-medium">{summary.period}</TableCell>
-                              <TableCell className="text-right text-green-500 font-medium">
-                                {formatCurrency(summary.totalRevenue)}
-                              </TableCell>
-                              <TableCell className="text-right">{formatNumber(summary.totalStreams)}</TableCell>
-                              <TableCell className="text-right">{summary.uniqueTracks}</TableCell>
-                              <TableCell className="text-right">{summary.uniqueArtists}</TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className="text-xs">{summary.topPlatform}</Badge>
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="secondary" className="text-xs">{summary.topCountry}</Badge>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <GrowthBadge growth={summary.growth} />
-                              </TableCell>
+                    {periodLoading ? (
+                      <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Periode</TableHead>
+                              <TableHead className="text-right">Revenue</TableHead>
+                              <TableHead className="text-right">Streams</TableHead>
+                              <TableHead className="text-right">Tracks</TableHead>
+                              <TableHead className="text-right">Artists</TableHead>
+                              <TableHead>Top Platform</TableHead>
+                              <TableHead>Top Country</TableHead>
+                              <TableHead className="text-right">Growth</TableHead>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
+                          </TableHeader>
+                          <TableBody>
+                            {periodSummaries.map((summary) => (
+                              <TableRow key={summary.period}>
+                                <TableCell className="font-mono font-medium">{summary.period}</TableCell>
+                                <TableCell className="text-right text-green-500 font-medium">{formatCurrency(summary.totalRevenue)}</TableCell>
+                                <TableCell className="text-right">{formatNumber(summary.totalStreams)}</TableCell>
+                                <TableCell className="text-right">{summary.uniqueTracks}</TableCell>
+                                <TableCell className="text-right">{summary.uniqueArtists}</TableCell>
+                                <TableCell><Badge variant="outline" className="text-xs">{summary.topPlatform}</Badge></TableCell>
+                                <TableCell><Badge variant="secondary" className="text-xs">{summary.topCountry}</Badge></TableCell>
+                                <TableCell className="text-right"><GrowthBadge growth={summary.growth} /></TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -808,11 +458,7 @@ export default function RoyaltySummary() {
                             </Pie>
                             <Tooltip 
                               formatter={(value: number) => formatCurrency(value)}
-                              contentStyle={{
-                                backgroundColor: 'hsl(var(--card))',
-                                border: '1px solid hsl(var(--border))',
-                                borderRadius: '8px',
-                              }}
+                              contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
                             />
                           </PieChart>
                         </ResponsiveContainer>
@@ -829,10 +475,7 @@ export default function RoyaltySummary() {
                         {platformBreakdown.map((p, index) => (
                           <div key={p.platform} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
                             <div className="flex items-center gap-3">
-                              <div 
-                                className="w-3 h-3 rounded-full" 
-                                style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
-                              />
+                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }} />
                               <span className="font-medium">{p.platform}</span>
                             </div>
                             <div className="text-right">
@@ -857,49 +500,43 @@ export default function RoyaltySummary() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Label</TableHead>
-                            <TableHead className="text-right">Total Revenue</TableHead>
-                            <TableHead className="text-right">Streams</TableHead>
-                            <TableHead className="text-right">Artist Share</TableHead>
-                            <TableHead className="text-right">Label Share</TableHead>
-                            <TableHead className="text-right">Admin Share</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {labelBreakdown.map((l) => (
-                            <TableRow key={l.label}>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium">{l.label}</span>
-                                  {l.label.toLowerCase() === 'soundpub music' && (
-                                    <Badge variant="outline" className="text-xs bg-primary/10 text-primary">
-                                      Soundpub
-                                    </Badge>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-right text-green-500 font-medium">
-                                {formatCurrency(l.revenue)}
-                              </TableCell>
-                              <TableCell className="text-right">{formatNumber(l.streams)}</TableCell>
-                              <TableCell className="text-right text-blue-400">
-                                {formatCurrency(l.artistRevenue)}
-                              </TableCell>
-                              <TableCell className="text-right text-purple-400">
-                                {formatCurrency(l.labelRevenue)}
-                              </TableCell>
-                              <TableCell className="text-right text-orange-400">
-                                {l.adminRevenue > 0 ? formatCurrency(l.adminRevenue) : '-'}
-                              </TableCell>
+                    {labelLoading ? (
+                      <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Label</TableHead>
+                              <TableHead className="text-right">Total Revenue</TableHead>
+                              <TableHead className="text-right">Streams</TableHead>
+                              <TableHead className="text-right">Artist Share</TableHead>
+                              <TableHead className="text-right">Label Share</TableHead>
+                              <TableHead className="text-right">Admin Share</TableHead>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
+                          </TableHeader>
+                          <TableBody>
+                            {labelBreakdown.map((l) => (
+                              <TableRow key={l.label}>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium">{l.label}</span>
+                                    {l.label.toLowerCase() === 'soundpub music' && (
+                                      <Badge variant="outline" className="text-xs bg-primary/10 text-primary">Soundpub</Badge>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right text-green-500 font-medium">{formatCurrency(l.revenue)}</TableCell>
+                                <TableCell className="text-right">{formatNumber(l.streams)}</TableCell>
+                                <TableCell className="text-right text-blue-400">{formatCurrency(l.artistRevenue)}</TableCell>
+                                <TableCell className="text-right text-purple-400">{formatCurrency(l.labelRevenue)}</TableCell>
+                                <TableCell className="text-right text-orange-400">{l.adminRevenue > 0 ? formatCurrency(l.adminRevenue) : '-'}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -914,58 +551,52 @@ export default function RoyaltySummary() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>#</TableHead>
-                            <TableHead>Artist</TableHead>
-                            <TableHead className="text-right">Total Revenue</TableHead>
-                            <TableHead className="text-right">Streams</TableHead>
-                            <TableHead className="text-right">Tracks</TableHead>
-                            <TableHead className="text-right">Artist Share</TableHead>
-                            <TableHead className="text-right">Label Share</TableHead>
-                            <TableHead className="text-right">Admin Share</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {artistBreakdown.map((a, index) => (
-                            <TableRow key={a.artist}>
-                              <TableCell className="font-mono text-muted-foreground">{index + 1}</TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium">{a.artist}</span>
-                                  {a.isSoundpubOnly && (
-                                    <Badge variant="outline" className="text-xs bg-primary/10 text-primary">
-                                      Soundpub
-                                    </Badge>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-right text-green-500 font-medium">
-                                {formatCurrency(a.revenue)}
-                              </TableCell>
-                              <TableCell className="text-right">{formatNumber(a.streams)}</TableCell>
-                              <TableCell className="text-right">{a.trackCount}</TableCell>
-                              <TableCell className="text-right text-blue-400">
-                                {formatCurrency(a.artistRevenue)}
-                              </TableCell>
-                              <TableCell className="text-right text-purple-400">
-                                {formatCurrency(a.labelRevenue)}
-                              </TableCell>
-                              <TableCell className="text-right text-orange-400">
-                                {a.adminRevenue > 0 ? formatCurrency(a.adminRevenue) : '-'}
-                              </TableCell>
+                    {artistLoading ? (
+                      <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>#</TableHead>
+                              <TableHead>Artist</TableHead>
+                              <TableHead className="text-right">Total Revenue</TableHead>
+                              <TableHead className="text-right">Streams</TableHead>
+                              <TableHead className="text-right">Tracks</TableHead>
+                              <TableHead className="text-right">Artist Share</TableHead>
+                              <TableHead className="text-right">Label Share</TableHead>
+                              <TableHead className="text-right">Admin Share</TableHead>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
+                          </TableHeader>
+                          <TableBody>
+                            {artistBreakdown.map((a, index) => (
+                              <TableRow key={a.artist}>
+                                <TableCell className="font-mono text-muted-foreground">{index + 1}</TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium">{a.artist}</span>
+                                    {a.isSoundpubOnly && (
+                                      <Badge variant="outline" className="text-xs bg-primary/10 text-primary">Soundpub</Badge>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right text-green-500 font-medium">{formatCurrency(a.revenue)}</TableCell>
+                                <TableCell className="text-right">{formatNumber(a.streams)}</TableCell>
+                                <TableCell className="text-right">{a.trackCount}</TableCell>
+                                <TableCell className="text-right text-blue-400">{formatCurrency(a.artistRevenue)}</TableCell>
+                                <TableCell className="text-right text-purple-400">{formatCurrency(a.labelRevenue)}</TableCell>
+                                <TableCell className="text-right text-orange-400">{a.adminRevenue > 0 ? formatCurrency(a.adminRevenue) : '-'}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
 
-              {/* Track Breakdown Tab (for all roles) */}
+              {/* Track Breakdown Tab */}
               <TabsContent value="tracks">
                 <Card className="bg-card/50 border-border/50">
                   <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -985,76 +616,66 @@ export default function RoyaltySummary() {
                       disabled={exporting || trackBreakdown.length === 0}
                       className="shrink-0"
                     >
-                      {exporting ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Download className="h-4 w-4 mr-2" />
-                      )}
+                      {exporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
                       Export CSV
                     </Button>
                   </CardHeader>
                   <CardContent>
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>#</TableHead>
-                            <TableHead>Judul Lagu</TableHead>
-                            <TableHead>Artist</TableHead>
-                            <TableHead>Label</TableHead>
-                            <TableHead className="text-right">Total Revenue</TableHead>
-                            <TableHead className="text-right">Streams</TableHead>
-                            <TableHead className="text-right">Artist Share</TableHead>
-                            <TableHead className="text-right">Label Share</TableHead>
-                            <TableHead className="text-right">Admin Share</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {trackBreakdown.map((track, index) => (
-                            <TableRow key={track.isrc}>
-                              <TableCell className="font-mono text-muted-foreground">{index + 1}</TableCell>
-                              <TableCell>
-                                <div className="flex flex-col">
-                                  <span className="font-medium">{track.title}</span>
-                                  <span className="text-xs text-muted-foreground font-mono">{track.isrc}</span>
-                                </div>
-                              </TableCell>
-                              <TableCell>{track.artist}</TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-1">
-                                  <Badge variant="outline" className="text-xs">
-                                    {track.label}
-                                  </Badge>
-                                  {track.isSoundpub && (
-                                    <Badge variant="outline" className="text-xs bg-primary/10 text-primary">
-                                      70/30
-                                    </Badge>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-right text-green-500 font-medium">
-                                {formatCurrency(track.revenue)}
-                              </TableCell>
-                              <TableCell className="text-right">{formatNumber(track.streams)}</TableCell>
-                              <TableCell className="text-right text-blue-400">
-                                {formatCurrency(track.artistRevenue)}
-                              </TableCell>
-                              <TableCell className="text-right text-purple-400">
-                                {formatCurrency(track.labelRevenue)}
-                              </TableCell>
-                              <TableCell className="text-right text-orange-400">
-                                {track.adminRevenue > 0 ? formatCurrency(track.adminRevenue) : '-'}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                    {trackBreakdown.length === 0 && (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <Disc3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                        <p>Belum ada data lagu untuk periode ini</p>
-                      </div>
+                    {trackLoading ? (
+                      <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+                    ) : (
+                      <>
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>#</TableHead>
+                                <TableHead>Judul Lagu</TableHead>
+                                <TableHead>Artist</TableHead>
+                                <TableHead>Label</TableHead>
+                                <TableHead className="text-right">Total Revenue</TableHead>
+                                <TableHead className="text-right">Streams</TableHead>
+                                <TableHead className="text-right">Artist Share</TableHead>
+                                <TableHead className="text-right">Label Share</TableHead>
+                                <TableHead className="text-right">Admin Share</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {trackBreakdown.map((track, index) => (
+                                <TableRow key={track.isrc}>
+                                  <TableCell className="font-mono text-muted-foreground">{index + 1}</TableCell>
+                                  <TableCell>
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">{track.title}</span>
+                                      <span className="text-xs text-muted-foreground font-mono">{track.isrc}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>{track.artist}</TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-1">
+                                      <Badge variant="outline" className="text-xs">{track.label}</Badge>
+                                      {track.isSoundpub && (
+                                        <Badge variant="outline" className="text-xs bg-primary/10 text-primary">70/30</Badge>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-right text-green-500 font-medium">{formatCurrency(track.revenue)}</TableCell>
+                                  <TableCell className="text-right">{formatNumber(track.streams)}</TableCell>
+                                  <TableCell className="text-right text-blue-400">{formatCurrency(track.artistRevenue)}</TableCell>
+                                  <TableCell className="text-right text-purple-400">{formatCurrency(track.labelRevenue)}</TableCell>
+                                  <TableCell className="text-right text-orange-400">{track.adminRevenue > 0 ? formatCurrency(track.adminRevenue) : '-'}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                        {trackBreakdown.length === 0 && (
+                          <div className="text-center py-8 text-muted-foreground">
+                            <Disc3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                            <p>Belum ada data lagu untuk periode ini</p>
+                          </div>
+                        )}
+                      </>
                     )}
                   </CardContent>
                 </Card>
