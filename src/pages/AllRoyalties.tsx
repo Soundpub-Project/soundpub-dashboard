@@ -76,9 +76,9 @@ function AllRoyaltiesContent() {
   };
 
   // Unique filter options
-  const periods = useMemo(() => [...new Set(royalties.map(r => r.period))].sort().reverse(), [royalties]);
-  const labels = useMemo(() => [...new Set(royalties.map(r => r.label_name))].sort(), [royalties]);
-  const artists = useMemo(() => [...new Set(royalties.filter(r => r.artist).map(r => r.artist!))].sort(), [royalties]);
+  const periods = useMemo(() => [...new Set(royalties.map(r => r.period))].filter(Boolean).sort().reverse(), [royalties]);
+  const labels = useMemo(() => [...new Set(royalties.map(r => r.label_name))].filter(Boolean).sort(), [royalties]);
+  const artists = useMemo(() => [...new Set(royalties.filter(r => r.artist).map(r => r.artist!))].filter(Boolean).sort(), [royalties]);
 
   // Filtered data
   const filtered = useMemo(() => {
