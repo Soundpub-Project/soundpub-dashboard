@@ -75,25 +75,41 @@ function AllRoyaltiesContent() {
     }
   };
 
+  // Normalize select values to prevent empty-string crash on Radix SelectItem
+  const normalizeOption = (value: string | null | undefined) => (value ?? '').trim();
+
   // Unique filter options
-  const periods = useMemo(() => [...new Set(royalties.map(r => r.period))].filter(Boolean).sort().reverse(), [royalties]);
-  const labels = useMemo(() => [...new Set(royalties.map(r => r.label_name))].filter(Boolean).sort(), [royalties]);
-  const artists = useMemo(() => [...new Set(royalties.filter(r => r.artist).map(r => r.artist!))].filter(Boolean).sort(), [royalties]);
+  const periods = useMemo(
+    () => [...new Set(royalties.map(r => normalizeOption(r.period)).filter(v => v.length > 0))].sort().reverse(),
+    [royalties]
+  );
+  const labels = useMemo(
+    () => [...new Set(royalties.map(r => normalizeOption(r.label_name)).filter(v => v.length > 0))].sort(),
+    [royalties]
+  );
+  const artists = useMemo(
+    () => [...new Set(royalties.map(r => normalizeOption(r.artist)).filter(v => v.length > 0))].sort(),
+    [royalties]
+  );
 
   // Filtered data
   const filtered = useMemo(() => {
     return royalties.filter(r => {
-      if (selectedPeriod !== 'all' && r.period !== selectedPeriod) return false;
-      if (selectedLabel !== 'all' && r.label_name !== selectedLabel) return false;
-      if (selectedArtist !== 'all' && r.artist !== selectedArtist) return false;
+      const rowPeriod = normalizeOption(r.period);
+      const rowLabel = normalizeOption(r.label_name);
+      const rowArtist = normalizeOption(r.artist);
+
+      if (selectedPeriod !== 'all' && rowPeriod !== selectedPeriod) return false;
+      if (selectedLabel !== 'all' && rowLabel !== selectedLabel) return false;
+      if (selectedArtist !== 'all' && rowArtist !== selectedArtist) return false;
       if (searchTerm) {
         const s = searchTerm.toLowerCase();
         return (
           (r.title?.toLowerCase() || '').includes(s) ||
-          (r.artist?.toLowerCase() || '').includes(s) ||
-          r.label_name.toLowerCase().includes(s) ||
-          r.isrc.toLowerCase().includes(s) ||
-          r.platform.toLowerCase().includes(s)
+          rowArtist.toLowerCase().includes(s) ||
+          rowLabel.toLowerCase().includes(s) ||
+          normalizeOption(r.isrc).toLowerCase().includes(s) ||
+          normalizeOption(r.platform).toLowerCase().includes(s)
         );
       }
       return true;
