@@ -206,6 +206,18 @@ export default function AllRoyalties() {
     })), 'all-royalties');
   };
 
+  // Show loading while auth is being determined
+  if (authLoading || (loading && !royalties.length)) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center py-24 gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Memuat data royalti...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
