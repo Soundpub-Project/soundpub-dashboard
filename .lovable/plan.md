@@ -1,58 +1,55 @@
 
 
-## Perbaikan 3 Masalah: Royalti Tidak Muncul, Bug Hapus Artis, dan Fitur Rilis untuk Artis
+## Perbaikan Bug Data Royalti Tidak Muncul untuk Artis, Whitelabel, dan Label
 
-### Masalah 1: Ringkasan Royalti tidak muncul di `/dashboard/royalty-summary` dan `/dashboard/analytics`
+### Masalah
 
-**Root cause**: Kedua halaman masih menggunakan `fetchAllRoyalties()` yang mengambil semua 21rb+ baris secara sekuensial. Fungsi ini berjalan via RLS, dan untuk role non-admin (label/whitelabel/artist), query akan difilter oleh RLS policies yang mungkin memblokir akses atau sangat lambat. Selain itu, halaman ini tidak pernah dimigrasi ke RPC hooks seperti Dashboard.
+Halaman `dashboard/analytics` dan `dashboard/royalty-summary` menggunakan `fetchAllRoyalties()` yang mengambil data dari tabel `royalties` langsung via client-side query + RLS. Untuk 21rb+ data, ini membutuhkan 21+ batch sequential queries. RLS policies sudah benar memfilter per role, tapi prosesnya sangat lambat sehingga halaman tampak tidak menampilkan data.
 
-**Solusi**: Migrasi `RoyaltySummary.tsx` dan `Analytics.tsx` untuk menggunakan React Query hooks (`useRoyaltyStats`, `useRoyaltyMonthlySummary`, `useRoyaltyPlatformSummary`) untuk KPI dan chart. Untuk data detail (breakdown per track/artist/label), tetap gunakan `fetchAllRoyalties` tapi sebagai background load, bukan blocking.
+Sementara itu, KPI cards sudah menggunakan RPC hooks yang cepat — tapi **semua tab detail** (Per Periode, Per Platform, Per Label, Per Artist, Per Lagu di RoyaltySummary; dan comparison chart + top performers di Analytics) masih bergantung 100% pada `fetchAllRoyalties()`.
 
-Namun ada masalah lebih fundamental: **RPC functions saat ini tidak memfilter berdasarkan role**. Fungsi `get_royalty_stats()` dll menggunakan `SECURITY DEFINER` dan query semua data tanpa filter. Untuk non-admin users, ini akan menampilkan data semua orang.
+### Solusi
 
-**Solusi lengkap**:
-1. Buat versi RPC yang menerima parameter filter (artist_name, label_name) agar bisa digunakan per-role
-2. Atau: buat RPC baru yang secara otomatis filter berdasarkan `auth.uid()` dan role user
-3. Update `RoyaltySummary.tsx` dan `Analytics.tsx` untuk menggunakan hooks tersebut
+Buat **RPC functions baru** di database untuk menghitung breakdown server-side (sudah terfilter per role), sehingga tidak perlu fetch 21rb row ke client.
 
-### Masalah 2: Artis yang dihapus masih muncul di form releases
+### Database Migration — 5 RPC Functions Baru
 
-**Root cause**: Ketika whitelabel menghapus artis via `DeleteArtistDialog`, edge function `remove-artist-from-label` hanya mengosongkan `parent_label_id` di tabel `profiles`. **Tabel `artists` tidak disentuh sama sekali**. Form releases (`ReleaseFormDialog.tsx` line 294-298) mengambil data artis dari tabel `artists` berdasarkan `label_id`, bukan dari `profiles`.
+1. **`get_royalty_period_summary()`** — Mengembalikan ringkasan per periode (revenue, streams, unique tracks/artists/labels, top platform, top country, growth). Untuk tab "Per Periode" di RoyaltySummary.
 
-Jadi flow-nya:
-1. Tambah artis → insert ke `profiles` + `artists` table
-2. Hapus artis → hanya update `profiles.parent_label_id = null`
-3. Form releases → query `artists` table → artis masih ada
+2. **`get_royalty_label_breakdown(_period text DEFAULT NULL)`** — Breakdown per label dengan revenue split. Untuk tab "Per Label".
 
-**Solusi**: Update edge function `remove-artist-from-label` untuk juga menghapus record dari tabel `artists` ketika artis dikeluarkan dari label.
+3. **`get_royalty_artist_breakdown(_period text DEFAULT NULL, _limit int DEFAULT 20)`** — Breakdown per artis dengan track count dan revenue split. Untuk tab "Per Artist".
 
-Tambahan: Implementasi validasi penghapusan - cek apakah artis memiliki releases aktif/pending sebelum mengizinkan penghapusan.
+4. **`get_royalty_track_breakdown(_period text DEFAULT NULL)`** — Breakdown per ISRC/lagu dengan platform/country count dan revenue split. Untuk tab "Per Lagu" + CSV export.
 
-### Masalah 3: Samakan fitur releases untuk role artis
+5. **`get_royalty_comparison(_from_date text, _to_date text, _prev_from text, _prev_to text)`** — Mengembalikan current vs previous period data untuk Analytics comparison chart dan top performers.
 
-**Saat ini**: Artis menggunakan `ArtistReleaseFormDialog` yang merupakan versi sederhana/beta. Label/Whitelabel menggunakan `ReleaseFormDialog` yang lebih lengkap (multi-track artists, contributors, media upload, ISRC, dll).
+Semua RPC menggunakan pola role-filter yang sama (SECURITY DEFINER + CASE WHEN admin/label/whitelabel/artist).
 
-**Solusi**: Alihkan artis untuk menggunakan `ReleaseFormDialog` yang sama dengan label/whitelabel, dengan penyesuaian:
-1. Di `Releases.tsx`, ubah `handleAddRelease` agar artis juga membuka `ReleaseFormDialog` (bukan `ArtistReleaseFormDialog`)
-2. Di `ReleaseFormDialog`, tambahkan logika untuk artis: auto-set `label_id` ke `parent_label_id` artis, auto-set `artist_name` ke nama artis
-3. Update RLS policy pada tabel `releases` agar artis bisa INSERT releases (saat ini hanya SELECT)
-4. Update RLS policy pada tabel `tracks` agar artis bisa INSERT/UPDATE tracks
+### Frontend Changes
 
-### Detail Implementasi
+**`src/hooks/useRoyaltyData.ts`** — Tambah 5 hooks baru:
+- `useRoyaltyPeriodSummary()`
+- `useRoyaltyLabelBreakdown(period)`
+- `useRoyaltyArtistBreakdown(period, limit)`
+- `useRoyaltyTrackBreakdown(period)`
+- `useRoyaltyComparison(fromDate, toDate, prevFrom, prevTo)`
 
-**Database migration:**
-- Tambah RLS policy: artis bisa INSERT releases dengan `label_id = parent_label_id` dan `artist_name = full_name`
-- Tambah RLS policy: artis bisa UPDATE releases mereka yang statusnya `pending`
-- Tambah RLS policy: artis bisa INSERT tracks untuk release mereka
-- Tambah RLS policy: artis bisa UPDATE tracks untuk release mereka yang statusnya `pending`
+**`src/pages/RoyaltySummary.tsx`**:
+- Hapus `fetchAllRoyalties()` dan semua state/useMemo yang bergantung padanya
+- Gunakan hooks baru untuk setiap tab (periodSummaries, platformBreakdown, labelBreakdown, artistBreakdown, trackBreakdown)
+- KPI tetap dari `useRoyaltyStats()` + filter period dari RPC
+- CSV export dari data `useRoyaltyTrackBreakdown`
 
-**Edge function diubah:**
-- `supabase/functions/remove-artist-from-label/index.ts` — tambah: cek releases aktif/pending, hapus dari tabel `artists`
+**`src/pages/Analytics.tsx`**:
+- Hapus `fetchAllRoyalties()` dan semua state/useMemo yang bergantung padanya
+- Gunakan `useRoyaltyComparison()` untuk chart dan top performers
+- KPI tetap dari `useRoyaltyStats()`
 
-**File frontend diubah:**
-1. `src/pages/RoyaltySummary.tsx` — migrasi ke RPC hooks, fallback fetchAllRoyalties untuk detail
-2. `src/pages/Analytics.tsx` — migrasi ke RPC hooks, fallback fetchAllRoyalties untuk comparison
-3. `src/pages/Releases.tsx` — artis menggunakan `ReleaseFormDialog`, bukan `ArtistReleaseFormDialog`
-4. `src/components/releases/ReleaseFormDialog.tsx` — tambah logika khusus artis (auto-set label_id, artist_name, hide admin-only fields)
-5. `supabase/functions/remove-artist-from-label/index.ts` — tambah validasi releases + hapus dari tabel artists
+**`src/pages/AllRoyalties.tsx`** — Tetap menggunakan `fetchAllRoyalties()` karena memang perlu data detail mentah untuk tabel.
+
+### Hasil yang Diharapkan
+- Data langsung muncul untuk semua role (artis, label, whitelabel) karena semua perhitungan dilakukan server-side
+- Tidak ada lagi fetch 21rb+ row ke client untuk halaman summary/analytics
+- Performa instant karena PostgreSQL menghitung agregasi langsung di database
 
