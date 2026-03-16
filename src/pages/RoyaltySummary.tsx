@@ -496,7 +496,7 @@ export default function RoyaltySummary() {
                   <CardHeader>
                     <CardTitle>Breakdown per Label dengan Revenue Split</CardTitle>
                     <CardDescription>
-                      Soundpub Music: 70% Artist, 30% Label | Label lain: 49% Artist, 21% Label, 30% Admin
+                      Sistem Share: 70% Artist, 21% Label, 9% Admin
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -521,9 +521,6 @@ export default function RoyaltySummary() {
                                 <TableCell>
                                   <div className="flex items-center gap-2">
                                     <span className="font-medium">{l.label}</span>
-                                    {l.label.toLowerCase() === 'soundpub music' && (
-                                      <Badge variant="outline" className="text-xs bg-primary/10 text-primary">Soundpub</Badge>
-                                    )}
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-right text-green-500 font-medium">{formatCurrency(l.revenue)}</TableCell>
@@ -547,7 +544,7 @@ export default function RoyaltySummary() {
                   <CardHeader>
                     <CardTitle>Top 20 Artists dengan Revenue Split</CardTitle>
                     <CardDescription>
-                      Artists dengan revenue tertinggi. Soundpub Music: 70% Artist, 30% Label | Label lain: 49% Artist, 21% Label, 30% Admin
+                      Sistem Share: 70% Artist, 21% Label, 9% Admin
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -575,9 +572,6 @@ export default function RoyaltySummary() {
                                 <TableCell>
                                   <div className="flex items-center gap-2">
                                     <span className="font-medium">{a.artist}</span>
-                                    {a.isSoundpubOnly && (
-                                      <Badge variant="outline" className="text-xs bg-primary/10 text-primary">Soundpub</Badge>
-                                    )}
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-right text-green-500 font-medium">{formatCurrency(a.revenue)}</TableCell>
@@ -606,7 +600,7 @@ export default function RoyaltySummary() {
                         Ringkasan Per Lagu dengan Revenue Split
                       </CardTitle>
                       <CardDescription>
-                        Detail performa setiap lagu. Soundpub: 70% Artist, 30% Label | Label lain: 49% Artist, 21% Label, 30% Admin
+                        Sistem Share: 70% Artist, 21% Label, 9% Admin
                       </CardDescription>
                     </div>
                     <Button
@@ -652,12 +646,7 @@ export default function RoyaltySummary() {
                                   </TableCell>
                                   <TableCell>{track.artist}</TableCell>
                                   <TableCell>
-                                    <div className="flex items-center gap-1">
-                                      <Badge variant="outline" className="text-xs">{track.label}</Badge>
-                                      {track.isSoundpub && (
-                                        <Badge variant="outline" className="text-xs bg-primary/10 text-primary">70/30</Badge>
-                                      )}
-                                    </div>
+                                    <Badge variant="outline" className="text-xs">{track.label}</Badge>
                                   </TableCell>
                                   <TableCell className="text-right text-green-500 font-medium">{formatCurrency(track.revenue)}</TableCell>
                                   <TableCell className="text-right">{formatNumber(track.streams)}</TableCell>

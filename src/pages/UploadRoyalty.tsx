@@ -65,7 +65,6 @@ interface UploadSummary {
 
 interface RevenueSplitPreview {
   label: string;
-  isSoundpubLabel: boolean;
   totalRevenue: number;
   labelShare: number;
   artistShare: number;
@@ -318,40 +317,20 @@ export default function UploadRoyalty() {
     });
     
     return Object.entries(labelTotals).map(([label, totalRevenue]) => {
-      const isSoundpubLabel = label.toLowerCase() === 'soundpub music';
-      
-      if (isSoundpubLabel) {
-        // Soundpub Music: 70% Artist, 30% Label (no admin fee)
-        const artistShare = totalRevenue * 0.70;
-        const labelShare = totalRevenue * 0.30;
-        return {
-          label,
-          isSoundpubLabel: true,
-          totalRevenue,
-          labelShare,
-          artistShare,
-          adminShare: 0,
-          labelPercentage: 30,
-          artistPercentage: 70,
-          adminPercentage: 0,
-        };
-      } else {
-        // Other labels: 30% Admin, 21% Label, 49% Artist
-        const adminShare = totalRevenue * 0.30;
-        const labelShare = totalRevenue * 0.21;
-        const artistShare = totalRevenue * 0.49;
-        return {
-          label,
-          isSoundpubLabel: false,
-          totalRevenue,
-          labelShare,
-          artistShare,
-          adminShare,
-          labelPercentage: 21,
-          artistPercentage: 49,
-          adminPercentage: 30,
-        };
-      }
+      // Flat split for all labels: 70% Artist, 21% Label, 9% Admin
+      const artistShare = totalRevenue * 0.70;
+      const labelShare = totalRevenue * 0.21;
+      const adminShare = totalRevenue * 0.09;
+      return {
+        label,
+        totalRevenue,
+        labelShare,
+        artistShare,
+        adminShare,
+        labelPercentage: 21,
+        artistPercentage: 70,
+        adminPercentage: 9,
+      };
     }).sort((a, b) => b.totalRevenue - a.totalRevenue);
   };
 
@@ -1021,23 +1000,16 @@ export default function UploadRoyalty() {
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
                               <span className="font-medium">{split.label}</span>
-                              {split.isSoundpubLabel && (
-                                <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/30">
-                                  Soundpub Label
-                                </Badge>
-                              )}
                             </div>
                             <span className="font-mono text-sm text-muted-foreground">
                               Total: Rp {split.totalRevenue.toLocaleString('id-ID')}
                             </span>
                           </div>
                           <div className="grid grid-cols-3 gap-2 text-sm">
-                            {split.adminPercentage > 0 && (
-                              <div className="p-2 rounded bg-red-500/10 border border-red-500/20">
-                                <p className="text-xs text-muted-foreground">Admin ({split.adminPercentage}%)</p>
-                                <p className="font-mono text-red-400">Rp {split.adminShare.toLocaleString('id-ID')}</p>
-                              </div>
-                            )}
+                            <div className="p-2 rounded bg-red-500/10 border border-red-500/20">
+                              <p className="text-xs text-muted-foreground">Admin ({split.adminPercentage}%)</p>
+                              <p className="font-mono text-red-400">Rp {split.adminShare.toLocaleString('id-ID')}</p>
+                            </div>
                             <div className="p-2 rounded bg-blue-500/10 border border-blue-500/20">
                               <p className="text-xs text-muted-foreground">Label ({split.labelPercentage}%)</p>
                               <p className="font-mono text-blue-400">Rp {split.labelShare.toLocaleString('id-ID')}</p>
@@ -1051,7 +1023,7 @@ export default function UploadRoyalty() {
                       ))}
                     </div>
                     <p className="text-xs text-muted-foreground mt-3">
-                      * Soundpub Music: 70% Artist, 30% Label | Label lain: 49% Artist, 21% Label, 30% Admin
+                      * Semua label: 70% Artist, 21% Label, 9% Admin
                     </p>
                   </div>
                 )}

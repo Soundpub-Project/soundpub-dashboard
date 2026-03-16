@@ -77,12 +77,10 @@ Deno.serve(async (req) => {
         // Priority: track.artist_user_id > release.artist_user_id (ISRC-based matching)
         const artistUserId = track?.artist_user_id || rel?.artist_user_id || null
 
-        // Revenue split: Soundpub=70/30, Whitelabel=30% admin + 70%*(70/30)
-        const isSoundpub = labelName.toLowerCase() === 'soundpub music'
-        const adminShare = isSoundpub ? 0 : r.net_revenue * 0.30
-        const remaining = isSoundpub ? r.net_revenue : r.net_revenue * 0.70
-        const labelShare = remaining * 0.30
-        const artistShare = remaining * 0.70
+        // Revenue split: 70% Artist, 21% Label, 9% Admin (flat for all labels)
+        const adminShare = r.net_revenue * 0.09
+        const labelShare = r.net_revenue * 0.21
+        const artistShare = r.net_revenue * 0.70
 
         if (labelName) labelRev[labelName] = (labelRev[labelName] || 0) + labelShare
         if (artistUserId) {
