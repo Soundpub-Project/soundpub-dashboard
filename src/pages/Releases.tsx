@@ -40,7 +40,7 @@ import {
 } from '@/components/ui/pagination';
 import { Disc3, Search, Plus, Loader2, Pencil, Eye, MoreHorizontal, Trash2, Archive, ArchiveRestore, CheckSquare, Beaker, Filter, X } from 'lucide-react';
 import { ReleaseFormDialog } from '@/components/releases/ReleaseFormDialog';
-import { ArtistReleaseFormDialog } from '@/components/releases/ArtistReleaseFormDialog';
+
 import { DeleteReleaseDialog } from '@/components/releases/DeleteReleaseDialog';
 import { ArchiveReleaseDialog } from '@/components/releases/ArchiveReleaseDialog';
 import { toast } from 'sonner';
