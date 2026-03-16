@@ -735,11 +735,6 @@ export default function Releases() {
           lyricsOnlyMode={lyricsOnlyMode}
         />
 
-        <ArtistReleaseFormDialog
-          open={artistFormOpen}
-          onOpenChange={setArtistFormOpen}
-          onSuccess={handleFormSuccess}
-        />
 
         <DeleteReleaseDialog
           open={deleteDialogOpen}
