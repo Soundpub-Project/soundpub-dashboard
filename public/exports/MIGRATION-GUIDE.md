@@ -1,6 +1,7 @@
-# SoundPub Dashboard - Migration Guide
+# SoundPub Dashboard - Migration Guide v2.2
 
 Panduan lengkap untuk migrasi dari Lovable Cloud ke Supabase eksternal atau Self-Hosted di VPS.
+Updated: April 2026
 
 ## 📚 Dokumentasi Terkait
 
