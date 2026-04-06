@@ -287,24 +287,24 @@ supabase functions deploy
 
 ### Daftar Edge Functions
 
-| # | Function | Deskripsi |
-|---|----------|-----------|
-| 1 | `change-own-password` | User ganti password sendiri |
-| 2 | `create-user` | Admin/Label buat user baru |
-| 3 | `create-whitelabel-artist` | Buat artist whitelabel (tanpa password) |
-| 4 | `delete-user` | Admin hapus user |
-| 5 | `gcs-upload` | Upload ke Google Cloud Storage |
-| 6 | `gcs-manage` | Manage file di GCS (delete, list) |
-| 7 | `test-gcs` | Test koneksi GCS |
-| 8 | `get-catalog-tracks` | API publik katalog (releases + tracks + label) |
-| 9 | `get-ga4-config` | Get Google Analytics config |
-| 10 | `process-royalty-upload` | Process CSV royalty (auto-match artist_user_id) |
-| 11 | `remove-artist-from-label` | Hapus artist dari label |
-| 12 | `send-royalty-notification` | Kirim notifikasi royalty via email |
-| 13 | `set-artist-password` | Set password artist whitelabel |
-| 14 | `update-app-settings` | Update settings |
-| 15 | `update-user-password` | Admin reset password user |
-| 16 | `update-user-status` | Admin ubah status user |
+| # | Function | Deskripsi | Status |
+|---|----------|-----------|--------|
+| 1 | `change-own-password` | User ganti password sendiri | ✅ Aktif |
+| 2 | `create-user` | Admin/Label buat user baru | ✅ Aktif |
+| 3 | `create-whitelabel-artist` | Buat artist whitelabel (tanpa password) | ✅ Aktif |
+| 4 | `delete-user` | Admin hapus user | ✅ Aktif |
+| 5 | `get-catalog-tracks` | API publik katalog (releases + tracks + label) | ✅ Aktif |
+| 6 | `get-ga4-config` | Get Google Analytics config | ✅ Aktif |
+| 7 | `process-royalty-upload` | Process CSV royalty (auto-match artist_user_id) | ✅ Aktif |
+| 8 | `remove-artist-from-label` | Hapus artist dari label (validasi releases) | ✅ Aktif |
+| 9 | `send-royalty-notification` | Kirim notifikasi royalty via email (Resend) | ✅ Aktif |
+| 10 | `set-artist-password` | Set password artist whitelabel | ✅ Aktif |
+| 11 | `update-app-settings` | Update settings (superadmin only) | ✅ Aktif |
+| 12 | `update-user-password` | Admin reset password user | ✅ Aktif |
+| 13 | `update-user-status` | Admin ubah status user | ✅ Aktif |
+| 14 | `test-gcs` | Test koneksi GCS | ⚠️ Opsional |
+| 15 | `gcs-upload` | Upload ke Google Cloud Storage | ❌ Disabled |
+| 16 | `gcs-manage` | Manage file di GCS (delete, list) | ❌ Disabled |
 
 ### Edge Function Standards
 
