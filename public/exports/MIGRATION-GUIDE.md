@@ -1,6 +1,7 @@
-# SoundPub Dashboard - Migration Guide
+# SoundPub Dashboard - Migration Guide v2.2
 
 Panduan lengkap untuk migrasi dari Lovable Cloud ke Supabase eksternal atau Self-Hosted di VPS.
+Updated: April 2026
 
 ## 📚 Dokumentasi Terkait
 
@@ -286,24 +287,24 @@ supabase functions deploy
 
 ### Daftar Edge Functions
 
-| # | Function | Deskripsi |
-|---|----------|-----------|
-| 1 | `change-own-password` | User ganti password sendiri |
-| 2 | `create-user` | Admin/Label buat user baru |
-| 3 | `create-whitelabel-artist` | Buat artist whitelabel (tanpa password) |
-| 4 | `delete-user` | Admin hapus user |
-| 5 | `gcs-upload` | Upload ke Google Cloud Storage |
-| 6 | `gcs-manage` | Manage file di GCS (delete, list) |
-| 7 | `test-gcs` | Test koneksi GCS |
-| 8 | `get-catalog-tracks` | API publik katalog (releases + tracks + label) |
-| 9 | `get-ga4-config` | Get Google Analytics config |
-| 10 | `process-royalty-upload` | Process CSV royalty (auto-match artist_user_id) |
-| 11 | `remove-artist-from-label` | Hapus artist dari label |
-| 12 | `send-royalty-notification` | Kirim notifikasi royalty via email |
-| 13 | `set-artist-password` | Set password artist whitelabel |
-| 14 | `update-app-settings` | Update settings |
-| 15 | `update-user-password` | Admin reset password user |
-| 16 | `update-user-status` | Admin ubah status user |
+| # | Function | Deskripsi | Status |
+|---|----------|-----------|--------|
+| 1 | `change-own-password` | User ganti password sendiri | ✅ Aktif |
+| 2 | `create-user` | Admin/Label buat user baru | ✅ Aktif |
+| 3 | `create-whitelabel-artist` | Buat artist whitelabel (tanpa password) | ✅ Aktif |
+| 4 | `delete-user` | Admin hapus user | ✅ Aktif |
+| 5 | `get-catalog-tracks` | API publik katalog (releases + tracks + label) | ✅ Aktif |
+| 6 | `get-ga4-config` | Get Google Analytics config | ✅ Aktif |
+| 7 | `process-royalty-upload` | Process CSV royalty (auto-match artist_user_id) | ✅ Aktif |
+| 8 | `remove-artist-from-label` | Hapus artist dari label (validasi releases) | ✅ Aktif |
+| 9 | `send-royalty-notification` | Kirim notifikasi royalty via email (Resend) | ✅ Aktif |
+| 10 | `set-artist-password` | Set password artist whitelabel | ✅ Aktif |
+| 11 | `update-app-settings` | Update settings (superadmin only) | ✅ Aktif |
+| 12 | `update-user-password` | Admin reset password user | ✅ Aktif |
+| 13 | `update-user-status` | Admin ubah status user | ✅ Aktif |
+| 14 | `test-gcs` | Test koneksi GCS | ⚠️ Opsional |
+| 15 | `gcs-upload` | Upload ke Google Cloud Storage | ❌ Disabled |
+| 16 | `gcs-manage` | Manage file di GCS (delete, list) | ❌ Disabled |
 
 ### Edge Function Standards
 
@@ -375,11 +376,14 @@ Di Supabase Dashboard > Settings > Edge Functions > Secrets:
 - [ ] Upload cover berfungsi
 - [ ] Upload audio/video berfungsi
 - [ ] Royalty upload berfungsi
+- [ ] Royalty Summary & Analytics (RPC functions) berfungsi
 - [ ] Payout request berfungsi
 - [ ] Audit logs tercatat
-- [ ] Role permissions benar
+- [ ] Role permissions benar (semua 7 role)
+- [ ] Artist bisa buat release lewat ReleaseFormDialog
 - [ ] Edge functions tidak CORS error
 - [ ] `get-catalog-tracks` mengembalikan label info
+- [ ] AllRoyalties page tidak white screen
 
 ### Test RLS Policies
 
@@ -390,6 +394,24 @@ SET request.jwt.claims = '{"sub": "[user-id]", "role": "authenticated"}';
 -- Coba query yang seharusnya dibatasi
 SELECT * FROM profiles; -- Harus hanya return profile sendiri
 SELECT * FROM releases; -- Tergantung role
+```
+
+### Test RPC Functions
+
+```sql
+-- Pastikan semua RPC functions terbuat
+SELECT routine_name FROM information_schema.routines 
+WHERE routine_schema = 'public' AND routine_type = 'FUNCTION'
+ORDER BY routine_name;
+
+-- Functions yang harus ada:
+-- get_royalty_stats, get_royalty_monthly_summary, get_royalty_platform_summary,
+-- get_royalty_country_summary, get_royalty_periods, get_royalty_period_summary,
+-- get_royalty_comparison, get_royalty_top_performers, get_royalty_label_breakdown,
+-- get_royalty_artist_breakdown, get_royalty_track_breakdown,
+-- has_role, is_admin, is_whitelabel, get_user_role, get_user_full_name,
+-- get_user_parent_label_id, get_user_release_label_ids, get_artist_user_id_by_name,
+-- handle_new_user, update_timestamp, update_balance_on_payout_status_change
 ```
 
 ### Verifikasi Data Count
@@ -468,4 +490,4 @@ Jika ada masalah dalam migrasi, hubungi tim development.
 
 ---
 
-*Dokumen ini di-generate untuk SoundPub Dashboard migration. Updated: February 2026*
+*Dokumen ini di-generate untuk SoundPub Dashboard migration. Updated: April 2026 (v2.2)*
