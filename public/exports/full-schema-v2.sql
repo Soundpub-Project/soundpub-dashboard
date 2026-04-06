@@ -1,6 +1,6 @@
 -- =====================================================
--- SoundPub Dashboard - Full Database Schema Export v2.1
--- Updated: March 2026
+-- SoundPub Dashboard - Full Database Schema Export v2.2
+-- Updated: April 2026
 -- Untuk migrasi ke Supabase Self-Hosted di VPS
 -- =====================================================
 
@@ -226,7 +226,6 @@ CREATE INDEX IF NOT EXISTS idx_releases_upc ON public.releases(upc);
 CREATE INDEX IF NOT EXISTS idx_tracks_release_id ON public.tracks(release_id);
 CREATE INDEX IF NOT EXISTS idx_tracks_isrc ON public.tracks(isrc);
 CREATE INDEX IF NOT EXISTS idx_tracks_artist_user_id ON public.tracks(artist_user_id);
-CREATE INDEX IF NOT EXISTS idx_tracks_isrc ON public.tracks(isrc);
 CREATE INDEX IF NOT EXISTS idx_royalty_uploads_user_id ON public.royalty_uploads(user_id);
 CREATE INDEX IF NOT EXISTS idx_royalties_upload_id ON public.royalties(upload_id);
 CREATE INDEX IF NOT EXISTS idx_royalties_period ON public.royalties(period);
@@ -243,7 +242,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON public.audit_logs(create
 CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON public.audit_logs(action);
 
 -- =====================================================
--- BAGIAN 5: SECURITY DEFINER FUNCTIONS
+-- BAGIAN 5: SECURITY DEFINER FUNCTIONS (Core)
 -- =====================================================
 
 -- Check if user has specific role
@@ -354,6 +353,468 @@ AS $$
     AND (_label_id IS NULL OR p.parent_label_id = _label_id)
   LIMIT 1
 $$;
+
+-- =====================================================
+-- BAGIAN 5b: ROYALTY RPC FUNCTIONS
+-- =====================================================
+
+-- Get royalty stats (totals)
+CREATE OR REPLACE FUNCTION public.get_royalty_stats()
+RETURNS TABLE(total_revenue NUMERIC, total_streams BIGINT, unique_artists BIGINT, unique_labels BIGINT, unique_platforms BIGINT, unique_tracks BIGINT)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT
+    COALESCE(SUM(net_revenue), 0) AS total_revenue,
+    COALESCE(SUM(sales_unit)::bigint, 0) AS total_streams,
+    COUNT(DISTINCT artist) AS unique_artists,
+    COUNT(DISTINCT label_name) AS unique_labels,
+    COUNT(DISTINCT platform) AS unique_platforms,
+    COUNT(DISTINCT isrc) AS unique_tracks
+  FROM royalties r
+  WHERE
+    CASE
+      WHEN is_admin(auth.uid()) THEN true
+      WHEN has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') THEN
+        r.label_name = get_user_full_name(auth.uid())
+      WHEN has_role(auth.uid(), 'artist') THEN
+        r.artist_user_id = auth.uid() OR (r.artist_user_id IS NULL AND r.artist = get_user_full_name(auth.uid()))
+      ELSE false
+    END;
+$$;
+
+-- Get royalty monthly summary
+CREATE OR REPLACE FUNCTION public.get_royalty_monthly_summary()
+RETURNS TABLE(period TEXT, revenue NUMERIC, streams BIGINT)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT
+    r.period,
+    SUM(r.net_revenue) AS revenue,
+    SUM(r.sales_unit)::bigint AS streams
+  FROM royalties r
+  WHERE
+    CASE
+      WHEN is_admin(auth.uid()) THEN true
+      WHEN has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') THEN
+        r.label_name = get_user_full_name(auth.uid())
+      WHEN has_role(auth.uid(), 'artist') THEN
+        r.artist_user_id = auth.uid() OR (r.artist_user_id IS NULL AND r.artist = get_user_full_name(auth.uid()))
+      ELSE false
+    END
+  GROUP BY r.period
+  ORDER BY r.period ASC;
+$$;
+
+-- Get royalty platform summary
+CREATE OR REPLACE FUNCTION public.get_royalty_platform_summary(_limit INTEGER DEFAULT 10)
+RETURNS TABLE(platform TEXT, revenue NUMERIC, streams BIGINT)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT
+    r.platform,
+    SUM(r.net_revenue) AS revenue,
+    SUM(r.sales_unit)::bigint AS streams
+  FROM royalties r
+  WHERE
+    CASE
+      WHEN is_admin(auth.uid()) THEN true
+      WHEN has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') THEN
+        r.label_name = get_user_full_name(auth.uid())
+      WHEN has_role(auth.uid(), 'artist') THEN
+        r.artist_user_id = auth.uid() OR (r.artist_user_id IS NULL AND r.artist = get_user_full_name(auth.uid()))
+      ELSE false
+    END
+  GROUP BY r.platform
+  ORDER BY revenue DESC
+  LIMIT _limit;
+$$;
+
+-- Get royalty country summary
+CREATE OR REPLACE FUNCTION public.get_royalty_country_summary(_limit INTEGER DEFAULT 10)
+RETURNS TABLE(country TEXT, revenue NUMERIC, streams BIGINT)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT
+    r.country,
+    SUM(r.net_revenue) AS revenue,
+    SUM(r.sales_unit)::bigint AS streams
+  FROM royalties r
+  WHERE
+    CASE
+      WHEN is_admin(auth.uid()) THEN true
+      WHEN has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') THEN
+        r.label_name = get_user_full_name(auth.uid())
+      WHEN has_role(auth.uid(), 'artist') THEN
+        r.artist_user_id = auth.uid() OR (r.artist_user_id IS NULL AND r.artist = get_user_full_name(auth.uid()))
+      ELSE false
+    END
+  GROUP BY r.country
+  ORDER BY revenue DESC
+  LIMIT _limit;
+$$;
+
+-- Get royalty periods
+CREATE OR REPLACE FUNCTION public.get_royalty_periods()
+RETURNS TABLE(period TEXT)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT DISTINCT r.period
+  FROM royalties r
+  WHERE
+    CASE
+      WHEN is_admin(auth.uid()) THEN true
+      WHEN has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') THEN
+        r.label_name = get_user_full_name(auth.uid())
+      WHEN has_role(auth.uid(), 'artist') THEN
+        r.artist_user_id = auth.uid() OR (r.artist_user_id IS NULL AND r.artist = get_user_full_name(auth.uid()))
+      ELSE false
+    END
+  ORDER BY r.period DESC;
+$$;
+
+-- Get royalty period summary (with growth calculation)
+CREATE OR REPLACE FUNCTION public.get_royalty_period_summary()
+RETURNS TABLE(period TEXT, revenue NUMERIC, streams BIGINT, unique_tracks BIGINT, unique_artists BIGINT, unique_labels BIGINT, top_platform TEXT, top_country TEXT, growth NUMERIC)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _uid uuid := auth.uid();
+  _is_admin boolean := is_admin(_uid);
+  _is_label boolean := has_role(_uid, 'label');
+  _is_whitelabel boolean := has_role(_uid, 'whitelabel');
+  _is_artist boolean := has_role(_uid, 'artist');
+  _full_name text := get_user_full_name(_uid);
+BEGIN
+  RETURN QUERY
+  WITH filtered AS (
+    SELECT r.*
+    FROM royalties r
+    WHERE
+      CASE
+        WHEN _is_admin THEN true
+        WHEN _is_label OR _is_whitelabel THEN r.label_name = _full_name
+        WHEN _is_artist THEN r.artist_user_id = _uid OR (r.artist_user_id IS NULL AND r.artist = _full_name)
+        ELSE false
+      END
+  ),
+  period_data AS (
+    SELECT
+      f.period,
+      SUM(f.net_revenue) AS revenue,
+      SUM(f.sales_unit)::bigint AS streams,
+      COUNT(DISTINCT f.isrc) AS unique_tracks,
+      COUNT(DISTINCT f.artist) AS unique_artists,
+      COUNT(DISTINCT f.label_name) AS unique_labels
+    FROM filtered f
+    GROUP BY f.period
+  ),
+  top_platforms AS (
+    SELECT DISTINCT ON (sub.period) sub.period, sub.platform
+    FROM (
+      SELECT f2.period, f2.platform, SUM(f2.net_revenue) AS rev
+      FROM filtered f2
+      GROUP BY f2.period, f2.platform
+    ) sub
+    ORDER BY sub.period, sub.rev DESC
+  ),
+  top_countries AS (
+    SELECT DISTINCT ON (sub.period) sub.period, sub.country
+    FROM (
+      SELECT f2.period, f2.country, SUM(f2.net_revenue) AS rev
+      FROM filtered f2
+      GROUP BY f2.period, f2.country
+    ) sub
+    ORDER BY sub.period, sub.rev DESC
+  ),
+  with_lag AS (
+    SELECT
+      pd.period,
+      pd.revenue,
+      pd.streams,
+      pd.unique_tracks,
+      pd.unique_artists,
+      pd.unique_labels,
+      COALESCE(tp.platform, '-') AS top_platform,
+      COALESCE(tc.country, '-') AS top_country,
+      LAG(pd.revenue) OVER (ORDER BY pd.period) AS prev_revenue
+    FROM period_data pd
+    LEFT JOIN top_platforms tp ON tp.period = pd.period
+    LEFT JOIN top_countries tc ON tc.period = pd.period
+  )
+  SELECT
+    wl.period,
+    wl.revenue,
+    wl.streams,
+    wl.unique_tracks,
+    wl.unique_artists,
+    wl.unique_labels,
+    wl.top_platform,
+    wl.top_country,
+    CASE WHEN wl.prev_revenue > 0
+      THEN ((wl.revenue - wl.prev_revenue) / wl.prev_revenue * 100)
+      ELSE 0::numeric
+    END AS growth
+  FROM with_lag wl
+  ORDER BY wl.period DESC;
+END;
+$$;
+
+-- Get royalty comparison between periods
+CREATE OR REPLACE FUNCTION public.get_royalty_comparison(_current_periods TEXT[], _previous_periods TEXT[])
+RETURNS TABLE(data_type TEXT, period TEXT, revenue NUMERIC, streams BIGINT)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _uid uuid := auth.uid();
+  _is_admin boolean := is_admin(_uid);
+  _is_label boolean := has_role(_uid, 'label');
+  _is_whitelabel boolean := has_role(_uid, 'whitelabel');
+  _is_artist boolean := has_role(_uid, 'artist');
+  _full_name text := get_user_full_name(_uid);
+BEGIN
+  RETURN QUERY
+  SELECT 'current'::text AS data_type, r.period, SUM(r.net_revenue) AS revenue, SUM(r.sales_unit)::bigint AS streams
+  FROM royalties r
+  WHERE r.period = ANY(_current_periods)
+    AND CASE
+      WHEN _is_admin THEN true
+      WHEN _is_label OR _is_whitelabel THEN r.label_name = _full_name
+      WHEN _is_artist THEN r.artist_user_id = _uid OR (r.artist_user_id IS NULL AND r.artist = _full_name)
+      ELSE false
+    END
+  GROUP BY r.period
+  UNION ALL
+  SELECT 'previous'::text AS data_type, r.period, SUM(r.net_revenue) AS revenue, SUM(r.sales_unit)::bigint AS streams
+  FROM royalties r
+  WHERE r.period = ANY(_previous_periods)
+    AND CASE
+      WHEN _is_admin THEN true
+      WHEN _is_label OR _is_whitelabel THEN r.label_name = _full_name
+      WHEN _is_artist THEN r.artist_user_id = _uid OR (r.artist_user_id IS NULL AND r.artist = _full_name)
+      ELSE false
+    END
+  GROUP BY r.period
+  ORDER BY period ASC;
+END;
+$$;
+
+-- Get top performers with growth
+CREATE OR REPLACE FUNCTION public.get_royalty_top_performers(_current_periods TEXT[], _previous_periods TEXT[], _group_by TEXT DEFAULT 'title', _limit INTEGER DEFAULT 10)
+RETURNS TABLE(name TEXT, revenue NUMERIC, streams BIGINT, growth NUMERIC)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _uid uuid := auth.uid();
+  _is_admin boolean := is_admin(_uid);
+  _is_label boolean := has_role(_uid, 'label');
+  _is_whitelabel boolean := has_role(_uid, 'whitelabel');
+  _is_artist boolean := has_role(_uid, 'artist');
+  _full_name text := get_user_full_name(_uid);
+BEGIN
+  RETURN QUERY
+  WITH role_filter AS (
+    SELECT r.*
+    FROM royalties r
+    WHERE CASE
+      WHEN _is_admin THEN true
+      WHEN _is_label OR _is_whitelabel THEN r.label_name = _full_name
+      WHEN _is_artist THEN r.artist_user_id = _uid OR (r.artist_user_id IS NULL AND r.artist = _full_name)
+      ELSE false
+    END
+  ),
+  current_data AS (
+    SELECT
+      CASE _group_by
+        WHEN 'title' THEN COALESCE(rf.title, rf.isrc)
+        WHEN 'platform' THEN rf.platform
+        WHEN 'country' THEN rf.country
+        ELSE COALESCE(rf.title, rf.isrc)
+      END AS name,
+      SUM(rf.net_revenue) AS revenue,
+      SUM(rf.sales_unit)::bigint AS streams
+    FROM role_filter rf
+    WHERE rf.period = ANY(_current_periods)
+    GROUP BY 1
+  ),
+  previous_data AS (
+    SELECT
+      CASE _group_by
+        WHEN 'title' THEN COALESCE(rf.title, rf.isrc)
+        WHEN 'platform' THEN rf.platform
+        WHEN 'country' THEN rf.country
+        ELSE COALESCE(rf.title, rf.isrc)
+      END AS name,
+      SUM(rf.net_revenue) AS revenue
+    FROM role_filter rf
+    WHERE rf.period = ANY(_previous_periods)
+    GROUP BY 1
+  )
+  SELECT
+    cd.name,
+    cd.revenue,
+    cd.streams,
+    CASE WHEN COALESCE(pd.revenue, 0) > 0
+      THEN ((cd.revenue - pd.revenue) / pd.revenue * 100)
+      ELSE 0::numeric
+    END AS growth
+  FROM current_data cd
+  LEFT JOIN previous_data pd ON pd.name = cd.name
+  ORDER BY cd.revenue DESC
+  LIMIT _limit;
+END;
+$$;
+
+-- Get royalty label breakdown
+CREATE OR REPLACE FUNCTION public.get_royalty_label_breakdown(_period TEXT DEFAULT NULL)
+RETURNS TABLE(label_name TEXT, revenue NUMERIC, streams BIGINT, artist_share NUMERIC, label_share NUMERIC, admin_share NUMERIC)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _uid uuid := auth.uid();
+  _is_admin boolean := is_admin(_uid);
+  _is_label boolean := has_role(_uid, 'label');
+  _is_whitelabel boolean := has_role(_uid, 'whitelabel');
+  _is_artist boolean := has_role(_uid, 'artist');
+  _full_name text := get_user_full_name(_uid);
+BEGIN
+  RETURN QUERY
+  SELECT
+    r.label_name,
+    SUM(r.net_revenue) AS revenue,
+    SUM(r.sales_unit)::bigint AS streams,
+    SUM(r.net_revenue) * 0.70 AS artist_share,
+    SUM(r.net_revenue) * 0.21 AS label_share,
+    SUM(r.net_revenue) * 0.09 AS admin_share
+  FROM royalties r
+  WHERE
+    (_period IS NULL OR r.period = _period)
+    AND CASE
+      WHEN _is_admin THEN true
+      WHEN _is_label OR _is_whitelabel THEN r.label_name = _full_name
+      WHEN _is_artist THEN r.artist_user_id = _uid OR (r.artist_user_id IS NULL AND r.artist = _full_name)
+      ELSE false
+    END
+  GROUP BY r.label_name
+  ORDER BY revenue DESC;
+END;
+$$;
+
+-- Get royalty artist breakdown
+CREATE OR REPLACE FUNCTION public.get_royalty_artist_breakdown(_period TEXT DEFAULT NULL, _limit INTEGER DEFAULT 20)
+RETURNS TABLE(artist_name TEXT, revenue NUMERIC, streams BIGINT, track_count BIGINT, is_soundpub BOOLEAN, artist_share NUMERIC, label_share NUMERIC, admin_share NUMERIC)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _uid uuid := auth.uid();
+  _is_admin boolean := is_admin(_uid);
+  _is_label boolean := has_role(_uid, 'label');
+  _is_whitelabel boolean := has_role(_uid, 'whitelabel');
+  _is_artist boolean := has_role(_uid, 'artist');
+  _full_name text := get_user_full_name(_uid);
+BEGIN
+  RETURN QUERY
+  SELECT
+    r.artist AS artist_name,
+    SUM(r.net_revenue) AS revenue,
+    SUM(r.sales_unit)::bigint AS streams,
+    COUNT(DISTINCT r.isrc) AS track_count,
+    false AS is_soundpub,
+    SUM(r.net_revenue) * 0.70 AS artist_share,
+    SUM(r.net_revenue) * 0.21 AS label_share,
+    SUM(r.net_revenue) * 0.09 AS admin_share
+  FROM royalties r
+  WHERE
+    r.artist IS NOT NULL
+    AND (_period IS NULL OR r.period = _period)
+    AND CASE
+      WHEN _is_admin THEN true
+      WHEN _is_label OR _is_whitelabel THEN r.label_name = _full_name
+      WHEN _is_artist THEN r.artist_user_id = _uid OR (r.artist_user_id IS NULL AND r.artist = _full_name)
+      ELSE false
+    END
+  GROUP BY r.artist
+  ORDER BY revenue DESC
+  LIMIT _limit;
+END;
+$$;
+
+-- Get royalty track breakdown
+CREATE OR REPLACE FUNCTION public.get_royalty_track_breakdown(_period TEXT DEFAULT NULL)
+RETURNS TABLE(isrc TEXT, title TEXT, artist_name TEXT, label TEXT, revenue NUMERIC, streams BIGINT, platform_count BIGINT, country_count BIGINT, is_soundpub BOOLEAN, artist_share NUMERIC, label_share NUMERIC, admin_share NUMERIC)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _uid uuid := auth.uid();
+  _is_admin boolean := is_admin(_uid);
+  _is_label boolean := has_role(_uid, 'label');
+  _is_whitelabel boolean := has_role(_uid, 'whitelabel');
+  _is_artist boolean := has_role(_uid, 'artist');
+  _full_name text := get_user_full_name(_uid);
+BEGIN
+  RETURN QUERY
+  SELECT
+    r.isrc,
+    COALESCE(MAX(r.title), 'Unknown') AS title,
+    COALESCE(MAX(r.artist), 'Unknown') AS artist_name,
+    MAX(r.label_name) AS label,
+    SUM(r.net_revenue) AS revenue,
+    SUM(r.sales_unit)::bigint AS streams,
+    COUNT(DISTINCT r.platform) AS platform_count,
+    COUNT(DISTINCT r.country) AS country_count,
+    false AS is_soundpub,
+    SUM(r.net_revenue) * 0.70 AS artist_share,
+    SUM(r.net_revenue) * 0.21 AS label_share,
+    SUM(r.net_revenue) * 0.09 AS admin_share
+  FROM royalties r
+  WHERE
+    (_period IS NULL OR r.period = _period)
+    AND CASE
+      WHEN _is_admin THEN true
+      WHEN _is_label OR _is_whitelabel THEN r.label_name = _full_name
+      WHEN _is_artist THEN r.artist_user_id = _uid OR (r.artist_user_id IS NULL AND r.artist = _full_name)
+      ELSE false
+    END
+  GROUP BY r.isrc
+  ORDER BY revenue DESC;
+END;
+$$;
+
+-- =====================================================
+-- BAGIAN 5c: TRIGGER FUNCTIONS
+-- =====================================================
 
 -- Handle new user signup (creates profile and default role)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -662,6 +1123,32 @@ CREATE POLICY "Artists can view their releases" ON public.releases
     )
   );
 
+-- Artist can INSERT releases (auto-set label_id via parent_label_id)
+DROP POLICY IF EXISTS "Artists can insert their releases" ON public.releases;
+CREATE POLICY "Artists can insert their releases" ON public.releases
+  FOR INSERT 
+  WITH CHECK (
+    has_role(auth.uid(), 'artist')
+    AND artist_user_id = auth.uid()
+    AND label_id = get_user_parent_label_id(auth.uid())
+  );
+
+-- Artist can UPDATE their own releases
+DROP POLICY IF EXISTS "Artists can update their releases" ON public.releases;
+CREATE POLICY "Artists can update their releases" ON public.releases
+  FOR UPDATE 
+  USING (
+    has_role(auth.uid(), 'artist') AND (
+      artist_user_id = auth.uid()
+      OR (artist_user_id IS NULL AND artist_name = get_user_full_name(auth.uid()))
+    )
+  )
+  WITH CHECK (
+    has_role(auth.uid(), 'artist')
+    AND artist_user_id = auth.uid()
+    AND label_id = get_user_parent_label_id(auth.uid())
+  );
+
 -- =====================================================
 -- BAGIAN 12: RLS POLICIES - TRACKS
 -- =====================================================
@@ -697,6 +1184,41 @@ CREATE POLICY "Artists can view their tracks" ON public.tracks
         WHERE releases.id = tracks.release_id 
         AND (releases.artist_user_id = auth.uid() OR (releases.artist_user_id IS NULL AND releases.artist_name = get_user_full_name(auth.uid())))
       )
+    )
+  );
+
+-- Artist can INSERT tracks for their releases
+DROP POLICY IF EXISTS "Artists can insert tracks for their releases" ON public.tracks;
+CREATE POLICY "Artists can insert tracks for their releases" ON public.tracks
+  FOR INSERT 
+  WITH CHECK (
+    has_role(auth.uid(), 'artist')
+    AND EXISTS (
+      SELECT 1 FROM releases 
+      WHERE releases.id = tracks.release_id 
+      AND releases.artist_user_id = auth.uid()
+      AND releases.label_id = get_user_parent_label_id(auth.uid())
+    )
+  );
+
+-- Artist can UPDATE tracks for their releases
+DROP POLICY IF EXISTS "Artists can update tracks for their releases" ON public.tracks;
+CREATE POLICY "Artists can update tracks for their releases" ON public.tracks
+  FOR UPDATE 
+  USING (
+    has_role(auth.uid(), 'artist')
+    AND EXISTS (
+      SELECT 1 FROM releases 
+      WHERE releases.id = tracks.release_id 
+      AND (releases.artist_user_id = auth.uid() OR (releases.artist_user_id IS NULL AND releases.artist_name = get_user_full_name(auth.uid())))
+    )
+  )
+  WITH CHECK (
+    has_role(auth.uid(), 'artist')
+    AND EXISTS (
+      SELECT 1 FROM releases 
+      WHERE releases.id = tracks.release_id 
+      AND releases.artist_user_id = auth.uid()
     )
   );
 
@@ -837,11 +1359,11 @@ CREATE POLICY "Admins can manage release covers" ON storage.objects
 
 CREATE POLICY "Labels can upload release covers" ON storage.objects
   FOR INSERT TO authenticated 
-  WITH CHECK (bucket_id = 'release-covers' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel')));
+  WITH CHECK (bucket_id = 'release-covers' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR has_role(auth.uid(), 'artist')));
 
 CREATE POLICY "Labels can update release covers" ON storage.objects
   FOR UPDATE TO authenticated 
-  USING (bucket_id = 'release-covers' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel')));
+  USING (bucket_id = 'release-covers' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR has_role(auth.uid(), 'artist')));
 
 CREATE POLICY "Labels can delete release covers" ON storage.objects
   FOR DELETE TO authenticated 
@@ -858,11 +1380,11 @@ CREATE POLICY "Admins can manage track audio" ON storage.objects
 
 CREATE POLICY "Labels can upload track audio" ON storage.objects
   FOR INSERT TO authenticated 
-  WITH CHECK (bucket_id = 'track-audio' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel')));
+  WITH CHECK (bucket_id = 'track-audio' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR has_role(auth.uid(), 'artist')));
 
 CREATE POLICY "Labels can update track audio" ON storage.objects
   FOR UPDATE TO authenticated 
-  USING (bucket_id = 'track-audio' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel')));
+  USING (bucket_id = 'track-audio' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR has_role(auth.uid(), 'artist')));
 
 CREATE POLICY "Labels can delete track audio" ON storage.objects
   FOR DELETE TO authenticated 
@@ -879,7 +1401,7 @@ CREATE POLICY "Admins can manage track video" ON storage.objects
 
 CREATE POLICY "Labels can upload track video" ON storage.objects
   FOR INSERT TO authenticated 
-  WITH CHECK (bucket_id = 'track-video' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel')));
+  WITH CHECK (bucket_id = 'track-video' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR has_role(auth.uid(), 'artist')));
 
 CREATE POLICY "Labels can delete track video" ON storage.objects
   FOR DELETE TO authenticated 
@@ -896,7 +1418,7 @@ CREATE POLICY "Admins can manage audio clips" ON storage.objects
 
 CREATE POLICY "Labels can upload audio clips" ON storage.objects
   FOR INSERT TO authenticated 
-  WITH CHECK (bucket_id = 'audio-clips' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel')));
+  WITH CHECK (bucket_id = 'audio-clips' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR has_role(auth.uid(), 'artist')));
 
 CREATE POLICY "Labels can delete audio clips" ON storage.objects
   FOR DELETE TO authenticated 
@@ -934,29 +1456,36 @@ INSERT INTO public.app_settings (key, value) VALUES
 ON CONFLICT (key) DO NOTHING;
 
 -- =====================================================
--- BAGIAN 22: MIGRASI GCS KE SUPABASE STORAGE
+-- BAGIAN 22: CATATAN MIGRASI
 -- =====================================================
 -- 
 -- Catatan: Sistem sudah bermigrasi dari GCS ke Supabase Storage.
--- Jika masih ada data di GCS, ikuti langkah berikut:
+-- Edge functions GCS (gcs-upload, gcs-manage) sudah di-disable.
 --
--- 1. Download semua file dari GCS bucket
--- 2. Upload ke Supabase Storage bucket yang sesuai:
---    - covers/ -> release-covers
---    - audio/  -> track-audio
---    - clips/  -> audio-clips
---    - logos/  -> label-logos
+-- Daftar Edge Functions yang perlu di-deploy:
+--   1. create-user
+--   2. delete-user
+--   3. update-user-status
+--   4. update-user-password
+--   5. change-own-password
+--   6. remove-artist-from-label
+--   7. process-royalty-upload
+--   8. create-whitelabel-artist
+--   9. set-artist-password
+--  10. update-app-settings
+--  11. get-ga4-config
+--  12. send-royalty-notification
+--  13. get-catalog-tracks
+--  14. test-gcs (opsional)
+--  15. gcs-upload (disabled)
+--  16. gcs-manage (disabled)
 --
--- 3. Update URL di database:
---    UPDATE releases 
---    SET cover_url = REPLACE(cover_url, 'storage.googleapis.com/YOUR_BUCKET/', 'YOUR_SUPABASE_URL/storage/v1/object/sign/release-covers/')
---    WHERE cover_url LIKE '%storage.googleapis.com%';
---
--- 4. Untuk private buckets, generate signed URLs dengan expiry panjang (1 tahun):
---    - Gunakan supabase.storage.from('bucket').createSignedUrl(path, 31536000)
---
--- Edge functions GCS (gcs-upload, gcs-manage) sudah di-disable tapi tidak dihapus.
--- Untuk mengaktifkan kembali, ubah GCS_DISABLED = false di file edge function.
+-- Secrets yang perlu dikonfigurasi di Supabase target:
+--   - RESEND_API_KEY (untuk email notifikasi)
+--   - GA4_MEASUREMENT_ID (untuk Google Analytics)
+--   - GCS_BUCKET_NAME (opsional, jika pakai GCS)
+--   - GCS_PROJECT_ID (opsional, jika pakai GCS)
+--   - GCS_SERVICE_ACCOUNT_KEY (opsional, jika pakai GCS)
 
 -- =====================================================
 -- BAGIAN 23: ARTIST INTEGRATION & SYNC
@@ -974,7 +1503,10 @@ ON CONFLICT (key) DO NOTHING;
 --    - Untuk Whitelabel: edge function 'create-whitelabel-artist' otomatis insert ke 'artists'
 --    - Untuk Label biasa: client-side code sinkronkan ke 'artists'
 --
--- Ini memastikan artis langsung muncul di dropdown releases tanpa perlu dihapus dan ditambahkan ulang.
+-- 4. Artis bisa membuat release sendiri via ReleaseFormDialog:
+--    - label_id otomatis diisi dari parent_label_id
+--    - artist_name otomatis diisi dari full_name profil artis
+--    - RLS policy memvalidasi artist_user_id dan label_id
 --
 -- Untuk migrasi data lama, jalankan query berikut:
 -- 
@@ -991,5 +1523,5 @@ ON CONFLICT (key) DO NOTHING;
 --   );
 
 -- =====================================================
--- END OF SCHEMA EXPORT v2
+-- END OF SCHEMA EXPORT v2.2
 -- =====================================================
