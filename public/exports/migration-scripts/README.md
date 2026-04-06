@@ -1,12 +1,16 @@
 # SoundPub Dashboard - Migration Scripts
 
-Script automasi untuk migrasi data dari Lovable Cloud ke Supabase eksternal.
+Script untuk import data dari CSV (hasil export Lovable Cloud) ke Supabase target.
+
+## ⚠️ Catatan Penting
+
+`SOURCE_SUPABASE_SERVICE_KEY` **tidak tersedia** dari Lovable Cloud. Data di-export langsung dari sandbox ke CSV. Script ini mengimport CSV tersebut ke Supabase target Anda.
 
 ## Prerequisites
 
-1. Node.js v18 atau lebih baru
-2. Schema database sudah di-deploy ke Supabase target (jalankan `full-schema.sql` terlebih dahulu)
-3. Service role keys untuk kedua Supabase projects
+1. Node.js v18+
+2. Schema sudah di-deploy ke Supabase target (`full-schema-v2.sql`)
+3. Service role key untuk Supabase target
 
 ## Setup
 
@@ -15,86 +19,66 @@ Script automasi untuk migrasi data dari Lovable Cloud ke Supabase eksternal.
    npm install
    ```
 
-2. Copy environment file:
+2. Taruh file CSV hasil export di `./exported-data/`:
+   ```bash
+   mkdir -p exported-data
+   cp /path/to/export/*.csv exported-data/
+   ```
+
+3. Copy environment file:
    ```bash
    cp .env.example .env
    ```
 
-3. Edit `.env` dengan credentials Supabase:
-   - `SOURCE_SUPABASE_URL` - URL Lovable Cloud project
-   - `SOURCE_SUPABASE_SERVICE_KEY` - Service role key Lovable Cloud
-   - `TARGET_SUPABASE_URL` - URL Supabase target
-   - `TARGET_SUPABASE_SERVICE_KEY` - Service role key Supabase target
+4. Edit `.env` dengan credentials Supabase target:
+   ```env
+   TARGET_SUPABASE_URL=https://your-server.supabase.co
+   TARGET_SUPABASE_SERVICE_KEY=your-service-role-key
+   CSV_IMPORT_DIR=./exported-data/
+   ```
 
 ## Usage
 
 ```bash
-npm run migrate
-# atau
-node migrate.js
+node import-csv.js
 ```
 
-## Urutan Migrasi
+## Urutan Import
 
-Script akan migrasi data dalam urutan berikut (sesuai foreign key dependencies):
+Script akan import data dalam urutan berikut (sesuai FK dependencies):
 
-1. Users (via Auth Admin API)
-2. Profiles
-3. User Roles
+1. Create users via Auth Admin API (dari profiles.csv)
+2. Update profiles dengan data lengkap
+3. User roles
 4. Artists
 5. Releases
 6. Tracks
-7. Royalty Uploads
+7. Royalty uploads
 8. Royalties
-9. Payout Requests
-10. Audit Logs
-11. App Settings
-12. Storage (info only - manual)
+9. Composer royalties
+10. Payout requests
+11. Audit logs
+12. App settings
 
-## Catatan Penting
+## User ID Mapping
 
-### User ID Mapping
+Script otomatis membuat mapping antara user ID lama dan baru. Mapping disimpan di `exported-data/id-mapping.json`. Semua foreign key references otomatis di-update.
 
-Script secara otomatis membuat mapping antara user ID lama dan baru karena Supabase akan generate ID baru saat create user. Semua foreign key references akan di-update sesuai mapping ini.
+## Password Reset
 
-### Password Reset
+Users yang di-import perlu reset password karena password hash tidak bisa di-copy.
 
-Users yang di-migrate akan perlu reset password karena password hash tidak bisa di-copy. Kirim email reset password setelah migrasi selesai.
+## Storage Files
 
-### Storage Files
+Storage files harus di-upload manual:
+1. Download dari Lovable Cloud → Storage
+2. Upload ke Supabase target
+3. Buckets: `release-covers`, `track-audio`, `track-video`, `audio-clips`, `label-logos`
 
-Storage files tidak di-migrate otomatis oleh script ini. Anda perlu:
-1. Download semua files dari Lovable Cloud storage
-2. Upload ke Supabase target storage
-3. Pastikan path file sama persis
+## Post-Import
 
-### Error Handling
-
-Jika ada error saat migrasi:
-- Script akan log error tapi tetap lanjut ke step berikutnya
-- Cek output untuk melihat berapa row yang berhasil di-migrate
-- Re-run script aman dilakukan (akan skip data yang sudah ada)
-
-## Troubleshooting
-
-### "duplicate key value violates unique constraint"
-
-Data sudah ada di target. Script akan skip row ini.
-
-### "violates foreign key constraint"
-
-Parent record belum ada. Pastikan menjalankan script dari awal, bukan partial.
-
-### Auth API errors
-
-Pastikan menggunakan SERVICE_ROLE_KEY, bukan anon key.
-
-## Post-Migration
-
-Setelah script selesai:
-
-1. Migrate storage files manually
+1. Upload storage files
 2. Deploy edge functions: `supabase functions deploy`
-3. Update frontend `.env` dengan Supabase target credentials
-4. Test semua functionality
-5. Kirim reset password email ke semua users
+3. Update frontend `.env` dengan target credentials
+4. Send reset password email ke semua users
+5. Test semua functionality
