@@ -490,4 +490,4 @@ Jika ada masalah dalam migrasi, hubungi tim development.
 
 ---
 
-*Dokumen ini di-generate untuk SoundPub Dashboard migration. Updated: February 2026*
+*Dokumen ini di-generate untuk SoundPub Dashboard migration. Updated: April 2026 (v2.2)*
