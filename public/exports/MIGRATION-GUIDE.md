@@ -376,11 +376,14 @@ Di Supabase Dashboard > Settings > Edge Functions > Secrets:
 - [ ] Upload cover berfungsi
 - [ ] Upload audio/video berfungsi
 - [ ] Royalty upload berfungsi
+- [ ] Royalty Summary & Analytics (RPC functions) berfungsi
 - [ ] Payout request berfungsi
 - [ ] Audit logs tercatat
-- [ ] Role permissions benar
+- [ ] Role permissions benar (semua 7 role)
+- [ ] Artist bisa buat release lewat ReleaseFormDialog
 - [ ] Edge functions tidak CORS error
 - [ ] `get-catalog-tracks` mengembalikan label info
+- [ ] AllRoyalties page tidak white screen
 
 ### Test RLS Policies
 
@@ -391,6 +394,24 @@ SET request.jwt.claims = '{"sub": "[user-id]", "role": "authenticated"}';
 -- Coba query yang seharusnya dibatasi
 SELECT * FROM profiles; -- Harus hanya return profile sendiri
 SELECT * FROM releases; -- Tergantung role
+```
+
+### Test RPC Functions
+
+```sql
+-- Pastikan semua RPC functions terbuat
+SELECT routine_name FROM information_schema.routines 
+WHERE routine_schema = 'public' AND routine_type = 'FUNCTION'
+ORDER BY routine_name;
+
+-- Functions yang harus ada:
+-- get_royalty_stats, get_royalty_monthly_summary, get_royalty_platform_summary,
+-- get_royalty_country_summary, get_royalty_periods, get_royalty_period_summary,
+-- get_royalty_comparison, get_royalty_top_performers, get_royalty_label_breakdown,
+-- get_royalty_artist_breakdown, get_royalty_track_breakdown,
+-- has_role, is_admin, is_whitelabel, get_user_role, get_user_full_name,
+-- get_user_parent_label_id, get_user_release_label_ids, get_artist_user_id_by_name,
+-- handle_new_user, update_timestamp, update_balance_on_payout_status_change
 ```
 
 ### Verifikasi Data Count
