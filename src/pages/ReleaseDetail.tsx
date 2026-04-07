@@ -79,7 +79,7 @@ interface Track {
 export default function ReleaseDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAdmin, isLabel, isWhitelabel } = useAuth();
+  const { isAdmin, isLabel, isWhitelabel, isArtist, user } = useAuth();
   const [release, setRelease] = useState<Release | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [labelInfo, setLabelInfo] = useState<LabelInfo | null>(null);
@@ -100,10 +100,16 @@ export default function ReleaseDetail() {
   // Determine edit capability based on status
   // - Admin: can always fully edit
   // - Label/Whitelabel: 
-  //   - pending status: can fully edit
+  //   - pending/draft status: can fully edit
   //   - active status: can only edit lyrics
-  const isPending = release?.status === 'pending';
-  const canFullyEdit = isAdmin || ((isLabel || isWhitelabel) && isPending);
+  // - Artist: can edit their own pending/draft releases
+  const isPendingOrDraft = release?.status === 'pending' || release?.status === 'draft';
+  const isOwnRelease = isArtist && release && (
+    release.artist_user_id === user?.id || 
+    (!release.artist_user_id && release.artist_name === user?.user_metadata?.full_name)
+  );
+  const isLocked = release?.status === 'pending_paid' || release?.status === 'active';
+  const canFullyEdit = isAdmin || ((isLabel || isWhitelabel) && isPendingOrDraft) || (isOwnRelease && isPendingOrDraft);
   const canEditLyricsOnly = (isLabel || isWhitelabel) && release?.status === 'active';
   
   // Get tracks with audio
@@ -369,7 +375,7 @@ export default function ReleaseDetail() {
               <p className="text-muted-foreground">oleh {release.artist_name}</p>
             </div>
           </div>
-          {canManageReleases && (canFullyEdit || canEditLyricsOnly) && (
+          {(canManageReleases || isArtist) && (canFullyEdit || canEditLyricsOnly) && (
             <Button className="gradient-primary" onClick={() => setFormOpen(true)}>
               <Pencil className="h-4 w-4 mr-2" />
               {canEditLyricsOnly ? 'Edit Lyrics' : 'Edit Release'}
