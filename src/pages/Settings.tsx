@@ -209,6 +209,63 @@ export default function Settings() {
           </>
         )}
 
+        {/* Avatar Section */}
+        <Card className="bg-card/50 border-border/50">
+          <CardHeader>
+            <CardTitle>Foto Profil</CardTitle>
+            <CardDescription>Upload foto profil Anda</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-6">
+              <Avatar className="h-20 w-20">
+                {profile?.avatar_url ? (
+                  <AvatarImage src={profile.avatar_url} alt={profile.full_name} />
+                ) : null}
+                <AvatarFallback className="bg-primary text-primary-foreground text-xl">
+                  {profile?.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => avatarInputRef.current?.click()}
+                    disabled={avatarLoading}
+                  >
+                    {avatarLoading ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Camera className="h-4 w-4 mr-2" />
+                    )}
+                    {profile?.avatar_url ? 'Ganti Foto' : 'Upload Foto'}
+                  </Button>
+                  {profile?.avatar_url && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRemoveAvatar}
+                      disabled={avatarLoading}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Hapus
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">JPG, PNG, WebP. Maks 2MB.</p>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarUpload}
+                  className="hidden"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Two Column Layout for Desktop */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Column */}
