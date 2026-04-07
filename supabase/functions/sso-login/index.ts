@@ -7,7 +7,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Base64url decode helper
 function base64urlDecode(str: string): Uint8Array {
   str = str.replace(/-/g, "+").replace(/_/g, "/");
   while (str.length % 4) str += "=";
@@ -82,7 +81,6 @@ async function verifyJwt(
   return payload;
 }
 
-// Wait for profile to exist after createUser (trigger may be async)
 async function waitForProfile(
   supabaseAdmin: ReturnType<typeof createClient>,
   userId: string,
@@ -116,7 +114,6 @@ async function syncProfile(
     throw new Error(`Failed to update profile: ${error.message}`);
   }
 
-  // Verify critical fields were saved
   const { data: verify } = await supabaseAdmin
     .from("profiles")
     .select("sso_provider, parent_label_id")
@@ -168,6 +165,58 @@ async function ensureArtistEntry(
   }
 }
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuid(value: string | null | undefined): value is string {
+  return typeof value === "string" && UUID_REGEX.test(value);
+}
+
+async function resolveIccnMediaLabelId(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  configuredLabelId: string | null
+): Promise<string> {
+  if (isUuid(configuredLabelId)) {
+    return configuredLabelId;
+  }
+
+  console.warn(
+    configuredLabelId
+      ? "Invalid ICCN_MEDIA_LABEL_ID secret, falling back to ICCN profile lookup"
+      : "Missing ICCN_MEDIA_LABEL_ID secret, falling back to ICCN profile lookup"
+  );
+
+  const { data: labelProfile, error } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .eq("email", "halo.iccn@gmail.com")
+    .maybeSingle();
+
+  if (error) {
+    console.error("ICCN label lookup error:", error);
+    throw new Error(`Failed to resolve ICCN Media label: ${error.message}`);
+  }
+
+  if (!isUuid(labelProfile?.id)) {
+    throw new Error("ICCN Media label is not configured correctly");
+  }
+
+  return labelProfile.id;
+}
+
+function getErrorStatus(message: string): number {
+  if (
+    message.startsWith("Invalid JWT") ||
+    message.startsWith("Invalid issuer") ||
+    message.startsWith("Token expired") ||
+    message.startsWith("No kid in JWT header")
+  ) {
+    return 401;
+  }
+
+  return 500;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -184,9 +233,8 @@ Deno.serve(async (req) => {
 
     const realmUrl = Deno.env.get("SSO_REALM_URL");
     const clientId = Deno.env.get("SSO_CLIENT_ID");
-    const iccnMediaLabelId = Deno.env.get("ICCN_MEDIA_LABEL_ID");
 
-    if (!realmUrl || !clientId || !iccnMediaLabelId) {
+    if (!realmUrl || !clientId) {
       console.error("Missing SSO configuration secrets");
       return new Response(
         JSON.stringify({ error: "SSO not configured" }),
@@ -194,10 +242,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 1. Verify JWT
     const payload = await verifyJwt(keycloak_token, realmUrl);
 
-    // 2. Check resource_access
     const resourceAccess = payload.resource_access as Record<string, { roles?: string[] }> | undefined;
     const clientRoles = resourceAccess?.[clientId]?.roles;
     if (!clientRoles || clientRoles.length === 0) {
@@ -207,7 +253,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 3. Extract email, name, and avatar
     const email = payload.email as string;
     const name =
       (payload.name as string) ||
@@ -222,14 +267,26 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 4. Create admin Supabase client
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error("Missing backend admin configuration secrets");
+      return new Response(
+        JSON.stringify({ error: "Backend admin configuration is missing" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // 5. Check if user exists by email
+    const iccnMediaLabelId = await resolveIccnMediaLabelId(
+      supabaseAdmin,
+      Deno.env.get("ICCN_MEDIA_LABEL_ID")
+    );
+
     const { data: existingProfile } = await supabaseAdmin
       .from("profiles")
       .select("id, sso_provider, parent_label_id, avatar_url, artist_profile_completed")
@@ -239,7 +296,6 @@ Deno.serve(async (req) => {
     let userId: string;
 
     if (existingProfile) {
-      // === EXISTING USER ===
       userId = existingProfile.id;
 
       const updates: Record<string, unknown> = {};
@@ -248,7 +304,6 @@ Deno.serve(async (req) => {
       if (!existingProfile.avatar_url && avatarFromSso) updates.avatar_url = avatarFromSso;
 
       if (Object.keys(updates).length > 0) {
-        // Always ensure sso_provider and parent_label_id are set
         updates.sso_provider = updates.sso_provider || existingProfile.sso_provider || "iccn";
         updates.parent_label_id = updates.parent_label_id || existingProfile.parent_label_id || iccnMediaLabelId;
 
@@ -257,9 +312,7 @@ Deno.serve(async (req) => {
 
       await ensureArtistRole(supabaseAdmin, userId);
       await ensureArtistEntry(supabaseAdmin, iccnMediaLabelId, name);
-
     } else {
-      // === NEW USER ===
       const randomPassword = crypto.randomUUID() + crypto.randomUUID();
       const { data: newUser, error: createError } =
         await supabaseAdmin.auth.admin.createUser({
@@ -279,7 +332,6 @@ Deno.serve(async (req) => {
 
       userId = newUser.user.id;
 
-      // Wait for handle_new_user trigger to create profile row
       const profileReady = await waitForProfile(supabaseAdmin, userId);
       if (!profileReady) {
         console.error("Profile not created by trigger after max retries");
@@ -289,7 +341,6 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Update profile with SSO info
       await syncProfile(supabaseAdmin, userId, {
         full_name: name,
         sso_provider: "iccn",
@@ -299,17 +350,14 @@ Deno.serve(async (req) => {
         ...(avatarFromSso ? { avatar_url: avatarFromSso } : {}),
       });
 
-      // Set role to artist
       await supabaseAdmin
         .from("user_roles")
         .update({ role: "artist" })
         .eq("user_id", userId);
 
-      // Insert into artists table
       await ensureArtistEntry(supabaseAdmin, iccnMediaLabelId, name);
     }
 
-    // 6. Generate a magic link to get session tokens
     const { data: linkData, error: linkError } =
       await supabaseAdmin.auth.admin.generateLink({
         type: "magiclink",
@@ -324,7 +372,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Use verifyOtp with token_hash
     const { data: sessionData, error: sessionError } =
       await supabaseAdmin.auth.verifyOtp({
         token_hash: linkData.properties.hashed_token,
@@ -357,7 +404,7 @@ Deno.serve(async (req) => {
     const message = error instanceof Error ? error.message : "Internal server error";
     return new Response(
       JSON.stringify({ error: message }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: getErrorStatus(message), headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
