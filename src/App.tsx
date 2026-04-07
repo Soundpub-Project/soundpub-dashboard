@@ -110,6 +110,11 @@ const App = () => (
                   <ArtistProfile />
                 </ProtectedRoute>
               } />
+              <Route path="/dashboard/artist-profile/:userId" element={
+                <ProtectedRoute requireAdmin>
+                  <ArtistProfile />
+                </ProtectedRoute>
+              } />
               
               {/* Whitelabel-specific routes */}
               <Route path="/dashboard/whitelabel" element={
