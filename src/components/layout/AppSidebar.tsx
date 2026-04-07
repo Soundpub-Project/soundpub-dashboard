@@ -39,6 +39,8 @@ import {
   Shield,
   HardDrive,
   ListMusic,
+  FileText,
+  Bell,
 } from 'lucide-react';
 
 interface NavItem {
