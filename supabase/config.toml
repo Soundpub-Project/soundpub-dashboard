@@ -50,3 +50,9 @@ verify_jwt = false
 
 [functions.sso-login]
 verify_jwt = false
+
+[functions.create-xendit-invoice]
+verify_jwt = false
+
+[functions.xendit-webhook]
+verify_jwt = false
