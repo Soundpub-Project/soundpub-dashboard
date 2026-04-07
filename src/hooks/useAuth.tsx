@@ -154,6 +154,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRole(null);
   };
 
+  const refreshProfile = async () => {
+    if (user) {
+      await fetchProfileAndRole(user.id);
+    }
+  };
+
   const isSuperadmin = role === 'superadmin';
   const isAdmin = role === 'superadmin' || role === 'admin';
   const isLabel = role === 'label';
@@ -174,6 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signIn,
         signUp,
         signOut,
+        refreshProfile,
         isSuperadmin,
         isAdmin,
         isLabel,
