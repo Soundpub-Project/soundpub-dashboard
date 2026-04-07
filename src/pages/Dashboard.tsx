@@ -20,6 +20,7 @@ import {
   Clock,
   CheckCircle
 } from 'lucide-react';
+import { ArtistOnboardingDialog } from '@/components/onboarding/ArtistOnboardingDialog';
 import { 
   AreaChart, 
   Area, 
@@ -67,7 +68,8 @@ interface TopPlatform {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { profile, isAdmin, isLabel, isArtist, isSsoUser, isArtistProfileCompleted } = useAuth();
+  const { profile, isAdmin, isLabel, isArtist, isSsoUser, isArtistProfileCompleted, refreshProfile } = useAuth();
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [stats, setStats] = useState<DashboardStats>({
     totalReleases: 0,
     totalTracks: 0,
@@ -103,6 +105,13 @@ export default function Dashboard() {
       fetchBasicStats();
     }
   }, [profile]);
+
+  // Auto-show onboarding dialog for SSO users who haven't completed profile
+  useEffect(() => {
+    if (isSsoUser && !isArtistProfileCompleted && profile) {
+      setOnboardingOpen(true);
+    }
+  }, [isSsoUser, isArtistProfileCompleted, profile]);
 
   const fetchBasicStats = async () => {
     try {
@@ -566,6 +575,16 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <ArtistOnboardingDialog
+        open={onboardingOpen}
+        onOpenChange={setOnboardingOpen}
+        allowSkip={false}
+        onComplete={() => {
+          refreshProfile();
+          setOnboardingOpen(false);
+        }}
+      />
     </DashboardLayout>
   );
 }
