@@ -174,6 +174,21 @@ const App = () => (
                   <AllRoyalties />
                 </ProtectedRoute>
               } />
+              <Route path="/dashboard/notifications" element={
+                <ProtectedRoute requireAdmin>
+                  <NotificationManagement />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/payment-settings" element={
+                <ProtectedRoute requireAdmin>
+                  <PaymentSettings />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/invoices" element={
+                <ProtectedRoute requireAdmin>
+                  <Invoices />
+                </ProtectedRoute>
+              } />
               
               {/* Superadmin-only routes */}
               <Route path="/dashboard/audit-logs" element={
