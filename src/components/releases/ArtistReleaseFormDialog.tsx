@@ -115,6 +115,7 @@ export function ArtistReleaseFormDialog({
 }: ArtistReleaseFormDialogProps) {
   const { user, profile } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [paymentLoading, setPaymentLoading] = useState(false);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
