@@ -313,6 +313,7 @@ export default function Auth() {
                     <Shield className="mr-2 h-4 w-4" />
                     Login via ICCN
                   </Button>
+                </form>
               </TabsContent>
 
               {/* Signup Tab */}
