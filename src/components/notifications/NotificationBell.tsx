@@ -14,7 +14,7 @@ import { Separator } from '@/components/ui/separator';
 import { formatDistanceToNow } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
 
-interface Notification {
+interface AppNotification {
   id: string;
   type: string;
   title: string;
