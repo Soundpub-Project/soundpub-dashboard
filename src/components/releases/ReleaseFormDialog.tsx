@@ -735,6 +735,128 @@ export function ReleaseFormDialog({
     }
   };
 
+  const handleSaveDraft = async () => {
+    const values = form.getValues();
+    // Validate minimum fields
+    if (!values.title || !values.artist_name || !values.release_type) {
+      toast.error('Judul, artist, dan tipe release wajib diisi');
+      return;
+    }
+    form.setValue('status', 'draft');
+    await onSubmit({ ...values, status: 'draft' });
+  };
+
+  const handlePayment = async () => {
+    // First validate and save the release
+    const isValid = await form.trigger();
+    if (!isValid) {
+      toast.error('Mohon lengkapi semua field yang wajib diisi');
+      return;
+    }
+    
+    const values = form.getValues();
+    if (!user) return;
+
+    setPaymentLoading(true);
+    try {
+      // Save release first
+      const coverUrl = await uploadCover();
+
+      const labelId = isAdmin ? values.label_id : isArtist && profile?.parent_label_id ? profile.parent_label_id : user.id;
+      if (!labelId) {
+        toast.error('Label wajib dipilih');
+        setPaymentLoading(false);
+        return;
+      }
+
+      const artistUserId = isArtist ? user.id : (labelArtists.find(
+        a => a.name.toLowerCase().trim() === values.artist_name.toLowerCase().trim()
+      )?.user_id || null);
+
+      let releaseId: string;
+
+      if (isEditMode && release) {
+        // Update existing release
+        await supabase.from('releases').update({
+          upc: values.upc || null,
+          title: values.title,
+          artist_name: values.artist_name,
+          release_type: values.release_type,
+          genre: values.genre || null,
+          release_date: values.release_date || null,
+          status: 'pending',
+          ...(coverUrl ? { cover_url: coverUrl } : {}),
+        }).eq('id', release.id);
+        releaseId = release.id;
+      } else {
+        // Create new release
+        const { data: newRelease, error: releaseError } = await supabase
+          .from('releases')
+          .insert({
+            upc: values.upc || null,
+            title: values.title,
+            artist_name: values.artist_name,
+            artist_user_id: artistUserId,
+            release_type: values.release_type,
+            genre: values.genre || null,
+            release_date: values.release_date || null,
+            status: 'pending',
+            cover_url: coverUrl,
+            label_id: labelId,
+            created_by: user.id,
+          })
+          .select()
+          .single();
+
+        if (releaseError) throw releaseError;
+        releaseId = newRelease.id;
+
+        // Insert tracks
+        const tracksToInsert = values.tracks.map((track) => {
+          const primaryArtist = track.artists.find(a => a.type === 'Main Artist')?.name || track.artists[0]?.name || '';
+          return {
+            release_id: releaseId,
+            isrc: track.isrc || null,
+            title: track.title,
+            artist_name: primaryArtist,
+            artists: track.artists,
+            composer: track.composer || null,
+            lyricist: track.lyricist || null,
+            genre: track.genre || null,
+            lyrics: track.lyrics || null,
+            explicit_lyrics: track.explicit_lyrics,
+            contributors: track.contributors || [],
+            audio_url: track.audio_url || null,
+            clip_url: track.clip_url || null,
+            duration: track.duration || null,
+          };
+        });
+
+        await supabase.from('tracks').insert(tracksToInsert);
+      }
+
+      // Call create-xendit-invoice
+      const { data: invoiceData, error: invoiceError } = await supabase.functions.invoke('create-xendit-invoice', {
+        body: { release_id: releaseId },
+      });
+
+      if (invoiceError) throw new Error(invoiceError.message || 'Gagal membuat invoice pembayaran');
+      
+      if (invoiceData?.invoice_url) {
+        toast.success(`Mengarahkan ke halaman pembayaran...`);
+        window.location.href = invoiceData.invoice_url;
+      } else {
+        throw new Error('Invoice URL tidak ditemukan');
+      }
+
+    } catch (error: any) {
+      console.error('Payment error:', error);
+      toast.error(error.message || 'Gagal memproses pembayaran');
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
   const addTrack = () => {
     appendTrack({
       isrc: '',
