@@ -284,6 +284,26 @@ export default function Releases() {
     setFormOpen(true);
   };
 
+  const handleContinuePayment = async (release: Release) => {
+    try {
+      const { data: invoiceData, error: invoiceError } = await supabase.functions.invoke('create-xendit-invoice', {
+        body: { release_id: release.id },
+      });
+
+      if (invoiceError) throw new Error(invoiceError.message || 'Gagal membuat invoice');
+
+      if (invoiceData?.invoice_url) {
+        toast.success('Mengarahkan ke halaman pembayaran...');
+        window.location.href = invoiceData.invoice_url;
+      } else {
+        throw new Error('Invoice URL tidak ditemukan');
+      }
+    } catch (error: any) {
+      console.error('Payment error:', error);
+      toast.error(error.message || 'Gagal memproses pembayaran');
+    }
+  };
+
   const handleDeleteRelease = (release: Release) => {
     setSelectedRelease(release);
     setDeleteDialogOpen(true);
