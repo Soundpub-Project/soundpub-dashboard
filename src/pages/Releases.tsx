@@ -668,8 +668,11 @@ export default function Releases() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <Badge variant={getStatusBadge(release.status)} className="capitalize">
-                              {release.status}
+                            <Badge 
+                              variant={getStatusBadge(release.status)} 
+                              className={`capitalize ${release.status === 'pending_paid' ? 'bg-green-600 text-white border-green-600' : ''}`}
+                            >
+                              {getStatusLabel(release.status)}
                             </Badge>
                           </TableCell>
                           <TableCell>
@@ -693,7 +696,16 @@ export default function Releases() {
                                       <MoreHorizontal className="h-4 w-4" />
                                     </Button>
                                   </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
+                                   <DropdownMenuContent align="end">
+                                    {release.status === 'pending_paid' && isAdmin && (
+                                      <>
+                                        <DropdownMenuItem onClick={() => handleConfirmRelease(release)}>
+                                          <CheckCircle className="h-4 w-4 mr-2" />
+                                          Konfirmasi & Aktifkan
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                      </>
+                                    )}
                                     <DropdownMenuItem onClick={() => handleEditRelease(release)}>
                                       <Pencil className="h-4 w-4 mr-2" />
                                       Edit
