@@ -237,6 +237,7 @@ export type Database = {
           address: string | null
           artist_profile_completed: boolean | null
           artist_revenue: number
+          avatar_url: string | null
           balance: number
           composer_code: string | null
           created_at: string | null
@@ -260,6 +261,7 @@ export type Database = {
           address?: string | null
           artist_profile_completed?: boolean | null
           artist_revenue?: number
+          avatar_url?: string | null
           balance?: number
           composer_code?: string | null
           created_at?: string | null
@@ -283,6 +285,7 @@ export type Database = {
           address?: string | null
           artist_profile_completed?: boolean | null
           artist_revenue?: number
+          avatar_url?: string | null
           balance?: number
           composer_code?: string | null
           created_at?: string | null
