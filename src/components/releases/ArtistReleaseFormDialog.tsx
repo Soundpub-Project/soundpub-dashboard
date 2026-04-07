@@ -388,6 +388,133 @@ export function ArtistReleaseFormDialog({
     }
   };
 
+  const handleSaveDraft = async () => {
+    const values = form.getValues();
+    if (!values.title || !values.artist_name || !values.release_type) {
+      toast.error('Judul, artist, dan tipe release wajib diisi');
+      return;
+    }
+    if (!user || !profile?.parent_label_id) {
+      toast.error('Profile tidak lengkap');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const coverUrl = await uploadCover();
+
+      const { data: newRelease, error: releaseError } = await supabase
+        .from('releases')
+        .insert({
+          title: values.title,
+          artist_name: values.artist_name,
+          artist_user_id: user.id,
+          release_type: values.release_type,
+          genre: values.genre || null,
+          release_date: values.release_date || null,
+          cover_url: coverUrl,
+          label_id: profile.parent_label_id,
+          created_by: user.id,
+          status: 'draft',
+        })
+        .select('id')
+        .single();
+
+      if (releaseError) throw releaseError;
+
+      for (const track of values.tracks) {
+        await supabase.from('tracks').insert({
+          release_id: newRelease.id,
+          title: track.title,
+          artist_name: values.artist_name,
+          artist_user_id: user.id,
+          composer: track.composer || null,
+          lyricist: track.lyricist || null,
+          genre: track.genre || null,
+          lyrics: track.lyrics || null,
+          explicit_lyrics: track.explicit_lyrics,
+        });
+      }
+
+      toast.success('Release disimpan sebagai draft');
+      onSuccess();
+      onOpenChange(false);
+    } catch (error: any) {
+      toast.error(error.message || 'Gagal menyimpan draft');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePayment = async () => {
+    const isValid = await form.trigger();
+    if (!isValid) {
+      toast.error('Mohon lengkapi semua field yang wajib diisi');
+      return;
+    }
+
+    const values = form.getValues();
+    if (!user || !profile?.parent_label_id) return;
+
+    setPaymentLoading(true);
+    try {
+      const coverUrl = await uploadCover();
+
+      // Create release first
+      const { data: newRelease, error: releaseError } = await supabase
+        .from('releases')
+        .insert({
+          title: values.title,
+          artist_name: values.artist_name,
+          artist_user_id: user.id,
+          release_type: values.release_type,
+          genre: values.genre || null,
+          release_date: values.release_date || null,
+          cover_url: coverUrl,
+          label_id: profile.parent_label_id,
+          created_by: user.id,
+          status: 'pending',
+        })
+        .select('id')
+        .single();
+
+      if (releaseError) throw releaseError;
+
+      for (const track of values.tracks) {
+        await supabase.from('tracks').insert({
+          release_id: newRelease.id,
+          title: track.title,
+          artist_name: values.artist_name,
+          artist_user_id: user.id,
+          composer: track.composer || null,
+          lyricist: track.lyricist || null,
+          genre: track.genre || null,
+          lyrics: track.lyrics || null,
+          explicit_lyrics: track.explicit_lyrics,
+        });
+      }
+
+      // Create invoice
+      const { data: invoiceData, error: invoiceError } = await supabase.functions.invoke('create-xendit-invoice', {
+        body: { release_id: newRelease.id },
+      });
+
+      if (invoiceError) throw new Error(invoiceError.message || 'Gagal membuat invoice');
+
+      if (invoiceData?.invoice_url) {
+        toast.success('Mengarahkan ke halaman pembayaran...');
+        window.location.href = invoiceData.invoice_url;
+      } else {
+        throw new Error('Invoice URL tidak ditemukan');
+      }
+    } catch (error: any) {
+      console.error('Payment error:', error);
+      toast.error(error.message || 'Gagal memproses pembayaran');
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] p-0">
