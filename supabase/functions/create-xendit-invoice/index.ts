@@ -44,6 +44,52 @@ Deno.serve(async (req) => {
     // Use service role for all DB operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+    // ===== CHECK FOR EXISTING PENDING PAYMENT =====
+    const { data: existingPayment } = await supabase
+      .from('release_payments')
+      .select('*')
+      .eq('release_id', release_id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (existingPayment?.xendit_invoice_url) {
+      // Verify the invoice is still valid by checking with Xendit
+      const xenditAuth = btoa(xenditSecretKey + ':')
+      try {
+        const checkResponse = await fetch(`https://api.xendit.co/v2/invoices/${existingPayment.xendit_invoice_id}`, {
+          headers: { 'Authorization': `Basic ${xenditAuth}` },
+        })
+        const checkBody = await checkResponse.json()
+        
+        if (checkResponse.ok && checkBody.status === 'PENDING') {
+          // Invoice still valid, return existing link
+          console.log('Reusing existing invoice:', existingPayment.xendit_invoice_id)
+          return new Response(JSON.stringify({
+            invoice_url: existingPayment.xendit_invoice_url,
+            invoice_id: existingPayment.xendit_invoice_id,
+            amount: existingPayment.amount,
+            track_count: existingPayment.track_count,
+            price_per_track: existingPayment.price_per_track,
+            reused: true,
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        } else {
+          // Invoice expired/paid/failed - mark old payment accordingly
+          const expiredStatus = checkBody.status === 'PAID' ? 'paid' : 'expired'
+          await supabase
+            .from('release_payments')
+            .update({ status: expiredStatus })
+            .eq('id', existingPayment.id)
+        }
+      } catch (e) {
+        console.warn('Could not verify existing invoice, creating new one:', e)
+      }
+    }
+
     // Get release info
     const { data: release, error: releaseError } = await supabase
       .from('releases')
@@ -80,7 +126,6 @@ Deno.serve(async (req) => {
     let description: string
 
     if (pricingMode === 'per_category') {
-      // Price by release type
       const releaseType = (release.release_type || 'single').toLowerCase()
       const priceMap: Record<string, number> = {
         single: parseInt(settings.release_price_single || '50000', 10),
@@ -91,7 +136,6 @@ Deno.serve(async (req) => {
       pricePerTrack = Math.ceil(totalAmount / totalTracks)
       description = `Pembayaran Release (${releaseType.toUpperCase()}): ${release.title}`
     } else {
-      // Price per track (default)
       pricePerTrack = parseInt(settings.release_price_per_track || '50000', 10)
       totalAmount = pricePerTrack * totalTracks
       description = `Pembayaran Release: ${release.title} (${totalTracks} track)`

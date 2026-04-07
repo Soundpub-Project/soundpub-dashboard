@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -82,6 +82,7 @@ const ALL_STATUSES: UserStatus[] = ['active', 'inactive', 'suspended'];
 
 export default function Users() {
   const { isAdmin, loading: authLoading, user } = useAuth();
+  const navigate = useNavigate();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -416,6 +417,12 @@ export default function Users() {
                                 <UserCog className="mr-2 h-4 w-4" />
                                 Ubah Status
                               </DropdownMenuItem>
+                              {user.role === 'artist' && (
+                                <DropdownMenuItem onClick={() => navigate(`/dashboard/artist-profile/${user.id}`)}>
+                                  <Music className="mr-2 h-4 w-4" />
+                                  Lihat Profil Artis
+                                </DropdownMenuItem>
+                              )}
                               {user.role === 'copyright' && (
                                 <DropdownMenuItem onClick={() => handleEditComposerCode(user)}>
                                   <Hash className="mr-2 h-4 w-4" />
