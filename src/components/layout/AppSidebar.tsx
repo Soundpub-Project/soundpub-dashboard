@@ -165,6 +165,12 @@ const administrationItems: NavItem[] = [
 // === MANAJEMEN LABEL & WHITELABEL ===
 const labelManagementItems: NavItem[] = [
   { 
+    title: 'Profil Artis', 
+    url: '/dashboard/artist-profile', 
+    icon: Music2,
+    roles: ['artist'],
+  },
+  { 
     title: 'Artis Saya', 
     url: '/dashboard/my-artists', 
     icon: Users,

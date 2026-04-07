@@ -138,6 +138,7 @@ interface Release {
   upc: string;
   title: string;
   artist_name: string;
+  artist_user_id?: string | null;
   release_date: string | null;
   cover_url: string | null;
   genre: string | null;
@@ -585,12 +586,12 @@ export function ReleaseFormDialog({
             upc: values.upc || null,
             title: values.title,
             artist_name: values.artist_name,
-            artist_user_id: selectedArtist?.user_id || null, // NEW: Save artist_user_id
+            artist_user_id: selectedArtist?.user_id || release.artist_user_id || null,
             release_type: values.release_type,
             genre: values.genre || null,
             release_date: values.release_date || null,
             status: values.status,
-            cover_url: coverUrl,
+            ...(coverUrl !== null ? { cover_url: coverUrl } : {}),
             label_id: updateLabelId,
           })
           .eq('id', release.id);
