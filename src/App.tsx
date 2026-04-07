@@ -33,6 +33,7 @@ import MediaLibrary from "./pages/MediaLibrary";
 import LandingPage from "./pages/LandingPage";
 import AllRoyalties from "./pages/AllRoyalties";
 import PaymentCallback from "./pages/PaymentCallback";
+import ArtistProfile from "./pages/ArtistProfile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
