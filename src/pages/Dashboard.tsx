@@ -216,14 +216,19 @@ export default function Dashboard() {
 
         {/* SSO Artist Profile Reminder Banner */}
         {isSsoUser && !isArtistProfileCompleted && (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 flex items-start gap-3">
-            <Clock className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-medium text-amber-600 dark:text-amber-400">Lengkapi Profil Artis Anda</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Anda perlu melengkapi informasi profil artis sebelum dapat menambahkan release baru. Buka halaman <a href="/dashboard/releases" className="underline text-primary hover:text-primary/80">Releases</a> untuk memulai.
-              </p>
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 flex items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <Clock className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-amber-600 dark:text-amber-400">Lengkapi Profil Artis Anda</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Anda perlu melengkapi informasi profil artis sebelum dapat menambahkan release baru.
+                </p>
+              </div>
             </div>
+            <Button size="sm" variant="outline" className="shrink-0 border-amber-500/50 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10" onClick={() => setOnboardingOpen(true)}>
+              Lengkapi Sekarang
+            </Button>
           </div>
         )}
 
@@ -579,7 +584,7 @@ export default function Dashboard() {
       <ArtistOnboardingDialog
         open={onboardingOpen}
         onOpenChange={setOnboardingOpen}
-        allowSkip={false}
+        allowSkip={true}
         onComplete={() => {
           refreshProfile();
           setOnboardingOpen(false);
