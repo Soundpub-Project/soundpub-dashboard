@@ -23,6 +23,7 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const functionUrl = `${supabaseUrl}/functions/v1/sso-login`;
 
+      console.log('SSO: Exchanging token with edge function:', functionUrl);
       const resp = await fetch(functionUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -30,9 +31,11 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
       });
 
       const data = await resp.json();
+      console.log('SSO: Edge function response status:', resp.status, 'data:', JSON.stringify(data).substring(0, 200));
 
       if (!resp.ok) {
-        throw new Error(data.error || 'SSO login failed');
+        const detail = data.details ? ` (${JSON.stringify(data.details)})` : '';
+        throw new Error(`${data.error || 'SSO login failed'}${detail}`);
       }
 
       // Set Supabase session
