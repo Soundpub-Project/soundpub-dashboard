@@ -854,23 +854,23 @@ export function ArtistReleaseFormDialog({
               >
                 Batal
               </Button>
-              {isEditMode ? (
+              {isEditMode && release?.status !== 'draft' ? (
                 <Button
                   type="submit"
-                  disabled={loading || uploadingCover}
+                  disabled={loading || uploadingCover || release?.status === 'pending_paid'}
                   className="gradient-primary"
                 >
                   {(loading || uploadingCover) && (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   )}
-                  Simpan Perubahan
+                  {release?.status === 'pending_paid' ? 'Terkunci (Sudah Dibayar)' : 'Simpan Perubahan'}
                 </Button>
               ) : (
                 <>
                   <Button
                     type="button"
                     variant="secondary"
-                    onClick={handleSaveDraft}
+                    onClick={isEditMode ? () => form.handleSubmit(onSubmit)() : handleSaveDraft}
                     disabled={loading || paymentLoading || uploadingCover}
                   >
                     {loading ? (
@@ -879,12 +879,16 @@ export function ArtistReleaseFormDialog({
                         Menyimpan...
                       </>
                     ) : (
-                      'Simpan Draft'
+                      isEditMode ? 'Simpan Perubahan' : 'Simpan Draft'
                     )}
                   </Button>
                   <Button
                     type="button"
-                    onClick={handlePayment}
+                    onClick={() => {
+                      if (confirm('Pastikan data release sudah benar. Setelah pembayaran, release tidak dapat diedit lagi. Lanjutkan?')) {
+                        handlePayment();
+                      }
+                    }}
                     disabled={loading || paymentLoading || uploadingCover}
                     className="gradient-primary"
                   >
