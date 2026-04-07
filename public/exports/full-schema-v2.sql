@@ -1523,5 +1523,53 @@ ON CONFLICT (key) DO NOTHING;
 --   );
 
 -- =====================================================
--- END OF SCHEMA EXPORT v2.2
+-- BAGIAN TAMBAHAN: PAYMENT GATEWAY (Xendit)
+-- =====================================================
+
+-- Tabel release_payments untuk tracking pembayaran release
+CREATE TABLE IF NOT EXISTS public.release_payments (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  release_id UUID NOT NULL REFERENCES public.releases(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL,
+  amount NUMERIC(18,2) NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'IDR',
+  track_count INTEGER NOT NULL DEFAULT 1,
+  price_per_track NUMERIC(18,2) NOT NULL DEFAULT 50000,
+  xendit_invoice_id TEXT,
+  xendit_invoice_url TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  paid_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_release_payments_release_id ON public.release_payments(release_id);
+CREATE INDEX IF NOT EXISTS idx_release_payments_user_id ON public.release_payments(user_id);
+CREATE INDEX IF NOT EXISTS idx_release_payments_status ON public.release_payments(status);
+CREATE INDEX IF NOT EXISTS idx_release_payments_xendit_invoice_id ON public.release_payments(xendit_invoice_id);
+
+ALTER TABLE public.release_payments ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their own payments"
+ON public.release_payments FOR SELECT TO authenticated
+USING (user_id = auth.uid());
+
+CREATE POLICY "Users can insert their own payments"
+ON public.release_payments FOR INSERT TO authenticated
+WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "Admins can manage all payments"
+ON public.release_payments FOR ALL TO authenticated
+USING (is_admin(auth.uid()));
+
+CREATE TRIGGER update_release_payments_timestamp
+  BEFORE UPDATE ON public.release_payments
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+-- Harga per track (configurable)
+INSERT INTO public.app_settings (key, value) VALUES ('release_price_per_track', '50000')
+ON CONFLICT (key) DO NOTHING;
+
+-- =====================================================
+-- END OF SCHEMA EXPORT v2.3
 -- =====================================================
