@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { StorageSettings } from './StorageSettings';
+import { PricingSettings } from './PricingSettings';
 import { 
   Loader2, 
   Upload, 
@@ -435,6 +436,9 @@ export function SuperAdminSettings() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Pricing Settings */}
+      <PricingSettings />
 
       {/* Storage & Analytics Settings - using separate component */}
       <Card className="bg-card/50 border-border/50">
