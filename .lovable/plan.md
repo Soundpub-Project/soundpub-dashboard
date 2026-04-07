@@ -1,10 +1,11 @@
 
-
-# Plan: Integrasi SSO Keycloak ICCN ke SoundPub
+# Plan: Integrasi SSO Keycloak ICCN ke SoundPub (Revisi v2)
 
 ## Ringkasan
 
-Integrasi SSO Keycloak ICCN menggunakan `keycloak-js` di frontend untuk mendeteksi session aktif dari ekosistem ICCN. Jika user sudah login di portal ICCN lain, mereka otomatis login ke SoundPub tanpa perlu klik tombol. Login email/password tetap tersedia sebagai fallback.
+User ICCN yang sudah login di ekosistem ICCN akan otomatis masuk ke SoundPub sebagai **Artist di bawah Label "ICCN Media"**. Tidak ada penyimpanan `sso_id` di database — sistem hanya sinkronisasi **email + nama** dari token Keycloak, lalu upsert ke profil Supabase.
+
+Login email/password tetap tersedia untuk user non-ICCN.
 
 ## Arsitektur
 
@@ -13,86 +14,127 @@ Integrasi SSO Keycloak ICCN menggunakan `keycloak-js` di frontend untuk mendetek
 │  Browser                                                │
 │                                                         │
 │  1. App mount → keycloak-js check-sso (iframe)          │
-│     ├─ Session ada → access_token didapat               │
+│     ├─ Session ICCN ada → access_token didapat          │
 │     │  → Kirim ke Edge Function "sso-login"             │
-│     │  → Dapat Supabase session → auto login            │
-│     └─ Session tidak ada → tampilkan Auth page normal   │
+│     │  → Edge function:                                 │
+│     │     a. Verify JWT (JWKS RS256)                    │
+│     │     b. Extract email + nama dari token            │
+│     │     c. Cari/buat user di Supabase                 │
+│     │     d. Set role = artist, parent_label_id = ICCN  │
+│     │     e. Return Supabase session                    │
+│     │  → Auto login ke dashboard                        │
+│     └─ Session tidak ada → Auth page normal             │
 │                                                         │
-│  2. Auth page: Tab Login | Tab Daftar | Tombol SSO ICCN │
-│     └─ Klik SSO → redirect ke Keycloak login page       │
-│        → callback → verify → Supabase session           │
-└─────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────┐
-│  Edge Function: sso-login                               │
-│                                                         │
-│  1. Terima access_token Keycloak                        │
-│  2. Verify JWT via JWKS (RS256 signature + issuer)      │
-│  3. Cek resource_access[soundpub].roles                 │
-│  4. Upsert: cari profiles by sso_id → by email → baru  │
-│  5. Generate Supabase session via admin.generateLink()  │
-│     atau signInWithPassword (service role)               │
-│  6. Return Supabase access_token + refresh_token        │
+│  2. Setelah login SSO pertama kali:                     │
+│     → Tampilkan form "Lengkapi Data Artis/Band"         │
+│     → Bisa di-skip (lihat-lihat dulu)                   │
+│     → WAJIB diisi sebelum buat Release                  │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ## Perubahan yang Diperlukan
 
-### 1. Database — Tambah kolom `sso_id` di profiles
+### 1. Database — Tambah kolom `sso_provider` di profiles
 
 ```sql
-ALTER TABLE public.profiles ADD COLUMN sso_id text UNIQUE;
+-- Hanya menandai bahwa user ini masuk via SSO (tanpa menyimpan sso_id)
 ALTER TABLE public.profiles ADD COLUMN sso_provider text DEFAULT null;
-CREATE INDEX idx_profiles_sso_id ON public.profiles(sso_id) WHERE sso_id IS NOT NULL;
+-- Menandai apakah user SSO sudah melengkapi data artis/band
+ALTER TABLE public.profiles ADD COLUMN artist_profile_completed boolean DEFAULT false;
 ```
 
-Kolom `sso_id` menyimpan field `sub` dari JWT Keycloak, digunakan untuk mapping user SSO ke user Supabase.
+- `sso_provider = 'iccn'` → menandai user SSO dari ICCN
+- `artist_profile_completed = false` → user SSO belum isi data artis/band
+- **TIDAK** menyimpan `sso_id` di database
 
-### 2. Database — Role baru (opsional)
+### 2. Database — Tabel baru `artist_profiles` (data diri artis/band)
 
-SSO user dari ICCN akan di-assign role berdasarkan `resource_access[soundpub].roles` dari JWT Keycloak. Mapping:
+```sql
+CREATE TABLE public.artist_profiles (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
+  artist_name text NOT NULL,
+  artist_type text NOT NULL DEFAULT 'solo', -- 'solo' | 'band' | 'group'
+  bio text,
+  genre text,
+  social_links jsonb DEFAULT '{}',
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
 
-| Keycloak Role | SoundPub Role | Keterangan |
-|---|---|---|
-| `ADMIN` | `admin` | Full admin |
-| `MEMBER` | `user` | User biasa |
-| `VIEWER` | `user` | Read-only, treatment khusus via flag |
+ALTER TABLE public.artist_profiles ENABLE ROW LEVEL SECURITY;
 
-Jika diperlukan role khusus SSO, bisa tambah value `'sso_member'` ke enum `app_role`.
+-- User bisa lihat dan edit data artis sendiri
+CREATE POLICY "Users can view own artist profile"
+  ON public.artist_profiles FOR SELECT
+  TO authenticated
+  USING (user_id = auth.uid());
+
+CREATE POLICY "Users can update own artist profile"
+  ON public.artist_profiles FOR UPDATE
+  TO authenticated
+  USING (user_id = auth.uid());
+
+CREATE POLICY "Users can insert own artist profile"
+  ON public.artist_profiles FOR INSERT
+  TO authenticated
+  WITH CHECK (user_id = auth.uid());
+
+-- Admin bisa lihat semua
+CREATE POLICY "Admins can manage all artist profiles"
+  ON public.artist_profiles FOR ALL
+  TO authenticated
+  USING (is_admin(auth.uid()));
+
+-- Label ICCN Media bisa lihat artis-artisnya
+CREATE POLICY "Labels can view their artist profiles"
+  ON public.artist_profiles FOR SELECT
+  TO authenticated
+  USING (
+    user_id IN (
+      SELECT id FROM profiles WHERE parent_label_id = auth.uid()
+    )
+  );
+```
 
 ### 3. Edge Function — `sso-login`
 
 File: `supabase/functions/sso-login/index.ts`
 
-Fungsi utama:
-- Terima `{ keycloak_token: string }` dari frontend
-- Fetch JWKS dari `https://sso.iccn.or.id/realms/{realm}/protocol/openid-connect/certs`
-- Verify signature RS256 + issuer + expiry
-- Cek `resource_access[soundpub].roles` ada dan tidak kosong
-- Cari user di DB: `SELECT * FROM profiles WHERE sso_id = {sub}` → fallback `WHERE email = {email}`
-- Jika tidak ada: create user via `supabase.auth.admin.createUser()`, set `sso_id`, role
-- Jika ada: update `sso_id` jika belum di-set (linking by email)
-- Generate magic link atau sign in: `supabase.auth.admin.generateLink({ type: 'magiclink', email })`
-- Return `{ access_token, refresh_token }` ke frontend
+Flow:
+1. Terima `{ keycloak_token: string }` dari frontend
+2. Fetch JWKS → verify JWT RS256 + issuer + expiry
+3. Extract **email** dan **nama** dari token (field `email`, `name` atau `preferred_username`)
+4. Cek `resource_access[soundpub].roles` — harus ada akses
+5. Cari user di profiles by **email**:
+   - **Ada**: Update `sso_provider = 'iccn'` jika belum, login via magic link
+   - **Tidak ada**: Create user baru via `supabase.auth.admin.createUser()`:
+     - `email` dari token
+     - `full_name` dari token  
+     - Random secure password (user tidak perlu tahu, login via SSO)
+     - Set `sso_provider = 'iccn'`
+     - Set `parent_label_id` = UUID label "ICCN Media"
+     - Insert role `artist` ke `user_roles`
+     - Insert ke tabel `artists` (nama = full_name, label_id = ICCN Media UUID)
+     - Set `artist_profile_completed = false`
+6. Generate Supabase session → return `{ access_token, refresh_token }`
 
-Secrets yang dibutuhkan:
-- `SSO_BASE_URL` = `https://sso.iccn.or.id`
-- `SSO_REALM` = `playground` (staging) / `PORTALICCN` (production)
+**Secrets yang dibutuhkan:**
+- `SSO_REALM_URL` = `https://sso.iccn.or.id/realms/playground` (staging)
 - `SSO_CLIENT_ID` = `soundpub`
+- `ICCN_MEDIA_LABEL_ID` = UUID dari user "ICCN Media" yang sudah didaftarkan sebagai Label
 
 ### 4. Frontend — `src/lib/keycloak.ts`
 
-Wrapper untuk `keycloak-js`:
+Wrapper keycloak-js:
 - Config dari env vars (`VITE_SSO_BASE_URL`, `VITE_SSO_REALM`, `VITE_SSO_CLIENT_ID`)
 - `initKeycloak()` — init dengan `check-sso` + silent iframe
-- `buildLoginUrl(redirectUri)` — generate login URL
-- `buildLogoutUrl(postLogoutRedirectUri, idTokenHint)` — manual logout URL
-- `exchangeRefreshToken()` — force refresh via `kc.updateToken(-1)`
-- `hasClientAccess(token)` — decode JWT, cek resource_access roles
+- `keycloakLogin()` — redirect ke Keycloak login
+- `keycloakLogout()` — redirect ke Keycloak logout URL
+- `getToken()` — ambil access_token
 
 ### 5. Frontend — `public/silent-check-sso.html`
 
-File wajib untuk iframe silent check:
 ```html
 <!DOCTYPE html>
 <html><body>
@@ -102,64 +144,88 @@ File wajib untuk iframe silent check:
 
 ### 6. Frontend — `src/context/SsoAuthContext.tsx`
 
-Context provider yang:
-- Init keycloak-js saat app mount (`check-sso`)
-- Jika authenticated → kirim token ke Edge Function `sso-login` → set Supabase session
-- Expose state: `ssoAuthenticated`, `ssoLoading`, `ssoLogin()`, `ssoLogout()`
+Provider yang:
+- Init keycloak-js saat mount (`check-sso` mode)
+- Jika ICCN session terdeteksi → kirim token ke `sso-login` → set Supabase session
+- Expose: `ssoLoading`, `ssoAuthenticated`, `triggerSsoLogin()`, `triggerSsoLogout()`
 
-### 7. Frontend — Update `useAuth.tsx`
+### 7. Frontend — Form "Lengkapi Data Artis/Band" (BARU)
 
-- Tambah `isSsoUser: boolean` (cek `profile?.sso_id !== null`)
-- Tambah `ssoLogout()` yang clear session Keycloak + Supabase
-- Update `signOut()` untuk handle SSO logout jika user adalah SSO user
+File: `src/components/onboarding/ArtistOnboardingDialog.tsx`
 
-### 8. Frontend — Update `Auth.tsx`
+- Muncul otomatis setelah login SSO pertama kali (`artist_profile_completed = false`)
+- Field:
+  - Nama Artis/Band (wajib)
+  - Tipe: Solo / Band / Group (wajib)
+  - Bio (opsional)
+  - Genre (opsional)
+  - Link sosial media (opsional)
+- Tombol **"Simpan"** → insert ke `artist_profiles`, update `profiles.artist_profile_completed = true`
+- Tombol **"Nanti Saja / Skip"** → tutup dialog, tapi flag tetap `false`
 
-- Tambah tombol "Login via SSO ICCN" di halaman login
-- Jika `check-sso` mendeteksi session aktif → auto-redirect ke dashboard (tanpa perlu klik)
-- Tampilkan loading state saat proses SSO check berlangsung
+### 8. Frontend — Enforce data artis sebelum buat Release
 
-### 9. Frontend — Update `AppSidebar.tsx`
+Di `ReleaseFormDialog.tsx` atau page Releases:
+- Sebelum buka form tambah release, cek `profile.artist_profile_completed`
+- Jika `false` → tampilkan dialog `ArtistOnboardingDialog` dengan pesan "Anda harus melengkapi data artis terlebih dahulu"
+- Tidak bisa di-skip dalam konteks ini
 
-- Update logout handler: jika SSO user → redirect ke Keycloak logout URL
+### 9. Frontend — Update `useAuth.tsx`
 
-### 10. Konfigurasi untuk Kedua Environment
+Tambah:
+- `isSsoUser: boolean` → cek `profile?.sso_provider != null`
+- `isArtistProfileCompleted: boolean` → cek `profile?.artist_profile_completed`
 
-**Lovable Cloud (dev/staging):**
-- Env vars via `.env`: `VITE_SSO_*`
-- Edge function secrets via Cloud Secrets
-- `allowed-origins` di Keycloak harus include `*.lovable.app`
+### 10. Frontend — Update `Auth.tsx`
 
-**Self-hosted (production VPS):**
-- Env vars di `.env` file server
-- Edge function secrets di Supabase self-hosted config
-- `allowed-origins` di Keycloak: domain production
+- Tambah tombol **"Login via ICCN"** di halaman login
+- SSO auto-detect: jika `check-sso` menemukan session → langsung login tanpa klik
+- Loading state selama proses SSO
 
-## Perlakuan Khusus User SSO
+### 11. Frontend — Update `Settings.tsx`
+
+- Jika `isSsoUser`:
+  - Sembunyikan form "Ubah Password" (password managed by Keycloak)
+  - Tampilkan info "Login via ICCN SSO"
+  - Tampilkan/edit data artis/band dari `artist_profiles`
+
+### 12. Frontend — Update `AppSidebar.tsx`
+
+- Jika `isSsoUser`: logout → clear Supabase session + redirect Keycloak logout
+
+### 13. Frontend — Update `App.tsx`
+
+- Wrap dengan `SsoAuthProvider`
+
+## Perlakuan Khusus User SSO ICCN
 
 | Aspek | User Email/Password | User SSO ICCN |
 |---|---|---|
-| Login | Form email + password | Auto-detect atau tombol SSO |
-| Password | Bisa ubah | Tidak ada password (managed Keycloak) |
-| Profile edit | Semua field | Nama, avatar, dll sync dari Keycloak JWT |
-| Logout | Clear Supabase session | Clear Supabase + redirect Keycloak logout |
-| Settings page | Tampil form password | Sembunyikan form password |
-| Signup | Tersedia | Tidak tersedia (harus dari ICCN) |
+| Login | Form email + password | Auto-detect / tombol "Login via ICCN" |
+| Role | Sesuai assignment admin | Otomatis `artist` di bawah ICCN Media |
+| Password | Bisa ubah | Tidak ada (managed Keycloak) |
+| Data artis | Tidak wajib | Wajib diisi sebelum buat release |
+| Onboarding | Tidak ada | Dialog lengkapi data artis/band |
+| Label | Sesuai assignment | Otomatis "ICCN Media" |
+| Logout | Clear Supabase | Clear Supabase + Keycloak logout |
+| Signup | Tersedia | Tidak ada (harus dari ekosistem ICCN) |
 
 ## File yang Akan Dibuat/Diubah
 
 | File | Aksi |
 |---|---|
-| `supabase/functions/sso-login/index.ts` | **Baru** — Edge function verify + upsert |
+| `supabase/functions/sso-login/index.ts` | **Baru** — Verify Keycloak JWT + upsert user |
 | `src/lib/keycloak.ts` | **Baru** — Keycloak wrapper |
 | `src/context/SsoAuthContext.tsx` | **Baru** — SSO context provider |
+| `src/components/onboarding/ArtistOnboardingDialog.tsx` | **Baru** — Form data artis/band |
 | `public/silent-check-sso.html` | **Baru** — Silent check iframe |
-| `src/hooks/useAuth.tsx` | **Update** — Tambah `isSsoUser`, SSO logout |
+| Migration SQL | **Baru** — `sso_provider`, `artist_profile_completed`, tabel `artist_profiles` |
+| `src/hooks/useAuth.tsx` | **Update** — `isSsoUser`, `isArtistProfileCompleted` |
 | `src/pages/Auth.tsx` | **Update** — Tombol SSO + auto-detect |
 | `src/App.tsx` | **Update** — Wrap `SsoAuthProvider` |
-| `src/pages/Settings.tsx` | **Update** — Hide password form untuk SSO user |
-| `src/components/layout/AppSidebar.tsx` | **Update** — SSO logout handler |
-| Migration SQL | **Baru** — Tambah `sso_id` column |
+| `src/pages/Settings.tsx` | **Update** — Hide password, tampil data artis |
+| `src/components/layout/AppSidebar.tsx` | **Update** — SSO logout |
+| `src/components/releases/ReleaseFormDialog.tsx` | **Update** — Cek artist_profile_completed |
 
 ## Dependensi Baru
 
@@ -167,11 +233,20 @@ Context provider yang:
 
 ## Urutan Implementasi
 
-1. Database migration (tambah `sso_id`)
-2. Add secrets (`SSO_BASE_URL`, `SSO_REALM`, `SSO_CLIENT_ID`)
-3. Edge function `sso-login`
-4. Frontend keycloak wrapper + silent-check-sso.html
-5. SSO context provider
-6. Update Auth page + useAuth + Settings + Sidebar
-7. Testing end-to-end
+1. Database migration (`sso_provider`, `artist_profile_completed`, `artist_profiles`)
+2. Add secrets (`SSO_REALM_URL`, `SSO_CLIENT_ID`, `ICCN_MEDIA_LABEL_ID`)
+3. Install `keycloak-js`
+4. Edge function `sso-login`
+5. Frontend: `keycloak.ts` + `silent-check-sso.html`
+6. Frontend: `SsoAuthContext.tsx`
+7. Frontend: `ArtistOnboardingDialog.tsx`
+8. Update: `useAuth`, `Auth.tsx`, `Settings.tsx`, `AppSidebar.tsx`, `App.tsx`
+9. Update: `ReleaseFormDialog.tsx` (enforce artist profile)
+10. Testing end-to-end
 
+## Catatan Penting
+
+- **Label "ICCN Media"** harus sudah ada di database sebagai user dengan role `label`. UUID-nya disimpan sebagai secret `ICCN_MEDIA_LABEL_ID`.
+- **Tidak ada `sso_id`** — identifikasi user SSO hanya via email. Jika email SSO sama dengan user yang sudah ada, akun akan di-link otomatis.
+- **Data dari SSO**: Hanya **email** dan **nama** yang diambil dari token Keycloak.
+- **Tabel `artist_profiles`** terpisah dari `profiles` — menyimpan informasi spesifik artis/band yang diisi user sendiri.
