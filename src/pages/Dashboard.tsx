@@ -106,6 +106,13 @@ export default function Dashboard() {
     }
   }, [profile]);
 
+  // Auto-show onboarding dialog for SSO users who haven't completed profile
+  useEffect(() => {
+    if (isSsoUser && !isArtistProfileCompleted && profile) {
+      setOnboardingOpen(true);
+    }
+  }, [isSsoUser, isArtistProfileCompleted, profile]);
+
   const fetchBasicStats = async () => {
     try {
       // Fetch counts in parallel - these are fast queries
