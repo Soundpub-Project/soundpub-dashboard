@@ -16,6 +16,7 @@ import { id as localeId } from 'date-fns/locale';
 
 interface AppNotification {
   id: string;
+  user_id: string | null;
   type: string;
   title: string;
   message: string;
