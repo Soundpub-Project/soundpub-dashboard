@@ -17,6 +17,8 @@ interface Profile {
   password_set: boolean | null;
   subscription_status: string | null;
   subscription_upgraded_at: string | null;
+  sso_provider: string | null;
+  artist_profile_completed: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -36,6 +38,8 @@ interface AuthContextType {
   isArtist: boolean;
   isCopyright: boolean;
   isWhitelabel: boolean;
+  isSsoUser: boolean;
+  isArtistProfileCompleted: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -154,6 +158,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isArtist = role === 'artist';
   const isCopyright = role === 'copyright';
   const isWhitelabel = role === 'whitelabel';
+  const isSsoUser = profile?.sso_provider != null;
+  const isArtistProfileCompleted = profile?.artist_profile_completed === true;
 
   return (
     <AuthContext.Provider
@@ -172,6 +178,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isArtist,
         isCopyright,
         isWhitelabel,
+        isSsoUser,
+        isArtistProfileCompleted,
       }}
     >
       {children}
