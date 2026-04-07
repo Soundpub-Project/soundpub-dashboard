@@ -315,6 +315,62 @@ export type Database = {
           },
         ]
       }
+      release_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string
+          id: string
+          paid_at: string | null
+          price_per_track: number
+          release_id: string
+          status: string
+          track_count: number
+          updated_at: string
+          user_id: string
+          xendit_invoice_id: string | null
+          xendit_invoice_url: string | null
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          paid_at?: string | null
+          price_per_track?: number
+          release_id: string
+          status?: string
+          track_count?: number
+          updated_at?: string
+          user_id: string
+          xendit_invoice_id?: string | null
+          xendit_invoice_url?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          paid_at?: string | null
+          price_per_track?: number
+          release_id?: string
+          status?: string
+          track_count?: number
+          updated_at?: string
+          user_id?: string
+          xendit_invoice_id?: string | null
+          xendit_invoice_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "release_payments_release_id_fkey"
+            columns: ["release_id"]
+            isOneToOne: false
+            referencedRelation: "releases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       releases: {
         Row: {
           archived_at: string | null
