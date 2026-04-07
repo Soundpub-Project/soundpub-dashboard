@@ -301,6 +301,16 @@ export default function Users() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <Select value={loginMethodFilter} onValueChange={(v) => setLoginMethodFilter(v as LoginMethod | 'all')}>
+                    <SelectTrigger className="w-full sm:w-40">
+                      <SelectValue placeholder="Semua Login" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Semua Login</SelectItem>
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="iccn">SSO ICCN</SelectItem>
+                      <SelectItem value="google">Google</SelectItem>
+                    </SelectContent>
                   {hasActiveFilters && (
                     <Button variant="ghost" size="icon" onClick={clearFilters} title="Clear filters">
                       <X className="h-4 w-4" />
@@ -328,6 +338,7 @@ export default function Users() {
                       <TableHead>Nama</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Role</TableHead>
+                      <TableHead>Login</TableHead>
                       <TableHead>Label / Kode</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Balance</TableHead>
