@@ -32,6 +32,7 @@ import CopyrightRoyaltySummary from "./pages/CopyrightRoyaltySummary";
 import MediaLibrary from "./pages/MediaLibrary";
 import LandingPage from "./pages/LandingPage";
 import AllRoyalties from "./pages/AllRoyalties";
+import PaymentCallback from "./pages/PaymentCallback";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -169,6 +170,13 @@ const App = () => (
               <Route path="/dashboard/export" element={
                 <ProtectedRoute allowedRoles={['superadmin']}>
                   <Export />
+                </ProtectedRoute>
+              } />
+              
+              {/* Payment callback */}
+              <Route path="/payment/callback" element={
+                <ProtectedRoute>
+                  <PaymentCallback />
                 </ProtectedRoute>
               } />
               

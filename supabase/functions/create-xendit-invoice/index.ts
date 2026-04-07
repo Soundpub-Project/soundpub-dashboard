@@ -1,0 +1,163 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
+  }
+
+  try {
+    // Authenticate user
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const xenditSecretKey = Deno.env.get('XENDIT_SECRET_KEY')
+
+    if (!xenditSecretKey) {
+      return new Response(JSON.stringify({ error: 'Payment gateway not configured' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    // Get user from token
+    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    })
+    const { data: { user }, error: authError } = await supabaseUser.auth.getUser()
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    const { release_id } = await req.json()
+    if (!release_id) {
+      return new Response(JSON.stringify({ error: 'release_id is required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    // Use service role for all DB operations
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+    // Get release info
+    const { data: release, error: releaseError } = await supabase
+      .from('releases')
+      .select('id, title, artist_name, label_id, status')
+      .eq('id', release_id)
+      .single()
+
+    if (releaseError || !release) {
+      return new Response(JSON.stringify({ error: 'Release not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    // Count tracks
+    const { count: trackCount } = await supabase
+      .from('tracks')
+      .select('id', { count: 'exact', head: true })
+      .eq('release_id', release_id)
+
+    const totalTracks = trackCount || 1
+
+    // Get pricing from app_settings
+    const { data: priceSetting } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'release_price_per_track')
+      .single()
+
+    const pricePerTrack = parseInt(priceSetting?.value || '50000', 10)
+    const totalAmount = pricePerTrack * totalTracks
+
+    // Get user profile for email
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('email, full_name')
+      .eq('id', user.id)
+      .single()
+
+    // Create Xendit Invoice
+    const xenditAuth = btoa(xenditSecretKey + ':')
+    const externalId = `release-${release_id}-${Date.now()}`
+
+    const invoicePayload = {
+      external_id: externalId,
+      amount: totalAmount,
+      currency: 'IDR',
+      description: `Pembayaran Release: ${release.title} (${totalTracks} track)`,
+      payer_email: profile?.email || user.email,
+      customer: {
+        given_names: profile?.full_name || 'User',
+        email: profile?.email || user.email,
+      },
+      success_redirect_url: `${req.headers.get('origin') || 'https://soundpub-dashboard.lovable.app'}/payment/callback?status=success&release_id=${release_id}`,
+      failure_redirect_url: `${req.headers.get('origin') || 'https://soundpub-dashboard.lovable.app'}/payment/callback?status=failed&release_id=${release_id}`,
+      items: [{
+        name: `Release: ${release.title}`,
+        quantity: totalTracks,
+        price: pricePerTrack,
+        category: 'MUSIC_RELEASE',
+      }],
+    }
+
+    const xenditResponse = await fetch('https://api.xendit.co/v2/invoices', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${xenditAuth}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(invoicePayload),
+    })
+
+    const xenditBody = await xenditResponse.json()
+
+    if (!xenditResponse.ok) {
+      console.error('Xendit error:', xenditBody)
+      return new Response(JSON.stringify({ error: 'Failed to create payment invoice', details: xenditBody.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    // Save payment record
+    const { error: paymentError } = await supabase
+      .from('release_payments')
+      .insert({
+        release_id,
+        user_id: user.id,
+        amount: totalAmount,
+        currency: 'IDR',
+        track_count: totalTracks,
+        price_per_track: pricePerTrack,
+        xendit_invoice_id: xenditBody.id,
+        xendit_invoice_url: xenditBody.invoice_url,
+        status: 'pending',
+      })
+
+    if (paymentError) {
+      console.error('Payment record error:', paymentError)
+    }
+
+    // Update release status to pending (awaiting payment)
+    await supabase
+      .from('releases')
+      .update({ status: 'pending' })
+      .eq('id', release_id)
+
+    return new Response(JSON.stringify({
+      invoice_url: xenditBody.invoice_url,
+      invoice_id: xenditBody.id,
+      amount: totalAmount,
+      track_count: totalTracks,
+      price_per_track: pricePerTrack,
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+
+  } catch (error) {
+    console.error('Error:', error)
+    return new Response(JSON.stringify({ error: error.message || 'Internal server error' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
+})

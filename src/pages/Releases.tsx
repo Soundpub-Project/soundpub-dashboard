@@ -39,7 +39,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
-import { Disc3, Search, Plus, Loader2, Pencil, Eye, MoreHorizontal, Trash2, Archive, ArchiveRestore, CheckSquare, Beaker, Filter, X } from 'lucide-react';
+import { Disc3, Search, Plus, Loader2, Pencil, Eye, MoreHorizontal, Trash2, Archive, ArchiveRestore, CheckSquare, Beaker, Filter, X, CheckCircle } from 'lucide-react';
 import { ReleaseFormDialog } from '@/components/releases/ReleaseFormDialog';
 
 import { DeleteReleaseDialog } from '@/components/releases/DeleteReleaseDialog';
@@ -163,11 +163,38 @@ export default function Releases() {
     const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
       active: 'default',
       pending: 'secondary',
+      pending_paid: 'default',
       rejected: 'destructive',
       draft: 'outline',
       inactive: 'outline',
     };
     return variants[status] || 'secondary';
+  };
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      active: 'Active',
+      pending: 'Pending',
+      pending_paid: 'Sudah Dibayar',
+      draft: 'Draft',
+      rejected: 'Rejected',
+      inactive: 'Inactive',
+    };
+    return labels[status] || status;
+  };
+
+  const handleConfirmRelease = async (release: Release) => {
+    try {
+      const { error } = await supabase
+        .from('releases')
+        .update({ status: 'active' })
+        .eq('id', release.id);
+      if (error) throw error;
+      toast.success(`Release "${release.title}" berhasil diaktifkan`);
+      fetchReleases();
+    } catch (error: any) {
+      toast.error(error.message || 'Gagal mengaktifkan release');
+    }
   };
 
   // Get unique values for filters
@@ -641,8 +668,11 @@ export default function Releases() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <Badge variant={getStatusBadge(release.status)} className="capitalize">
-                              {release.status}
+                            <Badge 
+                              variant={getStatusBadge(release.status)} 
+                              className={`capitalize ${release.status === 'pending_paid' ? 'bg-green-600 text-white border-green-600' : ''}`}
+                            >
+                              {getStatusLabel(release.status)}
                             </Badge>
                           </TableCell>
                           <TableCell>
@@ -666,7 +696,16 @@ export default function Releases() {
                                       <MoreHorizontal className="h-4 w-4" />
                                     </Button>
                                   </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
+                                   <DropdownMenuContent align="end">
+                                    {release.status === 'pending_paid' && isAdmin && (
+                                      <>
+                                        <DropdownMenuItem onClick={() => handleConfirmRelease(release)}>
+                                          <CheckCircle className="h-4 w-4 mr-2" />
+                                          Konfirmasi & Aktifkan
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                      </>
+                                    )}
                                     <DropdownMenuItem onClick={() => handleEditRelease(release)}>
                                       <Pencil className="h-4 w-4 mr-2" />
                                       Edit
