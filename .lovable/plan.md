@@ -1,72 +1,96 @@
 
 
-## Plan: SSO User Enhancements
+## Plan: Penyempurnaan SSO + Login Method Visibility + Dokumentasi
 
 ### Ringkasan
 
-4 fitur yang akan diimplementasikan: (1) fix parent label assignment untuk SSO users, (2) wajib isi profil artis sebelum buat release, (3) tetap pakai role `artist` yang sudah ada, dan (4) fitur upload foto profil.
+Menjawab 2 pertanyaan tambahan, lalu menyusun plan implementasi yang mencakup: (1) sinkronisasi avatar dari SSO ICCN, (2) kolom "Login Method" di halaman Users untuk admin/superadmin, dan (3) dokumentasi teknis.
 
 ---
 
-### Poin 3: Jawaban — Tidak perlu role khusus
+### Jawaban Pertanyaan 1: Apakah perlu implementasi berbeda untuk data SSO dari ICCN?
 
-Role `artist` yang sudah ada sudah cukup. User SSO dibedakan melalui kolom `sso_provider` di tabel `profiles`, bukan melalui role terpisah. Semua RLS policy dan permission yang berlaku untuk artist tetap berlaku.
+**Tidak perlu implementasi yang sangat berbeda**, tetapi ada satu hal yang bisa ditambahkan: **sinkronisasi avatar dari JWT ICCN**.
 
----
+Data yang dikirim ICCN via JWT:
+- `email` → sudah disinkronkan
+- `fullname` / `name` → sudah disinkronkan
+- `avatar` → **belum disinkronkan** — ini bisa langsung disimpan ke `profiles.avatar_url`
 
-### Step 1: Fix Parent Label Assignment di Edge Function `sso-login`
-
-**Masalah**: Untuk user yang sudah ada (existing), edge function tidak meng-update `parent_label_id` ke ICCN Media. Juga tidak menambahkan ke tabel `artists`.
-
-**Perubahan di `supabase/functions/sso-login/index.ts`**:
-- Pada blok `if (existingProfile)`: tambahkan logic untuk set `parent_label_id = iccnMediaLabelId` jika belum di-set
-- Tambahkan insert ke tabel `artists` jika belum ada entry untuk user tersebut di bawah ICCN Media
-- Pastikan role di-update ke `artist` jika masih `user`
-
----
-
-### Step 2: Wajib Isi Profil Artis untuk User SSO
-
-**Sudah ada**: `ArtistOnboardingDialog` dan tabel `artist_profiles`. Kolom `artist_profile_completed` di `profiles` sudah ada.
-
-**Perubahan**:
-1. **`src/pages/Releases.tsx`**: Sebelum membuka form "Tambah Release", cek `isSsoUser && !isArtistProfileCompleted`. Jika belum lengkap, tampilkan `ArtistOnboardingDialog` dengan `allowSkip={false}` (wajib diisi).
-2. **`src/pages/Dashboard.tsx`**: Tampilkan banner/reminder untuk SSO users yang belum melengkapi profil artis.
-3. **`ArtistOnboardingDialog`**: Setelah submit berhasil, refresh `profile` dari auth context agar `isArtistProfileCompleted` ter-update.
+Yang perlu ditambahkan di edge function `sso-login`:
+- Extract field `avatar` dari JWT payload
+- Simpan ke `profiles.avatar_url` saat user pertama kali login (jika belum punya avatar)
+- Untuk login berikutnya, **tidak overwrite** avatar jika user sudah upload sendiri di SoundPub
 
 ---
 
-### Step 3: Fitur Upload Foto Profil
+### Jawaban Pertanyaan 2: Bisa admin melihat metode login user?
 
-**Database**:
-- Kolom `avatar_url` sudah **tidak ada** di tabel `profiles`. Perlu ditambahkan via migration.
+**Ya, bisa.** Kolom `sso_provider` di tabel `profiles` sudah menyimpan info ini:
+- `null` → login biasa (email/password)
+- `'iccn'` → login via SSO ICCN
+- `'google'` → login via Google (nanti)
 
-**Storage**:
-- Buat bucket baru `avatars` (public) dengan RLS policy: user hanya bisa upload/update file di path `{user_id}/`.
+Yang perlu ditambahkan:
+- Kolom **"Login Method"** di tabel Users (`src/pages/Users.tsx`)
+- Badge visual: `Email`, `SSO ICCN`, `Google`
+- Filter tambahan berdasarkan login method
 
-**Migration SQL**:
-```sql
-ALTER TABLE public.profiles ADD COLUMN avatar_url text;
+---
 
-INSERT INTO storage.buckets (id, name, public) VALUES ('avatars', 'avatars', true);
+### Step 1: Sinkronisasi Avatar dari SSO ICCN
 
-CREATE POLICY "Users can upload own avatar"
-ON storage.objects FOR INSERT TO authenticated
-WITH CHECK (bucket_id = 'avatars' AND (storage.foldername(name))[1] = auth.uid()::text);
+**File**: `supabase/functions/sso-login/index.ts`
 
-CREATE POLICY "Users can update own avatar"
-ON storage.objects FOR UPDATE TO authenticated
-USING (bucket_id = 'avatars' AND (storage.foldername(name))[1] = auth.uid()::text);
+- Extract `payload.avatar` dari JWT (URL S3 dari Keycloak)
+- Untuk user baru: simpan langsung ke `profiles.avatar_url`
+- Untuk user existing: simpan hanya jika `avatar_url` masih `null`
 
-CREATE POLICY "Anyone can view avatars"
-ON storage.objects FOR SELECT TO public
-USING (bucket_id = 'avatars');
-```
+---
 
-**Frontend**:
-1. **`src/pages/Settings.tsx`**: Tambahkan section upload avatar dengan preview, menggunakan Supabase Storage upload.
-2. **`src/components/layout/AppSidebar.tsx`**: Tampilkan `avatar_url` di sidebar footer sebagai pengganti initials jika tersedia.
-3. **`src/components/layout/DashboardLayout.tsx`**: Tampilkan avatar di header.
+### Step 2: Tambah Kolom "Login Method" di Halaman Users
+
+**File**: `src/pages/Users.tsx`
+
+- Tambah `sso_provider` ke `UserProfile` interface
+- Tambah kolom tabel "Metode Login" dengan badge:
+  - `null` → Badge "Email" (default, warna netral)
+  - `'iccn'` → Badge "SSO ICCN" (warna biru/branded)
+  - `'google'` → Badge "Google" (warna merah/branded)
+- Tambah filter dropdown "Metode Login" di section filter (Email / SSO ICCN / Google / Semua)
+
+---
+
+### Step 3: Hardening Edge Function (dari plan sebelumnya yang sudah diapprove)
+
+**File**: `supabase/functions/sso-login/index.ts`
+
+- Tambahkan validasi hasil update profile — jika `sso_provider` atau `parent_label_id` gagal tersimpan, return error
+- Untuk user baru: tambahkan delay/retry setelah `createUser` agar trigger `handle_new_user` selesai dulu sebelum update profile
+- Repair data: update akun `bimokharis2708@gmail.com` agar `sso_provider='iccn'` dan `parent_label_id` terisi
+
+---
+
+### Step 4: Onboarding Dialog Fix
+
+**File**: `src/pages/Dashboard.tsx`
+
+- Pastikan `useEffect` untuk auto-open onboarding dialog berjalan setelah profile ter-refresh
+- Tambahkan fallback: jika `profile` berubah dan `isSsoUser && !isArtistProfileCompleted`, buka dialog
+
+---
+
+### Step 5: Dokumentasi Teknis
+
+**File**: `public/exports/SSO-INTEGRATION-DOCS.md`
+
+Dokumentasi mencakup:
+- Arsitektur SSO ICCN (Keycloak → Edge Function → Supabase Auth)
+- Data yang disinkronkan (email, nama, avatar, parent label)
+- Kolom `sso_provider` dan nilai-nilainya
+- Flow onboarding artis untuk user SSO
+- Cara menambahkan provider login baru (Google, dll)
+- Cara admin mengidentifikasi metode login user
 
 ---
 
@@ -74,12 +98,9 @@ USING (bucket_id = 'avatars');
 
 | File | Aksi |
 |---|---|
-| `supabase/functions/sso-login/index.ts` | Edit — fix parent label & artists sync untuk existing users |
-| `src/pages/Releases.tsx` | Edit — block release creation jika SSO user belum isi profil |
-| `src/pages/Dashboard.tsx` | Edit — tambah banner reminder profil artis |
-| `src/pages/Settings.tsx` | Edit — tambah avatar upload section |
-| `src/components/layout/AppSidebar.tsx` | Edit — tampilkan avatar |
-| `src/components/layout/DashboardLayout.tsx` | Edit — tampilkan avatar di header |
-| `src/hooks/useAuth.tsx` | Edit — tambah `avatar_url` di Profile interface |
-| Migration SQL | Baru — tambah kolom `avatar_url`, bucket `avatars` + RLS |
+| `supabase/functions/sso-login/index.ts` | Edit — tambah sinkronisasi avatar, hardening validasi |
+| `src/pages/Users.tsx` | Edit — tambah kolom & filter "Metode Login" |
+| `src/pages/Dashboard.tsx` | Edit — fix onboarding auto-open |
+| `public/exports/SSO-INTEGRATION-DOCS.md` | Baru — dokumentasi lengkap integrasi SSO |
+| Data repair via insert tool | Update `bimokharis2708@gmail.com` profile |
 
