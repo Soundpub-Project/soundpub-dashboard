@@ -396,8 +396,8 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* Manajemen Label & Whitelabel */}
-        {(isLabel || isWhitelabel) && (
+        {/* Manajemen Label, Whitelabel & Artist */}
+        {(isLabel || isWhitelabel || isArtist) && (
           <SidebarGroup>
             <SidebarGroupLabel>Manajemen</SidebarGroupLabel>
             <SidebarGroupContent>
