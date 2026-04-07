@@ -82,6 +82,7 @@ const ALL_STATUSES: UserStatus[] = ['active', 'inactive', 'suspended'];
 
 export default function Users() {
   const { isAdmin, loading: authLoading, user } = useAuth();
+  const navigate = useNavigate();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
