@@ -117,6 +117,69 @@ export default function Settings() {
     }
   };
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({ title: 'Error', description: 'File harus berupa gambar', variant: 'destructive' });
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: 'Error', description: 'Ukuran maksimal 2MB', variant: 'destructive' });
+      return;
+    }
+
+    setAvatarLoading(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const filePath = `${user.id}/avatar.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, { upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      const avatarUrl = `${publicUrl}?t=${Date.now()}`;
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: avatarUrl })
+        .eq('id', user.id);
+      if (updateError) throw updateError;
+
+      await refreshProfile();
+      toast({ title: 'Berhasil', description: 'Foto profil berhasil diupload' });
+    } catch (error: any) {
+      console.error('Error uploading avatar:', error);
+      toast({ title: 'Error', description: error.message || 'Gagal mengupload foto profil', variant: 'destructive' });
+    } finally {
+      setAvatarLoading(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!user) return;
+    setAvatarLoading(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ avatar_url: null })
+        .eq('id', user.id);
+      if (error) throw error;
+      await refreshProfile();
+      toast({ title: 'Berhasil', description: 'Foto profil berhasil dihapus' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'Gagal menghapus foto profil', variant: 'destructive' });
+    } finally {
+      setAvatarLoading(false);
+    }
+  };
+
   const isSuperAdmin = role === 'superadmin';
 
   return (
