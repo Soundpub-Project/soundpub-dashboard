@@ -27,7 +27,7 @@ interface AppNotification {
 
 export function NotificationBell() {
   const { user } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [open, setOpen] = useState(false);
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
@@ -46,7 +46,7 @@ export function NotificationBell() {
           table: 'notifications',
         },
         (payload) => {
-          const newNotif = payload.new as Notification;
+          const newNotif = payload.new as AppNotification;
           if (newNotif.user_id === user.id || newNotif.is_global) {
             setNotifications(prev => [newNotif, ...prev]);
           }
@@ -67,7 +67,7 @@ export function NotificationBell() {
       .order('created_at', { ascending: false })
       .limit(50);
 
-    if (data) setNotifications(data as Notification[]);
+    if (data) setNotifications(data as AppNotification[]);
   };
 
   const markAsRead = async (id: string) => {
