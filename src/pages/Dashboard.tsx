@@ -68,7 +68,8 @@ interface TopPlatform {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { profile, isAdmin, isLabel, isArtist, isSsoUser, isArtistProfileCompleted } = useAuth();
+  const { profile, isAdmin, isLabel, isArtist, isSsoUser, isArtistProfileCompleted, refreshProfile } = useAuth();
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [stats, setStats] = useState<DashboardStats>({
     totalReleases: 0,
     totalTracks: 0,
