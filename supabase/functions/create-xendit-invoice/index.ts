@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     // Get release info
     const { data: release, error: releaseError } = await supabase
       .from('releases')
-      .select('id, title, artist_name, label_id, status')
+      .select('id, title, artist_name, label_id, status, release_type')
       .eq('id', release_id)
       .single()
 
@@ -63,15 +63,39 @@ Deno.serve(async (req) => {
 
     const totalTracks = trackCount || 1
 
-    // Get pricing from app_settings
-    const { data: priceSetting } = await supabase
+    // Get pricing settings
+    const { data: settingsData } = await supabase
       .from('app_settings')
-      .select('value')
-      .eq('key', 'release_price_per_track')
-      .single()
+      .select('key, value')
+      .in('key', ['release_pricing_mode', 'release_price_per_track', 'release_price_single', 'release_price_ep', 'release_price_album'])
 
-    const pricePerTrack = parseInt(priceSetting?.value || '50000', 10)
-    const totalAmount = pricePerTrack * totalTracks
+    const settings: Record<string, string> = {}
+    settingsData?.forEach((s: { key: string; value: string | null }) => {
+      if (s.value) settings[s.key] = s.value
+    })
+
+    const pricingMode = settings.release_pricing_mode || 'per_track'
+    let totalAmount: number
+    let pricePerTrack: number
+    let description: string
+
+    if (pricingMode === 'per_category') {
+      // Price by release type
+      const releaseType = (release.release_type || 'single').toLowerCase()
+      const priceMap: Record<string, number> = {
+        single: parseInt(settings.release_price_single || '50000', 10),
+        ep: parseInt(settings.release_price_ep || '150000', 10),
+        album: parseInt(settings.release_price_album || '300000', 10),
+      }
+      totalAmount = priceMap[releaseType] || priceMap.single
+      pricePerTrack = Math.ceil(totalAmount / totalTracks)
+      description = `Pembayaran Release (${releaseType.toUpperCase()}): ${release.title}`
+    } else {
+      // Price per track (default)
+      pricePerTrack = parseInt(settings.release_price_per_track || '50000', 10)
+      totalAmount = pricePerTrack * totalTracks
+      description = `Pembayaran Release: ${release.title} (${totalTracks} track)`
+    }
 
     // Get user profile for email
     const { data: profile } = await supabase
@@ -88,7 +112,7 @@ Deno.serve(async (req) => {
       external_id: externalId,
       amount: totalAmount,
       currency: 'IDR',
-      description: `Pembayaran Release: ${release.title} (${totalTracks} track)`,
+      description,
       payer_email: profile?.email || user.email,
       customer: {
         given_names: profile?.full_name || 'User',
@@ -144,6 +168,15 @@ Deno.serve(async (req) => {
       .from('releases')
       .update({ status: 'pending' })
       .eq('id', release_id)
+
+    // Create notification for the user
+    await supabase.from('notifications').insert({
+      user_id: user.id,
+      type: 'info',
+      title: 'Invoice Pembayaran Dibuat',
+      message: `Invoice untuk release "${release.title}" telah dibuat. Total: Rp ${totalAmount.toLocaleString('id-ID')}`,
+      metadata: { release_id, amount: totalAmount },
+    })
 
     return new Response(JSON.stringify({
       invoice_url: xenditBody.invoice_url,

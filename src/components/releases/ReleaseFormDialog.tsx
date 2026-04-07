@@ -1588,7 +1588,7 @@ export function ReleaseFormDialog({
                 {isEditMode ? (
                   <Button
                     type="submit"
-                    disabled={loading || uploadingCover}
+                    disabled={loading || uploadingCover || (release?.status === 'pending_paid' && !lyricsOnlyMode)}
                     className="gradient-primary"
                   >
                     {loading || uploadingCover ? (
@@ -1596,6 +1596,8 @@ export function ReleaseFormDialog({
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         Menyimpan...
                       </>
+                    ) : release?.status === 'pending_paid' ? (
+                      'Terkunci (Sudah Dibayar)'
                     ) : (
                       'Update Release'
                     )}
@@ -1619,7 +1621,11 @@ export function ReleaseFormDialog({
                     </Button>
                     <Button
                       type="button"
-                      onClick={handlePayment}
+                      onClick={() => {
+                        if (confirm('Pastikan data release sudah benar. Setelah pembayaran, release tidak dapat diedit lagi. Lanjutkan?')) {
+                          handlePayment();
+                        }
+                      }}
                       disabled={loading || paymentLoading || uploadingCover}
                       className="gradient-primary"
                     >

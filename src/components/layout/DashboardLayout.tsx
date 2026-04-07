@@ -1,20 +1,23 @@
-import { ReactNode, useEffect } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
-import { Loader2, Bell } from 'lucide-react';
+import { Loader2, Megaphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { AnnouncementDialog } from '@/components/notifications/AnnouncementDialog';
 
 interface DashboardLayoutProps {
   children: ReactNode;
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { user, loading, profile } = useAuth();
+  const { user, loading, profile, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const [announcementOpen, setAnnouncementOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -49,11 +52,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               
               <div className="flex items-center gap-2">
                 <ThemeToggle />
+
+                {isAdmin && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setAnnouncementOpen(true)}
+                    title="Kirim Pengumuman"
+                  >
+                    <Megaphone className="h-5 w-5" />
+                  </Button>
+                )}
                 
-                <Button variant="ghost" size="icon" className="relative">
-                  <Bell className="h-5 w-5" />
-                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-primary" />
-                </Button>
+                <NotificationBell />
                 
                 {profile && (
                   <div className="hidden sm:flex items-center gap-3">
@@ -83,6 +94,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </main>
         </div>
       </div>
+
+      <AnnouncementDialog open={announcementOpen} onOpenChange={setAnnouncementOpen} />
     </SidebarProvider>
   );
 }

@@ -39,7 +39,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
-import { Disc3, Search, Plus, Loader2, Pencil, Eye, MoreHorizontal, Trash2, Archive, ArchiveRestore, CheckSquare, Beaker, Filter, X, CheckCircle } from 'lucide-react';
+import { Disc3, Search, Plus, Loader2, Pencil, Eye, MoreHorizontal, Trash2, Archive, ArchiveRestore, CheckSquare, Beaker, Filter, X, CheckCircle, DollarSign } from 'lucide-react';
 import { ReleaseFormDialog } from '@/components/releases/ReleaseFormDialog';
 
 import { DeleteReleaseDialog } from '@/components/releases/DeleteReleaseDialog';
@@ -282,6 +282,26 @@ export default function Releases() {
       setLyricsOnlyMode(false);
     }
     setFormOpen(true);
+  };
+
+  const handleContinuePayment = async (release: Release) => {
+    try {
+      const { data: invoiceData, error: invoiceError } = await supabase.functions.invoke('create-xendit-invoice', {
+        body: { release_id: release.id },
+      });
+
+      if (invoiceError) throw new Error(invoiceError.message || 'Gagal membuat invoice');
+
+      if (invoiceData?.invoice_url) {
+        toast.success('Mengarahkan ke halaman pembayaran...');
+        window.location.href = invoiceData.invoice_url;
+      } else {
+        throw new Error('Invoice URL tidak ditemukan');
+      }
+    } catch (error: any) {
+      console.error('Payment error:', error);
+      toast.error(error.message || 'Gagal memproses pembayaran');
+    }
   };
 
   const handleDeleteRelease = (release: Release) => {
@@ -689,7 +709,7 @@ export default function Releases() {
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
-                              {canManageReleases && (
+                              {(canManageReleases || isArtist) && (
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="sm">
@@ -706,31 +726,66 @@ export default function Releases() {
                                         <DropdownMenuSeparator />
                                       </>
                                     )}
-                                    <DropdownMenuItem onClick={() => handleEditRelease(release)}>
-                                      <Pencil className="h-4 w-4 mr-2" />
-                                      Edit
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleArchiveRelease(release)}>
-                                      {release.archived_at ? (
-                                        <>
-                                          <ArchiveRestore className="h-4 w-4 mr-2" />
-                                          Pulihkan
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Archive className="h-4 w-4 mr-2" />
-                                          Arsipkan
-                                        </>
-                                      )}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      onClick={() => handleDeleteRelease(release)}
-                                      className="text-destructive"
-                                    >
-                                      <Trash2 className="h-4 w-4 mr-2" />
-                                      Hapus
-                                    </DropdownMenuItem>
+                                    {/* Draft: allow edit and continue payment */}
+                                    {release.status === 'draft' && (
+                                      <>
+                                        <DropdownMenuItem onClick={() => handleEditRelease(release)}>
+                                          <Pencil className="h-4 w-4 mr-2" />
+                                          Edit Draft
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleContinuePayment(release)}>
+                                          <DollarSign className="h-4 w-4 mr-2" />
+                                          Lanjutkan Pembayaran
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                      </>
+                                    )}
+                                    {/* Pending: allow edit */}
+                                    {release.status === 'pending' && (
+                                      <DropdownMenuItem onClick={() => handleEditRelease(release)}>
+                                        <Pencil className="h-4 w-4 mr-2" />
+                                        Edit
+                                      </DropdownMenuItem>
+                                    )}
+                                    {/* Active: admin can always edit, others lyrics only */}
+                                    {release.status === 'active' && isAdmin && (
+                                      <DropdownMenuItem onClick={() => handleEditRelease(release)}>
+                                        <Pencil className="h-4 w-4 mr-2" />
+                                        Edit
+                                      </DropdownMenuItem>
+                                    )}
+                                    {/* pending_paid: locked, no edit */}
+                                    {release.status === 'pending_paid' && !isAdmin && (
+                                      <DropdownMenuItem disabled>
+                                        <Pencil className="h-4 w-4 mr-2 opacity-50" />
+                                        Terkunci (sudah dibayar)
+                                      </DropdownMenuItem>
+                                    )}
+                                    {canManageReleases && (
+                                      <>
+                                        <DropdownMenuItem onClick={() => handleArchiveRelease(release)}>
+                                          {release.archived_at ? (
+                                            <>
+                                              <ArchiveRestore className="h-4 w-4 mr-2" />
+                                              Pulihkan
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Archive className="h-4 w-4 mr-2" />
+                                              Arsipkan
+                                            </>
+                                          )}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          onClick={() => handleDeleteRelease(release)}
+                                          className="text-destructive"
+                                        >
+                                          <Trash2 className="h-4 w-4 mr-2" />
+                                          Hapus
+                                        </DropdownMenuItem>
+                                      </>
+                                    )}
                                   </DropdownMenuContent>
                                 </DropdownMenu>
                               )}

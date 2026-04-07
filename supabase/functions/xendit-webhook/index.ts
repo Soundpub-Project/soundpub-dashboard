@@ -74,6 +74,26 @@ Deno.serve(async (req) => {
         .update({ status: 'pending_paid' })
         .eq('id', payment.release_id)
 
+      // Create notification for the user
+      const releaseInfo = payment.releases as any
+      await supabase.from('notifications').insert({
+        user_id: payment.user_id,
+        type: 'success',
+        title: 'Pembayaran Berhasil',
+        message: `Pembayaran untuk release "${releaseInfo?.title || 'Unknown'}" berhasil. Admin akan segera mengonfirmasi.`,
+        metadata: { release_id: payment.release_id, amount: payment.amount },
+      })
+
+      // Create notification for admins (global)
+      await supabase.from('notifications').insert({
+        user_id: payment.user_id,
+        type: 'release',
+        title: 'Release Baru Dibayar',
+        message: `Release "${releaseInfo?.title || 'Unknown'}" oleh ${releaseInfo?.artist_name || 'Unknown'} telah dibayar. Menunggu konfirmasi.`,
+        is_global: true,
+        metadata: { release_id: payment.release_id, amount: payment.amount },
+      })
+
       // Send email notification
       try {
         await sendEmailNotification(payment, supabase)
@@ -87,6 +107,16 @@ Deno.serve(async (req) => {
         .from('releases')
         .update({ status: 'draft' })
         .eq('id', payment.release_id)
+
+      // Notify user of failed payment
+      const releaseInfo = payment.releases as any
+      await supabase.from('notifications').insert({
+        user_id: payment.user_id,
+        type: mappedStatus === 'expired' ? 'warning' : 'error',
+        title: mappedStatus === 'expired' ? 'Pembayaran Expired' : 'Pembayaran Gagal',
+        message: `Pembayaran untuk release "${releaseInfo?.title || 'Unknown'}" ${mappedStatus === 'expired' ? 'telah kedaluwarsa' : 'gagal'}. Silakan coba lagi.`,
+        metadata: { release_id: payment.release_id },
+      })
     }
 
     return new Response(JSON.stringify({ success: true }), {

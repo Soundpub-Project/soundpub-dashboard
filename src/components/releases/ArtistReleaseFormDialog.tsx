@@ -459,44 +459,96 @@ export function ArtistReleaseFormDialog({
     setPaymentLoading(true);
     try {
       const coverUrl = await uploadCover();
+      let releaseId: string;
 
-      // Create release first
-      const { data: newRelease, error: releaseError } = await supabase
-        .from('releases')
-        .insert({
-          title: values.title,
-          artist_name: values.artist_name,
-          artist_user_id: user.id,
-          release_type: values.release_type,
-          genre: values.genre || null,
-          release_date: values.release_date || null,
-          cover_url: coverUrl,
-          label_id: profile.parent_label_id,
-          created_by: user.id,
-          status: 'pending',
-        })
-        .select('id')
-        .single();
+      if (isEditMode && release) {
+        // Update existing draft release to pending
+        const { error: releaseError } = await supabase
+          .from('releases')
+          .update({
+            title: values.title,
+            artist_name: values.artist_name,
+            release_type: values.release_type,
+            genre: values.genre || null,
+            release_date: values.release_date || null,
+            cover_url: coverUrl,
+            status: 'pending',
+          })
+          .eq('id', release.id);
 
-      if (releaseError) throw releaseError;
+        if (releaseError) throw releaseError;
+        releaseId = release.id;
 
-      for (const track of values.tracks) {
-        await supabase.from('tracks').insert({
-          release_id: newRelease.id,
-          title: track.title,
-          artist_name: values.artist_name,
-          artist_user_id: user.id,
-          composer: track.composer || null,
-          lyricist: track.lyricist || null,
-          genre: track.genre || null,
-          lyrics: track.lyrics || null,
-          explicit_lyrics: track.explicit_lyrics,
-        });
+        // Update tracks
+        const existingTrackIds = values.tracks.filter(t => t.id).map(t => t.id);
+        if (existingTrackIds.length > 0) {
+          await supabase.from('tracks').delete().eq('release_id', release.id).not('id', 'in', `(${existingTrackIds.join(',')})`);
+        }
+        for (const track of values.tracks) {
+          if (track.id) {
+            await supabase.from('tracks').update({
+              title: track.title,
+              artist_name: values.artist_name,
+              composer: track.composer || null,
+              lyricist: track.lyricist || null,
+              genre: track.genre || null,
+              lyrics: track.lyrics || null,
+              explicit_lyrics: track.explicit_lyrics,
+            }).eq('id', track.id);
+          } else {
+            await supabase.from('tracks').insert({
+              release_id: release.id,
+              title: track.title,
+              artist_name: values.artist_name,
+              artist_user_id: user.id,
+              composer: track.composer || null,
+              lyricist: track.lyricist || null,
+              genre: track.genre || null,
+              lyrics: track.lyrics || null,
+              explicit_lyrics: track.explicit_lyrics,
+            });
+          }
+        }
+      } else {
+        // Create new release
+        const { data: newRelease, error: releaseError } = await supabase
+          .from('releases')
+          .insert({
+            title: values.title,
+            artist_name: values.artist_name,
+            artist_user_id: user.id,
+            release_type: values.release_type,
+            genre: values.genre || null,
+            release_date: values.release_date || null,
+            cover_url: coverUrl,
+            label_id: profile.parent_label_id,
+            created_by: user.id,
+            status: 'pending',
+          })
+          .select('id')
+          .single();
+
+        if (releaseError) throw releaseError;
+        releaseId = newRelease.id;
+
+        for (const track of values.tracks) {
+          await supabase.from('tracks').insert({
+            release_id: newRelease.id,
+            title: track.title,
+            artist_name: values.artist_name,
+            artist_user_id: user.id,
+            composer: track.composer || null,
+            lyricist: track.lyricist || null,
+            genre: track.genre || null,
+            lyrics: track.lyrics || null,
+            explicit_lyrics: track.explicit_lyrics,
+          });
+        }
       }
 
       // Create invoice
       const { data: invoiceData, error: invoiceError } = await supabase.functions.invoke('create-xendit-invoice', {
-        body: { release_id: newRelease.id },
+        body: { release_id: releaseId },
       });
 
       if (invoiceError) throw new Error(invoiceError.message || 'Gagal membuat invoice');
@@ -854,23 +906,23 @@ export function ArtistReleaseFormDialog({
               >
                 Batal
               </Button>
-              {isEditMode ? (
+              {isEditMode && release?.status !== 'draft' ? (
                 <Button
                   type="submit"
-                  disabled={loading || uploadingCover}
+                  disabled={loading || uploadingCover || release?.status === 'pending_paid'}
                   className="gradient-primary"
                 >
                   {(loading || uploadingCover) && (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   )}
-                  Simpan Perubahan
+                  {release?.status === 'pending_paid' ? 'Terkunci (Sudah Dibayar)' : 'Simpan Perubahan'}
                 </Button>
               ) : (
                 <>
                   <Button
                     type="button"
                     variant="secondary"
-                    onClick={handleSaveDraft}
+                    onClick={isEditMode ? () => form.handleSubmit(onSubmit)() : handleSaveDraft}
                     disabled={loading || paymentLoading || uploadingCover}
                   >
                     {loading ? (
@@ -879,12 +931,16 @@ export function ArtistReleaseFormDialog({
                         Menyimpan...
                       </>
                     ) : (
-                      'Simpan Draft'
+                      isEditMode ? 'Simpan Perubahan' : 'Simpan Draft'
                     )}
                   </Button>
                   <Button
                     type="button"
-                    onClick={handlePayment}
+                    onClick={() => {
+                      if (confirm('Pastikan data release sudah benar. Setelah pembayaran, release tidak dapat diedit lagi. Lanjutkan?')) {
+                        handlePayment();
+                      }
+                    }}
                     disabled={loading || paymentLoading || uploadingCover}
                     className="gradient-primary"
                   >
