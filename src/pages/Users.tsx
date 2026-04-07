@@ -416,6 +416,12 @@ export default function Users() {
                                 <UserCog className="mr-2 h-4 w-4" />
                                 Ubah Status
                               </DropdownMenuItem>
+                              {user.role === 'artist' && (
+                                <DropdownMenuItem onClick={() => navigate(`/dashboard/artist-profile/${user.id}`)}>
+                                  <Music className="mr-2 h-4 w-4" />
+                                  Lihat Profil Artis
+                                </DropdownMenuItem>
+                              )}
                               {user.role === 'copyright' && (
                                 <DropdownMenuItem onClick={() => handleEditComposerCode(user)}>
                                   <Hash className="mr-2 h-4 w-4" />
