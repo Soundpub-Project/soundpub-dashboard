@@ -143,6 +143,24 @@ const administrationItems: NavItem[] = [
     roles: ['superadmin', 'admin'],
   },
   { 
+    title: 'Invoice', 
+    url: '/dashboard/invoices', 
+    icon: FileText,
+    roles: ['superadmin', 'admin'],
+  },
+  { 
+    title: 'Kelola Notifikasi', 
+    url: '/dashboard/notifications', 
+    icon: Bell,
+    roles: ['superadmin', 'admin'],
+  },
+  { 
+    title: 'Pengaturan Pembayaran', 
+    url: '/dashboard/payment-settings', 
+    icon: Settings,
+    roles: ['superadmin', 'admin'],
+  },
+  { 
     title: 'Log Aktivitas', 
     url: '/dashboard/audit-logs', 
     icon: ScrollText,
