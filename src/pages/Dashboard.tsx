@@ -575,6 +575,16 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <ArtistOnboardingDialog
+        open={onboardingOpen}
+        onOpenChange={setOnboardingOpen}
+        allowSkip={false}
+        onComplete={() => {
+          refreshProfile();
+          setOnboardingOpen(false);
+        }}
+      />
     </DashboardLayout>
   );
 }
