@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.get-catalog-tracks]
 verify_jwt = false
+
+[functions.sso-login]
+verify_jwt = false
