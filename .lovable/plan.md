@@ -1,51 +1,85 @@
 
 
-## Analisis Masalah SSO di `dev.soundpub.xyz`
-
-### Masalah yang Teridentifikasi
-
-Ada **3 masalah** yang menyebabkan SSO tidak bekerja di deployment staging:
-
-#### 1. Edge Function masih error "Failed to fetch JWKS: 404"
-Log terbaru menunjukkan `SSO_REALM_URL` secret kemungkinan belum ter-apply dengan benar ke edge function. Meskipun sudah di-update berkali-kali, edge function masih gagal fetch JWKS. Perlu di-redeploy ulang dan di-test langsung.
-
-#### 2. Domain `dev.soundpub.xyz` tidak ada di Keycloak `allowed-origins`
-Dari JWT yang kamu berikan, `allowed-origins` hanya berisi:
-- `https://next.iccn.or.id`
-- `http://localhost:5173`, `http://localhost:3000`, `http://localhost:4560`
-- Beberapa URL ngrok dan `cms-sso.iccn.or.id`, `fe-sso.iccn.or.id`
-
-**`dev.soundpub.xyz` tidak terdaftar.** Artinya Keycloak `check-sso` (silent iframe) akan gagal karena domain tidak diizinkan. Kamu perlu minta tim ICCN menambahkan `https://dev.soundpub.xyz` ke:
-- **Valid Redirect URIs** di client `soundpub` di Keycloak
-- **Web Origins** di client `soundpub` di Keycloak
-
-#### 3. Token yang dikirim adalah dari client `landing-iccn`, bukan `soundpub`
-JWT menunjukkan `azp: "landing-iccn"`. Keycloak `check-sso` dari frontend SoundPub seharusnya mendapatkan token dengan `azp: "soundpub"`. Jika domain `dev.soundpub.xyz` tidak terdaftar di client `soundpub`, Keycloak tidak akan memberikan token untuk client tersebut.
-
-### Rencana Fix
-
-#### Step 1: Konfigurasi Keycloak (dilakukan oleh tim ICCN)
-Minta admin Keycloak ICCN untuk menambahkan di client **`soundpub`**:
-- **Valid Redirect URIs**: `https://dev.soundpub.xyz/*`
-- **Web Origins**: `https://dev.soundpub.xyz`
-- Juga untuk domain produksi nantinya: `https://dashboard.soundpub.xyz`
-
-#### Step 2: Redeploy edge function `sso-login`
-Redeploy ulang untuk memastikan secret `SSO_REALM_URL = https://sso.iccn.or.id/realms/playground` benar-benar ter-apply. Tambahkan logging `console.log("SSO_REALM_URL:", realmUrl)` untuk debugging.
-
-#### Step 3: Tambahkan error handling yang lebih jelas di frontend
-Update `SsoAuthContext.tsx` untuk menampilkan pesan error yang lebih informatif saat token exchange gagal, sehingga mudah di-debug.
-
-#### Step 4: Pastikan `.env` di staging benar
-File `.env` di `dev.soundpub.xyz` harus mengarah ke backend Lovable Cloud yang benar:
-```
-VITE_SUPABASE_URL=https://opkvvdgnhhopkkeaokzo.supabase.co
-VITE_SUPABASE_PROJECT_ID=opkvvdgnhhopkkeaokzo
-VITE_SSO_BASE_URL=https://sso.iccn.or.id
-VITE_SSO_REALM=playground
-VITE_SSO_CLIENT_ID=soundpub
-```
+## Plan: SSO User Enhancements
 
 ### Ringkasan
-Yang paling kritis adalah **Step 1** — tanpa domain `dev.soundpub.xyz` terdaftar di Keycloak client `soundpub`, silent check-sso tidak akan pernah berhasil mendapatkan token. Ini harus dilakukan oleh admin Keycloak ICCN.
+
+4 fitur yang akan diimplementasikan: (1) fix parent label assignment untuk SSO users, (2) wajib isi profil artis sebelum buat release, (3) tetap pakai role `artist` yang sudah ada, dan (4) fitur upload foto profil.
+
+---
+
+### Poin 3: Jawaban — Tidak perlu role khusus
+
+Role `artist` yang sudah ada sudah cukup. User SSO dibedakan melalui kolom `sso_provider` di tabel `profiles`, bukan melalui role terpisah. Semua RLS policy dan permission yang berlaku untuk artist tetap berlaku.
+
+---
+
+### Step 1: Fix Parent Label Assignment di Edge Function `sso-login`
+
+**Masalah**: Untuk user yang sudah ada (existing), edge function tidak meng-update `parent_label_id` ke ICCN Media. Juga tidak menambahkan ke tabel `artists`.
+
+**Perubahan di `supabase/functions/sso-login/index.ts`**:
+- Pada blok `if (existingProfile)`: tambahkan logic untuk set `parent_label_id = iccnMediaLabelId` jika belum di-set
+- Tambahkan insert ke tabel `artists` jika belum ada entry untuk user tersebut di bawah ICCN Media
+- Pastikan role di-update ke `artist` jika masih `user`
+
+---
+
+### Step 2: Wajib Isi Profil Artis untuk User SSO
+
+**Sudah ada**: `ArtistOnboardingDialog` dan tabel `artist_profiles`. Kolom `artist_profile_completed` di `profiles` sudah ada.
+
+**Perubahan**:
+1. **`src/pages/Releases.tsx`**: Sebelum membuka form "Tambah Release", cek `isSsoUser && !isArtistProfileCompleted`. Jika belum lengkap, tampilkan `ArtistOnboardingDialog` dengan `allowSkip={false}` (wajib diisi).
+2. **`src/pages/Dashboard.tsx`**: Tampilkan banner/reminder untuk SSO users yang belum melengkapi profil artis.
+3. **`ArtistOnboardingDialog`**: Setelah submit berhasil, refresh `profile` dari auth context agar `isArtistProfileCompleted` ter-update.
+
+---
+
+### Step 3: Fitur Upload Foto Profil
+
+**Database**:
+- Kolom `avatar_url` sudah **tidak ada** di tabel `profiles`. Perlu ditambahkan via migration.
+
+**Storage**:
+- Buat bucket baru `avatars` (public) dengan RLS policy: user hanya bisa upload/update file di path `{user_id}/`.
+
+**Migration SQL**:
+```sql
+ALTER TABLE public.profiles ADD COLUMN avatar_url text;
+
+INSERT INTO storage.buckets (id, name, public) VALUES ('avatars', 'avatars', true);
+
+CREATE POLICY "Users can upload own avatar"
+ON storage.objects FOR INSERT TO authenticated
+WITH CHECK (bucket_id = 'avatars' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+CREATE POLICY "Users can update own avatar"
+ON storage.objects FOR UPDATE TO authenticated
+USING (bucket_id = 'avatars' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+CREATE POLICY "Anyone can view avatars"
+ON storage.objects FOR SELECT TO public
+USING (bucket_id = 'avatars');
+```
+
+**Frontend**:
+1. **`src/pages/Settings.tsx`**: Tambahkan section upload avatar dengan preview, menggunakan Supabase Storage upload.
+2. **`src/components/layout/AppSidebar.tsx`**: Tampilkan `avatar_url` di sidebar footer sebagai pengganti initials jika tersedia.
+3. **`src/components/layout/DashboardLayout.tsx`**: Tampilkan avatar di header.
+
+---
+
+### File yang akan diubah/dibuat
+
+| File | Aksi |
+|---|---|
+| `supabase/functions/sso-login/index.ts` | Edit — fix parent label & artists sync untuk existing users |
+| `src/pages/Releases.tsx` | Edit — block release creation jika SSO user belum isi profil |
+| `src/pages/Dashboard.tsx` | Edit — tambah banner reminder profil artis |
+| `src/pages/Settings.tsx` | Edit — tambah avatar upload section |
+| `src/components/layout/AppSidebar.tsx` | Edit — tampilkan avatar |
+| `src/components/layout/DashboardLayout.tsx` | Edit — tampilkan avatar di header |
+| `src/hooks/useAuth.tsx` | Edit — tambah `avatar_url` di Profile interface |
+| Migration SQL | Baru — tambah kolom `avatar_url`, bucket `avatars` + RLS |
 
