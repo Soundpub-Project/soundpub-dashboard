@@ -40,6 +40,8 @@ import {
 type AppRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user' | 'copyright' | 'whitelabel';
 type UserStatus = 'active' | 'inactive' | 'suspended';
 
+type LoginMethod = 'email' | 'iccn' | 'google';
+
 interface UserProfile {
   id: string;
   email: string;
@@ -52,6 +54,7 @@ interface UserProfile {
   parent_label_id?: string | null;
   parent_label_name?: string | null;
   composer_code?: string | null;
+  sso_provider?: string | null;
 }
 
 const ROLE_ICONS: Record<AppRole, React.ReactNode> = {
@@ -84,6 +87,7 @@ export default function Users() {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<AppRole | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<UserStatus | 'all'>('all');
+  const [loginMethodFilter, setLoginMethodFilter] = useState<LoginMethod | 'all'>('all');
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
@@ -175,9 +179,28 @@ export default function Users() {
     setSearchTerm('');
     setRoleFilter('all');
     setStatusFilter('all');
+    setLoginMethodFilter('all');
   };
 
-  const hasActiveFilters = searchTerm || roleFilter !== 'all' || statusFilter !== 'all';
+  const hasActiveFilters = searchTerm || roleFilter !== 'all' || statusFilter !== 'all' || loginMethodFilter !== 'all';
+
+  const getLoginMethod = (ssoProvider: string | null | undefined): LoginMethod => {
+    if (ssoProvider === 'iccn') return 'iccn';
+    if (ssoProvider === 'google') return 'google';
+    return 'email';
+  };
+
+  const getLoginMethodBadge = (ssoProvider: string | null | undefined) => {
+    const method = getLoginMethod(ssoProvider);
+    switch (method) {
+      case 'iccn':
+        return <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 text-xs">SSO ICCN</Badge>;
+      case 'google':
+        return <Badge variant="outline" className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 text-xs">Google</Badge>;
+      default:
+        return <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-xs">Email</Badge>;
+    }
+  };
 
   const filteredUsers = users.filter((user) => {
     const matchesSearch = 
@@ -186,8 +209,9 @@ export default function Users() {
     
     const matchesRole = roleFilter === 'all' || user.role === roleFilter;
     const matchesStatus = statusFilter === 'all' || user.status === statusFilter;
+    const matchesLoginMethod = loginMethodFilter === 'all' || getLoginMethod(user.sso_provider) === loginMethodFilter;
     
-    return matchesSearch && matchesRole && matchesStatus;
+    return matchesSearch && matchesRole && matchesStatus && matchesLoginMethod;
   });
 
   if (authLoading) {
