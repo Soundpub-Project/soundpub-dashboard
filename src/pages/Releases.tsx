@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { ArtistOnboardingDialog } from '@/components/onboarding/ArtistOnboardingDialog';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -76,12 +77,13 @@ const PAGE_SIZE_OPTIONS = [
 
 export default function Releases() {
   const navigate = useNavigate();
-  const { isAdmin, isLabel, isArtist, isWhitelabel, loading: authLoading } = useAuth();
+  const { isAdmin, isLabel, isArtist, isWhitelabel, isSsoUser, isArtistProfileCompleted, refreshProfile, loading: authLoading } = useAuth();
   const [releases, setReleases] = useState<Release[]>([]);
   const [labels, setLabels] = useState<LabelInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [formOpen, setFormOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -235,6 +237,11 @@ export default function Releases() {
   };
 
   const handleAddRelease = () => {
+    // SSO users must complete artist profile first
+    if (isSsoUser && !isArtistProfileCompleted) {
+      setOnboardingOpen(true);
+      return;
+    }
     setSelectedRelease(null);
     setLyricsOnlyMode(false);
     setFormOpen(true);
@@ -748,6 +755,16 @@ export default function Releases() {
           onOpenChange={setArchiveDialogOpen}
           release={selectedRelease}
           onSuccess={handleFormSuccess}
+        />
+
+        <ArtistOnboardingDialog
+          open={onboardingOpen}
+          onOpenChange={setOnboardingOpen}
+          allowSkip={false}
+          onComplete={() => {
+            refreshProfile();
+            setOnboardingOpen(false);
+          }}
         />
       </div>
     </DashboardLayout>
