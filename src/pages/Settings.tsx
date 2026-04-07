@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -8,18 +8,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, Eye, EyeOff, KeyRound } from 'lucide-react';
+import { Loader2, Save, Eye, EyeOff, KeyRound, Camera, Trash2 } from 'lucide-react';
 import { SuperAdminSettings } from '@/components/settings/SuperAdminSettings';
 import { LabelLogoSettings } from '@/components/settings/LabelLogoSettings';
 
 export default function Settings() {
-  const { profile, user, role, isLabel, isWhitelabel, isSsoUser } = useAuth();
+  const { profile, user, role, isLabel, isWhitelabel, isSsoUser, refreshProfile } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [avatarLoading, setAvatarLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     full_name: profile?.full_name || '',
     phone: profile?.phone || '',
