@@ -20,6 +20,7 @@ import {
   Clock,
   CheckCircle
 } from 'lucide-react';
+import { ArtistOnboardingDialog } from '@/components/onboarding/ArtistOnboardingDialog';
 import { 
   AreaChart, 
   Area, 
