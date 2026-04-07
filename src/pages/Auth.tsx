@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useSsoAuth } from '@/context/SsoAuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,9 +9,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Music2, Loader2, Moon, Sun, Eye, EyeOff } from 'lucide-react';
+import { Music2, Loader2, Moon, Sun, Eye, EyeOff, Shield } from 'lucide-react';
 import { z } from 'zod';
 import { useTheme } from '@/hooks/useTheme';
+import { Separator } from '@/components/ui/separator';
 
 
 const loginSchema = z.object({
@@ -31,6 +33,7 @@ const signupSchema = z.object({
 export default function Auth() {
   const navigate = useNavigate();
   const { signIn, signUp, user, loading: authLoading } = useAuth();
+  const { ssoLoading, triggerSsoLogin } = useSsoAuth();
   const { toast } = useToast();
   const { resolvedTheme, setTheme } = useTheme();
   
@@ -168,10 +171,11 @@ export default function Auth() {
     }
   };
 
-  if (authLoading) {
+  if (authLoading || ssoLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-3">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        {ssoLoading && <p className="text-sm text-muted-foreground">Memeriksa sesi SSO...</p>}
       </div>
     );
   }
@@ -290,7 +294,25 @@ export default function Auth() {
                       'Masuk'
                     )}
                   </Button>
-                </form>
+
+                  <div className="relative my-2">
+                    <div className="absolute inset-0 flex items-center">
+                      <Separator className="w-full" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-card px-2 text-muted-foreground">atau</span>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={triggerSsoLogin}
+                  >
+                    <Shield className="mr-2 h-4 w-4" />
+                    Login via ICCN
+                  </Button>
               </TabsContent>
 
               {/* Signup Tab */}

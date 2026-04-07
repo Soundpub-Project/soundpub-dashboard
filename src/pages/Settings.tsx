@@ -14,7 +14,7 @@ import { SuperAdminSettings } from '@/components/settings/SuperAdminSettings';
 import { LabelLogoSettings } from '@/components/settings/LabelLogoSettings';
 
 export default function Settings() {
-  const { profile, user, role, isLabel, isWhitelabel } = useAuth();
+  const { profile, user, role, isLabel, isWhitelabel, isSsoUser } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -220,87 +220,107 @@ export default function Settings() {
 
           {/* Right Column */}
           <div className="space-y-6">
-            <Card className="bg-card/50 border-border/50">
-              <CardHeader>
-                <CardTitle>Ubah Password</CardTitle>
-                <CardDescription>Ubah password akun Anda</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handlePasswordChange} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="new_password">Password Baru</Label>
-                    <div className="relative">
-                      <Input
-                        id="new_password"
-                        type={showPassword ? 'text' : 'password'}
-                        value={passwordData.newPassword}
-                        onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                        placeholder="Masukkan password baru"
-                        className="pr-10"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <Eye className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </Button>
+            {/* Password change - hide for SSO users */}
+            {!isSsoUser && (
+              <Card className="bg-card/50 border-border/50">
+                <CardHeader>
+                  <CardTitle>Ubah Password</CardTitle>
+                  <CardDescription>Ubah password akun Anda</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handlePasswordChange} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="new_password">Password Baru</Label>
+                      <div className="relative">
+                        <Input
+                          id="new_password"
+                          type={showPassword ? 'text' : 'password'}
+                          value={passwordData.newPassword}
+                          onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                          placeholder="Masukkan password baru"
+                          className="pr-10"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? (
+                            <EyeOff className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm_password">Konfirmasi Password</Label>
-                    <div className="relative">
-                      <Input
-                        id="confirm_password"
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        value={passwordData.confirmPassword}
-                        onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                        placeholder="Konfirmasi password baru"
-                        className="pr-10"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      >
-                        {showConfirmPassword ? (
-                          <EyeOff className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <Eye className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </Button>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirm_password">Konfirmasi Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="confirm_password"
+                          type={showConfirmPassword ? 'text' : 'password'}
+                          value={passwordData.confirmPassword}
+                          onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                          placeholder="Konfirmasi password baru"
+                          className="pr-10"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        >
+                          {showConfirmPassword ? (
+                            <EyeOff className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
 
-                  <Button 
-                    type="submit" 
-                    variant="outline" 
-                    disabled={passwordLoading || !passwordData.newPassword || !passwordData.confirmPassword}
-                  >
-                    {passwordLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Menyimpan...
-                      </>
-                    ) : (
-                      <>
-                        <KeyRound className="mr-2 h-4 w-4" />
-                        Ubah Password
-                      </>
-                    )}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
+                    <Button 
+                      type="submit" 
+                      variant="outline" 
+                      disabled={passwordLoading || !passwordData.newPassword || !passwordData.confirmPassword}
+                    >
+                      {passwordLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Menyimpan...
+                        </>
+                      ) : (
+                        <>
+                          <KeyRound className="mr-2 h-4 w-4" />
+                          Ubah Password
+                        </>
+                      )}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* SSO info for SSO users */}
+            {isSsoUser && (
+              <Card className="bg-card/50 border-border/50">
+                <CardHeader>
+                  <CardTitle>Login SSO</CardTitle>
+                  <CardDescription>Akun Anda terhubung via ICCN SSO</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="p-3 rounded-lg bg-muted/30">
+                    <p className="text-sm text-muted-foreground">
+                      Password dikelola oleh sistem SSO ICCN. Untuk mengubah password, silakan gunakan portal ICCN.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <Card className="bg-card/50 border-border/50">
               <CardHeader>

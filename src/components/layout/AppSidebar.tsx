@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/hooks/useAuth';
+import { useSsoAuth } from '@/context/SsoAuthContext';
 import { useTheme } from '@/hooks/useTheme';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -196,7 +197,8 @@ const accountItems: NavItem[] = [
 export function AppSidebar() {
   const { state } = useSidebar();
   const location = useLocation();
-  const { profile, role, signOut, isAdmin, isLabel, isArtist, isCopyright, isWhitelabel } = useAuth();
+  const { profile, role, signOut, isAdmin, isLabel, isArtist, isCopyright, isWhitelabel, isSsoUser } = useAuth();
+  const { triggerSsoLogout } = useSsoAuth();
   const { resolvedTheme } = useTheme();
   const collapsed = state === 'collapsed';
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -463,7 +465,7 @@ export function AppSidebar() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={signOut}
+            onClick={isSsoUser ? triggerSsoLogout : signOut}
             className="w-full mt-2 justify-start text-muted-foreground hover:text-destructive"
           >
             <LogOut className="h-4 w-4 mr-2" />
