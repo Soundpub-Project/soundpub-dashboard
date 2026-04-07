@@ -38,6 +38,42 @@ export type Database = {
         }
         Relationships: []
       }
+      artist_profiles: {
+        Row: {
+          artist_name: string
+          artist_type: string
+          bio: string | null
+          created_at: string | null
+          genre: string | null
+          id: string
+          social_links: Json | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          artist_name: string
+          artist_type?: string
+          bio?: string | null
+          created_at?: string | null
+          genre?: string | null
+          id?: string
+          social_links?: Json | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          artist_name?: string
+          artist_type?: string
+          bio?: string | null
+          created_at?: string | null
+          genre?: string | null
+          id?: string
+          social_links?: Json | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       artists: {
         Row: {
           created_at: string | null
@@ -199,6 +235,7 @@ export type Database = {
       profiles: {
         Row: {
           address: string | null
+          artist_profile_completed: boolean | null
           artist_revenue: number
           balance: number
           composer_code: string | null
@@ -213,6 +250,7 @@ export type Database = {
           parent_label_id: string | null
           password_set: boolean | null
           phone: string | null
+          sso_provider: string | null
           status: string
           subscription_status: string | null
           subscription_upgraded_at: string | null
@@ -220,6 +258,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          artist_profile_completed?: boolean | null
           artist_revenue?: number
           balance?: number
           composer_code?: string | null
@@ -234,6 +273,7 @@ export type Database = {
           parent_label_id?: string | null
           password_set?: boolean | null
           phone?: string | null
+          sso_provider?: string | null
           status?: string
           subscription_status?: string | null
           subscription_upgraded_at?: string | null
@@ -241,6 +281,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          artist_profile_completed?: boolean | null
           artist_revenue?: number
           balance?: number
           composer_code?: string | null
@@ -255,6 +296,7 @@ export type Database = {
           parent_label_id?: string | null
           password_set?: boolean | null
           phone?: string | null
+          sso_provider?: string | null
           status?: string
           subscription_status?: string | null
           subscription_upgraded_at?: string | null
