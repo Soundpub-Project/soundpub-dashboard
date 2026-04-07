@@ -46,7 +46,7 @@ export function NotificationBell() {
           table: 'notifications',
         },
         (payload) => {
-          const newNotif = payload.new as AppNotification;
+          const newNotif = payload.new as unknown as AppNotification;
           if (newNotif.user_id === user.id || newNotif.is_global) {
             setNotifications(prev => [newNotif, ...prev]);
           }
