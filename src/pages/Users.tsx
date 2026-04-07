@@ -359,6 +359,9 @@ export default function Users() {
                           </div>
                         </TableCell>
                         <TableCell>
+                          {getLoginMethodBadge(user.sso_provider)}
+                        </TableCell>
+                        <TableCell>
                           {user.role === 'copyright' && user.composer_code ? (
                             <div className="flex items-center gap-1.5">
                               <Hash className="h-3 w-3 text-cyan-500" />
