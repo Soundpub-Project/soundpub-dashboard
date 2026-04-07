@@ -40,14 +40,12 @@ async function verifyJwt(
   const parts = token.split(".");
   if (parts.length !== 3) throw new Error("Invalid JWT");
 
-  // Decode header to get kid
   const header = JSON.parse(
     new TextDecoder().decode(base64urlDecode(parts[0]))
   );
   const kid = header.kid;
   if (!kid) throw new Error("No kid in JWT header");
 
-  // Fetch JWKS
   const jwksUrl = `${realmUrl}/protocol/openid-connect/certs`;
   const jwksResp = await fetch(jwksUrl);
   if (!jwksResp.ok) throw new Error(`Failed to fetch JWKS: ${jwksResp.status}`);
@@ -58,7 +56,6 @@ async function verifyJwt(
   );
   if (!jwk) throw new Error(`No matching JWK for kid: ${kid}`);
 
-  // Import key and verify
   const key = await importRSAKey(jwk);
   const signatureBytes = base64urlDecode(parts[2]);
   const dataBytes = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
@@ -71,21 +68,104 @@ async function verifyJwt(
   );
   if (!valid) throw new Error("Invalid JWT signature");
 
-  // Decode and validate payload
   const payload = decodeJwtPayload(token);
 
-  // Check issuer
   if (payload.iss !== realmUrl) {
     throw new Error(`Invalid issuer: ${payload.iss}`);
   }
 
-  // Check expiry
   const now = Math.floor(Date.now() / 1000);
   if (typeof payload.exp === "number" && payload.exp < now) {
     throw new Error("Token expired");
   }
 
   return payload;
+}
+
+// Wait for profile to exist after createUser (trigger may be async)
+async function waitForProfile(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  userId: string,
+  maxRetries = 10,
+  delayMs = 300
+): Promise<boolean> {
+  for (let i = 0; i < maxRetries; i++) {
+    const { data } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("id", userId)
+      .maybeSingle();
+    if (data) return true;
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return false;
+}
+
+async function syncProfile(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  userId: string,
+  updates: Record<string, unknown>
+): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from("profiles")
+    .update(updates)
+    .eq("id", userId);
+
+  if (error) {
+    console.error("Profile update error:", error);
+    throw new Error(`Failed to update profile: ${error.message}`);
+  }
+
+  // Verify critical fields were saved
+  const { data: verify } = await supabaseAdmin
+    .from("profiles")
+    .select("sso_provider, parent_label_id")
+    .eq("id", userId)
+    .single();
+
+  if (!verify?.sso_provider || !verify?.parent_label_id) {
+    throw new Error(
+      `Profile sync verification failed: sso_provider=${verify?.sso_provider}, parent_label_id=${verify?.parent_label_id}`
+    );
+  }
+}
+
+async function ensureArtistRole(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  userId: string
+): Promise<void> {
+  const { data: currentRole } = await supabaseAdmin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (currentRole?.role === "user") {
+    await supabaseAdmin
+      .from("user_roles")
+      .update({ role: "artist" })
+      .eq("user_id", userId);
+  }
+}
+
+async function ensureArtistEntry(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  labelId: string,
+  name: string
+): Promise<void> {
+  const { data: existingArtist } = await supabaseAdmin
+    .from("artists")
+    .select("id")
+    .eq("label_id", labelId)
+    .eq("name", name)
+    .maybeSingle();
+
+  if (!existingArtist) {
+    await supabaseAdmin.from("artists").insert({
+      label_id: labelId,
+      name: name,
+    });
+  }
 }
 
 Deno.serve(async (req) => {
@@ -106,15 +186,10 @@ Deno.serve(async (req) => {
     const clientId = Deno.env.get("SSO_CLIENT_ID");
     const iccnMediaLabelId = Deno.env.get("ICCN_MEDIA_LABEL_ID");
 
-    console.log("SSO_REALM_URL:", realmUrl);
-    console.log("SSO_CLIENT_ID:", clientId);
-    console.log("ICCN_MEDIA_LABEL_ID:", iccnMediaLabelId ? "set" : "NOT SET");
-    console.log("JWKS URL would be:", realmUrl ? `${realmUrl}/protocol/openid-connect/certs` : "INVALID");
-
     if (!realmUrl || !clientId || !iccnMediaLabelId) {
-      console.error("Missing SSO configuration secrets:", { realmUrl: !!realmUrl, clientId: !!clientId, iccnMediaLabelId: !!iccnMediaLabelId });
+      console.error("Missing SSO configuration secrets");
       return new Response(
-        JSON.stringify({ error: "SSO not configured", details: { realmUrl: !!realmUrl, clientId: !!clientId, iccnMediaLabelId: !!iccnMediaLabelId } }),
+        JSON.stringify({ error: "SSO not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -132,12 +207,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 3. Extract email and name
+    // 3. Extract email, name, and avatar
     const email = payload.email as string;
     const name =
       (payload.name as string) ||
       (payload.preferred_username as string) ||
       email.split("@")[0];
+    const avatarFromSso = (payload.avatar as string) || null;
 
     if (!email) {
       return new Response(
@@ -156,63 +232,34 @@ Deno.serve(async (req) => {
     // 5. Check if user exists by email
     const { data: existingProfile } = await supabaseAdmin
       .from("profiles")
-      .select("id, sso_provider, artist_profile_completed")
+      .select("id, sso_provider, parent_label_id, avatar_url, artist_profile_completed")
       .eq("email", email)
       .maybeSingle();
 
     let userId: string;
 
     if (existingProfile) {
-      // User exists — update sso_provider and parent_label_id if needed
+      // === EXISTING USER ===
       userId = existingProfile.id;
+
       const updates: Record<string, unknown> = {};
       if (!existingProfile.sso_provider) updates.sso_provider = "iccn";
-
-      // Check if parent_label_id needs to be set
-      const { data: fullProfile } = await supabaseAdmin
-        .from("profiles")
-        .select("parent_label_id")
-        .eq("id", userId)
-        .single();
-
-      if (!fullProfile?.parent_label_id) {
-        updates.parent_label_id = iccnMediaLabelId;
-      }
+      if (!existingProfile.parent_label_id) updates.parent_label_id = iccnMediaLabelId;
+      if (!existingProfile.avatar_url && avatarFromSso) updates.avatar_url = avatarFromSso;
 
       if (Object.keys(updates).length > 0) {
-        await supabaseAdmin.from("profiles").update(updates).eq("id", userId);
+        // Always ensure sso_provider and parent_label_id are set
+        updates.sso_provider = updates.sso_provider || existingProfile.sso_provider || "iccn";
+        updates.parent_label_id = updates.parent_label_id || existingProfile.parent_label_id || iccnMediaLabelId;
+
+        await syncProfile(supabaseAdmin, userId, updates);
       }
 
-      // Ensure role is 'artist' (not 'user')
-      const { data: currentRole } = await supabaseAdmin
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId)
-        .maybeSingle();
+      await ensureArtistRole(supabaseAdmin, userId);
+      await ensureArtistEntry(supabaseAdmin, iccnMediaLabelId, name);
 
-      if (currentRole?.role === "user") {
-        await supabaseAdmin
-          .from("user_roles")
-          .update({ role: "artist" })
-          .eq("user_id", userId);
-      }
-
-      // Ensure entry in artists table under ICCN Media
-      const { data: existingArtist } = await supabaseAdmin
-        .from("artists")
-        .select("id")
-        .eq("label_id", iccnMediaLabelId)
-        .eq("name", name)
-        .maybeSingle();
-
-      if (!existingArtist) {
-        await supabaseAdmin.from("artists").insert({
-          label_id: iccnMediaLabelId,
-          name: name,
-        });
-      }
     } else {
-      // Create new user
+      // === NEW USER ===
       const randomPassword = crypto.randomUUID() + crypto.randomUUID();
       const { data: newUser, error: createError } =
         await supabaseAdmin.auth.admin.createUser({
@@ -232,17 +279,25 @@ Deno.serve(async (req) => {
 
       userId = newUser.user.id;
 
-      // Update profile with SSO info and ICCN Media label
-      await supabaseAdmin
-        .from("profiles")
-        .update({
-          full_name: name,
-          sso_provider: "iccn",
-          parent_label_id: iccnMediaLabelId,
-          password_set: false,
-          artist_profile_completed: false,
-        })
-        .eq("id", userId);
+      // Wait for handle_new_user trigger to create profile row
+      const profileReady = await waitForProfile(supabaseAdmin, userId);
+      if (!profileReady) {
+        console.error("Profile not created by trigger after max retries");
+        return new Response(
+          JSON.stringify({ error: "Profile creation timeout" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Update profile with SSO info
+      await syncProfile(supabaseAdmin, userId, {
+        full_name: name,
+        sso_provider: "iccn",
+        parent_label_id: iccnMediaLabelId,
+        password_set: false,
+        artist_profile_completed: false,
+        ...(avatarFromSso ? { avatar_url: avatarFromSso } : {}),
+      });
 
       // Set role to artist
       await supabaseAdmin
@@ -251,19 +306,7 @@ Deno.serve(async (req) => {
         .eq("user_id", userId);
 
       // Insert into artists table
-      const { data: existingArtist } = await supabaseAdmin
-        .from("artists")
-        .select("id")
-        .eq("label_id", iccnMediaLabelId)
-        .eq("name", name)
-        .maybeSingle();
-
-      if (!existingArtist) {
-        await supabaseAdmin.from("artists").insert({
-          label_id: iccnMediaLabelId,
-          name: name,
-        });
-      }
+      await ensureArtistEntry(supabaseAdmin, iccnMediaLabelId, name);
     }
 
     // 6. Generate a magic link to get session tokens
@@ -280,11 +323,6 @@ Deno.serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    // Extract the token hash and verify OTP to get session
-    const urlObj = new URL(linkData.properties.action_link);
-    const token_hash = urlObj.searchParams.get("token") || 
-                       urlObj.hash?.replace("#", "")?.split("&")?.find(p => p.startsWith("token="))?.split("=")[1];
 
     // Use verifyOtp with token_hash
     const { data: sessionData, error: sessionError } =
