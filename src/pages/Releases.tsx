@@ -39,7 +39,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
-import { Disc3, Search, Plus, Loader2, Pencil, Eye, MoreHorizontal, Trash2, Archive, ArchiveRestore, CheckSquare, Beaker, Filter, X } from 'lucide-react';
+import { Disc3, Search, Plus, Loader2, Pencil, Eye, MoreHorizontal, Trash2, Archive, ArchiveRestore, CheckSquare, Beaker, Filter, X, CheckCircle } from 'lucide-react';
 import { ReleaseFormDialog } from '@/components/releases/ReleaseFormDialog';
 
 import { DeleteReleaseDialog } from '@/components/releases/DeleteReleaseDialog';
@@ -163,11 +163,38 @@ export default function Releases() {
     const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
       active: 'default',
       pending: 'secondary',
+      pending_paid: 'default',
       rejected: 'destructive',
       draft: 'outline',
       inactive: 'outline',
     };
     return variants[status] || 'secondary';
+  };
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      active: 'Active',
+      pending: 'Pending',
+      pending_paid: 'Sudah Dibayar',
+      draft: 'Draft',
+      rejected: 'Rejected',
+      inactive: 'Inactive',
+    };
+    return labels[status] || status;
+  };
+
+  const handleConfirmRelease = async (release: Release) => {
+    try {
+      const { error } = await supabase
+        .from('releases')
+        .update({ status: 'active' })
+        .eq('id', release.id);
+      if (error) throw error;
+      toast.success(`Release "${release.title}" berhasil diaktifkan`);
+      fetchReleases();
+    } catch (error: any) {
+      toast.error(error.message || 'Gagal mengaktifkan release');
+    }
   };
 
   // Get unique values for filters
