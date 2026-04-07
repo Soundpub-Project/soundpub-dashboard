@@ -39,6 +39,8 @@ import {
   Shield,
   HardDrive,
   ListMusic,
+  FileText,
+  Bell,
 } from 'lucide-react';
 
 interface NavItem {
@@ -140,6 +142,24 @@ const administrationItems: NavItem[] = [
     title: 'Kelola Pembayaran', 
     url: '/dashboard/admin-payouts', 
     icon: CreditCard,
+    roles: ['superadmin', 'admin'],
+  },
+  { 
+    title: 'Invoice', 
+    url: '/dashboard/invoices', 
+    icon: FileText,
+    roles: ['superadmin', 'admin'],
+  },
+  { 
+    title: 'Kelola Notifikasi', 
+    url: '/dashboard/notifications', 
+    icon: Bell,
+    roles: ['superadmin', 'admin'],
+  },
+  { 
+    title: 'Pengaturan Pembayaran', 
+    url: '/dashboard/payment-settings', 
+    icon: Settings,
     roles: ['superadmin', 'admin'],
   },
   { 

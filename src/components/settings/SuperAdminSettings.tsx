@@ -437,8 +437,7 @@ export function SuperAdminSettings() {
         </CardContent>
       </Card>
 
-      {/* Pricing Settings */}
-      <PricingSettings />
+      {/* Pricing moved to /dashboard/payment-settings */}
 
       {/* Storage & Analytics Settings - using separate component */}
       <Card className="bg-card/50 border-border/50">

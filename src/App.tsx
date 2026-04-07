@@ -34,6 +34,9 @@ import LandingPage from "./pages/LandingPage";
 import AllRoyalties from "./pages/AllRoyalties";
 import PaymentCallback from "./pages/PaymentCallback";
 import ArtistProfile from "./pages/ArtistProfile";
+import NotificationManagement from "./pages/NotificationManagement";
+import PaymentSettings from "./pages/PaymentSettings";
+import Invoices from "./pages/Invoices";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -169,6 +172,21 @@ const App = () => (
               <Route path="/dashboard/all-royalties" element={
                 <ProtectedRoute requireAdmin>
                   <AllRoyalties />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/notifications" element={
+                <ProtectedRoute requireAdmin>
+                  <NotificationManagement />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/payment-settings" element={
+                <ProtectedRoute requireAdmin>
+                  <PaymentSettings />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/invoices" element={
+                <ProtectedRoute requireAdmin>
+                  <Invoices />
                 </ProtectedRoute>
               } />
               
