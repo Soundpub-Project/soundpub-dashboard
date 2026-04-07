@@ -13,7 +13,7 @@ interface SsoAuthContextType {
 const SsoAuthContext = createContext<SsoAuthContextType | undefined>(undefined);
 
 export function SsoAuthProvider({ children }: { children: ReactNode }) {
-  const [ssoLoading, setSsoLoading] = useState(true);
+  const [ssoLoading, setSsoLoading] = useState(false);
   const [ssoAuthenticated, setSsoAuthenticated] = useState(false);
   const [ssoError, setSsoError] = useState<string | null>(null);
 

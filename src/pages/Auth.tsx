@@ -171,11 +171,10 @@ export default function Auth() {
     }
   };
 
-  if (authLoading || ssoLoading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-3">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        {ssoLoading && <p className="text-sm text-muted-foreground">Memeriksa sesi SSO...</p>}
       </div>
     );
   }
