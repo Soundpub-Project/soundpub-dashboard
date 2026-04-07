@@ -106,10 +106,15 @@ Deno.serve(async (req) => {
     const clientId = Deno.env.get("SSO_CLIENT_ID");
     const iccnMediaLabelId = Deno.env.get("ICCN_MEDIA_LABEL_ID");
 
+    console.log("SSO_REALM_URL:", realmUrl);
+    console.log("SSO_CLIENT_ID:", clientId);
+    console.log("ICCN_MEDIA_LABEL_ID:", iccnMediaLabelId ? "set" : "NOT SET");
+    console.log("JWKS URL would be:", realmUrl ? `${realmUrl}/protocol/openid-connect/certs` : "INVALID");
+
     if (!realmUrl || !clientId || !iccnMediaLabelId) {
-      console.error("Missing SSO configuration secrets");
+      console.error("Missing SSO configuration secrets:", { realmUrl: !!realmUrl, clientId: !!clientId, iccnMediaLabelId: !!iccnMediaLabelId });
       return new Response(
-        JSON.stringify({ error: "SSO not configured" }),
+        JSON.stringify({ error: "SSO not configured", details: { realmUrl: !!realmUrl, clientId: !!clientId, iccnMediaLabelId: !!iccnMediaLabelId } }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
