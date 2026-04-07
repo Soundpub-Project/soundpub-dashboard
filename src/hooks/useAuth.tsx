@@ -14,6 +14,7 @@ interface Profile {
   status: string;
   balance: number;
   logo_url: string | null;
+  avatar_url: string | null;
   password_set: boolean | null;
   subscription_status: string | null;
   subscription_upgraded_at: string | null;
@@ -32,6 +33,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
   isSuperadmin: boolean;
   isAdmin: boolean;
   isLabel: boolean;
@@ -152,6 +154,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRole(null);
   };
 
+  const refreshProfile = async () => {
+    if (user) {
+      await fetchProfileAndRole(user.id);
+    }
+  };
+
   const isSuperadmin = role === 'superadmin';
   const isAdmin = role === 'superadmin' || role === 'admin';
   const isLabel = role === 'label';
@@ -172,6 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signIn,
         signUp,
         signOut,
+        refreshProfile,
         isSuperadmin,
         isAdmin,
         isLabel,

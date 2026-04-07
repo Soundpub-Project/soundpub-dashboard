@@ -163,13 +163,53 @@ Deno.serve(async (req) => {
     let userId: string;
 
     if (existingProfile) {
-      // User exists — update sso_provider if needed
+      // User exists — update sso_provider and parent_label_id if needed
       userId = existingProfile.id;
-      if (!existingProfile.sso_provider) {
+      const updates: Record<string, unknown> = {};
+      if (!existingProfile.sso_provider) updates.sso_provider = "iccn";
+
+      // Check if parent_label_id needs to be set
+      const { data: fullProfile } = await supabaseAdmin
+        .from("profiles")
+        .select("parent_label_id")
+        .eq("id", userId)
+        .single();
+
+      if (!fullProfile?.parent_label_id) {
+        updates.parent_label_id = iccnMediaLabelId;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await supabaseAdmin.from("profiles").update(updates).eq("id", userId);
+      }
+
+      // Ensure role is 'artist' (not 'user')
+      const { data: currentRole } = await supabaseAdmin
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (currentRole?.role === "user") {
         await supabaseAdmin
-          .from("profiles")
-          .update({ sso_provider: "iccn" })
-          .eq("id", userId);
+          .from("user_roles")
+          .update({ role: "artist" })
+          .eq("user_id", userId);
+      }
+
+      // Ensure entry in artists table under ICCN Media
+      const { data: existingArtist } = await supabaseAdmin
+        .from("artists")
+        .select("id")
+        .eq("label_id", iccnMediaLabelId)
+        .eq("name", name)
+        .maybeSingle();
+
+      if (!existingArtist) {
+        await supabaseAdmin.from("artists").insert({
+          label_id: iccnMediaLabelId,
+          name: name,
+        });
       }
     } else {
       // Create new user

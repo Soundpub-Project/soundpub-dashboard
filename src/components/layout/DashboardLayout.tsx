@@ -6,6 +6,7 @@ import { AppSidebar } from './AppSidebar';
 import { Loader2, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -55,11 +56,21 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 </Button>
                 
                 {profile && (
-                  <div className="hidden sm:block text-right">
-                    <p className="text-sm font-medium text-foreground">{profile.full_name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Balance: Rp {profile.balance.toLocaleString('id-ID')}
-                    </p>
+                  <div className="hidden sm:flex items-center gap-3">
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-foreground">{profile.full_name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Balance: Rp {profile.balance.toLocaleString('id-ID')}
+                      </p>
+                    </div>
+                    <Avatar className="h-8 w-8">
+                      {profile.avatar_url ? (
+                        <AvatarImage src={profile.avatar_url} alt={profile.full_name} />
+                      ) : null}
+                      <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                        {profile.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
                   </div>
                 )}
               </div>

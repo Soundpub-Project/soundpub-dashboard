@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -8,18 +8,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, Eye, EyeOff, KeyRound } from 'lucide-react';
+import { Loader2, Save, Eye, EyeOff, KeyRound, Camera, Trash2 } from 'lucide-react';
 import { SuperAdminSettings } from '@/components/settings/SuperAdminSettings';
 import { LabelLogoSettings } from '@/components/settings/LabelLogoSettings';
 
 export default function Settings() {
-  const { profile, user, role, isLabel, isWhitelabel, isSsoUser } = useAuth();
+  const { profile, user, role, isLabel, isWhitelabel, isSsoUser, refreshProfile } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [avatarLoading, setAvatarLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     full_name: profile?.full_name || '',
     phone: profile?.phone || '',
@@ -114,6 +117,69 @@ export default function Settings() {
     }
   };
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({ title: 'Error', description: 'File harus berupa gambar', variant: 'destructive' });
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: 'Error', description: 'Ukuran maksimal 2MB', variant: 'destructive' });
+      return;
+    }
+
+    setAvatarLoading(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const filePath = `${user.id}/avatar.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, { upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      const avatarUrl = `${publicUrl}?t=${Date.now()}`;
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: avatarUrl })
+        .eq('id', user.id);
+      if (updateError) throw updateError;
+
+      await refreshProfile();
+      toast({ title: 'Berhasil', description: 'Foto profil berhasil diupload' });
+    } catch (error: any) {
+      console.error('Error uploading avatar:', error);
+      toast({ title: 'Error', description: error.message || 'Gagal mengupload foto profil', variant: 'destructive' });
+    } finally {
+      setAvatarLoading(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!user) return;
+    setAvatarLoading(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ avatar_url: null })
+        .eq('id', user.id);
+      if (error) throw error;
+      await refreshProfile();
+      toast({ title: 'Berhasil', description: 'Foto profil berhasil dihapus' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'Gagal menghapus foto profil', variant: 'destructive' });
+    } finally {
+      setAvatarLoading(false);
+    }
+  };
+
   const isSuperAdmin = role === 'superadmin';
 
   return (
@@ -142,6 +208,63 @@ export default function Settings() {
             <Separator className="my-6" />
           </>
         )}
+
+        {/* Avatar Section */}
+        <Card className="bg-card/50 border-border/50">
+          <CardHeader>
+            <CardTitle>Foto Profil</CardTitle>
+            <CardDescription>Upload foto profil Anda</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-6">
+              <Avatar className="h-20 w-20">
+                {profile?.avatar_url ? (
+                  <AvatarImage src={profile.avatar_url} alt={profile.full_name} />
+                ) : null}
+                <AvatarFallback className="bg-primary text-primary-foreground text-xl">
+                  {profile?.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => avatarInputRef.current?.click()}
+                    disabled={avatarLoading}
+                  >
+                    {avatarLoading ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Camera className="h-4 w-4 mr-2" />
+                    )}
+                    {profile?.avatar_url ? 'Ganti Foto' : 'Upload Foto'}
+                  </Button>
+                  {profile?.avatar_url && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRemoveAvatar}
+                      disabled={avatarLoading}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Hapus
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">JPG, PNG, WebP. Maks 2MB.</p>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarUpload}
+                  className="hidden"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Two Column Layout for Desktop */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

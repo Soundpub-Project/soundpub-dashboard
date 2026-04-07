@@ -19,7 +19,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   LayoutDashboard,
   Disc3,
@@ -446,6 +446,9 @@ export function AppSidebar() {
         <div className="p-2">
           <div className="flex items-center gap-3 p-2 rounded-lg bg-sidebar-accent/50">
             <Avatar className="h-9 w-9 shrink-0">
+              {profile?.avatar_url ? (
+                <AvatarImage src={profile.avatar_url} alt={profile.full_name} />
+              ) : null}
               <AvatarFallback className="bg-primary text-primary-foreground text-sm">
                 {profile?.full_name ? getInitials(profile.full_name) : 'U'}
               </AvatarFallback>
