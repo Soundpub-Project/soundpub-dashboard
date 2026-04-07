@@ -49,9 +49,9 @@ export function ArtistOnboardingDialog({
 
     setLoading(true);
     try {
-      // Insert artist profile
-      const { error: insertError } = await supabase
-        .from('artist_profiles' as string)
+      // Insert artist profile - cast needed since table not yet in generated types
+      const { error: insertError } = await (supabase as any)
+        .from('artist_profiles')
         .upsert({
           user_id: user.id,
           artist_name: formData.artist_name.trim(),
@@ -64,9 +64,9 @@ export function ArtistOnboardingDialog({
       if (insertError) throw insertError;
 
       // Update profile flag
-      const { error: updateError } = await supabase
+      const { error: updateError } = await (supabase as any)
         .from('profiles')
-        .update({ artist_profile_completed: true } as Record<string, unknown>)
+        .update({ artist_profile_completed: true })
         .eq('id', user.id);
 
       if (updateError) throw updateError;
