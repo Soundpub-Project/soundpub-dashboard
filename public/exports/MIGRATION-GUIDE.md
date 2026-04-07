@@ -305,6 +305,9 @@ supabase functions deploy
 | 14 | `test-gcs` | Test koneksi GCS | ⚠️ Opsional |
 | 15 | `gcs-upload` | Upload ke Google Cloud Storage | ❌ Disabled |
 | 16 | `gcs-manage` | Manage file di GCS (delete, list) | ❌ Disabled |
+| 17 | `sso-login` | Login SSO via Keycloak/ICCN | ✅ Aktif |
+| 18 | `create-xendit-invoice` | Buat invoice pembayaran Xendit | ✅ Aktif |
+| 19 | `xendit-webhook` | Webhook callback dari Xendit | ✅ Aktif |
 
 ### Edge Function Standards
 
@@ -336,6 +339,16 @@ supabase secrets set GA4_MEASUREMENT_ID=G-XXXXXXXXXX
 supabase secrets set GCS_PROJECT_ID=your-project-id
 supabase secrets set GCS_BUCKET_NAME=your-bucket
 supabase secrets set GCS_SERVICE_ACCOUNT_KEY='{"type":"service_account",...}'
+
+# Payment Gateway (Xendit)
+supabase secrets set XENDIT_SECRET_KEY=xnd_xxxxxxxxxx
+supabase secrets set XENDIT_WEBHOOK_TOKEN=your-webhook-token
+supabase secrets set NOTIFICATION_EMAIL=publisher@soundpub.xyz
+
+# SSO (ICCN)
+supabase secrets set SSO_REALM_URL=https://your-keycloak/realms/your-realm
+supabase secrets set SSO_CLIENT_ID=your-client-id
+supabase secrets set ICCN_MEDIA_LABEL_ID=uuid-of-iccn-media-profile
 ```
 
 ---

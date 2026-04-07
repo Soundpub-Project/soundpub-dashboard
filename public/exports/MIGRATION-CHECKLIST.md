@@ -401,6 +401,37 @@ Checklist untuk memastikan semua langkah migrasi ke VPS selesai dengan benar.
 
 ---
 
+## 🔄 Payment Gateway (Xendit) Checklist
+
+### Secrets
+- [ ] `XENDIT_SECRET_KEY` di-set di edge function secrets
+- [ ] `XENDIT_WEBHOOK_TOKEN` di-set di edge function secrets
+- [ ] `NOTIFICATION_EMAIL` di-set (default: publisher@soundpub.xyz)
+
+### Xendit Dashboard
+- [ ] Webhook URL dikonfigurasi: `https://[domain]/functions/v1/xendit-webhook`
+- [ ] Events dipilih: Invoice Paid, Expired, Failed
+- [ ] Test webhook berhasil
+
+### Database
+- [ ] Tabel `release_payments` terbuat
+- [ ] RLS policies aktif
+- [ ] `app_settings` key `release_price_per_track` ada (default: 50000)
+
+### Edge Functions
+- [ ] `create-xendit-invoice` deployed dan berfungsi
+- [ ] `xendit-webhook` deployed dan berfungsi
+
+### Testing
+- [ ] Buat release baru → Simpan Draft → Status = draft
+- [ ] Buat release baru → Bayar → Redirect ke Xendit
+- [ ] Setelah bayar → Status release = pending_paid
+- [ ] Email notifikasi diterima di publisher@soundpub.xyz
+- [ ] Admin konfirmasi → Status = active
+- [ ] Payment expired → Status release kembali ke draft
+
+---
+
 **Migration Completed:** ☐
 
 **Date:** _________________
