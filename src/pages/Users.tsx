@@ -311,6 +311,7 @@ export default function Users() {
                       <SelectItem value="iccn">SSO ICCN</SelectItem>
                       <SelectItem value="google">Google</SelectItem>
                     </SelectContent>
+                  </Select>
                   {hasActiveFilters && (
                     <Button variant="ghost" size="icon" onClick={clearFilters} title="Clear filters">
                       <X className="h-4 w-4" />
