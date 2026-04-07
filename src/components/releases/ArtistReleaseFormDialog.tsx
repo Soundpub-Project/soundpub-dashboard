@@ -850,20 +850,55 @@ export function ArtistReleaseFormDialog({
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
-                disabled={loading}
+                disabled={loading || paymentLoading}
               >
                 Batal
               </Button>
-              <Button
-                type="submit"
-                disabled={loading || uploadingCover}
-                className="gradient-primary"
-              >
-                {(loading || uploadingCover) && (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                )}
-                {isEditMode ? 'Simpan Perubahan' : 'Buat Release'}
-              </Button>
+              {isEditMode ? (
+                <Button
+                  type="submit"
+                  disabled={loading || uploadingCover}
+                  className="gradient-primary"
+                >
+                  {(loading || uploadingCover) && (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  )}
+                  Simpan Perubahan
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleSaveDraft}
+                    disabled={loading || paymentLoading || uploadingCover}
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Menyimpan...
+                      </>
+                    ) : (
+                      'Simpan Draft'
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handlePayment}
+                    disabled={loading || paymentLoading || uploadingCover}
+                    className="gradient-primary"
+                  >
+                    {paymentLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Memproses...
+                      </>
+                    ) : (
+                      'Lanjutkan Pembayaran'
+                    )}
+                  </Button>
+                </>
+              )}
             </div>
           </form>
         </Form>
