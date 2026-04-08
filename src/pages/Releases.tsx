@@ -174,7 +174,7 @@ export default function Releases() {
   const getStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
       active: 'Active',
-      pending: 'Pending',
+      pending: 'Menunggu Pembayaran',
       pending_paid: 'Sudah Dibayar',
       draft: 'Draft',
       rejected: 'Rejected',
@@ -740,12 +740,19 @@ export default function Releases() {
                                         <DropdownMenuSeparator />
                                       </>
                                     )}
-                                    {/* Pending: allow edit */}
+                                    {/* Pending (unpaid): allow edit and continue payment */}
                                     {release.status === 'pending' && (
-                                      <DropdownMenuItem onClick={() => handleEditRelease(release)}>
-                                        <Pencil className="h-4 w-4 mr-2" />
-                                        Edit
-                                      </DropdownMenuItem>
+                                      <>
+                                        <DropdownMenuItem onClick={() => handleEditRelease(release)}>
+                                          <Pencil className="h-4 w-4 mr-2" />
+                                          Edit
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleContinuePayment(release)}>
+                                          <DollarSign className="h-4 w-4 mr-2" />
+                                          Lanjutkan Pembayaran
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                      </>
                                     )}
                                     {/* Active: admin can always edit, others lyrics only */}
                                     {release.status === 'active' && isAdmin && (
