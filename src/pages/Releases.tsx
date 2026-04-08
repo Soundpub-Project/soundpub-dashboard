@@ -174,7 +174,7 @@ export default function Releases() {
   const getStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
       active: 'Active',
-      pending: 'Pending',
+      pending: 'Menunggu Pembayaran',
       pending_paid: 'Sudah Dibayar',
       draft: 'Draft',
       rejected: 'Rejected',
