@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save, Eye, EyeOff, KeyRound, Camera, Trash2 } from 'lucide-react';
 import { SuperAdminSettings } from '@/components/settings/SuperAdminSettings';
 import { LabelLogoSettings } from '@/components/settings/LabelLogoSettings';
+import { IccnIntegrationSettings } from '@/components/settings/IccnIntegrationSettings';
 
 export default function Settings() {
   const { profile, user, role, isLabel, isWhitelabel, isSsoUser, refreshProfile } = useAuth();
@@ -196,6 +197,11 @@ export default function Settings() {
             <div>
               <h2 className="text-xl font-semibold mb-4">Super Admin Settings</h2>
               <SuperAdminSettings />
+            </div>
+            <Separator className="my-6" />
+            <div>
+              <h2 className="text-xl font-semibold mb-4">Integrasi ICCN</h2>
+              <IccnIntegrationSettings />
             </div>
             <Separator className="my-6" />
           </>
