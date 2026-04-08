@@ -207,11 +207,8 @@ Deno.serve(async (req) => {
       console.error('Payment record error:', paymentError)
     }
 
-    // Update release status to pending (awaiting payment)
-    await supabase
-      .from('releases')
-      .update({ status: 'pending' })
-      .eq('id', release_id)
+    // Keep release as draft until payment is actually completed
+    // The webhook will update status to 'pending_paid' when payment succeeds
 
     // Create notification for the user
     await supabase.from('notifications').insert({
