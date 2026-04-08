@@ -19,7 +19,7 @@ export function IccnIntegrationSettings() {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const endpointUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-service-info`;
+  const endpointUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/info-soundpub`;
 
   useEffect(() => { fetchSettings(); }, []);
 

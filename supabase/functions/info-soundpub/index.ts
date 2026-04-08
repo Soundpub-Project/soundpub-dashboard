@@ -46,7 +46,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
   } catch (error) {
-    console.error('get-service-info error:', error);
+    console.error('info-soundpub error:', error);
     return new Response(
       JSON.stringify({
         status: 'error',
