@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.xendit-webhook]
 verify_jwt = false
+
+[functions.get-service-info]
+verify_jwt = false
