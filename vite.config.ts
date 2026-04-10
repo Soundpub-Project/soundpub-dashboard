@@ -13,6 +13,8 @@ export default defineConfig(({ mode }) => ({
       // "dev-dashboard.soundpub.xyz",
       "dashboard.soundpub.xyz",
       "https://dashboard.soundpub.xyz",
+      "dev.soundpub.xyz",
+      "https://dev.soundpub.xyz",
       "localhost",
       "127.0.0.1"
     ]
