@@ -355,7 +355,7 @@ export default function Auth() {
                     onClick={triggerSsoLogin}
                   >
                     <Shield className="mr-2 h-4 w-4" />
-                    Login via ICCN
+                    Login via SSO
                   </Button>
                 </form>
               </TabsContent>
