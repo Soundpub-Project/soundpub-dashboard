@@ -3,18 +3,24 @@
 ## ✅ Sudah Dikerjakan
 
 ### Authentication & Authorization
-- [x] Login/Signup system
-- [x] Role-based access control (superadmin, admin, label, artist, user, **copyright**, **whitelabel**)
+- [x] Login/Signup system (email & password)
+- [x] **Google Login** via Lovable Cloud OAuth (`@lovable.dev/cloud-auth-js`)
+- [x] **SSO ICCN Login** via Keycloak (edge function `sso-login`)
+- [x] Role-based access control (superadmin, admin, label, artist, user, copyright, whitelabel)
+- [x] **Auto-assign role `artist`** untuk semua user baru (manual & Google)
+- [x] **Proteksi data profil saat login SSO** — tidak overwrite `parent_label_id` jika sudah ada
 - [x] Profile management (view & edit)
 - [x] Protected routes berdasarkan role
 - [x] Fix logout stuck bug di halaman admin (Users page)
-- [x] **Password visibility toggle di login & signup form**
-- [x] **Self-password change di Settings (semua role)**
+- [x] Password visibility toggle di login & signup form
+- [x] Self-password change di Settings (semua role)
 
 ### Dashboard & Layout
 - [x] Dashboard layout dengan sidebar navigation
 - [x] Responsive design
 - [x] Real-time dashboard statistics
+- [x] Theme Toggle — Light/Dark mode
+- [x] Settings Page 2-Column Layout
 
 ### Release Management
 - [x] Daftar releases dengan filter & search
@@ -25,11 +31,11 @@
 - [x] Delete releases
 - [x] Archive/restore releases
 - [x] Bulk actions (select multiple, bulk archive, bulk delete)
-- [x] **Label info di release detail page** (menampilkan nama label pemilik release)
-- [x] **Audio Player di release detail** (play/pause, progress bar, volume control, skip next/prev)
-- [x] **Dropdown artist di form tambah release untuk Label** (pilih dari artist yang terdaftar di label)
-- [x] **Drag and drop upload untuk audio files**
-- [x] **Fix "Unknown Label" untuk artist view** - Artis bisa melihat nama label dari release mereka
+- [x] Label info di release detail page
+- [x] Audio Player di release detail (play/pause, progress bar, volume control, skip next/prev)
+- [x] Dropdown artist di form tambah release untuk Label
+- [x] Drag and drop upload untuk audio files
+- [x] Fix "Unknown Label" untuk artist view
 
 ### Release Metadata
 - [x] Multiple artists (Main/Featured) per track
@@ -44,190 +50,173 @@
 - [x] Music video upload (MP4, up to 2GB)
 - [x] Audio clip upload (30-60s preview, up to 20MB)
 - [x] Storage buckets dengan RLS policies
-- [x] **GCS resumable upload untuk file besar**
+- [x] GCS resumable upload untuk file besar
 
 ### User Management
 - [x] Daftar users (admin view)
 - [x] Add user (admin/label)
-- [x] Edit user
-- [x] Delete user
+- [x] Edit user & Delete user (Admin/Superadmin only)
 - [x] Change user role (admin only)
+- [x] Change user status (active/inactive/suspended)
 - [x] My Artists page (label view)
-- [x] Fix RLS policy untuk label update status artist
-- [x] **Delete user (Admin/Superadmin only)**
-- [x] **Change user status (active/inactive/suspended)**
-- [x] **Label dapat menghapus artist dari labelnya**
-- [x] **Fix RLS policy untuk label menghapus artist (parent_label_id = null)**
-- [x] **Admin change password untuk user lain**
-- [x] **Filter users by role** (dropdown filter)
-- [x] **Filter users by status** (dropdown filter)
-- [x] **Search users by name/email**
-- [x] **Kolom Label untuk Artist** - Menampilkan label parent di tabel users
-- [x] **Pilih Label saat tambah Artist** - Admin/Superadmin bisa pilih label untuk artist baru
-- [x] **Edit Composer Code** - Admin/Superadmin bisa edit composer code untuk user
+- [x] Label dapat menghapus artist dari labelnya
+- [x] Admin change password untuk user lain
+- [x] Filter users by role & status (dropdown filter)
+- [x] Search users by name/email
+- [x] Kolom Label untuk Artist — Menampilkan label parent di tabel users
+- [x] Pilih Label saat tambah Artist — Admin/Superadmin bisa pilih label
+- [x] Edit Composer Code — Admin/Superadmin bisa edit composer code
+- [x] Fix RLS policy untuk label update status artist & hapus artist
 
 ### Royalty Management
-- [x] Royalty Overview dengan charts
-  - [x] Revenue trend chart
-  - [x] Platform distribution chart
-  - [x] Country distribution chart
+- [x] Royalty Overview dengan charts (Revenue trend, Platform distribution, Country distribution)
 - [x] Upload Royalty CSV dengan validasi
 - [x] Balance update otomatis setelah upload
-- [x] **Royalty Composer (Hak Cipta)** - Upload royalty untuk composer/pencipta lagu
+- [x] Royalty Composer (Hak Cipta) — Upload royalty untuk composer/pencipta lagu
 
-### Royalty Summary (NEW)
-- [x] **Tab Per Periode** - Ringkasan royalti per periode waktu
-- [x] **Tab Per Platform** - Ringkasan royalti per platform streaming
-- [x] **Tab Per Label** - Ringkasan royalti per label (admin/label only)
-- [x] **Tab Per Artis** - Ringkasan royalti per artist (admin/label only)
-- [x] **Tab Per Lagu** - Ringkasan royalti per lagu untuk semua role
-- [x] **Role-based tab visibility** - Tab tertentu hanya muncul untuk role yang sesuai
-- [x] **Export CSV Per Lagu** - Export data ringkasan per lagu ke file CSV
+### Royalty Summary
+- [x] Tab Per Periode — Ringkasan royalti per periode waktu
+- [x] Tab Per Platform — Ringkasan royalti per platform streaming
+- [x] Tab Per Label — Ringkasan royalti per label (admin/label only)
+- [x] Tab Per Artis — Ringkasan royalti per artist (admin/label only)
+- [x] Tab Per Lagu — Ringkasan royalti per lagu untuk semua role
+- [x] Role-based tab visibility
+- [x] Export CSV Per Lagu
 
 ### Payout System
-- [x] Daftar payout requests
-- [x] Request payout form
+- [x] Daftar payout requests & Request payout form
 - [x] Payout history dengan status badges
-- [x] Admin Approve/Reject Payout
-  - [x] Halaman khusus admin untuk melihat semua payout requests
-  - [x] Tombol approve/reject dengan konfirmasi
-  - [x] Mark as Paid functionality
-  - [x] Update balance setelah payout approved (via trigger)
-  - [x] Statistik payout (pending, approved, paid, rejected)
-  - [x] Search & filter by status
+- [x] Admin Approve/Reject Payout dengan konfirmasi
+- [x] Mark as Paid functionality
+- [x] Update balance setelah payout approved (via trigger)
+- [x] Statistik payout (pending, approved, paid, rejected)
+- [x] Search & filter by status
+
+### Payment Gateway (Xendit)
+- [x] **Integrasi Xendit Payment Gateway**
+- [x] **`create-xendit-invoice`** edge function — buat invoice pembayaran
+- [x] **`xendit-webhook`** edge function — callback dari Xendit
+- [x] **Halaman Invoices** (`/dashboard/invoices`) — daftar & status pembayaran
+- [x] **Payment Callback page** (`/payment/callback`)
+- [x] **Payment Settings page** (`/dashboard/payment-settings`)
+- [x] **Pricing Settings** — per track / per kategori release
+- [x] **Konfirmasi dialog** sebelum pembayaran
+- [x] **Reuse invoice pending** yang masih valid
+- [x] **Email notifikasi** setelah pembayaran berhasil (via Resend)
+- [x] **Release locking** setelah pembayaran (status `pending_paid`)
+- [x] **Tabel `release_payments`** untuk tracking pembayaran
 
 ### Analytics
 - [x] Halaman analytics dedicated
-- [x] Custom date ranges
-- [x] Perbandingan periode (MoM, YoY)
+- [x] Custom date ranges & Perbandingan periode (MoM, YoY)
 - [x] Growth metrics & KPIs
-- [x] Performance indicators (growth %)
 - [x] Top performing releases/tracks/platforms/countries
 
 ### Export Functionality
-- [x] CSV exports (sudah ada di royalties/reports)
-- [x] PDF reports (browser print available)
-- [x] **Database Export Feature** - Export full schema SQL untuk migrasi
+- [x] CSV exports (royalties/reports)
+- [x] PDF reports (browser print)
+- [x] Database Export Feature — Export full schema SQL untuk migrasi
 
-### Artist Simplified Release Form
-- [x] Form sederhana khusus untuk role Artist (BETA)
-- [x] Upload cover art langsung
-- [x] UPC/ISRC dikosongkan (diisi oleh label)
+### Artist Onboarding & Profile
+- [x] **`artist_profiles` table** — profil artis/band detail (nama, tipe, genre, bio, social links)
+- [x] **Artist Onboarding Dialog** — wajib diisi sebelum buat release
+- [x] **Artist Profile page** (`/dashboard/artist-profile`)
+- [x] **Admin view profil artis** (`/dashboard/artist-profile/:userId`)
+- [x] **Kolom `artist_profile_completed`** di profiles
+- [x] Artist Simplified Release Form (BETA)
+
+### ICCN Integration
+- [x] **`info-soundpub` edge function** — API publik detail layanan ICCN
+- [x] **Admin panel ICCN Integration Settings** — deskripsi & galeri foto
+- [x] **Storage bucket `iccn-gallery`** untuk foto layanan
+- [x] **App settings keys**: `iccn_service_desc`, `iccn_service_photos`
+
+### Notification System
+- [x] **Notification Bell** component (real-time)
+- [x] **Announcement Dialog** — admin kirim pengumuman global
+- [x] **Notification Management page** (`/dashboard/notifications`)
+
+### Media Library
+- [x] **Media Library page** (`/dashboard/media-library`)
 
 ### Audit Logs
-- [x] **Halaman Audit Logs (Admin only)**
-- [x] **Log password_change (admin ubah password user)**
-- [x] **Log self_password_change (user ubah password sendiri)**
-- [x] **Log role_change**
-- [x] **Log status_change**
-- [x] **Log user_created**
-- [x] **Log user_deleted**
-- [x] **Log artist_removed (label hapus artist dari label)**
-- [x] **Search & filter audit logs**
+- [x] Halaman Audit Logs (Admin only)
+- [x] Log: password_change, self_password_change, role_change, status_change, user_created, user_deleted, artist_removed
+- [x] Search & filter audit logs
 
 ### Edge Functions
-- [x] `create-user` - Membuat user baru (admin/label)
-- [x] `process-royalty-upload` - Proses upload CSV royalty (auto-match artist_user_id)
-- [x] `delete-user` - Hapus user (admin/superadmin)
-- [x] `update-user-status` - Update status user
-- [x] `update-user-password` - Admin ubah password user lain
-- [x] `change-own-password` - User ubah password sendiri
-- [x] `remove-artist-from-label` - Label hapus artist dengan audit log
-- [x] `gcs-upload` - Upload file ke Google Cloud Storage
-- [x] `gcs-manage` - Manage file di GCS (delete, list, dll)
-- [x] `test-gcs` - Test koneksi GCS
-- [x] `create-whitelabel-artist` - Buat artist tanpa password (whitelabel)
-- [x] `set-artist-password` - Set password untuk artist whitelabel
-- [x] `get-ga4-config` - Ambil konfigurasi GA4
-- [x] `update-app-settings` - Update app settings
-- [x] `send-royalty-notification` - Kirim notifikasi royalty
-- [x] `get-catalog-tracks` - API publik untuk katalog (releases + tracks + label info)
+- [x] `create-user` — Membuat user baru
+- [x] `process-royalty-upload` — Proses upload CSV royalty (auto-match artist_user_id)
+- [x] `delete-user` — Hapus user
+- [x] `update-user-status` — Update status user
+- [x] `update-user-password` — Admin ubah password user lain
+- [x] `change-own-password` — User ubah password sendiri
+- [x] `remove-artist-from-label` — Label hapus artist dengan audit log
+- [x] `gcs-upload` / `gcs-manage` / `test-gcs` — Google Cloud Storage
+- [x] `create-whitelabel-artist` — Buat artist tanpa password (whitelabel)
+- [x] `set-artist-password` — Set password untuk artist whitelabel
+- [x] `get-ga4-config` — Ambil konfigurasi GA4
+- [x] `update-app-settings` — Update app settings
+- [x] `send-royalty-notification` — Kirim notifikasi royalty
+- [x] `get-catalog-tracks` — API publik katalog (releases + tracks + label info)
+- [x] `create-xendit-invoice` — Buat invoice Xendit
+- [x] `xendit-webhook` — Callback webhook Xendit
+- [x] `sso-login` — SSO login via Keycloak
+- [x] `info-soundpub` — API detail layanan ICCN
 
 ### Super Admin Features
-- [x] **Google Cloud Storage Integration** - GCS sebagai primary storage (toggle on/off)
-- [x] **Google Analytics 4 Integration** - GA4 tracking dengan Measurement ID
-- [x] **Dashboard Logo Upload** - Upload logo untuk sidebar/header
-- [x] **Label Logo Upload** - Setiap label bisa upload logo masing-masing
-- [x] **Logo Light/Dark Theme** - Upload logo terpisah untuk tema terang dan gelap
-- [x] **Favicon Upload** - Upload favicon khusus untuk dashboard
-- [x] **Storage Provider Switch** - Pilih antara Supabase Storage atau GCS
-- [x] **Test API untuk GCS** - Verifikasi koneksi GCS
+- [x] Google Cloud Storage Integration (toggle on/off)
+- [x] Google Analytics 4 Integration
+- [x] Dashboard Logo Upload (light/dark theme)
+- [x] Label Logo Upload per label
+- [x] Favicon Upload
+- [x] Storage Provider Switch (Supabase / GCS)
+- [x] Test API untuk GCS
 
-### Role Baru
-- [x] **Copyright Role** - Akses ke royalty composer (perlindungan hak cipta)
-- [x] **White Label Role** - Seperti label tapi artist tidak bisa login sampai upgrade
+### Role Khusus
+- [x] **Copyright Role** — Akses ke royalty composer
+- [x] **White Label Role** — Artist tanpa login sampai upgrade
+- [x] **Copyright Dashboard** (`/dashboard/copyright`)
+- [x] **Copyright Analytics** (`/dashboard/copyright-analytics`)
+- [x] **Copyright Royalty Summary** (`/dashboard/copyright-royalty-summary`)
+- [x] **Whitelabel Dashboard** (`/dashboard/whitelabel`)
 
-### White Label Features
-- [x] **ProtectedRoute support untuk role whitelabel dan copyright**
-- [x] **StorageSettings terintegrasi ke SuperAdminSettings**
-- [x] **Dashboard khusus untuk role Whitelabel** - Manage artists dan subscription status
-- [x] **Dashboard khusus untuk role Copyright** - Lihat royalty composer
-- [x] **Set password untuk artist whitelabel** (setelah upgrade subscription)
+### RLS & Security
+- [x] SECURITY DEFINER functions — Mencegah infinite recursion
+- [x] `get_user_parent_label_id()`, `get_user_release_label_ids()`
+- [x] Artist RLS policies
+- [x] Hybrid ID-based + name-based matching via `artist_user_id`
 
-### RLS & Security Improvements
-- [x] **SECURITY DEFINER functions** - Mencegah infinite recursion di RLS policies
-- [x] `get_user_parent_label_id()` - Function untuk ambil parent label ID tanpa trigger RLS
-- [x] `get_user_release_label_ids()` - Function untuk ambil label IDs dari releases
-- [x] **Artist RLS policies** - Artis bisa lihat profile parent label mereka
+### Halaman Tracks & Catalog API
+- [x] Halaman `/tracks` (superadmin/admin) — filter, search, pagination
+- [x] `get-catalog-tracks` — Public API dengan label info, pagination, search
 
-### ID-Based Matching (Migrasi dari Name-Based) ✅
-- [x] **Kolom `artist_user_id`** ditambahkan ke tabel `releases`, `tracks`, `royalties`
-- [x] **Hybrid RLS policies** - Primary: ID-based, Fallback: name-based
-- [x] **Data migration** - Existing data di-migrasi berdasarkan name matching
-- [x] **Function `get_artist_user_id_by_name()`** - Helper untuk mencari artist ID
-- [x] **Frontend updated** - ReleaseFormDialog & ArtistSelector menyimpan `artist_user_id`
-- [x] **process-royalty-upload** auto-match `artist_user_id` dari nama saat import
-
-### Halaman Tracks ✅
-- [x] **Halaman `/tracks`** - Daftar semua tracks (superadmin/admin)
-- [x] **Filter by artist & genre**
-- [x] **Search by title, artist, ISRC**
-- [x] **Pagination** dengan pilihan page size (10/20/50/100/All)
-- [x] **Label info per track** (via release → profiles join)
-
-### Catalog API ✅
-- [x] **`get-catalog-tracks`** - Public API untuk website eksternal
-- [x] **Includes label info** (profiles join di response)
-- [x] **Pagination, search, genre filter**
-- [x] **Optimized CORS & pinned version** (@2.49.1)
-
-### UI/UX Improvements
-- [x] **Settings Page 2-Column Layout** - Layout desktop lebih optimal dengan 2 kolom
-- [x] **Theme Toggle** - Light/Dark mode toggle
-
-### Bug Fixes & Improvements (Maret 2026)
-- [x] **AllRoyalties White Screen Fix** - ErrorBoundary, null safety, SelectItem filter untuk mencegah crash
-- [x] **RoyaltySummary migrasi ke RPC hooks** - Tidak lagi menggunakan fetchAllRoyalties() yang lambat
-- [x] **Analytics migrasi ke RPC hooks** - KPI dan chart menggunakan RPC functions
-- [x] **Remove-artist-from-label: validasi releases** - Cek releases aktif/pending sebelum hapus artis
-- [x] **Samakan fitur releases untuk role artis** - Artis menggunakan ReleaseFormDialog lengkap dengan auto-set label_id dan artist_name, RLS policy INSERT/UPDATE sudah ada
-
-### Edge Function Standards ✅
-- [x] **Pin version `@supabase/supabase-js@2.49.1`** - Mencegah bundle timeout
-- [x] **Full CORS headers** termasuk `Access-Control-Allow-Methods`
-- [x] **Inline CORS** (tidak import dari shared file)
+### Edge Function Standards
+- [x] Pin version `@supabase/supabase-js@2.49.1`
+- [x] Full CORS headers & inline CORS
 
 ---
 
 ## ❌ Belum Dikerjakan
 
 ### Low Priority
-- [ ] **Artist Profile Page**
-  - Public profile page untuk artist
-  - Statistik singkat
-  - Daftar releases
-
-### White Label Features
-- [ ] **Subscription management UI untuk whitelabel** (admin side)
+- [ ] Artist Public Profile Page (statistik singkat, daftar releases)
+- [ ] Subscription management UI untuk whitelabel (admin side)
 
 ---
 
-## 🔮 Future Implementation (Deferred)
+## 🔮 Future Implementation
 
 ### Authentication & Security
+- [ ] **Set password untuk user Google** — User yang login via Google bisa tambah password
+- [ ] **Account linking Google** — User manual bisa tautkan akun Google
 - [ ] Forgot Password / Reset Password via email
 - [ ] Email notification saat password diubah
 - [ ] Two-Factor Authentication (2FA)
+
+### Google OAuth untuk Self-Hosted
+- [ ] **Dual-mode Google Login** — Lovable Cloud OAuth + fallback Supabase native OAuth
+- [ ] Dokumentasi setup Google OAuth di Google Cloud Console untuk VPS
 
 ### Release Management
 - [ ] Metadata versioning (track changes history)
@@ -242,7 +231,7 @@
 
 ### Notifications
 - [ ] Email notification ketika payout diproses
-- [ ] In-app notifications
+- [ ] Push notifications
 
 ### User Management
 - [ ] Bulk actions untuk users (bulk delete, bulk status change)
@@ -253,46 +242,39 @@
 ## 🚀 Big Role Future (Custom Role System)
 
 ### Overview
-Sistem custom role yang memungkinkan admin membuat role dinamis dengan permission per-fitur, seperti dashboard CMS advance.
+Sistem custom role dengan permission per-fitur, seperti dashboard CMS advance.
 
 ### Database Changes Required
-- [ ] **permissions** table - Daftar semua permission yang tersedia
-- [ ] **custom_roles** table - Role yang dibuat admin
-- [ ] **role_permissions** table - Mapping role ke permissions
-- [ ] **user_custom_roles** table - Assign custom role ke user
+- [ ] `permissions` table
+- [ ] `custom_roles` table
+- [ ] `role_permissions` table
+- [ ] `user_custom_roles` table
 
 ### Core Features
-- [ ] **Permission Management UI (Superadmin)**
-- [ ] **Custom Role Builder UI**
-- [ ] **Role Assignment**
-- [ ] **Dynamic Menu/Sidebar**
-- [ ] **Permission Check Hooks**
-
-### Implementation Priority
-1. Database schema design
-2. Backend permission check functions
-3. Permission management UI
-4. Role builder UI
-5. Dynamic sidebar integration
-6. Route/component protection
+- [ ] Permission Management UI (Superadmin)
+- [ ] Custom Role Builder UI
+- [ ] Role Assignment
+- [ ] Dynamic Menu/Sidebar
+- [ ] Permission Check Hooks
 
 ---
 
 ## 📝 Notes
-- Database menggunakan Lovable Cloud (Supabase)
-- RLS policies sudah diimplementasi untuk keamanan data
-- Edge functions untuk operasi yang memerlukan service role
-- Storage buckets: release-covers, track-audio, track-video, audio-clips, label-logos, klikus-biolink
-- Beberapa fitur metadata (composer, lyricist, lyrics) sudah ada di level track
-- Audit logs mencatat semua aktivitas penting admin dan label
-- Audio player mendukung: play/pause individual track, volume control, progress seek, next/prev navigation
-- Role baru: `copyright` untuk pemilik hak cipta, `whitelabel` untuk label dengan artist tanpa akses login
-- GCS upload menggunakan Signed URL V4 untuk upload langsung dari browser
-- Storage provider bisa di-switch antara Supabase dan GCS melalui superadmin settings
-- Copyright royalty matching: support by name (case insensitive) OR composer_code
-- SECURITY DEFINER functions digunakan untuk mencegah infinite recursion di RLS policies
-- Artist bisa melihat nama label dari release mereka (fix "Unknown Label" bug)
-- Role artist memiliki tab "Per Lagu" khusus di Royalty Summary
-- **ID-based matching** via `artist_user_id` — hybrid approach dengan name fallback
-- **Edge function standards**: pin @2.49.1, inline CORS, full headers
-- **`get-catalog-tracks`** API menyertakan label info untuk website eksternal
+- Database: Lovable Cloud (Supabase)
+- RLS policies untuk keamanan data
+- Edge functions untuk operasi service role
+- Storage buckets: release-covers, track-audio, track-video, audio-clips, label-logos, klikus-biolink, iccn-gallery
+- Audio player: play/pause, volume, progress seek, next/prev
+- Role: `copyright` (hak cipta), `whitelabel` (artist tanpa login)
+- GCS upload: Signed URL V4 dari browser
+- Storage provider: switch Supabase ↔ GCS via superadmin
+- Copyright royalty: matching by name (case insensitive) OR composer_code
+- SECURITY DEFINER functions: mencegah infinite recursion RLS
+- ID-based matching: `artist_user_id` hybrid + name fallback
+- Edge function standards: pin @2.49.1, inline CORS, full headers
+- `get-catalog-tracks` API: label info untuk website eksternal
+- Google Login: managed by Lovable Cloud OAuth, auto-assign role artist
+- SSO ICCN: Keycloak JWT → Supabase magiclink session
+- Payment Gateway: Xendit invoice + webhook, email via Resend
+- Artist Onboarding: wajib isi profil sebelum buat release
+- ICCN Integration: API publik + admin panel galeri foto
