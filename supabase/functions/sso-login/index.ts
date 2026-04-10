@@ -298,14 +298,16 @@ Deno.serve(async (req) => {
     if (existingProfile) {
       userId = existingProfile.id;
 
+      // Only update fields that are NOT already set — never overwrite existing data
       const updates: Record<string, unknown> = {};
       if (!existingProfile.sso_provider) updates.sso_provider = "iccn";
       if (!existingProfile.parent_label_id) updates.parent_label_id = iccnMediaLabelId;
       if (!existingProfile.avatar_url && avatarFromSso) updates.avatar_url = avatarFromSso;
 
       if (Object.keys(updates).length > 0) {
-        updates.sso_provider = updates.sso_provider || existingProfile.sso_provider || "iccn";
-        updates.parent_label_id = updates.parent_label_id || existingProfile.parent_label_id || iccnMediaLabelId;
+        // Preserve existing values — only fill in what's missing
+        updates.sso_provider = updates.sso_provider || existingProfile.sso_provider;
+        updates.parent_label_id = updates.parent_label_id || existingProfile.parent_label_id;
 
         await syncProfile(supabaseAdmin, userId, updates);
       }
