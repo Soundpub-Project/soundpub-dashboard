@@ -1,53 +1,65 @@
 
 
-## Plan: Implementasi Google Login + Auto-Assign Role Artist
+## Plan: Update TODO.md — Release Notes & TODO List Lengkap
 
-### Ringkasan
+Memperbarui file `TODO.md` dengan semua fitur yang sudah diimplementasikan sejak awal project hingga April 2026, termasuk fitur-fitur terbaru yang belum tercatat.
 
-Menambahkan tombol "Login dengan Google" di halaman Auth. User baru yang signup (manual atau Google) otomatis di-assign role **artist** dan wajib isi profil artis sebelum bisa buat release. User lama yang login via Google **tidak** akan ditimpa data profilnya.
+### Fitur Baru yang Perlu Ditambahkan ke "Sudah Dikerjakan"
 
-### Langkah Implementasi
+#### Authentication & Authorization (Update)
+- Google Login via Lovable Cloud OAuth
+- SSO ICCN Login via Keycloak (edge function `sso-login`)
+- Auto-assign role `artist` untuk semua user baru (manual & Google)
+- Proteksi data profil saat login SSO (tidak overwrite `parent_label_id` jika sudah ada)
 
-#### 1. Configure Social Auth (Lovable Cloud)
-Gunakan tool **Configure Social Auth** untuk generate modul `src/integrations/lovable/` dengan package `@lovable.dev/cloud-auth-js`. Ini menyediakan `lovable.auth.signInWithOAuth("google", ...)`.
+#### Payment Gateway (Baru - April 2026)
+- Integrasi Xendit Payment Gateway
+- `create-xendit-invoice` edge function
+- `xendit-webhook` edge function untuk callback
+- Halaman Invoice Pembayaran (`/dashboard/invoices`)
+- Payment Callback page (`/payment/callback`)
+- Payment Settings page (`/dashboard/payment-settings`)
+- Pricing Settings (per track / per kategori)
+- Konfirmasi dialog sebelum pembayaran
+- Reuse invoice pending yang masih valid
+- Refund otomatis saat release berbayar dihapus admin
+- Email notifikasi setelah pembayaran berhasil
+- Release locking setelah pembayaran (status `pending_paid`)
+- Tabel `release_payments` untuk tracking pembayaran
 
-#### 2. Update Halaman Auth (`src/pages/Auth.tsx`)
-- Import `lovable` dari `@/integrations/lovable/index`
-- Tambahkan tombol **"Login dengan Google"** (dengan icon Google SVG) di bawah form login, sejajar dengan tombol "Login via ICCN"
-- Handler:
-  ```typescript
-  const result = await lovable.auth.signInWithOAuth("google", {
-    redirect_uri: window.location.origin,
-  });
-  ```
-- Tambahkan juga di tab Signup agar user baru bisa langsung daftar via Google
+#### ICCN Integration (Baru - April 2026)
+- `info-soundpub` edge function — API Detail Layanan ICCN
+- Admin panel ICCN Integration Settings (deskripsi & galeri foto)
+- Storage bucket `iccn-gallery` untuk foto layanan
+- App settings keys: `iccn_service_desc`, `iccn_service_photos`
 
-#### 3. Update Database Trigger `handle_new_user()`
-Ubah trigger agar user baru **otomatis mendapat role `artist`** (bukan `user`):
-```sql
-INSERT INTO public.user_roles (user_id, role)
-VALUES (NEW.id, 'artist');
-```
-Juga set `artist_profile_completed = false` dan `sso_provider = 'google'` jika login via Google (dari `raw_user_meta_data`).
+#### Artist Onboarding & Profile (Baru - April 2026)
+- `artist_profiles` table untuk profil artis/band detail
+- Artist Onboarding Dialog wajib sebelum buat release
+- Artist Profile page (`/dashboard/artist-profile`)
+- Admin bisa lihat profil artis user lain (`/dashboard/artist-profile/:userId`)
+- Kolom `artist_profile_completed` di profiles
 
-#### 4. Fix SSO Login — Jangan Overwrite Data Existing User
-Update edge function `sso-login` agar **tidak mengubah `parent_label_id`** jika user sudah punya label assignment. Ini mencegah bug dimana user manual yang login SSO otomatis pindah ke label ICCN.
+#### Notification & Media
+- Notification Management page (`/dashboard/notifications`)
+- Announcement Dialog
+- Notification Bell component
+- Media Library page (`/dashboard/media-library`)
 
-#### 5. Onboarding Wajib
-Sistem onboarding artis sudah ada — `ArtistOnboardingDialog` muncul otomatis di Dashboard jika `artist_profile_completed = false`. Tidak perlu perubahan di sini, sudah sesuai kebutuhan.
+#### Halaman Baru
+- Copyright Dashboard (`/dashboard/copyright`)
+- Copyright Analytics (`/dashboard/copyright-analytics`)
+- Copyright Royalty Summary (`/dashboard/copyright-royalty-summary`)
+- Whitelabel Dashboard (`/dashboard/whitelabel`)
 
-### File yang Akan Dibuat/Diedit
+### TODO List Update
+- Pindahkan "Google Login" dari future ke done
+- Tambah item baru di "Future": set password untuk user Google, account linking Google
+- Update notes section
+
+### File yang Diedit
 
 | File | Aksi |
 |------|------|
-| `src/integrations/lovable/*` | Auto-generated via Configure Social Auth |
-| `src/pages/Auth.tsx` | Edit — tambah tombol Google Login |
-| Database migration | Alter trigger `handle_new_user` → default role `artist` |
-| `supabase/functions/sso-login/index.ts` | Fix — jangan overwrite `parent_label_id` jika sudah ada |
-
-### Yang TIDAK Berubah
-- Tidak perlu tabel baru
-- Tidak perlu RLS baru
-- Tidak perlu API key (managed by Lovable Cloud)
-- Account linking → nanti (sesuai jawaban user)
+| `TODO.md` | Full rewrite — update semua section |
 
