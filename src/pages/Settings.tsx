@@ -17,6 +17,9 @@ import { IccnIntegrationSettings } from '@/components/settings/IccnIntegrationSe
 
 export default function Settings() {
   const { profile, user, role, isLabel, isWhitelabel, isSsoUser, refreshProfile } = useAuth();
+  const isGoogleUser = profile?.sso_provider === 'google';
+  const isIccnUser = profile?.sso_provider === 'iccn';
+  const hasPasswordSet = profile?.password_set === true;
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -102,10 +105,13 @@ export default function Settings() {
 
       toast({
         title: 'Berhasil',
-        description: 'Password berhasil diubah',
+        description: isGoogleUser && !hasPasswordSet 
+          ? 'Password berhasil diatur. Anda sekarang bisa login dengan email & password.' 
+          : 'Password berhasil diubah',
       });
       
       setPasswordData({ newPassword: '', confirmPassword: '' });
+      await refreshProfile();
     } catch (error: any) {
       console.error('Error changing password:', error);
       toast({
@@ -349,24 +355,39 @@ export default function Settings() {
 
           {/* Right Column */}
           <div className="space-y-6">
-            {/* Password change - hide for SSO users */}
-            {!isSsoUser && (
+            {/* Password change - show for non-SSO users OR Google users */}
+            {(!isSsoUser || isGoogleUser) && (
               <Card className="bg-card/50 border-border/50">
                 <CardHeader>
-                  <CardTitle>Ubah Password</CardTitle>
-                  <CardDescription>Ubah password akun Anda</CardDescription>
+                  <CardTitle>
+                    {isGoogleUser && !hasPasswordSet ? 'Atur Password' : 'Ubah Password'}
+                  </CardTitle>
+                  <CardDescription>
+                    {isGoogleUser && !hasPasswordSet 
+                      ? 'Atur password agar bisa login dengan email & password selain Google'
+                      : 'Ubah password akun Anda'}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
+                  {isGoogleUser && !hasPasswordSet && (
+                    <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 mb-4">
+                      <p className="text-sm text-foreground">
+                        🔑 Akun Anda terhubung via <strong>Google</strong>. Atur password di bawah agar Anda juga bisa login menggunakan email & password.
+                      </p>
+                    </div>
+                  )}
                   <form onSubmit={handlePasswordChange} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="new_password">Password Baru</Label>
+                      <Label htmlFor="new_password">
+                        {isGoogleUser && !hasPasswordSet ? 'Password' : 'Password Baru'}
+                      </Label>
                       <div className="relative">
                         <Input
                           id="new_password"
                           type={showPassword ? 'text' : 'password'}
                           value={passwordData.newPassword}
                           onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                          placeholder="Masukkan password baru"
+                          placeholder={isGoogleUser && !hasPasswordSet ? 'Buat password Anda' : 'Masukkan password baru'}
                           className="pr-10"
                         />
                         <Button
@@ -393,7 +414,7 @@ export default function Settings() {
                           type={showConfirmPassword ? 'text' : 'password'}
                           value={passwordData.confirmPassword}
                           onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                          placeholder="Konfirmasi password baru"
+                          placeholder="Konfirmasi password"
                           className="pr-10"
                         />
                         <Button
@@ -414,7 +435,8 @@ export default function Settings() {
 
                     <Button 
                       type="submit" 
-                      variant="outline" 
+                      variant={isGoogleUser && !hasPasswordSet ? 'default' : 'outline'}
+                      className={isGoogleUser && !hasPasswordSet ? 'gradient-primary' : ''}
                       disabled={passwordLoading || !passwordData.newPassword || !passwordData.confirmPassword}
                     >
                       {passwordLoading ? (
@@ -425,7 +447,7 @@ export default function Settings() {
                       ) : (
                         <>
                           <KeyRound className="mr-2 h-4 w-4" />
-                          Ubah Password
+                          {isGoogleUser && !hasPasswordSet ? 'Atur Password' : 'Ubah Password'}
                         </>
                       )}
                     </Button>
@@ -434,8 +456,8 @@ export default function Settings() {
               </Card>
             )}
 
-            {/* SSO info for SSO users */}
-            {isSsoUser && (
+            {/* SSO info for ICCN SSO users only */}
+            {isIccnUser && (
               <Card className="bg-card/50 border-border/50">
                 <CardHeader>
                   <CardTitle>Login SSO</CardTitle>
