@@ -17,6 +17,9 @@ import { IccnIntegrationSettings } from '@/components/settings/IccnIntegrationSe
 
 export default function Settings() {
   const { profile, user, role, isLabel, isWhitelabel, isSsoUser, refreshProfile } = useAuth();
+  const isGoogleUser = profile?.sso_provider === 'google';
+  const isIccnUser = profile?.sso_provider === 'iccn';
+  const hasPasswordSet = profile?.password_set === true;
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);

@@ -78,6 +78,12 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Mark password as set in profile (for Google OAuth users who set password for first time)
+    await supabaseAdmin
+      .from('profiles')
+      .update({ password_set: true })
+      .eq('id', user.id);
+
     // Get user info for audit log
     const { data: profileData } = await supabase
       .from('profiles')
