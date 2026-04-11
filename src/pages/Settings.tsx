@@ -105,10 +105,13 @@ export default function Settings() {
 
       toast({
         title: 'Berhasil',
-        description: 'Password berhasil diubah',
+        description: isGoogleUser && !hasPasswordSet 
+          ? 'Password berhasil diatur. Anda sekarang bisa login dengan email & password.' 
+          : 'Password berhasil diubah',
       });
       
       setPasswordData({ newPassword: '', confirmPassword: '' });
+      await refreshProfile();
     } catch (error: any) {
       console.error('Error changing password:', error);
       toast({
