@@ -615,6 +615,33 @@ export default function UploadRoyalty() {
     }
   };
 
+  const handleDeleteUpload = async (uploadId: string, filename: string) => {
+    try {
+      toast({ title: 'Menghapus...', description: `Menghapus upload ${filename} dan rollback saldo...` });
+
+      const { data, error } = await supabase.functions.invoke('delete-royalty-upload', {
+        body: { upload_id: uploadId },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast({
+        title: 'Upload Dihapus',
+        description: `${data.deletedRecords} record dihapus dan saldo telah di-rollback.`,
+      });
+
+      fetchUploadHistory();
+    } catch (error: any) {
+      console.error('Delete upload error:', error);
+      toast({
+        title: 'Gagal Menghapus',
+        description: error.message || 'Terjadi kesalahan saat menghapus upload',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const downloadSampleCSV = () => {
     const sampleData = `period,isrc,upc,title,artist,label_name,platform,country,sales_type,sales_unit,net_revenue
 2024-01,IDABC1234567,123456789012,My Song,John Doe,Indie Records,Spotify,ID,streaming,1000,100000
