@@ -1,42 +1,40 @@
 
 
-## Plan: Fix SSO Bugs + Fitur Hapus Upload Royalti
+## Plan: Fix "0 Record" Bug + Whitelabel Royalty Not Updating
 
-### Bug #1 & #2: SSO ICCN — Token Tidak Terdeteksi & Tombol Tidak Berfungsi
+### Investigasi & Temuan
 
-**Akar masalah:** Fungsi `initKeycloakAndLogin()` menggunakan singleton `keycloakInstance`. Jika Keycloak sudah pernah di-init (misalnya dari callback sebelumnya), instance lama masuk status stale dan `kc.login()` gagal tanpa error yang terlihat. Selain itu, saat kembali dari SSO ICCN, `initKeycloak()` mungkin gagal memproses code/state karena instance sudah terinisialisasi sebelumnya.
+**Bug 1: "(0 record)" di dialog hapus**
 
-**Solusi:**
-1. **`src/lib/keycloak.ts`** — Reset `keycloakInstance` ke `null` sebelum setiap init baru (`initKeycloak` dan `initKeycloakAndLogin`), sehingga selalu mendapatkan instance Keycloak yang fresh. Tambahkan error logging yang lebih detail.
+Semua record di tabel `royalty_uploads` menunjukkan `inserted_records = 0` dan `status = 'processing'`, meskipun data royalti SUDAH berhasil masuk (contoh: upload "LAPORAN MARET - FIX.csv" punya 603 royalti di database). Artinya edge function `process-royalty-upload` berhasil insert data, tapi GAGAL atau TIDAK SEMPAT menjalankan step terakhir:
+```
+await supabaseAdmin.from('royalty_uploads').update({ status: 'completed', inserted_records: inserted })
+```
+Kemungkinan besar: step update saldo yang berjalan per-label/artis memakan waktu terlalu lama sehingga function timeout sebelum sempat update upload record.
 
-2. **`src/context/SsoAuthContext.tsx`** — Tambahkan handling ketika `initKeycloak()` mengembalikan `false` (callback gagal/token tidak terdeteksi): bersihkan URL params dan set error message yang jelas, TANPA redirect. Tambahkan console.log untuk debugging flow.
+**Bug 2: Whitelabel balance tidak terupdate**
 
-3. **`src/pages/Auth.tsx`** — Pastikan tombol SSO menampilkan error dari `ssoError` jika ada, agar user tahu apa yang terjadi.
+Ditemukan **name mismatch**: di CSV, label_name = `KADITRUDIT`, tapi di profiles, full_name = `KADIRUDIT`. Karena balance update menggunakan exact match `eq('full_name', name)`, saldo tidak pernah terupdate untuk label ini.
 
-### Fitur #3: Hapus Upload Royalti + Rollback Saldo
+### Solusi
 
-**Cara kerja:**
-- Buat edge function `delete-royalty-upload` yang:
-  1. Menerima `upload_id`
-  2. Query semua `royalties` dengan `upload_id` tersebut
-  3. Hitung total `net_revenue` per `artist_user_id` (dengan split 70/21/9)
-  4. Kurangi saldo di `profiles.balance` dan `profiles.label_revenue` / `profiles.artist_revenue`
-  5. Hapus semua row dari `royalties` dengan `upload_id`
-  6. Hapus record dari `royalty_uploads`
-  7. Catat di `audit_logs`
+#### 1. Fix `process-royalty-upload` Edge Function
+- **Pindahkan update `royalty_uploads` ke SEBELUM balance update** — agar `inserted_records` dan `status` terupdate bahkan jika balance update timeout
+- Ubah status flow: `processing` → `inserted` (data masuk) → `completed` (saldo terupdate)
+- Tambahkan error handling per-balance update agar satu failure tidak menghentikan seluruh proses
 
-- Update `src/pages/UploadRoyalty.tsx`:
-  - Tambah tombol "Hapus" per row di tabel Riwayat Upload
-  - Tambah `AlertDialog` konfirmasi dengan peringatan rollback saldo
-  - Panggil edge function dan refresh data setelah berhasil
+#### 2. Fix UI Display di `UploadRoyalty.tsx`
+- Jika `inserted_records = 0` tapi `total_records > 0`, tampilkan `total_records` sebagai fallback di dialog hapus
+- Ini menangani data historis yang sudah terlanjur `inserted_records = 0`
 
-### File yang Diedit/Dibuat
+#### 3. Fix Name Matching (Case-Insensitive + Trim)
+- Di `process-royalty-upload`, gunakan case-insensitive matching (`.ilike()` atau normalisasi) saat mencari profile by label name
+- Ini mencegah mismatch akibat typo huruf kecil/besar atau spasi ekstra
 
-| File | Aksi |
-|------|------|
-| `src/lib/keycloak.ts` | Edit — reset instance sebelum init |
-| `src/context/SsoAuthContext.tsx` | Edit — better error handling, no redirect on failure |
-| `src/pages/Auth.tsx` | Edit — tampilkan ssoError |
-| `supabase/functions/delete-royalty-upload/index.ts` | Baru — edge function hapus + rollback |
-| `src/pages/UploadRoyalty.tsx` | Edit — tambah tombol hapus + dialog konfirmasi |
+### File yang Diedit
+
+| File | Perubahan |
+|------|-----------|
+| `supabase/functions/process-royalty-upload/index.ts` | Fix: update upload record lebih awal, case-insensitive name matching |
+| `src/pages/UploadRoyalty.tsx` | Fix: fallback display saat `inserted_records = 0` |
 
