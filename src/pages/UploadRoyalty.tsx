@@ -1201,7 +1201,7 @@ export default function UploadRoyalty() {
                           {upload.total_records.toLocaleString('id-ID')}
                         </TableCell>
                         <TableCell className="text-right">
-                          {upload.inserted_records.toLocaleString('id-ID')}
+                          {(upload.inserted_records || upload.total_records).toLocaleString('id-ID')}
                         </TableCell>
                         <TableCell>
                           <Badge className={`capitalize ${getStatusBadge(upload.status)}`}>
@@ -1219,7 +1219,7 @@ export default function UploadRoyalty() {
                               <AlertDialogHeader>
                                 <AlertDialogTitle>Hapus Upload Royalti?</AlertDialogTitle>
                                 <AlertDialogDescription className="space-y-2">
-                                  <p>Anda akan menghapus upload <strong>{upload.original_filename}</strong> ({upload.inserted_records} record).</p>
+                                  <p>Anda akan menghapus upload <strong>{upload.original_filename}</strong> ({(upload.inserted_records || upload.total_records).toLocaleString('id-ID')} record).</p>
                                   <p className="text-destructive font-medium">⚠️ Saldo artis yang sudah terupdate dari upload ini akan di-rollback (dikurangi kembali).</p>
                                   <p>Tindakan ini tidak dapat dibatalkan.</p>
                                 </AlertDialogDescription>
