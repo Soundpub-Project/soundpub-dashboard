@@ -1,44 +1,42 @@
 
 
-## Bug: Auto-Redirect ke SSO ICCN
+## Plan: Fix SSO Bugs + Fitur Hapus Upload Royalti
 
-### Akar Masalah
+### Bug #1 & #2: SSO ICCN — Token Tidak Terdeteksi & Tombol Tidak Berfungsi
 
-Di `SsoAuthContext.tsx`, Keycloak di-inisialisasi **otomatis** saat app pertama kali dimuat (di `useEffect` baris 58-90) dengan opsi `onLoad: 'check-sso'`. Ini menyebabkan:
+**Akar masalah:** Fungsi `initKeycloakAndLogin()` menggunakan singleton `keycloakInstance`. Jika Keycloak sudah pernah di-init (misalnya dari callback sebelumnya), instance lama masuk status stale dan `kc.login()` gagal tanpa error yang terlihat. Selain itu, saat kembali dari SSO ICCN, `initKeycloak()` mungkin gagal memproses code/state karena instance sudah terinisialisasi sebelumnya.
 
-1. User buka halaman `/auth` → `SsoAuthProvider` mount → `initKeycloak()` dipanggil
-2. Keycloak mencoba **silent check SSO** via iframe ke `sso.iccn.or.id`
-3. Jika iframe gagal, timeout, atau ada session SSO yang sudah ada di browser → Keycloak bisa **redirect** user ke halaman login ICCN secara otomatis
-4. User yang tidak bermaksud login SSO tiba-tiba diarahkan ke halaman ICCN
+**Solusi:**
+1. **`src/lib/keycloak.ts`** — Reset `keycloakInstance` ke `null` sebelum setiap init baru (`initKeycloak` dan `initKeycloakAndLogin`), sehingga selalu mendapatkan instance Keycloak yang fresh. Tambahkan error logging yang lebih detail.
 
-### Solusi
+2. **`src/context/SsoAuthContext.tsx`** — Tambahkan handling ketika `initKeycloak()` mengembalikan `false` (callback gagal/token tidak terdeteksi): bersihkan URL params dan set error message yang jelas, TANPA redirect. Tambahkan console.log untuk debugging flow.
 
-**Ubah Keycloak menjadi lazy initialization** — hanya init ketika user secara eksplisit klik tombol "Login via SSO", bukan saat app dimuat.
+3. **`src/pages/Auth.tsx`** — Pastikan tombol SSO menampilkan error dari `ssoError` jika ada, agar user tahu apa yang terjadi.
 
-### Perubahan
+### Fitur #3: Hapus Upload Royalti + Rollback Saldo
 
-#### 1. `src/lib/keycloak.ts`
-- Hapus `onLoad: 'check-sso'` dari `initKeycloak()`
-- Buat fungsi baru `initKeycloakAndLogin()` yang melakukan init + login dalam satu langkah
-- Hapus `silentCheckSsoRedirectUri` karena tidak diperlukan lagi
+**Cara kerja:**
+- Buat edge function `delete-royalty-upload` yang:
+  1. Menerima `upload_id`
+  2. Query semua `royalties` dengan `upload_id` tersebut
+  3. Hitung total `net_revenue` per `artist_user_id` (dengan split 70/21/9)
+  4. Kurangi saldo di `profiles.balance` dan `profiles.label_revenue` / `profiles.artist_revenue`
+  5. Hapus semua row dari `royalties` dengan `upload_id`
+  6. Hapus record dari `royalty_uploads`
+  7. Catat di `audit_logs`
 
-#### 2. `src/context/SsoAuthContext.tsx`
-- **Hapus auto-init `useEffect`** yang memanggil `initKeycloak()` saat mount
-- Ubah `triggerSsoLogin` agar memanggil `initKeycloakAndLogin()` — init Keycloak hanya saat user klik tombol SSO
-- Tambahkan penanganan callback: setelah redirect dari Keycloak kembali ke `/auth`, cek URL params untuk mendeteksi apakah ini adalah SSO callback, baru kemudian init Keycloak dan exchange token
+- Update `src/pages/UploadRoyalty.tsx`:
+  - Tambah tombol "Hapus" per row di tabel Riwayat Upload
+  - Tambah `AlertDialog` konfirmasi dengan peringatan rollback saldo
+  - Panggil edge function dan refresh data setelah berhasil
 
-#### 3. `src/pages/Auth.tsx`
-- Tidak perlu perubahan signifikan, hanya pastikan tombol SSO menampilkan loading state saat proses init+login berlangsung
+### File yang Diedit/Dibuat
 
-### File yang Diedit
-
-| File | Perubahan |
-|------|-----------|
-| `src/lib/keycloak.ts` | Refactor: hapus auto check-sso, tambah lazy init+login |
-| `src/context/SsoAuthContext.tsx` | Hapus auto-init useEffect, jadikan SSO lazy/on-demand |
-
-### Yang Tidak Berubah
-- Edge function `sso-login` — tidak terpengaruh
-- Halaman Auth UI — tombol SSO tetap sama
-- Flow Google Login — tidak terpengaruh
+| File | Aksi |
+|------|------|
+| `src/lib/keycloak.ts` | Edit — reset instance sebelum init |
+| `src/context/SsoAuthContext.tsx` | Edit — better error handling, no redirect on failure |
+| `src/pages/Auth.tsx` | Edit — tampilkan ssoError |
+| `supabase/functions/delete-royalty-upload/index.ts` | Baru — edge function hapus + rollback |
+| `src/pages/UploadRoyalty.tsx` | Edit — tambah tombol hapus + dialog konfirmasi |
 
