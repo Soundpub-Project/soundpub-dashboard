@@ -26,8 +26,20 @@ import {
   Download,
   TrendingUp,
   Users,
-  DollarSign
+  DollarSign,
+  Trash2
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface RoyaltyRow {
   period: string;
@@ -1142,6 +1154,7 @@ export default function UploadRoyalty() {
                       <TableHead className="text-right">Total</TableHead>
                       <TableHead className="text-right">Berhasil</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Aksi</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1167,6 +1180,34 @@ export default function UploadRoyalty() {
                           <Badge className={`capitalize ${getStatusBadge(upload.status)}`}>
                             {upload.status}
                           </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Hapus Upload Royalti?</AlertDialogTitle>
+                                <AlertDialogDescription className="space-y-2">
+                                  <p>Anda akan menghapus upload <strong>{upload.original_filename}</strong> ({upload.inserted_records} record).</p>
+                                  <p className="text-destructive font-medium">⚠️ Saldo artis yang sudah terupdate dari upload ini akan di-rollback (dikurangi kembali).</p>
+                                  <p>Tindakan ini tidak dapat dibatalkan.</p>
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Batal</AlertDialogCancel>
+                                <AlertDialogAction
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  onClick={() => handleDeleteUpload(upload.id, upload.original_filename)}
+                                >
+                                  Hapus & Rollback Saldo
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </TableCell>
                       </TableRow>
                     ))}
