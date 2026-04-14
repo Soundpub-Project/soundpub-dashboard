@@ -34,7 +34,7 @@ const signupSchema = z.object({
 export default function Auth() {
   const navigate = useNavigate();
   const { signIn, signUp, user, loading: authLoading } = useAuth();
-  const { ssoLoading, triggerSsoLogin } = useSsoAuth();
+  const { ssoLoading, ssoError, triggerSsoLogin } = useSsoAuth();
   const { toast } = useToast();
   const { resolvedTheme, setTheme } = useTheme();
   
