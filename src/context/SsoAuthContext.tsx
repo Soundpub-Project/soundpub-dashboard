@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { initKeycloak, getToken, keycloakLogin, keycloakLogout, isKeycloakAuthenticated } from '@/lib/keycloak';
+import { initKeycloak, initKeycloakAndLogin, getToken, keycloakLogout, isSsoCallback } from '@/lib/keycloak';
 
 interface SsoAuthContextType {
   ssoLoading: boolean;
@@ -19,7 +19,6 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
 
   const exchangeToken = useCallback(async (keycloakToken: string) => {
     try {
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const functionUrl = `${supabaseUrl}/functions/v1/sso-login`;
 
@@ -31,14 +30,13 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
       });
 
       const data = await resp.json();
-      console.log('SSO: Edge function response status:', resp.status, 'data:', JSON.stringify(data).substring(0, 200));
+      console.log('SSO: Edge function response status:', resp.status);
 
       if (!resp.ok) {
         const detail = data.details ? ` (${JSON.stringify(data.details)})` : '';
         throw new Error(`${data.error || 'SSO login failed'}${detail}`);
       }
 
-      // Set Supabase session
       const { error } = await supabase.auth.setSession({
         access_token: data.access_token,
         refresh_token: data.refresh_token,
@@ -47,6 +45,8 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
 
       setSsoAuthenticated(true);
+      // Clean up URL params after successful callback
+      window.history.replaceState({}, '', window.location.pathname);
       return true;
     } catch (err) {
       console.error('SSO token exchange error:', err);
@@ -55,13 +55,16 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Only process SSO callback when returning from Keycloak (URL has code+state params)
   useEffect(() => {
-    let cancelled = false;
+    if (!isSsoCallback()) return;
 
-    const init = async () => {
+    let cancelled = false;
+    setSsoLoading(true);
+
+    const handleCallback = async () => {
       try {
         const authenticated = await initKeycloak();
-        
         if (cancelled) return;
 
         if (authenticated) {
@@ -71,9 +74,9 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
           }
         }
       } catch (err) {
-        console.error('SSO init error:', err);
+        console.error('SSO callback error:', err);
         if (!cancelled) {
-          setSsoError('SSO initialization failed');
+          setSsoError('SSO login failed');
         }
       } finally {
         if (!cancelled) {
@@ -82,15 +85,19 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    init();
-
-    return () => {
-      cancelled = true;
-    };
+    handleCallback();
+    return () => { cancelled = true; };
   }, [exchangeToken]);
 
-  const triggerSsoLogin = useCallback(() => {
-    keycloakLogin();
+  const triggerSsoLogin = useCallback(async () => {
+    setSsoLoading(true);
+    setSsoError(null);
+    try {
+      await initKeycloakAndLogin();
+    } catch {
+      setSsoError('Failed to connect to SSO');
+      setSsoLoading(false);
+    }
   }, []);
 
   const triggerSsoLogout = useCallback(async () => {

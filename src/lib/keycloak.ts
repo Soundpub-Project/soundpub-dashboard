@@ -17,12 +17,14 @@ export function getKeycloak(): Keycloak {
   return keycloakInstance;
 }
 
+/**
+ * Initialize Keycloak WITHOUT auto-login (no onLoad).
+ * Used only to process SSO callback when returning from Keycloak.
+ */
 export async function initKeycloak(): Promise<boolean> {
   const kc = getKeycloak();
   try {
     const authenticated = await kc.init({
-      onLoad: 'check-sso',
-      silentCheckSsoRedirectUri: `${window.location.origin}/silent-check-sso.html`,
       checkLoginIframe: false,
       pkceMethod: 'S256',
     });
@@ -33,9 +35,22 @@ export async function initKeycloak(): Promise<boolean> {
   }
 }
 
-export function keycloakLogin(): void {
+/**
+ * Initialize Keycloak and immediately trigger login redirect.
+ * Used when user explicitly clicks "Login via SSO".
+ */
+export async function initKeycloakAndLogin(): Promise<void> {
   const kc = getKeycloak();
-  kc.login({ redirectUri: window.location.origin + '/auth' });
+  try {
+    await kc.init({
+      checkLoginIframe: false,
+      pkceMethod: 'S256',
+    });
+    kc.login({ redirectUri: window.location.origin + '/auth' });
+  } catch (error) {
+    console.error('Keycloak init+login error:', error);
+    throw error;
+  }
 }
 
 export function keycloakLogout(): void {
@@ -53,4 +68,12 @@ export function getIdToken(): string | undefined {
 
 export function isKeycloakAuthenticated(): boolean {
   return getKeycloak().authenticated ?? false;
+}
+
+/**
+ * Check if current URL contains Keycloak SSO callback parameters.
+ */
+export function isSsoCallback(): boolean {
+  const params = new URLSearchParams(window.location.search);
+  return params.has('code') && params.has('state');
 }
