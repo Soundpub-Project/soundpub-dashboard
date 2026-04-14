@@ -120,10 +120,15 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+const defaultSsoAuth: SsoAuthContextType = {
+  ssoLoading: false,
+  ssoAuthenticated: false,
+  ssoError: null,
+  triggerSsoLogin: () => {},
+  triggerSsoLogout: () => {},
+};
+
 export function useSsoAuth() {
   const context = useContext(SsoAuthContext);
-  if (!context) {
-    throw new Error('useSsoAuth must be used within SsoAuthProvider');
-  }
-  return context;
+  return context ?? defaultSsoAuth;
 }
