@@ -348,15 +348,24 @@ export default function Auth() {
                     Login dengan Google
                   </Button>
 
-                  <Button
+                   <Button
                     type="button"
                     variant="outline"
                     className="w-full"
                     onClick={triggerSsoLogin}
+                    disabled={ssoLoading}
                   >
-                    <Shield className="mr-2 h-4 w-4" />
-                    Login via SSO
+                    {ssoLoading ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Shield className="mr-2 h-4 w-4" />
+                    )}
+                    {ssoLoading ? 'Menghubungkan ke SSO...' : 'Login via SSO'}
                   </Button>
+
+                  {ssoError && (
+                    <p className="text-xs text-destructive text-center">{ssoError}</p>
+                  )}
                 </form>
               </TabsContent>
 

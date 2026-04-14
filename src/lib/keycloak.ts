@@ -18,19 +18,30 @@ export function getKeycloak(): Keycloak {
 }
 
 /**
+ * Reset Keycloak instance to force a fresh init.
+ */
+function resetKeycloak(): void {
+  keycloakInstance = null;
+}
+
+/**
  * Initialize Keycloak WITHOUT auto-login (no onLoad).
  * Used only to process SSO callback when returning from Keycloak.
+ * Always resets instance first to avoid stale state.
  */
 export async function initKeycloak(): Promise<boolean> {
+  resetKeycloak();
   const kc = getKeycloak();
   try {
+    console.log('SSO: Initializing Keycloak for callback processing...');
     const authenticated = await kc.init({
       checkLoginIframe: false,
       pkceMethod: 'S256',
     });
+    console.log('SSO: Keycloak init result:', authenticated, 'token exists:', !!kc.token);
     return authenticated;
   } catch (error) {
-    console.error('Keycloak init error:', error);
+    console.error('SSO: Keycloak init error:', error);
     return false;
   }
 }
@@ -38,17 +49,21 @@ export async function initKeycloak(): Promise<boolean> {
 /**
  * Initialize Keycloak and immediately trigger login redirect.
  * Used when user explicitly clicks "Login via SSO".
+ * Always resets instance first to avoid stale state.
  */
 export async function initKeycloakAndLogin(): Promise<void> {
+  resetKeycloak();
   const kc = getKeycloak();
   try {
+    console.log('SSO: Initializing Keycloak for login redirect...');
     await kc.init({
       checkLoginIframe: false,
       pkceMethod: 'S256',
     });
-    kc.login({ redirectUri: window.location.origin + '/auth' });
+    console.log('SSO: Keycloak initialized, redirecting to login...');
+    await kc.login({ redirectUri: window.location.origin + '/auth' });
   } catch (error) {
-    console.error('Keycloak init+login error:', error);
+    console.error('SSO: Keycloak init+login error:', error);
     throw error;
   }
 }

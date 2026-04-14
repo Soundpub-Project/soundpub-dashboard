@@ -61,22 +61,36 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
 
     let cancelled = false;
     setSsoLoading(true);
+    setSsoError(null);
 
     const handleCallback = async () => {
       try {
+        console.log('SSO: Detected callback params, initializing Keycloak...');
         const authenticated = await initKeycloak();
         if (cancelled) return;
 
         if (authenticated) {
           const token = getToken();
+          console.log('SSO: Keycloak authenticated, token exists:', !!token);
           if (token) {
             await exchangeToken(token);
+          } else {
+            console.error('SSO: Keycloak authenticated but no token available');
+            setSsoError('SSO: Token tidak ditemukan setelah autentikasi');
+            // Clean up URL params
+            window.history.replaceState({}, '', window.location.pathname);
           }
+        } else {
+          console.warn('SSO: Keycloak callback returned not authenticated');
+          setSsoError('SSO: Autentikasi gagal, silakan coba lagi');
+          // Clean up URL params so it doesn't retry
+          window.history.replaceState({}, '', window.location.pathname);
         }
       } catch (err) {
         console.error('SSO callback error:', err);
         if (!cancelled) {
-          setSsoError('SSO login failed');
+          setSsoError(err instanceof Error ? err.message : 'SSO login failed');
+          window.history.replaceState({}, '', window.location.pathname);
         }
       } finally {
         if (!cancelled) {
@@ -93,9 +107,12 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
     setSsoLoading(true);
     setSsoError(null);
     try {
+      console.log('SSO: User triggered SSO login...');
       await initKeycloakAndLogin();
-    } catch {
-      setSsoError('Failed to connect to SSO');
+      // If we get here without redirect, something went wrong
+    } catch (err) {
+      console.error('SSO: triggerSsoLogin error:', err);
+      setSsoError('Gagal terhubung ke SSO ICCN. Silakan coba lagi.');
       setSsoLoading(false);
     }
   }, []);
@@ -124,8 +141,8 @@ const defaultSsoAuth: SsoAuthContextType = {
   ssoLoading: false,
   ssoAuthenticated: false,
   ssoError: null,
-  triggerSsoLogin: () => {},
-  triggerSsoLogout: () => {},
+  triggerSsoLogin: () => { console.warn('SSO: triggerSsoLogin called outside SsoAuthProvider'); },
+  triggerSsoLogout: () => { console.warn('SSO: triggerSsoLogout called outside SsoAuthProvider'); },
 };
 
 export function useSsoAuth() {
