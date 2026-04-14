@@ -624,7 +624,7 @@ export default function UploadRoyalty() {
       });
 
       if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      if (!data?.ok) throw new Error(data?.error || 'Unknown error');
 
       toast({
         title: 'Upload Dihapus',
