@@ -38,6 +38,7 @@ import NotificationManagement from "./pages/NotificationManagement";
 import PaymentSettings from "./pages/PaymentSettings";
 import Invoices from "./pages/Invoices";
 import NotFound from "./pages/NotFound";
+import IccnIframeAuth from "./pages/IccnIframeAuth";
 
 const queryClient = new QueryClient();
 
@@ -56,6 +57,9 @@ const App = () => (
               <Route path="/auth" element={<Auth />} />
               {/* Archived: LandingPage tersedia di /catalog untuk penggunaan di masa depan */}
               <Route path="/catalog" element={<LandingPage />} />
+
+              {/* ICCN Super App iframe embed */}
+              <Route path="/iccn/iframe" element={<IccnIframeAuth />} />
               
               {/* Protected dashboard routes - require authentication */}
               <Route path="/dashboard" element={

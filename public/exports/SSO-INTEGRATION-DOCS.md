@@ -30,8 +30,14 @@
 | Field JWT | Kolom di `profiles` | Keterangan |
 |---|---|---|
 | `email` | `email` | Digunakan sebagai identifier utama |
-| `name` / `preferred_username` | `full_name` | Nama lengkap user |
+| `fullname` / `name` / `preferred_username` | `full_name` | Prioritas: `fullname` > `name` > `preferred_username` |
 | `avatar` | `avatar_url` | URL foto profil dari Keycloak (hanya jika user belum punya avatar) |
+| `phone` | `phone` | Nomor HP (hanya jika kolom masih kosong) |
+| `city` | `city` | Kota domisili (hanya jika kosong) |
+| `province` | `province` | Provinsi (hanya jika kosong) |
+| `type` | `sso_user_type` | Tipe user ICCN: `korda` / `pengurus` / null |
+| `sub` | `sso_user_id` | ID stabil dari Keycloak (untuk tracking jika email berubah) |
+| `azp` | — (validasi) | Harus sama dengan `SSO_CLIENT_ID`, jika tidak token ditolak |
 | - | `sso_provider` | Diset ke `'iccn'` untuk semua user SSO ICCN |
 | - | `parent_label_id` | Diset ke ID label ICCN Media |
 | - | `artist_profile_completed` | `false` untuk user baru |
@@ -41,6 +47,12 @@
 
 - **Tabel `user_roles`**: Role diset ke `artist`
 - **Tabel `artists`**: Entry dibuat di bawah label ICCN Media
+
+### Aturan Sinkronisasi
+
+- **User pertama login**: Semua field SSO yang tersedia langsung diisi.
+- **User existing login ulang**: Hanya kolom yang masih `NULL` yang diisi — data yang sudah diedit user TIDAK ditimpa.
+- **Validasi `azp`**: Token dengan `azp` yang tidak sesuai `SSO_CLIENT_ID` akan ditolak (HTTP 401).
 
 ---
 
@@ -88,7 +100,36 @@ Di halaman **Users** (`/dashboard/users`), admin dapat:
 | `SSO_CLIENT_ID` | Client ID di Keycloak (e.g., `soundpub`) |
 | `ICCN_MEDIA_LABEL_ID` | UUID label ICCN Media di tabel `profiles` |
 
+### Realm Staging vs Production
+
+| Environment | `SSO_REALM_URL` | `VITE_SSO_REALM` (frontend) |
+|---|---|---|
+| Staging | `https://sso.iccn.or.id/realms/playground` | `playground` |
+| Production | `https://sso.iccn.or.id/realms/PORTALICCN` | `PORTALICCN` |
+
+Untuk pindah ke production, cukup update kedua nilai di Cloud Secrets dan Vite env — tidak perlu code change.
+
 ---
+
+## 8. Integrasi Iframe ICCN Super App
+
+SoundPub bisa di-embed sebagai iframe di ICCN Super App via URL:
+
+```
+https://dashboard.soundpub.xyz/iccn/iframe
+```
+
+### Alur
+
+1. Halaman cek session Supabase lokal — jika ada, langsung redirect ke `/dashboard`.
+2. Jika tidak ada, jalankan **silent SSO check** (cek apakah user sudah login di Keycloak ICCN tanpa redirect).
+3. Jika user sudah login di ICCN → exchange token → buat session Supabase → redirect ke `/dashboard`.
+4. Jika silent check gagal → redirect manual ke halaman login ICCN.
+
+### Catatan
+
+- Pastikan `https://dashboard.soundpub.xyz` (dan domain Super App ICCN) ada di **Web Origins** client `soundpub` di Keycloak agar silent check bisa berjalan.
+- Cookie session Supabase otomatis pakai `SameSite=None; Secure` di HTTPS, jadi cross-domain iframe bisa jalan.
 
 ## 6. Cara Menambahkan Provider Login Baru
 
