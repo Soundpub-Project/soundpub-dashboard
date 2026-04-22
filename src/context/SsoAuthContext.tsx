@@ -1,11 +1,20 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { initKeycloak, initKeycloakAndLogin, getToken, keycloakLogout, isSsoCallback } from '@/lib/keycloak';
+import {
+  initKeycloak,
+  initKeycloakSilent,
+  initKeycloakAndLogin,
+  getToken,
+  keycloakLogout,
+  isSsoCallback,
+  setupTokenRefresh,
+} from '@/lib/keycloak';
 
 interface SsoAuthContextType {
   ssoLoading: boolean;
   ssoAuthenticated: boolean;
   ssoError: string | null;
+  ssoChecking: boolean;
   triggerSsoLogin: () => void;
   triggerSsoLogout: () => void;
 }
@@ -16,6 +25,8 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
   const [ssoLoading, setSsoLoading] = useState(false);
   const [ssoAuthenticated, setSsoAuthenticated] = useState(false);
   const [ssoError, setSsoError] = useState<string | null>(null);
+  const [ssoChecking, setSsoChecking] = useState(false);
+  const exchangedRef = useRef(false);
 
   const exchangeToken = useCallback(async (keycloakToken: string) => {
     try {
@@ -45,6 +56,7 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
 
       setSsoAuthenticated(true);
+      exchangedRef.current = true;
       // Clean up URL params after successful callback
       window.history.replaceState({}, '', window.location.pathname);
       return true;
@@ -55,51 +67,79 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Only process SSO callback when returning from Keycloak (URL has code+state params)
+  // On mount: process callback if URL has code+state, otherwise run silent SSO check.
   useEffect(() => {
-    if (!isSsoCallback()) return;
-
     let cancelled = false;
-    setSsoLoading(true);
-    setSsoError(null);
 
-    const handleCallback = async () => {
+    const run = async () => {
+      // Don't run silent check if user already has a Supabase session.
+      const { data: existingSession } = await supabase.auth.getSession();
+      if (cancelled) return;
+
+      const isCallback = isSsoCallback();
+
+      if (!isCallback && existingSession.session) {
+        // Already logged in via Supabase — skip silent check to avoid duplicate exchange.
+        return;
+      }
+
+      if (isCallback) {
+        setSsoLoading(true);
+      } else {
+        setSsoChecking(true);
+      }
+      setSsoError(null);
+
       try {
-        console.log('SSO: Detected callback params, initializing Keycloak...');
-        const authenticated = await initKeycloak();
+        const authenticated = isCallback
+          ? (console.log('SSO: Detected callback params, initializing Keycloak...'), await initKeycloak())
+          : (console.log('SSO: Running silent SSO check on mount...'), await initKeycloakSilent());
+
         if (cancelled) return;
 
         if (authenticated) {
           const token = getToken();
           console.log('SSO: Keycloak authenticated, token exists:', !!token);
           if (token) {
-            await exchangeToken(token);
+            const ok = await exchangeToken(token);
+            if (ok) {
+              // Set up periodic token refresh; sync Supabase when Keycloak refreshes.
+              setupTokenRefresh(async (newToken) => {
+                console.log('SSO: Re-exchanging refreshed Keycloak token...');
+                await exchangeToken(newToken);
+              });
+            }
           } else {
-            console.error('SSO: Keycloak authenticated but no token available');
-            setSsoError('SSO: Token tidak ditemukan setelah autentikasi');
-            // Clean up URL params
-            window.history.replaceState({}, '', window.location.pathname);
+            if (isCallback) {
+              console.error('SSO: Keycloak authenticated but no token available');
+              setSsoError('SSO: Token tidak ditemukan setelah autentikasi');
+              window.history.replaceState({}, '', window.location.pathname);
+            }
           }
-        } else {
+        } else if (isCallback) {
           console.warn('SSO: Keycloak callback returned not authenticated');
           setSsoError('SSO: Autentikasi gagal, silakan coba lagi');
-          // Clean up URL params so it doesn't retry
           window.history.replaceState({}, '', window.location.pathname);
+        } else {
+          console.log('SSO: Silent check — no active ICCN session');
         }
       } catch (err) {
-        console.error('SSO callback error:', err);
+        console.error('SSO mount handler error:', err);
         if (!cancelled) {
-          setSsoError(err instanceof Error ? err.message : 'SSO login failed');
-          window.history.replaceState({}, '', window.location.pathname);
+          if (isCallback) {
+            setSsoError(err instanceof Error ? err.message : 'SSO login failed');
+            window.history.replaceState({}, '', window.location.pathname);
+          }
         }
       } finally {
         if (!cancelled) {
           setSsoLoading(false);
+          setSsoChecking(false);
         }
       }
     };
 
-    handleCallback();
+    run();
     return () => { cancelled = true; };
   }, [exchangeToken]);
 
@@ -128,6 +168,7 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
         ssoLoading,
         ssoAuthenticated,
         ssoError,
+        ssoChecking,
         triggerSsoLogin,
         triggerSsoLogout,
       }}
@@ -141,6 +182,7 @@ const defaultSsoAuth: SsoAuthContextType = {
   ssoLoading: false,
   ssoAuthenticated: false,
   ssoError: null,
+  ssoChecking: false,
   triggerSsoLogin: () => { console.warn('SSO: triggerSsoLogin called outside SsoAuthProvider'); },
   triggerSsoLogout: () => { console.warn('SSO: triggerSsoLogout called outside SsoAuthProvider'); },
 };
