@@ -278,6 +278,7 @@ export type Database = {
           artist_revenue: number
           avatar_url: string | null
           balance: number
+          city: string | null
           composer_code: string | null
           created_at: string | null
           email: string
@@ -290,7 +291,10 @@ export type Database = {
           parent_label_id: string | null
           password_set: boolean | null
           phone: string | null
+          province: string | null
           sso_provider: string | null
+          sso_user_id: string | null
+          sso_user_type: string | null
           status: string
           subscription_status: string | null
           subscription_upgraded_at: string | null
@@ -302,6 +306,7 @@ export type Database = {
           artist_revenue?: number
           avatar_url?: string | null
           balance?: number
+          city?: string | null
           composer_code?: string | null
           created_at?: string | null
           email: string
@@ -314,7 +319,10 @@ export type Database = {
           parent_label_id?: string | null
           password_set?: boolean | null
           phone?: string | null
+          province?: string | null
           sso_provider?: string | null
+          sso_user_id?: string | null
+          sso_user_type?: string | null
           status?: string
           subscription_status?: string | null
           subscription_upgraded_at?: string | null
@@ -326,6 +334,7 @@ export type Database = {
           artist_revenue?: number
           avatar_url?: string | null
           balance?: number
+          city?: string | null
           composer_code?: string | null
           created_at?: string | null
           email?: string
@@ -338,7 +347,10 @@ export type Database = {
           parent_label_id?: string | null
           password_set?: boolean | null
           phone?: string | null
+          province?: string | null
           sso_provider?: string | null
+          sso_user_id?: string | null
+          sso_user_type?: string | null
           status?: string
           subscription_status?: string | null
           subscription_upgraded_at?: string | null
