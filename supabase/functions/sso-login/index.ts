@@ -208,6 +208,7 @@ function getErrorStatus(message: string): number {
   if (
     message.startsWith("Invalid JWT") ||
     message.startsWith("Invalid issuer") ||
+    message.startsWith("Invalid azp") ||
     message.startsWith("Token expired") ||
     message.startsWith("No kid in JWT header")
   ) {
@@ -244,6 +245,14 @@ Deno.serve(async (req) => {
 
     const payload = await verifyJwt(keycloak_token, realmUrl);
 
+    // Validate azp (authorized party) matches our client ID
+    if (payload.azp && payload.azp !== clientId) {
+      return new Response(
+        JSON.stringify({ error: `Invalid azp: ${payload.azp}` }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const resourceAccess = payload.resource_access as Record<string, { roles?: string[] }> | undefined;
     const clientRoles = resourceAccess?.[clientId]?.roles;
     if (!clientRoles || clientRoles.length === 0) {
@@ -254,11 +263,18 @@ Deno.serve(async (req) => {
     }
 
     const email = payload.email as string;
+    const fullnameFromSso = (payload.fullname as string) || null;
     const name =
+      fullnameFromSso ||
       (payload.name as string) ||
       (payload.preferred_username as string) ||
       email.split("@")[0];
     const avatarFromSso = (payload.avatar as string) || null;
+    const phoneFromSso = (payload.phone as string) || null;
+    const cityFromSso = (payload.city as string) || null;
+    const provinceFromSso = (payload.province as string) || null;
+    const ssoUserId = (payload.sub as string) || null;
+    const ssoUserType = (payload.type as string) || null;
 
     if (!email) {
       return new Response(
@@ -289,7 +305,7 @@ Deno.serve(async (req) => {
 
     const { data: existingProfile } = await supabaseAdmin
       .from("profiles")
-      .select("id, sso_provider, parent_label_id, avatar_url, artist_profile_completed")
+      .select("id, sso_provider, parent_label_id, avatar_url, phone, city, province, sso_user_id, sso_user_type, artist_profile_completed")
       .eq("email", email)
       .maybeSingle();
 
@@ -303,6 +319,11 @@ Deno.serve(async (req) => {
       if (!existingProfile.sso_provider) updates.sso_provider = "iccn";
       if (!existingProfile.parent_label_id) updates.parent_label_id = iccnMediaLabelId;
       if (!existingProfile.avatar_url && avatarFromSso) updates.avatar_url = avatarFromSso;
+      if (!(existingProfile as Record<string, unknown>).phone && phoneFromSso) updates.phone = phoneFromSso;
+      if (!(existingProfile as Record<string, unknown>).city && cityFromSso) updates.city = cityFromSso;
+      if (!(existingProfile as Record<string, unknown>).province && provinceFromSso) updates.province = provinceFromSso;
+      if (!(existingProfile as Record<string, unknown>).sso_user_id && ssoUserId) updates.sso_user_id = ssoUserId;
+      if (!(existingProfile as Record<string, unknown>).sso_user_type && ssoUserType) updates.sso_user_type = ssoUserType;
 
       if (Object.keys(updates).length > 0) {
         // Preserve existing values — only fill in what's missing
@@ -350,6 +371,11 @@ Deno.serve(async (req) => {
         password_set: false,
         artist_profile_completed: false,
         ...(avatarFromSso ? { avatar_url: avatarFromSso } : {}),
+        ...(phoneFromSso ? { phone: phoneFromSso } : {}),
+        ...(cityFromSso ? { city: cityFromSso } : {}),
+        ...(provinceFromSso ? { province: provinceFromSso } : {}),
+        ...(ssoUserId ? { sso_user_id: ssoUserId } : {}),
+        ...(ssoUserType ? { sso_user_type: ssoUserType } : {}),
       });
 
       await supabaseAdmin
