@@ -1,104 +1,54 @@
 
 
-## Analisis Lengkap Sistem SSO ICCN
+## Penyebab Error: Konfigurasi `.env` Salah
 
-### Arsitektur Saat Ini
+Edge function `sso-login` membaca 3 secret berikut:
 
-```text
-┌────────────┐    ┌──────────────┐    ┌──────────────────┐    ┌──────────────┐
-│  /auth     │───▶│  Keycloak    │───▶│  Edge Function    │───▶│  Supabase    │
-│  (browser) │◀───│  ICCN SSO    │    │  sso-login        │    │  Auth + DB   │
-└────────────┘    └──────────────┘    └──────────────────┘    └──────────────┘
-       │                                       │
-       │  keycloak-js (PKCE S256)              │  verifyJwt + JWKS
-       │  redirect_uri: /auth                  │  generateLink + verifyOtp
-       │  exchange code → token                │  return Supabase session
+| Secret | Fungsi | Nilai yang BENAR |
+|---|---|---|
+| `SSO_REALM_URL` | URL **lengkap realm** Keycloak (issuer JWT) | `https://sso.iccn.or.id/realms/playground` |
+| `SSO_CLIENT_ID` | Client ID di Keycloak | `soundpub` |
+| `ICCN_MEDIA_LABEL_ID` | UUID label "ICCN Media" di tabel `profiles` | UUID (misal `a1b2c3d4-...`) |
+
+### Yang salah di `.env` Anda saat ini
+
+```
+SSO_REALM_URL="https://sso.iccn.or.id"          ❌ Kurang /realms/playground
+ICCN_MEDIA_LABEL_ID="soundpub"                  ❌ Ini Client ID, bukan Label UUID
+SSO_CLIENT_ID="playground"                      ❌ Ini nama realm, bukan Client ID
 ```
 
-### Komponen Inti
+Akibatnya:
+1. **`verifyJwt` gagal** — karena `payload.iss` dari token ICCN adalah `https://sso.iccn.or.id/realms/playground`, tapi function membandingkan dengan `https://sso.iccn.or.id` → error "Invalid issuer".
+2. **JWKS fetch ke URL salah** → `https://sso.iccn.or.id/protocol/openid-connect/certs` (404) seharusnya `.../realms/playground/protocol/openid-connect/certs`.
+3. **Cek `resource_access[clientId]`** mencari role di key `playground`, padahal seharusnya di `soundpub` → user dianggap tidak punya akses.
+4. **`ICCN_MEDIA_LABEL_ID` bukan UUID** → function fallback ke lookup `email = halo.iccn@gmail.com`. Jika profile itu tidak ada → error.
 
-| File | Peran |
-|------|-------|
-| `src/lib/keycloak.ts` | Singleton Keycloak client, lazy init |
-| `src/context/SsoAuthContext.tsx` | Context React untuk login/logout SSO + auto-callback |
-| `src/pages/Auth.tsx` | UI tombol "Login via SSO" |
-| `supabase/functions/sso-login/index.ts` | Verifikasi JWT, upsert user, generate session |
-| `public/silent-check-sso.html` | Helper untuk silent SSO (tidak dipakai saat ini) |
+### Perbaikan
 
-### Masalah yang Ditemukan (Akar Penyebab Auto-Login Gagal)
+**Update 3 secret Lovable Cloud** (bukan `.env` frontend — ini secrets backend untuk edge function):
 
-**1. Tidak Ada Auto-Login / Silent SSO**
-Saat ini Keycloak hanya di-init **dua kondisi**:
-- User klik tombol "Login via SSO" (`triggerSsoLogin`)
-- URL berisi `?code=...&state=...` (callback)
+```
+SSO_REALM_URL = https://sso.iccn.or.id/realms/playground
+SSO_CLIENT_ID = soundpub
+ICCN_MEDIA_LABEL_ID = <UUID profile ICCN Media dari tabel profiles>
+```
 
-Tidak ada mekanisme **silent check** saat user buka `/auth`. Akibatnya, meskipun user sudah login di portal ICCN lain (cookie SSO aktif di `sso.iccn.or.id`), aplikasi SoundPub **tidak mendeteksinya** dan tetap menampilkan form login.
+Untuk mendapatkan `ICCN_MEDIA_LABEL_ID`, kita query `profiles` dengan `email = halo.iccn@gmail.com` dan ambil `id`-nya.
 
-**2. `redirect_uri` Inkonsisten**
-- `initKeycloakAndLogin` redirect ke `/auth`
-- `keycloakLogout` redirect ke `/`
-- Callback diproses di mana saja (`SsoAuthProvider` mount di App root), tapi user yang refresh di `/dashboard` dengan token SSO valid tidak akan ter-trigger silent login.
+### Catatan: `.env` vs Secrets
 
-**3. Refresh Token Supabase Hilang**
-Log auth menunjukkan `400: Invalid Refresh Token: Refresh Token Not Found` dari `dev.soundpub.xyz`. Ini terjadi karena:
-- Session Supabase yang dibuat via `setSession` tidak persisten lintas tab/refresh
-- Tidak ada mekanisme **auto-refresh** dari Keycloak ke Supabase saat token Supabase expired
+- File `.env` Anda kemungkinan dimaksud sebagai **secrets edge function** — tapi edge function di Lovable Cloud TIDAK membaca `.env` lokal. Mereka membaca **Cloud Secrets** yang harus diset lewat tool `add_secret`.
+- Frontend `src/lib/keycloak.ts` memakai env Vite (`VITE_SSO_BASE_URL`, `VITE_SSO_REALM`, `VITE_SSO_CLIENT_ID`) — saat ini hardcoded fallback ke `https://sso.iccn.or.id` / `playground` / `soundpub` yang sudah benar, jadi frontend OK.
 
-**4. Tidak Ada `silent-check-sso.html` Workflow**
-File HTML sudah ada (`public/silent-check-sso.html`), tapi **tidak pernah dipanggil** dari kode. Padahal ini fitur penting Keycloak untuk auto-detect session tanpa redirect penuh.
+### Langkah Implementasi (saat plan disetujui)
 
-**5. Reset Instance Terlalu Agresif**
-`resetKeycloak()` dipanggil setiap init, sehingga state authenticated/token Keycloak tidak pernah persisten antar pemanggilan dalam satu session browser. Ini menggagalkan refresh token Keycloak (`kc.updateToken()`).
+1. Query database untuk dapatkan UUID profile `halo.iccn@gmail.com`
+2. Set/update 3 Cloud Secrets dengan nilai yang benar via `add_secret`
+3. Cek log edge function `sso-login` untuk verifikasi tidak ada error issuer/JWKS lagi
+4. Minta Anda test ulang tombol "Login via SSO"
 
-**6. Edge Function `sso-login` Selalu Generate Session Baru**
-Setiap kali token SSO ditukar, function generate magiclink + verifyOtp baru. Ini membuat refresh token lama invalid → menyebabkan error `refresh_token_not_found` ketika tab lain mencoba refresh.
+### Tidak Ada Perubahan Kode
 
----
-
-### Perbaikan yang Diusulkan
-
-#### A. Tambah Silent SSO Check saat App Mount
-- Modifikasi `SsoAuthContext` untuk menjalankan `kc.init({ onLoad: 'check-sso', silentCheckSsoRedirectUri: '/silent-check-sso.html' })` **sekali saat mount** (bukan auto redirect login)
-- Jika `authenticated === true` dari silent check → otomatis tukar token ke Supabase session
-- Jika `false` → tidak ada redirect, user tetap di `/auth` dan bisa pilih login manual
-
-#### B. Persistent Keycloak Instance + Token Refresh
-- Hapus `resetKeycloak()` dari `initKeycloak` (hanya reset di error/logout)
-- Setup interval `kc.updateToken(60)` setiap 30 detik agar token Keycloak fresh
-- Saat token Keycloak refresh sukses → trigger refresh Supabase session juga
-
-#### C. Konsisten redirect_uri
-- Semua flow (login, callback, logout) gunakan `${window.location.origin}/auth`
-- Setelah callback sukses, redirect ke `/dashboard`
-
-#### D. Edge Function: Tambah Mode "refresh"
-- Tambah parameter `mode: 'refresh' | 'login'` di body
-- Mode `refresh`: cek apakah user sudah ada Supabase session aktif, kalau iya jangan generate baru
-- Cegah invalidasi refresh token Supabase yang masih valid
-
-#### E. Better Error Handling & Logging
-- Log step-by-step di console untuk debugging
-- Tampilkan error spesifik di UI (mis. "Token ICCN expired", "Tidak ada akses", dll)
-- Banner di `/auth` yang menampilkan status silent check ("Memeriksa sesi ICCN...")
-
----
-
-### File yang Akan Diedit
-
-| File | Perubahan |
-|------|-----------|
-| `src/lib/keycloak.ts` | Tambah `initKeycloakSilent()`, `setupTokenRefresh()`, perbaiki redirect_uri konsisten, hapus reset agresif |
-| `src/context/SsoAuthContext.tsx` | Tambah silent check on mount, auto-exchange jika authenticated, setup token refresh interval |
-| `src/pages/Auth.tsx` | Tampilkan status "Memeriksa sesi ICCN..." saat silent check berjalan |
-| `supabase/functions/sso-login/index.ts` | Tambah mode `refresh` (opsional), better idempotency saat session sudah ada |
-| `public/silent-check-sso.html` | Sudah ada — pastikan tidak di-cache PWA/SW |
-
-### Yang Tidak Berubah
-- Flow login email/password
-- Flow Google OAuth
-- Logika upsert user di edge function (verifikasi JWT, role artist, parent_label_id)
-- Schema database
-
-### Catatan Penting
-- Silent SSO **butuh konfigurasi di Keycloak ICCN**: origin `https://dashboard.soundpub.xyz` dan `https://*.lovable.app` harus ada di Web Origins client `soundpub`. Jika belum, silent check akan diam-diam gagal (CORS iframe). Kita akan tambahkan log warning supaya jelas saat ini terjadi.
+Logika edge function sudah benar — hanya nilai secrets yang perlu dikoreksi. Tidak ada file yang perlu diedit.
 
