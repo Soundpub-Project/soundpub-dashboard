@@ -34,7 +34,7 @@ const signupSchema = z.object({
 export default function Auth() {
   const navigate = useNavigate();
   const { signIn, signUp, user, loading: authLoading } = useAuth();
-  const { ssoLoading, ssoError, triggerSsoLogin } = useSsoAuth();
+  const { ssoLoading, ssoError, ssoChecking, triggerSsoLogin } = useSsoAuth();
   const { toast } = useToast();
   const { resolvedTheme, setTheme } = useTheme();
   
@@ -353,14 +353,18 @@ export default function Auth() {
                     variant="outline"
                     className="w-full"
                     onClick={triggerSsoLogin}
-                    disabled={ssoLoading}
+                    disabled={ssoLoading || ssoChecking}
                   >
-                    {ssoLoading ? (
+                    {(ssoLoading || ssoChecking) ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
                       <Shield className="mr-2 h-4 w-4" />
                     )}
-                    {ssoLoading ? 'Menghubungkan ke SSO...' : 'Login via SSO'}
+                    {ssoChecking
+                      ? 'Memeriksa sesi ICCN...'
+                      : ssoLoading
+                        ? 'Menghubungkan ke SSO...'
+                        : 'Login via SSO'}
                   </Button>
 
                   {ssoError && (
