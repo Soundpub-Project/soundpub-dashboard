@@ -1,76 +1,110 @@
-## Tujuan
+Saya sudah cek alurnya. Masalah utamanya bukan di ICCN login-nya — ICCN sudah berhasil mengembalikan `code`. Buktinya URL berubah menjadi:
 
-Saat user buka **dashboard.soundpub.xyz** (platform utama, bukan iframe), dan user **sudah login di SSO ICCN** di tab/browser yang sama, SoundPub harus otomatis login tanpa user perlu klik tombol "Login via SSO". Tombol manual SSO tetap berfungsi sebagai fallback.
-
-## Analisis Kondisi Saat Ini
-
-`SsoAuthProvider` sebenarnya **sudah** menjalankan `initKeycloakSilent()` saat mount di setiap halaman. Tapi log menunjukkan:
-
+```text
+/auth#state=...&session_state=...&iss=...&code=...
 ```
+
+Tapi kode aplikasi saat ini hanya mendeteksi callback SSO dari query string (`?code=...&state=...`), sedangkan ICCN/Keycloak mengembalikannya lewat URL fragment/hash (`#code=...&state=...`). Akibatnya aplikasi menganggap itu bukan callback, lalu menjalankan silent check lagi, dan token tidak pernah dikirim ke backend `sso-login`. Ini juga terkonfirmasi dari network/log: tidak ada request ke `sso-login`.
+
+## Plan Perbaikan
+
+### 1. Perbaiki deteksi callback SSO
+Update helper di `src/lib/keycloak.ts` supaya `isSsoCallback()` membaca dua format:
+
+```text
+/auth?code=...&state=...
+/auth#code=...&state=...
+```
+
+Ini langsung memperbaiki kasus URL yang kamu tunjukkan.
+
+### 2. Paksa Keycloak JS memakai mode callback yang sama
+Tambahkan konfigurasi eksplisit di init Keycloak:
+
+```ts
+responseMode: 'fragment'
+flow: 'standard'
+pkceMethod: 'S256'
+```
+
+Dipasang di:
+- `initKeycloak()` untuk memproses callback login manual
+- `initKeycloakSilent()` untuk silent check
+- `initKeycloakAndLogin()` untuk redirect login manual
+
+Tujuannya supaya login dimulai dan callback diproses dengan format yang konsisten.
+
+### 3. Proses callback sebelum silent check
+Di `src/context/SsoAuthContext.tsx`, pastikan urutannya:
+
+```text
+Jika URL punya code/state di query atau hash
+  -> proses callback Keycloak
+  -> ambil access token ICCN
+  -> kirim ke backend sso-login
+  -> set session SoundPub
+  -> bersihkan URL
+  -> masuk dashboard
+Jika tidak ada callback
+  -> baru jalankan silent check / auto redirect
+```
+
+Jadi ketika balik dari ICCN, aplikasi tidak akan lagi jatuh ke log:
+
+```text
 SSO: Silent check — no active ICCN session
 ```
 
-Padahal user sudah login di ICCN. Penyebab paling mungkin (sesuai jawaban user: domain sudah di-whitelist):
+melainkan akan lanjut ke exchange token.
 
-1. **`silent-check-sso.html` salah pakai `location.origin`** sebagai target `postMessage`. Halaman ini di-load di iframe oleh Keycloak dari domain SoundPub, lalu Keycloak (di domain `sso.iccn.or.id`) yang mendengarkan `message`. `location.origin` di iframe = origin SoundPub, sehingga Keycloak-JS di parent menolak pesannya. Harus pakai `'*'` (standar contoh resmi Keycloak).
-2. **`checkLoginIframe: false`** mematikan mekanisme deteksi sesi via iframe — tapi `silent-check-sso` masih jalan via redirect iframe terpisah, jadi ini OK.
-3. **3rd-party cookie**: Browser modern (Chrome, Safari, Firefox) blokir cookie pihak ketiga secara default. Saat iframe dari `dashboard.soundpub.xyz` membuka `sso.iccn.or.id`, cookie session Keycloak **tidak dikirim** → silent check selalu return "no session". Ini batasan fundamental browser.
+### 4. Redirect ke dashboard setelah session SoundPub berhasil dibuat
+Setelah `supabase.auth.setSession()` sukses, arahkan user ke `/dashboard`. Ini membuat flow manual “Login via SSO” selesai otomatis tanpa user perlu refresh.
 
-## Solusi
+### 5. Tambah logging aman untuk debugging
+Tambahkan log yang tidak membocorkan token/code penuh, misalnya:
 
-### 1. Fix `silent-check-sso.html` (quick win)
-
-Ubah target `postMessage` ke `'*'` sesuai contoh resmi Keycloak, supaya pesan diterima dengan benar.
-
-```html
-<script>parent.postMessage(location.href, '*');</script>
+```text
+SSO: Callback detected in hash
+SSO: Processing callback with Keycloak
+SSO: Token exchange success
 ```
 
-### 2. Tambah fallback: deteksi via session storage flag
+Dengan begitu kalau masih gagal, kita bisa tahu titik gagalnya: callback parsing, Keycloak token, atau backend exchange.
 
-Karena 3rd-party cookie sering diblokir, kita tambahkan deteksi sekunder:
-- Saat user **berhasil** login via SSO (manual atau silent), simpan flag `iccn_sso_active=true` di `localStorage` SoundPub dengan TTL (misal 8 jam).
-- Saat mount, jika flag masih valid **dan** belum ada session Supabase → jalankan silent check.
-- Saat Keycloak return "not authenticated" → hapus flag.
+### 6. Auto-login tanpa klik di platform utama
+Untuk auto-login penuh dari platform utama, silent check lintas domain masih bisa diblokir browser karena third-party cookie. Solusi yang paling stabil tetap full-page redirect otomatis ke ICCN, lalu ICCN langsung balik kalau user sudah login.
 
-Ini bukan bypass keamanan (token tetap divalidasi server-side), hanya hint UX agar silent check dijalankan lebih agresif setelah pernah login.
+Setelah callback hash diperbaiki, opsi ini akan berjalan jika `VITE_SSO_AUTO_REDIRECT=true` di Build Secrets. Jadi flow-nya:
 
-### 3. Tambah opsi auto-redirect untuk first-time visitors (opt-in via env)
+```text
+User buka SoundPub
+Tidak ada session SoundPub
+Redirect top-level ke ICCN
+ICCN lihat user sudah login
+ICCN callback ke /auth#code=...
+SoundPub proses callback
+Masuk dashboard
+```
 
-Tambahkan flag `VITE_SSO_AUTO_REDIRECT=true` (default `false`). Jika `true` **dan** silent check gagal **dan** belum ada session Supabase **dan** user di route `/` atau `/auth` → otomatis redirect ke Keycloak login (bukan silent, full redirect). Setelah login Keycloak akan kembalikan dengan `code+state` dan auto-exchange jalan.
+## File yang akan diubah
 
-User bisa enable ini hanya di production agar UX seamless. Default off supaya tidak ganggu development.
+- `src/lib/keycloak.ts`
+  - deteksi callback dari `window.location.hash`
+  - tambah opsi `responseMode: 'fragment'` dan `flow: 'standard'`
+  - optional redirect URI agar flow iframe nanti juga bisa dipakai tanpa merusak platform utama
 
-### 4. Improve logging
+- `src/context/SsoAuthContext.tsx`
+  - proses hash callback lebih dulu
+  - exchange token dan redirect dashboard setelah sukses
+  - logging yang lebih jelas
 
-Tambahkan log eksplisit:
-- Origin yang dikirim untuk silent check
-- Apakah cookie 3rd-party kemungkinan diblokir (deteksi via failure pattern)
-- Status flag localStorage
+- `.env.example`
+  - tambahkan catatan bahwa ICCN callback menggunakan fragment/hash
+  - tegaskan `VITE_SSO_AUTO_REDIRECT=true` diperlukan untuk auto-login tanpa klik dari platform utama
 
-## Yang Akan Diubah
+- `public/exports/SSO-INTEGRATION-DOCS.md`
+  - update dokumentasi debugging sesuai behavior ICCN yang mengembalikan `code` via hash
 
-1. **`public/silent-check-sso.html`** — ganti target `postMessage` ke `'*'`.
-2. **`src/lib/keycloak.ts`** — tambah helper `markSsoActive()` / `clearSsoActive()` / `wasSsoActive()` pakai localStorage (key: `soundpub_iccn_sso_active`, TTL 8 jam).
-3. **`src/context/SsoAuthContext.tsx`**:
-   - Panggil `markSsoActive()` setelah exchange token sukses.
-   - Panggil `clearSsoActive()` saat logout atau silent check gagal.
-   - Jika `VITE_SSO_AUTO_REDIRECT=true` dan silent check gagal di route public → trigger full redirect login.
-4. **`src/pages/Auth.tsx`** — tampilkan indikator kecil "Mendeteksi sesi ICCN..." saat `ssoChecking=true` agar user tahu sistem sedang cek (sudah ada `ssoChecking`, hanya dipakai).
-5. **`.env.example`** — dokumentasikan `VITE_SSO_AUTO_REDIRECT`.
-6. **`public/exports/SSO-INTEGRATION-DOCS.md`** — update dokumentasi auto-login + catatan 3rd-party cookie.
+## Catatan penting
 
-## Catatan Penting untuk User
-
-**3rd-party cookie adalah penghalang utama** auto-login lintas domain. Solusi paling andal jangka panjang:
-- **Opsi A (recommended)**: Pakai subdomain bersama, mis. `sso.iccn.or.id` dan `dashboard.iccn.or.id` (atau letakkan SoundPub di subdomain `iccn.or.id`). Cookie jadi same-site → silent check 100% jalan.
-- **Opsi B**: Aktifkan `VITE_SSO_AUTO_REDIRECT=true` — UX trade-off: user yang **belum** login di ICCN akan tetap di-redirect ke halaman login ICCN otomatis. Cocok kalau SoundPub memang khusus user ICCN.
-- **Opsi C**: Status quo + tombol manual "Login via SSO" yang sudah ada. Paling aman, butuh 1 klik.
-
-Saya akan implement fix #1 + #2 + #3 (opt-in) sehingga ketiga opsi tersedia, user tinggal pilih via env.
-
-## Tidak Termasuk Plan Ini
-
-- Setup iframe ICCN Super App (sudah dibahas, akan dikerjakan setelah platform utama solid).
-- Perubahan di sisi Keycloak / admin ICCN.
-- Migrasi domain.
+Backend `sso-login` belum perlu diubah dulu, karena masalah saat ini terjadi sebelum request backend dipanggil. Setelah perbaikan ini, jika ada error baru dari backend seperti `Invalid azp`, `No access role`, atau `SSO not configured`, baru kita lanjut debug di sisi konfigurasi client/secret ICCN.

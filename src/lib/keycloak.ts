@@ -93,6 +93,8 @@ export async function initKeycloak(): Promise<boolean> {
     initPromise = kc.init({
       checkLoginIframe: false,
       pkceMethod: 'S256',
+      responseMode: 'fragment',
+      flow: 'standard',
     });
     const authenticated = await initPromise;
     console.log('SSO: Keycloak init result:', authenticated, 'token exists:', !!kc.token);
@@ -123,6 +125,8 @@ export async function initKeycloakSilent(): Promise<boolean> {
       silentCheckSsoRedirectUri: `${window.location.origin}/silent-check-sso.html`,
       checkLoginIframe: false,
       pkceMethod: 'S256',
+      responseMode: 'fragment',
+      flow: 'standard',
     });
     const authenticated = await initPromise;
     console.log('SSO: Silent check result:', authenticated, 'token exists:', !!kc.token);
@@ -175,6 +179,8 @@ export async function initKeycloakAndLogin(): Promise<void> {
     initPromise = kc.init({
       checkLoginIframe: false,
       pkceMethod: 'S256',
+      responseMode: 'fragment',
+      flow: 'standard',
     });
     await initPromise;
     console.log('SSO: Keycloak initialized, redirecting to login...');
@@ -213,6 +219,14 @@ export function isKeycloakAuthenticated(): boolean {
  * Check if current URL contains Keycloak SSO callback parameters.
  */
 export function isSsoCallback(): boolean {
-  const params = new URLSearchParams(window.location.search);
-  return params.has('code') && params.has('state');
+  // ICCN/Keycloak with responseMode=fragment returns code+state in the
+  // URL hash (e.g. /auth#code=...&state=...). We support both shapes.
+  const queryParams = new URLSearchParams(window.location.search);
+  if (queryParams.has('code') && queryParams.has('state')) return true;
+
+  const rawHash = window.location.hash || '';
+  if (!rawHash) return false;
+  const hash = rawHash.startsWith('#') ? rawHash.slice(1) : rawHash;
+  const hashParams = new URLSearchParams(hash);
+  return hashParams.has('code') && hashParams.has('state');
 }
