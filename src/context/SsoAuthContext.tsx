@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import {
   initKeycloak,
@@ -30,6 +31,8 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
   const [ssoError, setSsoError] = useState<string | null>(null);
   const [ssoChecking, setSsoChecking] = useState(false);
   const exchangedRef = useRef(false);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const exchangeToken = useCallback(async (keycloakToken: string) => {
     try {
@@ -61,8 +64,9 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
       setSsoAuthenticated(true);
       exchangedRef.current = true;
       markSsoActive();
-      // Clean up URL params after successful callback
+      // Clean up both query string AND hash fragment (Keycloak fragment mode)
       window.history.replaceState({}, '', window.location.pathname);
+      console.log('SSO: Token exchange success — Supabase session established');
       return true;
     } catch (err) {
       console.error('SSO token exchange error:', err);
@@ -89,6 +93,7 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
 
       if (isCallback) {
         setSsoLoading(true);
+        console.log('SSO: Callback detected (query or hash) — processing with Keycloak...');
       } else {
         setSsoChecking(true);
       }
@@ -112,6 +117,13 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
                 console.log('SSO: Re-exchanging refreshed Keycloak token...');
                 await exchangeToken(newToken);
               });
+              if (!cancelled) {
+                // After a successful callback exchange, send the user into the app.
+                const path = window.location.pathname;
+                if (path === '/' || path === '/auth') {
+                  navigate('/dashboard', { replace: true });
+                }
+              }
             }
           } else {
             if (isCallback) {
@@ -163,7 +175,7 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
 
     run();
     return () => { cancelled = true; };
-  }, [exchangeToken]);
+  }, [exchangeToken, navigate, location.pathname]);
 
   const triggerSsoLogin = useCallback(async () => {
     setSsoLoading(true);
