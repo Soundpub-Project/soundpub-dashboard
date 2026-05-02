@@ -8,6 +8,47 @@ let keycloakInstance: Keycloak | null = null;
 let initPromise: Promise<boolean> | null = null;
 let refreshTimer: number | null = null;
 
+// ---------------------------------------------------------------
+// SSO active flag (localStorage hint)
+// Used to remember that the user has had a working ICCN session
+// recently, so we can be more aggressive with silent checks even
+// when 3rd-party cookies are blocked between visits.
+// ---------------------------------------------------------------
+const SSO_ACTIVE_KEY = 'soundpub_iccn_sso_active';
+const SSO_ACTIVE_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
+
+export function markSsoActive(): void {
+  try {
+    localStorage.setItem(SSO_ACTIVE_KEY, String(Date.now()));
+  } catch {
+    // ignore (private mode etc.)
+  }
+}
+
+export function clearSsoActive(): void {
+  try {
+    localStorage.removeItem(SSO_ACTIVE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+export function wasSsoActive(): boolean {
+  try {
+    const raw = localStorage.getItem(SSO_ACTIVE_KEY);
+    if (!raw) return false;
+    const ts = parseInt(raw, 10);
+    if (!Number.isFinite(ts)) return false;
+    if (Date.now() - ts > SSO_ACTIVE_TTL_MS) {
+      localStorage.removeItem(SSO_ACTIVE_KEY);
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function getRedirectUri(): string {
   return `${window.location.origin}/auth`;
 }
