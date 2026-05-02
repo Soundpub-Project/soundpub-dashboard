@@ -8,6 +8,9 @@ import {
   keycloakLogout,
   isSsoCallback,
   setupTokenRefresh,
+  markSsoActive,
+  clearSsoActive,
+  wasSsoActive,
 } from '@/lib/keycloak';
 
 interface SsoAuthContextType {
@@ -57,6 +60,7 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
 
       setSsoAuthenticated(true);
       exchangedRef.current = true;
+      markSsoActive();
       // Clean up URL params after successful callback
       window.history.replaceState({}, '', window.location.pathname);
       return true;
@@ -122,6 +126,24 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
           window.history.replaceState({}, '', window.location.pathname);
         } else {
           console.log('SSO: Silent check — no active ICCN session');
+          // Clear stale flag — user is not actually logged in at ICCN.
+          clearSsoActive();
+
+          // Optional: full-redirect auto login if env enables it AND we're
+          // on a public auth route. Avoids loops by not redirecting if we
+          // just came back from a callback or are already on a callback URL.
+          const autoRedirect = import.meta.env.VITE_SSO_AUTO_REDIRECT === 'true';
+          const path = window.location.pathname;
+          const onPublicAuthRoute = path === '/' || path === '/auth';
+          if (autoRedirect && onPublicAuthRoute && !isCallback) {
+            console.log('SSO: Auto-redirect enabled — sending user to ICCN login...');
+            try {
+              await initKeycloakAndLogin();
+              return;
+            } catch (err) {
+              console.error('SSO: Auto-redirect failed:', err);
+            }
+          }
         }
       } catch (err) {
         console.error('SSO mount handler error:', err);

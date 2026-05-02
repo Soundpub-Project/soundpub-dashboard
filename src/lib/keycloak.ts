@@ -190,6 +190,7 @@ export function keycloakLogout(): void {
   const kc = getKeycloak();
   const idToken = kc.idToken;
   resetKeycloak();
+  clearSsoActive();
   kc.logout({
     redirectUri: `${window.location.origin}/auth`,
     ...(idToken ? { idToken } : {}),
