@@ -181,6 +181,7 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
 
   const triggerSsoLogout = useCallback(async () => {
     await supabase.auth.signOut();
+    clearSsoActive();
     keycloakLogout();
   }, []);
 
