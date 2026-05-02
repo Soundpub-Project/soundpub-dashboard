@@ -131,6 +131,26 @@ https://dashboard.soundpub.xyz/iccn/iframe
 - Pastikan `https://dashboard.soundpub.xyz` (dan domain Super App ICCN) ada di **Web Origins** client `soundpub` di Keycloak agar silent check bisa berjalan.
 - Cookie session Supabase otomatis pakai `SameSite=None; Secure` di HTTPS, jadi cross-domain iframe bisa jalan.
 
+## 9. Auto-Login di Platform Utama (dashboard.soundpub.xyz)
+
+Saat user buka dashboard SoundPub, `SsoAuthProvider` otomatis menjalankan **silent SSO check** ke Keycloak ICCN. Jika user sudah login di ICCN dan browser membolehkan 3rd-party cookie, session Supabase langsung dibuat tanpa user perlu klik tombol.
+
+### Syarat agar silent check berhasil
+
+1. **Web Origins** di Keycloak client `soundpub` harus berisi origin SoundPub (mis. `https://dashboard.soundpub.xyz`).
+2. File `public/silent-check-sso.html` mem-`postMessage` ke parent dengan target `'*'` (sudah benar).
+3. **3rd-party cookie tidak diblokir** — ini batasan utama browser modern.
+
+### Strategi jika 3rd-party cookie diblokir
+
+- **Opsi A (terbaik)**: Pindahkan SoundPub ke subdomain `iccn.or.id` agar cookie jadi same-site.
+- **Opsi B**: Set env `VITE_SSO_AUTO_REDIRECT=true`. Saat silent check gagal di route `/` atau `/auth`, user otomatis di-redirect ke halaman login Keycloak (full page). Cocok jika SoundPub khusus user ICCN.
+- **Opsi C**: Biarkan default — user klik tombol "Login via SSO" satu kali.
+
+### Flag `localStorage`
+
+Setelah login SSO sukses, key `soundpub_iccn_sso_active` (TTL 8 jam) disimpan sebagai hint. Saat logout atau silent check return "no session", flag dibersihkan.
+
 ## 6. Cara Menambahkan Provider Login Baru
 
 Untuk menambahkan provider baru (misal Google):
