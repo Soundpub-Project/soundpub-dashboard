@@ -122,18 +122,20 @@ export function setupTokenRefresh(onRefresh?: (token: string) => void): void {
  * Used when user explicitly clicks "Login via SSO".
  */
 export async function initKeycloakAndLogin(): Promise<void> {
-  const kc = getKeycloak();
   try {
-    if (kc.authenticated === undefined) {
-      console.log('SSO: Initializing Keycloak for login redirect...');
-      if (!initPromise) {
-        initPromise = kc.init({
-          checkLoginIframe: false,
-          pkceMethod: 'S256',
-        });
-      }
-      await initPromise;
+    // If a previous silent check already ran (or any prior init), the instance
+    // may be in a broken state where `kc.endpoints` is undefined. Reset to be safe.
+    if (keycloakInstance) {
+      console.log('SSO: Resetting Keycloak instance before login redirect...');
+      resetKeycloak();
     }
+    const kc = getKeycloak();
+    console.log('SSO: Initializing Keycloak for login redirect...');
+    initPromise = kc.init({
+      checkLoginIframe: false,
+      pkceMethod: 'S256',
+    });
+    await initPromise;
     console.log('SSO: Keycloak initialized, redirecting to login...');
     await kc.login({ redirectUri: getRedirectUri() });
   } catch (error) {
