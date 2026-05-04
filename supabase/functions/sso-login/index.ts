@@ -257,10 +257,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { keycloak_token } = await req.json();
-    if (!keycloak_token) {
+    const { keycloak_token, code, redirect_uri, code_verifier } = await req.json();
+    if (!keycloak_token && !code) {
       return new Response(
-        JSON.stringify({ error: "keycloak_token is required" }),
+        JSON.stringify({ error: "keycloak_token or code is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -276,7 +276,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    const payload = await verifyJwt(keycloak_token, realmUrl);
+    const accessToken = keycloak_token || await exchangeAuthorizationCode(
+      realmUrl,
+      clientId,
+      code,
+      redirect_uri,
+      code_verifier ?? null
+    );
+
+    const payload = await verifyJwt(accessToken, realmUrl);
 
     // Validate azp (authorized party) matches our client ID
     if (payload.azp && payload.azp !== clientId) {
