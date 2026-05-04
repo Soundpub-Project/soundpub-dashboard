@@ -3,10 +3,25 @@ import Keycloak from 'keycloak-js';
 const SSO_BASE_URL = import.meta.env.VITE_SSO_BASE_URL || 'https://sso.iccn.or.id';
 const SSO_REALM = import.meta.env.VITE_SSO_REALM || 'playground';
 const SSO_CLIENT_ID = import.meta.env.VITE_SSO_CLIENT_ID || 'soundpub';
+const SSO_PKCE_KEY = 'soundpub_iccn_sso_pkce';
 
 let keycloakInstance: Keycloak | null = null;
 let initPromise: Promise<boolean> | null = null;
 let refreshTimer: number | null = null;
+
+interface StoredPkceState {
+  state: string;
+  codeVerifier: string;
+  redirectUri: string;
+  createdAt: number;
+}
+
+export interface SsoCallbackParams {
+  code: string | null;
+  state: string | null;
+  error: string | null;
+  errorDescription: string | null;
+}
 
 // ---------------------------------------------------------------
 // SSO active flag (localStorage hint)
@@ -51,6 +66,45 @@ export function wasSsoActive(): boolean {
 
 function getRedirectUri(): string {
   return `${window.location.origin}/auth`;
+}
+
+function base64UrlEncode(bytes: Uint8Array): string {
+  let binary = '';
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function randomBase64Url(byteLength: number): string {
+  const bytes = new Uint8Array(byteLength);
+  crypto.getRandomValues(bytes);
+  return base64UrlEncode(bytes);
+}
+
+async function sha256Base64Url(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return base64UrlEncode(new Uint8Array(digest));
+}
+
+async function createSsoLoginUrl(options?: { prompt?: 'none'; redirectUri?: string }): Promise<string> {
+  const redirectUri = options?.redirectUri || getRedirectUri();
+  const state = randomBase64Url(16);
+  const codeVerifier = randomBase64Url(32);
+  const codeChallenge = await sha256Base64Url(codeVerifier);
+
+  const stored: StoredPkceState = { state, codeVerifier, redirectUri, createdAt: Date.now() };
+  sessionStorage.setItem(SSO_PKCE_KEY, JSON.stringify(stored));
+
+  const url = new URL(`${SSO_BASE_URL}/realms/${SSO_REALM}/protocol/openid-connect/auth`);
+  url.searchParams.set('client_id', SSO_CLIENT_ID);
+  url.searchParams.set('redirect_uri', redirectUri);
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('scope', 'openid profile email');
+  url.searchParams.set('state', state);
+  url.searchParams.set('code_challenge', codeChallenge);
+  url.searchParams.set('code_challenge_method', 'S256');
+  if (options?.prompt) url.searchParams.set('prompt', options.prompt);
+
+  return url.toString();
 }
 
 export function getKeycloak(): Keycloak {
