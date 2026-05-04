@@ -222,6 +222,8 @@ export function setupTokenRefresh(onRefresh?: (token: string) => void): void {
  */
 export async function initKeycloakAndLogin(): Promise<void> {
   try {
+    sessionStorage.removeItem('soundpub_iccn_exchange_key');
+    sessionStorage.removeItem('soundpub_iccn_prompt_none_tried');
     console.log('SSO: Redirecting to ICCN authorization endpoint...');
     window.location.href = await createSsoLoginUrl();
   } catch (error) {
@@ -252,6 +254,7 @@ export function keycloakLogout(): void {
   try {
     sessionStorage.removeItem(SSO_PKCE_KEY);
     sessionStorage.removeItem('soundpub_iccn_prompt_none_tried');
+    sessionStorage.removeItem('soundpub_iccn_exchange_key');
   } catch {
     // ignore
   }
