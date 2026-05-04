@@ -27,6 +27,7 @@ interface SsoAuthContextType {
 
 const SsoAuthContext = createContext<SsoAuthContextType | undefined>(undefined);
 const SSO_PROMPT_NONE_TRIED_KEY = 'soundpub_iccn_prompt_none_tried';
+const SSO_EXCHANGE_KEY = 'soundpub_iccn_exchange_key';
 
 export function SsoAuthProvider({ children }: { children: ReactNode }) {
   const [ssoLoading, setSsoLoading] = useState(false);
@@ -122,14 +123,33 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
             throw new Error(callback.errorDescription || callback.error);
           }
 
+          if (!callback.code) throw new Error('SSO: Authorization code tidak ditemukan');
+
+          const exchangeKey = `${callback.state || 'no-state'}:${callback.code}`;
+          if (sessionStorage.getItem(SSO_EXCHANGE_KEY) === exchangeKey) {
+            console.warn('SSO: Authorization code was already processed; clearing stale callback URL');
+            window.history.replaceState({}, '', window.location.pathname);
+            setSsoError('Sesi SSO sudah diproses. Silakan klik Login via SSO lagi.');
+            return;
+          }
+
           const storedPkce = consumeStoredPkceState(callback.state);
           console.log('SSO: Callback params parsed, exchanging authorization code...', 'hasPkce:', !!storedPkce?.codeVerifier);
-          if (!callback.code) throw new Error('SSO: Authorization code tidak ditemukan');
+          if (!storedPkce?.codeVerifier) {
+            console.warn('SSO: Missing PKCE verifier for callback state; not exchanging stale authorization code');
+            window.history.replaceState({}, '', window.location.pathname);
+            sessionStorage.removeItem(SSO_PROMPT_NONE_TRIED_KEY);
+            setSsoError('Sesi SSO kedaluwarsa. Silakan klik Login via SSO lagi.');
+            return;
+          }
+
+          sessionStorage.setItem(SSO_EXCHANGE_KEY, exchangeKey);
+          window.history.replaceState({}, '', window.location.pathname);
 
           const ok = await exchangeToken({
             code: callback.code,
-            redirectUri: storedPkce?.redirectUri || `${window.location.origin}/auth`,
-            codeVerifier: storedPkce?.codeVerifier ?? null,
+            redirectUri: storedPkce.redirectUri,
+            codeVerifier: storedPkce.codeVerifier,
           });
 
           if (ok && !cancelled) {
