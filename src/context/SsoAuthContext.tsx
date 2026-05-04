@@ -8,6 +8,8 @@ import {
   getToken,
   keycloakLogout,
   isSsoCallback,
+  getSsoCallbackParams,
+  consumeStoredPkceState,
   setupTokenRefresh,
   markSsoActive,
   clearSsoActive,
@@ -34,7 +36,7 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const exchangeToken = useCallback(async (keycloakToken: string) => {
+  const exchangeToken = useCallback(async (payload: { keycloakToken?: string; code?: string; redirectUri?: string; codeVerifier?: string | null }) => {
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const functionUrl = `${supabaseUrl}/functions/v1/sso-login`;
@@ -43,7 +45,12 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
       const resp = await fetch(functionUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keycloak_token: keycloakToken }),
+        body: JSON.stringify({
+          ...(payload.keycloakToken ? { keycloak_token: payload.keycloakToken } : {}),
+          ...(payload.code ? { code: payload.code } : {}),
+          ...(payload.redirectUri ? { redirect_uri: payload.redirectUri } : {}),
+          ...(payload.codeVerifier ? { code_verifier: payload.codeVerifier } : {}),
+        }),
       });
 
       const data = await resp.json();
