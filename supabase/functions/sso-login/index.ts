@@ -277,6 +277,7 @@ Deno.serve(async (req) => {
       realmUrl = realmUrl.replace(/\/$/, "");
     }
     console.log("SSO: using realmUrl:", realmUrl);
+    console.log("SSO: using clientId:", JSON.stringify(clientId), "len:", clientId?.length);
 
     if (!clientId) {
       console.error("Missing SSO configuration secrets");
