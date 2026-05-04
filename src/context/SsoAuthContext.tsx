@@ -107,9 +107,31 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
       setSsoError(null);
 
       try {
-        const authenticated = isCallback
-          ? (console.log('SSO: Detected callback params, initializing Keycloak...'), await initKeycloak())
-          : (console.log('SSO: Running silent SSO check on mount...'), await initKeycloakSilent());
+        if (isCallback) {
+          const callback = getSsoCallbackParams();
+          if (callback.error) {
+            throw new Error(callback.errorDescription || callback.error);
+          }
+
+          const storedPkce = consumeStoredPkceState(callback.state);
+          console.log('SSO: Callback params parsed, exchanging authorization code...', 'hasPkce:', !!storedPkce?.codeVerifier);
+          if (!callback.code) throw new Error('SSO: Authorization code tidak ditemukan');
+
+          const ok = await exchangeToken({
+            code: callback.code,
+            redirectUri: storedPkce?.redirectUri || `${window.location.origin}/auth`,
+            codeVerifier: storedPkce?.codeVerifier ?? null,
+          });
+
+          if (ok && !cancelled) {
+            if (window.location.pathname === '/' || window.location.pathname === '/auth') {
+              navigate('/dashboard', { replace: true });
+            }
+          }
+          return;
+        }
+
+        const authenticated = (console.log('SSO: Running silent SSO check on mount...'), await initKeycloakSilent());
 
         if (cancelled) return;
 
@@ -117,12 +139,12 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
           const token = getToken();
           console.log('SSO: Keycloak authenticated, token exists:', !!token);
           if (token) {
-            const ok = await exchangeToken(token);
+            const ok = await exchangeToken({ keycloakToken: token });
             if (ok) {
               // Set up periodic token refresh; sync Supabase when Keycloak refreshes.
               setupTokenRefresh(async (newToken) => {
                 console.log('SSO: Re-exchanging refreshed Keycloak token...');
-                await exchangeToken(newToken);
+                await exchangeToken({ keycloakToken: newToken });
               });
               if (!cancelled) {
                 // After a successful callback exchange, send the user into the app.
