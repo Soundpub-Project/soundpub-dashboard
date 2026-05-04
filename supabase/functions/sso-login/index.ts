@@ -114,6 +114,19 @@ async function exchangeAuthorizationCode(
   return tokenData.access_token as string;
 }
 
+function resolveSsoClientId(configuredClientId: string | undefined, realm: string): string {
+  const clientId = configuredClientId?.trim();
+
+  if (!clientId || clientId === realm || clientId === "playground" || clientId === "PORTALICCN") {
+    console.warn(
+      "SSO_CLIENT_ID is missing or points to a realm name; falling back to SoundPub ICCN client"
+    );
+    return "soundpub";
+  }
+
+  return clientId;
+}
+
 async function waitForProfile(
   supabaseAdmin: ReturnType<typeof createClient>,
   userId: string,
@@ -265,8 +278,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    const clientId = Deno.env.get("SSO_CLIENT_ID");
+    const configuredClientId = Deno.env.get("SSO_CLIENT_ID");
     const realm = Deno.env.get("SSO_REALM") || "playground";
+    const clientId = resolveSsoClientId(configuredClientId, realm);
     let realmUrl = Deno.env.get("SSO_REALM_URL") || "";
     if (!realmUrl) {
       const base = Deno.env.get("SSO_BASE_URL") || "https://sso.iccn.or.id";
@@ -277,15 +291,7 @@ Deno.serve(async (req) => {
       realmUrl = realmUrl.replace(/\/$/, "");
     }
     console.log("SSO: using realmUrl:", realmUrl);
-    console.log("SSO: using clientId:", JSON.stringify(clientId), "len:", clientId?.length);
-
-    if (!clientId) {
-      console.error("Missing SSO configuration secrets");
-      return new Response(
-        JSON.stringify({ error: "SSO not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    console.log("SSO: using clientId:", JSON.stringify(clientId), "len:", clientId.length);
 
     const accessToken = keycloak_token || await exchangeAuthorizationCode(
       realmUrl,
