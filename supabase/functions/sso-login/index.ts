@@ -265,10 +265,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    const realmUrl = Deno.env.get("SSO_REALM_URL");
     const clientId = Deno.env.get("SSO_CLIENT_ID");
+    const realm = Deno.env.get("SSO_REALM") || "playground";
+    let realmUrl = Deno.env.get("SSO_REALM_URL") || "";
+    if (!realmUrl) {
+      const base = Deno.env.get("SSO_BASE_URL") || "https://sso.iccn.or.id";
+      realmUrl = `${base.replace(/\/$/, "")}/realms/${realm}`;
+    } else if (!/\/realms\//.test(realmUrl)) {
+      realmUrl = `${realmUrl.replace(/\/$/, "")}/realms/${realm}`;
+    } else {
+      realmUrl = realmUrl.replace(/\/$/, "");
+    }
+    console.log("SSO: using realmUrl:", realmUrl);
 
-    if (!realmUrl || !clientId) {
+    if (!clientId) {
       console.error("Missing SSO configuration secrets");
       return new Response(
         JSON.stringify({ error: "SSO not configured" }),
