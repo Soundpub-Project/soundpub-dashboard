@@ -2,7 +2,6 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, Re
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import {
-  initKeycloak,
   initKeycloakSilent,
   initKeycloakAndLogin,
   getToken,
