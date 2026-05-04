@@ -88,6 +88,8 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     const run = async () => {
+      // Guard against React StrictMode double-invocation reusing the same code
+      if (exchangedRef.current) return;
       // Don't run silent check if user already has a Supabase session.
       const { data: existingSession } = await supabase.auth.getSession();
       if (cancelled) return;
@@ -109,6 +111,7 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
 
       try {
         if (isCallback) {
+          exchangedRef.current = true;
           const callback = getSsoCallbackParams();
           if (callback.error) {
             if (callback.error === 'login_required') {
