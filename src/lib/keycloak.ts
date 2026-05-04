@@ -236,14 +236,39 @@ export async function initSsoPromptNone(redirectUri?: string): Promise<void> {
 }
 
 export function keycloakLogout(): void {
-  const kc = getKeycloak();
-  const idToken = kc.idToken;
+  // We do PKCE manually (no keycloak-js init), so kc.logout() would crash
+  // because the adapter has no endpoints loaded. Build the logout URL by hand
+  // per ICCN docs: {SSO_BASE_URL}/realms/{SSO_REALM}/protocol/openid-connect/logout
+  let idToken: string | undefined;
+  try {
+    idToken = keycloakInstance?.idToken;
+  } catch {
+    idToken = undefined;
+  }
+
   resetKeycloak();
   clearSsoActive();
-  kc.logout({
-    redirectUri: `${window.location.origin}/auth`,
-    ...(idToken ? { idToken } : {}),
-  });
+
+  try {
+    sessionStorage.removeItem(SSO_PKCE_KEY);
+    sessionStorage.removeItem('soundpub_iccn_prompt_none_tried');
+  } catch {
+    // ignore
+  }
+
+  const logoutUrl = new URL(
+    `${SSO_BASE_URL}/realms/${SSO_REALM}/protocol/openid-connect/logout`
+  );
+  logoutUrl.searchParams.set('client_id', SSO_CLIENT_ID);
+  logoutUrl.searchParams.set(
+    'post_logout_redirect_uri',
+    `${window.location.origin}/auth`
+  );
+  if (idToken) {
+    logoutUrl.searchParams.set('id_token_hint', idToken);
+  }
+
+  window.location.href = logoutUrl.toString();
 }
 
 export function getToken(): string | undefined {
