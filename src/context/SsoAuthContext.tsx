@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   initKeycloakSilent,
   initKeycloakAndLogin,
+  initSsoPromptNone,
   getToken,
   keycloakLogout,
   isSsoCallback,
@@ -25,6 +26,7 @@ interface SsoAuthContextType {
 }
 
 const SsoAuthContext = createContext<SsoAuthContextType | undefined>(undefined);
+const SSO_PROMPT_NONE_TRIED_KEY = 'soundpub_iccn_prompt_none_tried';
 
 export function SsoAuthProvider({ children }: { children: ReactNode }) {
   const [ssoLoading, setSsoLoading] = useState(false);
@@ -109,6 +111,11 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
         if (isCallback) {
           const callback = getSsoCallbackParams();
           if (callback.error) {
+            if (callback.error === 'login_required') {
+              sessionStorage.setItem(SSO_PROMPT_NONE_TRIED_KEY, 'true');
+              window.history.replaceState({}, '', window.location.pathname);
+              return;
+            }
             throw new Error(callback.errorDescription || callback.error);
           }
 
@@ -175,6 +182,15 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
           const autoRedirect = import.meta.env.VITE_SSO_AUTO_REDIRECT === 'true';
           const path = window.location.pathname;
           const onPublicAuthRoute = path === '/' || path === '/auth';
+          const alreadyTriedPromptNone = sessionStorage.getItem(SSO_PROMPT_NONE_TRIED_KEY) === 'true';
+
+          if (onPublicAuthRoute && !alreadyTriedPromptNone) {
+            console.log('SSO: Silent check failed — trying top-level ICCN prompt=none once...');
+            sessionStorage.setItem(SSO_PROMPT_NONE_TRIED_KEY, 'true');
+            await initSsoPromptNone(`${window.location.origin}/auth`);
+            return;
+          }
+
           if (autoRedirect && onPublicAuthRoute && !isCallback) {
             console.log('SSO: Auto-redirect enabled — sending user to ICCN login...');
             try {
