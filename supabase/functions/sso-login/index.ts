@@ -81,6 +81,39 @@ async function verifyJwt(
   return payload;
 }
 
+async function exchangeAuthorizationCode(
+  realmUrl: string,
+  clientId: string,
+  code: string,
+  redirectUri: string,
+  codeVerifier?: string | null
+): Promise<string> {
+  const body = new URLSearchParams({
+    grant_type: "authorization_code",
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    code,
+  });
+
+  if (codeVerifier) {
+    body.set("code_verifier", codeVerifier);
+  }
+
+  const tokenResp = await fetch(`${realmUrl}/protocol/openid-connect/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+
+  const tokenData = await tokenResp.json().catch(() => ({}));
+  if (!tokenResp.ok || !tokenData.access_token) {
+    console.error("ICCN code exchange failed:", tokenResp.status, tokenData);
+    throw new Error(tokenData.error_description || tokenData.error || "Failed to exchange SSO code");
+  }
+
+  return tokenData.access_token as string;
+}
+
 async function waitForProfile(
   supabaseAdmin: ReturnType<typeof createClient>,
   userId: string,
@@ -224,10 +257,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { keycloak_token } = await req.json();
-    if (!keycloak_token) {
+    const { keycloak_token, code, redirect_uri, code_verifier } = await req.json();
+    if (!keycloak_token && !code) {
       return new Response(
-        JSON.stringify({ error: "keycloak_token is required" }),
+        JSON.stringify({ error: "keycloak_token or code is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -243,7 +276,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    const payload = await verifyJwt(keycloak_token, realmUrl);
+    const accessToken = keycloak_token || await exchangeAuthorizationCode(
+      realmUrl,
+      clientId,
+      code,
+      redirect_uri,
+      code_verifier ?? null
+    );
+
+    const payload = await verifyJwt(accessToken, realmUrl);
 
     // Validate azp (authorized party) matches our client ID
     if (payload.azp && payload.azp !== clientId) {

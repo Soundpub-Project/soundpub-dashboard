@@ -2,12 +2,14 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, Re
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import {
-  initKeycloak,
   initKeycloakSilent,
   initKeycloakAndLogin,
+  initSsoPromptNone,
   getToken,
   keycloakLogout,
   isSsoCallback,
+  getSsoCallbackParams,
+  consumeStoredPkceState,
   setupTokenRefresh,
   markSsoActive,
   clearSsoActive,
@@ -24,6 +26,7 @@ interface SsoAuthContextType {
 }
 
 const SsoAuthContext = createContext<SsoAuthContextType | undefined>(undefined);
+const SSO_PROMPT_NONE_TRIED_KEY = 'soundpub_iccn_prompt_none_tried';
 
 export function SsoAuthProvider({ children }: { children: ReactNode }) {
   const [ssoLoading, setSsoLoading] = useState(false);
@@ -34,7 +37,7 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const exchangeToken = useCallback(async (keycloakToken: string) => {
+  const exchangeToken = useCallback(async (payload: { keycloakToken?: string; code?: string; redirectUri?: string; codeVerifier?: string | null }) => {
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const functionUrl = `${supabaseUrl}/functions/v1/sso-login`;
@@ -43,7 +46,12 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
       const resp = await fetch(functionUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keycloak_token: keycloakToken }),
+        body: JSON.stringify({
+          ...(payload.keycloakToken ? { keycloak_token: payload.keycloakToken } : {}),
+          ...(payload.code ? { code: payload.code } : {}),
+          ...(payload.redirectUri ? { redirect_uri: payload.redirectUri } : {}),
+          ...(payload.codeVerifier ? { code_verifier: payload.codeVerifier } : {}),
+        }),
       });
 
       const data = await resp.json();
@@ -100,9 +108,36 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
       setSsoError(null);
 
       try {
-        const authenticated = isCallback
-          ? (console.log('SSO: Detected callback params, initializing Keycloak...'), await initKeycloak())
-          : (console.log('SSO: Running silent SSO check on mount...'), await initKeycloakSilent());
+        if (isCallback) {
+          const callback = getSsoCallbackParams();
+          if (callback.error) {
+            if (callback.error === 'login_required') {
+              sessionStorage.setItem(SSO_PROMPT_NONE_TRIED_KEY, 'true');
+              window.history.replaceState({}, '', window.location.pathname);
+              return;
+            }
+            throw new Error(callback.errorDescription || callback.error);
+          }
+
+          const storedPkce = consumeStoredPkceState(callback.state);
+          console.log('SSO: Callback params parsed, exchanging authorization code...', 'hasPkce:', !!storedPkce?.codeVerifier);
+          if (!callback.code) throw new Error('SSO: Authorization code tidak ditemukan');
+
+          const ok = await exchangeToken({
+            code: callback.code,
+            redirectUri: storedPkce?.redirectUri || `${window.location.origin}/auth`,
+            codeVerifier: storedPkce?.codeVerifier ?? null,
+          });
+
+          if (ok && !cancelled) {
+            if (window.location.pathname === '/' || window.location.pathname === '/auth') {
+              navigate('/dashboard', { replace: true });
+            }
+          }
+          return;
+        }
+
+        const authenticated = (console.log('SSO: Running silent SSO check on mount...'), await initKeycloakSilent());
 
         if (cancelled) return;
 
@@ -110,12 +145,12 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
           const token = getToken();
           console.log('SSO: Keycloak authenticated, token exists:', !!token);
           if (token) {
-            const ok = await exchangeToken(token);
+            const ok = await exchangeToken({ keycloakToken: token });
             if (ok) {
               // Set up periodic token refresh; sync Supabase when Keycloak refreshes.
               setupTokenRefresh(async (newToken) => {
                 console.log('SSO: Re-exchanging refreshed Keycloak token...');
-                await exchangeToken(newToken);
+                await exchangeToken({ keycloakToken: newToken });
               });
               if (!cancelled) {
                 // After a successful callback exchange, send the user into the app.
@@ -147,6 +182,15 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
           const autoRedirect = import.meta.env.VITE_SSO_AUTO_REDIRECT === 'true';
           const path = window.location.pathname;
           const onPublicAuthRoute = path === '/' || path === '/auth';
+          const alreadyTriedPromptNone = sessionStorage.getItem(SSO_PROMPT_NONE_TRIED_KEY) === 'true';
+
+          if (onPublicAuthRoute && !alreadyTriedPromptNone) {
+            console.log('SSO: Silent check failed — trying top-level ICCN prompt=none once...');
+            sessionStorage.setItem(SSO_PROMPT_NONE_TRIED_KEY, 'true');
+            await initSsoPromptNone(`${window.location.origin}/auth`);
+            return;
+          }
+
           if (autoRedirect && onPublicAuthRoute && !isCallback) {
             console.log('SSO: Auto-redirect enabled — sending user to ICCN login...');
             try {

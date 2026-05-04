@@ -3,10 +3,25 @@ import Keycloak from 'keycloak-js';
 const SSO_BASE_URL = import.meta.env.VITE_SSO_BASE_URL || 'https://sso.iccn.or.id';
 const SSO_REALM = import.meta.env.VITE_SSO_REALM || 'playground';
 const SSO_CLIENT_ID = import.meta.env.VITE_SSO_CLIENT_ID || 'soundpub';
+const SSO_PKCE_KEY = 'soundpub_iccn_sso_pkce';
 
 let keycloakInstance: Keycloak | null = null;
 let initPromise: Promise<boolean> | null = null;
 let refreshTimer: number | null = null;
+
+interface StoredPkceState {
+  state: string;
+  codeVerifier: string;
+  redirectUri: string;
+  createdAt: number;
+}
+
+export interface SsoCallbackParams {
+  code: string | null;
+  state: string | null;
+  error: string | null;
+  errorDescription: string | null;
+}
 
 // ---------------------------------------------------------------
 // SSO active flag (localStorage hint)
@@ -51,6 +66,45 @@ export function wasSsoActive(): boolean {
 
 function getRedirectUri(): string {
   return `${window.location.origin}/auth`;
+}
+
+function base64UrlEncode(bytes: Uint8Array): string {
+  let binary = '';
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function randomBase64Url(byteLength: number): string {
+  const bytes = new Uint8Array(byteLength);
+  crypto.getRandomValues(bytes);
+  return base64UrlEncode(bytes);
+}
+
+async function sha256Base64Url(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return base64UrlEncode(new Uint8Array(digest));
+}
+
+async function createSsoLoginUrl(options?: { prompt?: 'none'; redirectUri?: string }): Promise<string> {
+  const redirectUri = options?.redirectUri || getRedirectUri();
+  const state = randomBase64Url(16);
+  const codeVerifier = randomBase64Url(32);
+  const codeChallenge = await sha256Base64Url(codeVerifier);
+
+  const stored: StoredPkceState = { state, codeVerifier, redirectUri, createdAt: Date.now() };
+  sessionStorage.setItem(SSO_PKCE_KEY, JSON.stringify(stored));
+
+  const url = new URL(`${SSO_BASE_URL}/realms/${SSO_REALM}/protocol/openid-connect/auth`);
+  url.searchParams.set('client_id', SSO_CLIENT_ID);
+  url.searchParams.set('redirect_uri', redirectUri);
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('scope', 'openid profile email');
+  url.searchParams.set('state', state);
+  url.searchParams.set('code_challenge', codeChallenge);
+  url.searchParams.set('code_challenge_method', 'S256');
+  if (options?.prompt) url.searchParams.set('prompt', options.prompt);
+
+  return url.toString();
 }
 
 export function getKeycloak(): Keycloak {
@@ -168,28 +222,17 @@ export function setupTokenRefresh(onRefresh?: (token: string) => void): void {
  */
 export async function initKeycloakAndLogin(): Promise<void> {
   try {
-    // If a previous silent check already ran (or any prior init), the instance
-    // may be in a broken state where `kc.endpoints` is undefined. Reset to be safe.
-    if (keycloakInstance) {
-      console.log('SSO: Resetting Keycloak instance before login redirect...');
-      resetKeycloak();
-    }
-    const kc = getKeycloak();
-    console.log('SSO: Initializing Keycloak for login redirect...');
-    initPromise = kc.init({
-      checkLoginIframe: false,
-      pkceMethod: 'S256',
-      responseMode: 'fragment',
-      flow: 'standard',
-    });
-    await initPromise;
-    console.log('SSO: Keycloak initialized, redirecting to login...');
-    await kc.login({ redirectUri: getRedirectUri() });
+    console.log('SSO: Redirecting to ICCN authorization endpoint...');
+    window.location.href = await createSsoLoginUrl();
   } catch (error) {
-    console.error('SSO: Keycloak init+login error:', error);
+    console.error('SSO: Login redirect error:', error);
     resetKeycloak();
     throw error;
   }
+}
+
+export async function initSsoPromptNone(redirectUri?: string): Promise<void> {
+  window.location.href = await createSsoLoginUrl({ prompt: 'none', redirectUri });
 }
 
 export function keycloakLogout(): void {
@@ -219,14 +262,43 @@ export function isKeycloakAuthenticated(): boolean {
  * Check if current URL contains Keycloak SSO callback parameters.
  */
 export function isSsoCallback(): boolean {
-  // ICCN/Keycloak with responseMode=fragment returns code+state in the
-  // URL hash (e.g. /auth#code=...&state=...). We support both shapes.
+  const params = getSsoCallbackParams();
+  return !!((params.code || params.error) && params.state);
+}
+
+export function getSsoCallbackParams(): SsoCallbackParams {
   const queryParams = new URLSearchParams(window.location.search);
-  if (queryParams.has('code') && queryParams.has('state')) return true;
+  if (queryParams.has('code') || queryParams.has('error')) {
+    return {
+      code: queryParams.get('code'),
+      state: queryParams.get('state'),
+      error: queryParams.get('error'),
+      errorDescription: queryParams.get('error_description'),
+    };
+  }
 
   const rawHash = window.location.hash || '';
-  if (!rawHash) return false;
+  if (!rawHash) return { code: null, state: null, error: null, errorDescription: null };
   const hash = rawHash.startsWith('#') ? rawHash.slice(1) : rawHash;
   const hashParams = new URLSearchParams(hash);
-  return hashParams.has('code') && hashParams.has('state');
+  return {
+    code: hashParams.get('code'),
+    state: hashParams.get('state'),
+    error: hashParams.get('error'),
+    errorDescription: hashParams.get('error_description'),
+  };
+}
+
+export function consumeStoredPkceState(callbackState: string | null): StoredPkceState | null {
+  try {
+    const raw = sessionStorage.getItem(SSO_PKCE_KEY);
+    if (!raw) return null;
+    const stored = JSON.parse(raw) as StoredPkceState;
+    sessionStorage.removeItem(SSO_PKCE_KEY);
+    const isFresh = Date.now() - stored.createdAt < 10 * 60 * 1000;
+    if (!isFresh || stored.state !== callbackState) return null;
+    return stored;
+  } catch {
+    return null;
+  }
 }
