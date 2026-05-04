@@ -81,6 +81,39 @@ async function verifyJwt(
   return payload;
 }
 
+async function exchangeAuthorizationCode(
+  realmUrl: string,
+  clientId: string,
+  code: string,
+  redirectUri: string,
+  codeVerifier?: string | null
+): Promise<string> {
+  const body = new URLSearchParams({
+    grant_type: "authorization_code",
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    code,
+  });
+
+  if (codeVerifier) {
+    body.set("code_verifier", codeVerifier);
+  }
+
+  const tokenResp = await fetch(`${realmUrl}/protocol/openid-connect/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+
+  const tokenData = await tokenResp.json().catch(() => ({}));
+  if (!tokenResp.ok || !tokenData.access_token) {
+    console.error("ICCN code exchange failed:", tokenResp.status, tokenData);
+    throw new Error(tokenData.error_description || tokenData.error || "Failed to exchange SSO code");
+  }
+
+  return tokenData.access_token as string;
+}
+
 async function waitForProfile(
   supabaseAdmin: ReturnType<typeof createClient>,
   userId: string,
