@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -42,7 +43,9 @@ import {
   Music, 
   ImageIcon,
   AlertTriangle,
-  Beaker
+  Beaker,
+  Lock,
+  UserCog
 } from 'lucide-react';
 
 // Genre list
@@ -114,20 +117,40 @@ export function ArtistReleaseFormDialog({
   onSuccess,
 }: ArtistReleaseFormDialogProps) {
   const { user, profile } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [artistProfile, setArtistProfile] = useState<{ artist_name: string } | null>(null);
+  const [profileChecked, setProfileChecked] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isEditMode = !!release;
+
+  // Fetch artist_profiles when opening
+  useEffect(() => {
+    if (!open || !user) return;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from('artist_profiles')
+        .select('artist_name')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      setArtistProfile(data || null);
+      setProfileChecked(true);
+    })();
+  }, [open, user]);
+
+  const stageName = artistProfile?.artist_name || '';
+  const profileIncomplete = profileChecked && !stageName;
 
   const form = useForm<ReleaseFormValues>({
     resolver: zodResolver(releaseFormSchema),
     defaultValues: {
       title: '',
-      artist_name: profile?.full_name || '',
+      artist_name: '',
       release_type: 'single',
       genre: '',
       release_date: '',
@@ -152,10 +175,10 @@ export function ArtistReleaseFormDialog({
   useEffect(() => {
     if (open && release) {
       loadReleaseData();
-    } else if (open && !release) {
+    } else if (open && !release && stageName) {
       form.reset({
         title: '',
-        artist_name: profile?.full_name || '',
+        artist_name: stageName,
         release_type: 'single',
         genre: '',
         release_date: '',
@@ -173,7 +196,7 @@ export function ArtistReleaseFormDialog({
       setCoverFile(null);
       setCoverPreview(null);
     }
-  }, [open, release, profile]);
+  }, [open, release, stageName]);
 
   const loadReleaseData = async () => {
     if (!release) return;
@@ -596,6 +619,30 @@ export function ArtistReleaseFormDialog({
           </Alert>
         </div>
 
+        {profileIncomplete && !isEditMode ? (
+          <div className="px-6 pb-6">
+            <Alert className="border-destructive/40 bg-destructive/5">
+              <UserCog className="h-4 w-4 text-destructive" />
+              <AlertDescription className="space-y-3">
+                <p className="text-foreground">
+                  <strong>Profile Artis belum lengkap.</strong> Anda harus mengisi nama artis (stage name)
+                  di Profile Artis terlebih dahulu sebelum membuat release.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    onOpenChange(false);
+                    navigate('/artist-profile');
+                  }}
+                >
+                  <UserCog className="h-4 w-4 mr-2" />
+                  Lengkapi Profile Artis
+                </Button>
+              </AlertDescription>
+            </Alert>
+          </div>
+        ) : (
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <ScrollArea className="max-h-[60vh] px-6">
@@ -661,10 +708,21 @@ export function ArtistReleaseFormDialog({
                     name="artist_name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Nama Artist *</FormLabel>
+                        <FormLabel className="flex items-center gap-1">
+                          Nama Artist (Main) *
+                          <Lock className="h-3 w-3 text-muted-foreground" />
+                        </FormLabel>
                         <FormControl>
-                          <Input placeholder="Nama artist" {...field} />
+                          <Input
+                            placeholder="Nama artist"
+                            {...field}
+                            disabled
+                            className="bg-muted/40"
+                          />
                         </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          Diambil dari Profile Artis. Featured artist bisa ditambahkan di bagian artist tambahan.
+                        </p>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -958,6 +1016,7 @@ export function ArtistReleaseFormDialog({
             </div>
           </form>
         </Form>
+        )}
       </DialogContent>
     </Dialog>
   );

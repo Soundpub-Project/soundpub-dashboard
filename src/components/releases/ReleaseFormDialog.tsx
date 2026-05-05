@@ -190,6 +190,7 @@ export function ReleaseFormDialog({
   const [loadingLabels, setLoadingLabels] = useState(false);
   const [labelArtists, setLabelArtists] = useState<Artist[]>([]);
   const [loadingArtists, setLoadingArtists] = useState(false);
+  const [artistStageName, setArtistStageName] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isEditMode = !!release;
@@ -244,6 +245,23 @@ export function ReleaseFormDialog({
       fetchLabelArtists(profile.parent_label_id);
     }
   }, [open, isLabel, isWhitelabel, isArtist, user, profile?.parent_label_id]);
+
+  // Fetch artist stage name from artist_profiles for artist role
+  useEffect(() => {
+    if (!open || !isArtist || !user) return;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from('artist_profiles')
+        .select('artist_name')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      const name = data?.artist_name || profile?.full_name || '';
+      setArtistStageName(name);
+      if (name && !isEditMode) {
+        form.setValue('artist_name', name);
+      }
+    })();
+  }, [open, isArtist, user, profile?.full_name, isEditMode]);
 
   // Fetch artists when label is selected by admin
   const selectedLabelId = form.watch('label_id');
@@ -349,7 +367,9 @@ export function ReleaseFormDialog({
         const defaultLabelId = isArtist && profile?.parent_label_id
           ? profile.parent_label_id
           : (isLabel || isWhitelabel) && user ? user.id : '';
-        const defaultArtistName = isArtist && profile?.full_name ? profile.full_name : '';
+        const defaultArtistName = isArtist
+          ? (artistStageName || profile?.full_name || '')
+          : '';
 
         form.reset({
           upc: '',
@@ -1082,7 +1102,7 @@ export function ReleaseFormDialog({
                         <FormLabel>Nama Artist Utama *</FormLabel>
                   {isArtist ? (
                           <FormControl>
-                            <Input value={profile?.full_name || ''} disabled className="bg-muted" />
+                            <Input value={artistStageName} disabled className="bg-muted" />
                           </FormControl>
                         ) : isLabel || isWhitelabel || (isAdmin && selectedLabelId) ? (
                           loadingArtists ? (
