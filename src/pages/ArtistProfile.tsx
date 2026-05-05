@@ -638,21 +638,79 @@ export default function ArtistProfile() {
               </div>
             ) : (
               canEdit && (
-                <div className="space-y-2">
-                  <Label>URL atau ID Spotify Artist</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={spotifyInput}
-                      onChange={(e) => setSpotifyInput(e.target.value)}
-                      placeholder="https://open.spotify.com/artist/..."
-                    />
-                    <Button onClick={handleSpotifySync} disabled={syncingSpotify || !spotifyInput.trim()}>
-                      {syncingSpotify ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Connect'}
-                    </Button>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Cari Artis di Spotify</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={spotifySearch}
+                        onChange={(e) => setSpotifySearch(e.target.value)}
+                        placeholder="Ketik nama artis (mis. Tulus, Raisa, ...)"
+                        className="pl-9"
+                      />
+                      {searchingSpotify && (
+                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Pilih artis yang sesuai. Pastikan benar — link ini jadi profil resmi Spotify Anda.
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Buka profil artis di Spotify, klik tombol "..." → Share → Copy link to artist.
-                  </p>
+
+                  {spotifyResults && spotifyResults.length === 0 && !searchingSpotify && (
+                    <p className="text-sm text-muted-foreground">Tidak ada hasil. Coba kata kunci lain.</p>
+                  )}
+
+                  {spotifyResults && spotifyResults.length > 0 && (
+                    <div className="space-y-2 max-h-80 overflow-y-auto border border-border/50 rounded-lg p-2">
+                      {spotifyResults.map((a: any) => (
+                        <button
+                          key={a.id}
+                          type="button"
+                          disabled={syncingSpotify}
+                          onClick={() => runSpotifyFetch(a.id)}
+                          className="w-full flex items-center gap-3 p-2 rounded hover:bg-muted/50 transition text-left disabled:opacity-50"
+                        >
+                          {a.image ? (
+                            <img src={a.image} alt={a.name} className="h-12 w-12 rounded-full object-cover flex-shrink-0" />
+                          ) : (
+                            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                              <User className="h-5 w-5 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{a.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {a.followers?.toLocaleString()} followers
+                              {a.genres?.length > 0 && ` · ${a.genres.slice(0, 2).join(', ')}`}
+                            </p>
+                          </div>
+                          {syncingSpotify ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          ) : (
+                            <span className="text-xs text-primary">Connect</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Atau paste URL manual</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={spotifyInput}
+                        onChange={(e) => setSpotifyInput(e.target.value)}
+                        placeholder="https://open.spotify.com/artist/..."
+                      />
+                      <Button onClick={handleSpotifySync} disabled={syncingSpotify || !spotifyInput.trim()} variant="outline">
+                        {syncingSpotify ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Connect'}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               )
             )}
