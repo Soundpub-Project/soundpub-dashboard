@@ -684,10 +684,21 @@ export function ArtistReleaseFormDialog({
                     name="artist_name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Nama Artist *</FormLabel>
+                        <FormLabel className="flex items-center gap-1">
+                          Nama Artist (Main) *
+                          <Lock className="h-3 w-3 text-muted-foreground" />
+                        </FormLabel>
                         <FormControl>
-                          <Input placeholder="Nama artist" {...field} />
+                          <Input
+                            placeholder="Nama artist"
+                            {...field}
+                            disabled
+                            className="bg-muted/40"
+                          />
                         </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          Diambil dari Profile Artis. Featured artist bisa ditambahkan di bagian artist tambahan.
+                        </p>
                         <FormMessage />
                       </FormItem>
                     )}
