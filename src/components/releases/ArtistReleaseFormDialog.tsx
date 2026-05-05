@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -42,7 +43,9 @@ import {
   Music, 
   ImageIcon,
   AlertTriangle,
-  Beaker
+  Beaker,
+  Lock,
+  UserCog
 } from 'lucide-react';
 
 // Genre list
