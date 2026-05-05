@@ -1100,7 +1100,7 @@ export function ReleaseFormDialog({
                         <FormLabel>Nama Artist Utama *</FormLabel>
                   {isArtist ? (
                           <FormControl>
-                            <Input value={profile?.full_name || ''} disabled className="bg-muted" />
+                            <Input value={artistStageName} disabled className="bg-muted" />
                           </FormControl>
                         ) : isLabel || isWhitelabel || (isAdmin && selectedLabelId) ? (
                           loadingArtists ? (
