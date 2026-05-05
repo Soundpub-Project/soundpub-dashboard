@@ -48,6 +48,8 @@ export function AudioClipCutterDialog({
   const bufferRef = useRef<AudioBuffer | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const waveContainerRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef<null | 'start' | 'end'>(null);
 
   // Load + decode audio on open
   useEffect(() => {
@@ -184,6 +186,59 @@ export function AudioClipCutterDialog({
     }
   };
 
+  // Direct-drag handles on the waveform itself
+  const pxToSec = (clientX: number): number => {
+    const el = waveContainerRef.current;
+    if (!el || !duration) return 0;
+    const rect = el.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    return ratio * duration;
+  };
+
+  const beginDrag = (which: 'start' | 'end') => (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    draggingRef.current = which;
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!draggingRef.current) return;
+    const t = pxToSec(e.clientX);
+    if (draggingRef.current === 'start') {
+      handleRangeChange([t, range[1]]);
+    } else {
+      handleRangeChange([range[0], t]);
+    }
+  };
+
+  const endDrag = (e: React.PointerEvent) => {
+    if (!draggingRef.current) return;
+    draggingRef.current = null;
+    try { (e.target as Element).releasePointerCapture?.(e.pointerId); } catch {}
+  };
+
+  // Click on waveform (outside handles) → move playhead
+  const onWaveClick = (e: React.PointerEvent) => {
+    if (draggingRef.current) return;
+    const target = e.target as HTMLElement;
+    if (target.dataset.handle) return;
+    const t = pxToSec(e.clientX);
+    const a = audioRef.current;
+    if (a) {
+      a.currentTime = Math.min(Math.max(t, range[0]), range[1]);
+      setCurrentTime(a.currentTime);
+    }
+  };
+
+  const onHandleKey = (which: 'start' | 'end') => (e: React.KeyboardEvent) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    const delta = (e.shiftKey ? 2 : 0.5) * (e.key === 'ArrowLeft' ? -1 : 1);
+    if (which === 'start') handleRangeChange([range[0] + delta, range[1]]);
+    else handleRangeChange([range[0], range[1] + delta]);
+  };
+
   const clipDuration = range[1] - range[0];
   const valid = clipDuration >= MIN_CLIP && clipDuration <= MAX_CLIP;
 
@@ -240,16 +295,74 @@ export function AudioClipCutterDialog({
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Waveform */}
-            <div className="rounded-lg border bg-muted/30 p-3">
+            {/* Waveform with draggable handles */}
+            <div
+              ref={waveContainerRef}
+              className="relative rounded-lg border bg-muted/30 select-none overflow-hidden"
+              style={{ touchAction: 'none' }}
+              onPointerMove={onPointerMove}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+              onPointerDown={onWaveClick}
+            >
               <canvas
                 ref={canvasRef}
-                className="w-full h-24 block"
-                style={{ width: '100%', height: '96px' }}
+                className="w-full h-32 block pointer-events-none"
+                style={{ width: '100%', height: '128px' }}
               />
+              {duration > 0 && (
+                <>
+                  {/* Selection overlay */}
+                  <div
+                    className="absolute top-0 bottom-0 bg-primary/20 pointer-events-none"
+                    style={{
+                      left: `${(range[0] / duration) * 100}%`,
+                      width: `${((range[1] - range[0]) / duration) * 100}%`,
+                    }}
+                  />
+                  {/* Start handle */}
+                  <div
+                    data-handle="start"
+                    role="slider"
+                    aria-label="Start handle"
+                    aria-valuemin={0}
+                    aria-valuemax={duration}
+                    aria-valuenow={range[0]}
+                    tabIndex={0}
+                    onPointerDown={beginDrag('start')}
+                    onKeyDown={onHandleKey('start')}
+                    className="absolute top-0 bottom-0 w-6 -ml-3 flex items-center justify-center cursor-ew-resize touch-none group z-10"
+                    style={{ left: `${(range[0] / duration) * 100}%` }}
+                  >
+                    <div className="h-full w-1.5 rounded bg-primary shadow-md group-hover:w-2 transition-all" data-handle="start" />
+                    <div className="absolute top-1 px-1.5 py-0.5 rounded bg-primary text-primary-foreground text-[10px] font-mono whitespace-nowrap shadow pointer-events-none">
+                      {formatTime(range[0])}
+                    </div>
+                  </div>
+                  {/* End handle */}
+                  <div
+                    data-handle="end"
+                    role="slider"
+                    aria-label="End handle"
+                    aria-valuemin={0}
+                    aria-valuemax={duration}
+                    aria-valuenow={range[1]}
+                    tabIndex={0}
+                    onPointerDown={beginDrag('end')}
+                    onKeyDown={onHandleKey('end')}
+                    className="absolute top-0 bottom-0 w-6 -ml-3 flex items-center justify-center cursor-ew-resize touch-none group z-10"
+                    style={{ left: `${(range[1] / duration) * 100}%` }}
+                  >
+                    <div className="h-full w-1.5 rounded bg-primary shadow-md group-hover:w-2 transition-all" data-handle="end" />
+                    <div className="absolute top-1 px-1.5 py-0.5 rounded bg-primary text-primary-foreground text-[10px] font-mono whitespace-nowrap shadow pointer-events-none">
+                      {formatTime(range[1])}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
-            {/* Range slider (dual-thumb) */}
+            {/* Range slider (dual-thumb) — fallback / fine adjust */}
             <div className="px-1">
               <SliderPrimitive.Root
                 className="relative flex w-full touch-none select-none items-center"
@@ -266,11 +379,11 @@ export function AudioClipCutterDialog({
                 </SliderPrimitive.Track>
                 <SliderPrimitive.Thumb
                   aria-label="Start"
-                  className="block h-5 w-5 rounded-full border-2 border-primary bg-background ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                  className="block h-7 w-7 rounded-full border-2 border-primary bg-background shadow-md cursor-grab active:cursor-grabbing ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
                 />
                 <SliderPrimitive.Thumb
                   aria-label="End"
-                  className="block h-5 w-5 rounded-full border-2 border-primary bg-background ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                  className="block h-7 w-7 rounded-full border-2 border-primary bg-background shadow-md cursor-grab active:cursor-grabbing ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
                 />
               </SliderPrimitive.Root>
             </div>

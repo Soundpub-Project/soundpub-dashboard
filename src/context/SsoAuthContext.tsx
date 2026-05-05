@@ -197,32 +197,9 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
         } else {
           console.log('SSO: Silent check — no active ICCN session');
           // Clear stale flag — user is not actually logged in at ICCN.
+          // IMPORTANT: do NOT auto-redirect to ICCN login here. User must
+          // explicitly click "Login via SSO" to be sent to the SSO page.
           clearSsoActive();
-
-          // Optional: full-redirect auto login if env enables it AND we're
-          // on a public auth route. Avoids loops by not redirecting if we
-          // just came back from a callback or are already on a callback URL.
-          const autoRedirect = import.meta.env.VITE_SSO_AUTO_REDIRECT === 'true';
-          const path = window.location.pathname;
-          const onPublicAuthRoute = path === '/' || path === '/auth';
-          const alreadyTriedPromptNone = sessionStorage.getItem(SSO_PROMPT_NONE_TRIED_KEY) === 'true';
-
-          if (onPublicAuthRoute && !alreadyTriedPromptNone) {
-            console.log('SSO: Silent check failed — trying top-level ICCN prompt=none once...');
-            sessionStorage.setItem(SSO_PROMPT_NONE_TRIED_KEY, 'true');
-            await initSsoPromptNone(`${window.location.origin}/auth`);
-            return;
-          }
-
-          if (autoRedirect && onPublicAuthRoute && !isCallback) {
-            console.log('SSO: Auto-redirect enabled — sending user to ICCN login...');
-            try {
-              await initKeycloakAndLogin();
-              return;
-            } catch (err) {
-              console.error('SSO: Auto-redirect failed:', err);
-            }
-          }
         }
       } catch (err) {
         console.error('SSO mount handler error:', err);
