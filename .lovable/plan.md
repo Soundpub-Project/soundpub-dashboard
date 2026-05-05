@@ -1,67 +1,173 @@
-## Rencana Perbaikan: SSO Auto-Redirect + UX Audio Clip Cutter
 
-### Bagian 1 — Hilangkan Auto-Redirect ke ICCN SSO
+# Penyempurnaan Profile Artis sebagai Source of Truth
 
-**Masalah:** Saat user membuka `/` atau `/auth`, kode di `SsoAuthContext.tsx` secara otomatis memanggil `initSsoPromptNone(...)` setelah silent check gagal. Ini menyebabkan halaman tiba-tiba redirect penuh ke ICCN SSO meski user belum klik apa-apa.
+## Tujuan
 
-**Perubahan minimal (1 file, tanpa menyentuh logika exchange code yang sudah fix):**
-
-`src/context/SsoAuthContext.tsx`
-- Hapus blok yang memanggil `initSsoPromptNone(...)` secara otomatis pada saat silent check gagal.
-- Tetap pertahankan:
-  - `initKeycloakSilent()` (silent iframe check, tidak melakukan redirect)
-  - `triggerSsoLogin()` (hanya jalan saat user klik tombol Login via SSO)
-  - Seluruh flow callback (`isSsoCallback`, `consumeStoredPkceState`, `exchangeToken`, `SSO_EXCHANGE_KEY` guard) — TIDAK DIUBAH.
-- Hapus juga blok `VITE_SSO_AUTO_REDIRECT` agar tidak ada kemungkinan redirect otomatis.
-
-Dampak: user hanya akan ke ICCN SSO ketika ia secara eksplisit menekan tombol Login via SSO. Silent SSO tetap bekerja (mendeteksi sesi aktif tanpa pindah halaman). Logika fix kemarin tidak tersentuh.
+Membuat `artist_profiles` jadi sumber data utama identitas artis (nama panggung, foto, bio, link Spotify) — terpisah dari `profiles` yang merepresentasikan akun login user. Setiap artis **wajib** isi profile artis sebelum bisa membuat release. Nama artis utama di release auto-fill dari `artist_profiles.artist_name` dan locked, tapi featured artists tetap bisa ditambahkan bebas.
 
 ---
 
-### Bagian 2 — Perbaikan UX Audio Clip Cutter
+## Bagian 1 — Perubahan Database
 
-**Masalah saat ini:**
-- Thumb slider kecil (20px) → susah digeser dengan presisi.
-- Slider hanya muncul di bawah waveform, terpisah dari area waveform sehingga tidak intuitif.
-- Tidak ada handle visual di waveform itu sendiri.
+### A. Tambahkan kolom ke `artist_profiles`
 
-**Perubahan (1 file): `src/components/releases/AudioClipCutterDialog.tsx`**
+```text
+artist_profiles
+├── artist_name         (sudah ada) — nama panggung utama
+├── artist_type         (sudah ada) — solo / band / group
+├── bio                 (sudah ada)
+├── genre               (sudah ada)
+├── social_links        (sudah ada — jsonb)
+├── + legal_name        text       — nama asli (untuk kontrak/royalty)
+├── + profile_image_url text       — foto artis (upload manual)
+├── + country           text
+├── + city              text
+├── + language          text       — bahasa utama lagu
+├── + gender            text       — opsional, untuk DSP
+├── + date_of_birth     date       — opsional
+├── + spotify_artist_id  text
+├── + spotify_artist_url text
+├── + spotify_data       jsonb     — cache hasil fetch (foto, follower, genre, top tracks)
+├── + spotify_synced_at  timestamptz
+├── + verified          boolean    — admin-controlled
+└── + verified_at       timestamptz
+```
 
-1. **Drag langsung di atas waveform**
-   - Bungkus `<canvas>` waveform dengan container `relative` setinggi ~120px.
-   - Tambahkan dua "handle bar" overlay (div absolut) di atas waveform — satu untuk start, satu untuk end. Posisi dihitung dari `(range[i] / duration) * 100%`.
-   - Tambahkan area highlight (overlay semi-transparan primary) di antara dua handle agar terlihat bagian terpilih.
-   - Setiap handle:
-     - Lebar 12px, tinggi penuh waveform, warna primary, cursor `ew-resize`, ada grip kecil di tengah.
-     - Hit area diperluar dengan padding tak terlihat (`::before` atau wrapper 24px).
-     - `onPointerDown` → `setPointerCapture` → handler `pointermove` global mengkonversi `clientX` ke detik berdasarkan `getBoundingClientRect()` container, lalu memanggil `handleRangeChange([newStart, end])` atau `[start, newEnd]`. `pointerup` melepaskan capture.
-   - Klik di area waveform di luar handle akan memindahkan playhead ke posisi tersebut (tanpa memengaruhi range).
+RLS policies sudah ada (artist owner, label, whitelabel, admin) — tetap dipakai, hanya kolom baru otomatis ikut.
 
-2. **Slider bawah tetap ada sebagai fallback, tapi diperbesar**
-   - `SliderPrimitive.Thumb`: ubah `h-5 w-5` → `h-7 w-7`, tambahkan `shadow-md` dan `cursor-grab active:cursor-grabbing`.
-   - Track tetap, agar terlihat ringan.
+### B. Helper function baru
 
-3. **Penanda angka di handle**
-   - Setiap handle menampilkan label kecil di atasnya (`Start 0:45`, `End 1:15`) yang ikut bergerak. Label memakai `text-xs` di chip background.
+```sql
+get_user_artist_name(_user_id uuid) RETURNS text
+-- COALESCE(artist_profiles.artist_name, profiles.full_name)
+-- Dipakai di RPC release/royalty supaya konsisten.
+```
 
-4. **Logika `handleRangeChange` tidak berubah** — tetap clamp 30–60 detik. Pointer handlers di waveform memanggil fungsi yang sama agar konsisten.
+`get_user_full_name()` lama tetap ada (dipakai untuk auth/RLS yang sudah berjalan).
 
-5. **Aksesibilitas**
-   - Handle div di waveform dapat fokus (`tabIndex=0`) dan menerima `ArrowLeft/ArrowRight` untuk geser ±0.5 detik (Shift untuk ±2 detik).
+### C. Storage bucket
 
-6. **Touch friendly**
-   - `touch-action: none` pada container waveform agar drag tidak men-scroll halaman.
-
-**Tidak diubah:** `src/lib/audioClipper.ts`, integrasi di `MediaUploadSection.tsx`, edge functions, schema database.
+Pakai bucket **`avatars`** yang sudah ada (atau buat folder `artist-photos/`). Tidak perlu bucket baru.
 
 ---
 
-### File yang akan disentuh
-1. `src/context/SsoAuthContext.tsx` — hapus auto prompt=none + auto-redirect.
-2. `src/components/releases/AudioClipCutterDialog.tsx` — handle drag langsung di waveform + slider lebih besar.
+## Bagian 2 — Halaman "Profile Artis" (UI)
 
-### Yang TIDAK akan disentuh (sesuai pesan user)
-- `src/lib/keycloak.ts` (tidak ada perubahan logic)
-- Edge function `sso-login`
-- Logika exchange code, PKCE, `SSO_EXCHANGE_KEY` guard
-- `src/lib/audioClipper.ts`
+**Lokasi:** `src/pages/ArtistProfile.tsx` (sudah ada — disempurnakan).
+
+**Section yang ditambahkan:**
+
+1. **Identitas Artis**
+   - Stage Name (artist_name) *required*
+   - Legal Name
+   - Artist Type (solo/band/group)
+   - Genre, Language, Country, City
+   - Bio (textarea)
+
+2. **Foto Artis** — upload manual ke storage `avatars/artist-photos/{user_id}.jpg`. Tampilkan preview circle.
+
+3. **Social Media** — Instagram, YouTube, TikTok, Twitter (jsonb `social_links`).
+
+4. **Spotify Integration** (section khusus):
+   - Input field: paste URL Spotify Artist (contoh `https://open.spotify.com/artist/xxxx`)
+   - Tombol **"Connect & Sync"** → panggil edge function `spotify-fetch-artist`
+   - Setelah sukses, tampilkan card preview: foto Spotify, follower count, genres, top 5 tracks, link "Open in Spotify"
+   - Tombol **"Refresh Data"** untuk re-fetch
+   - Tombol **"Disconnect"** untuk hapus
+
+5. **Status**
+   - Badge "Verified" kalau `verified=true` (admin yang set)
+   - Badge "Profile Lengkap" kalau semua field wajib terisi
+
+---
+
+## Bagian 3 — Spotify Integration
+
+### Edge function baru: `spotify-fetch-artist`
+
+```text
+Input:  { artist_url_or_id: string }
+Output: { id, name, images, followers, genres, popularity, top_tracks }
+```
+
+**Flow:**
+1. Parse `artist_id` dari URL/input.
+2. Get OAuth token: POST `accounts.spotify.com/api/token` dengan Client Credentials (Basic auth pakai `SPOTIFY_CLIENT_ID:SPOTIFY_CLIENT_SECRET`). Cache token (1 jam).
+3. GET `api.spotify.com/v1/artists/{id}` + GET `/v1/artists/{id}/top-tracks?market=ID`.
+4. Return data → frontend save ke `artist_profiles.spotify_data` + `spotify_artist_id` + `spotify_synced_at`.
+
+### Secrets yang perlu ditambahkan
+- `SPOTIFY_CLIENT_ID`
+- `SPOTIFY_CLIENT_SECRET`
+
+(Akan di-request via `add_secret` di awal implementasi. User daftar gratis di developer.spotify.com → Create App.)
+
+---
+
+## Bagian 4 — Enforcement di Release Form
+
+Lokasi: `src/components/releases/ArtistReleaseFormDialog.tsx` & `ReleaseFormDialog.tsx`.
+
+**Logic baru:**
+
+1. Ketika artis buka form release:
+   - Cek `artist_profiles` untuk user ini (sudah ada `artist_profile_completed` flag di profiles).
+   - Kalau **belum** lengkap → blokir form, munculkan dialog: "Lengkapi Profile Artis dulu" → tombol redirect ke `/artist-profile`.
+
+2. Kalau sudah lengkap:
+   - Field "Artist Name" (Main Artist) auto-fill dari `artist_profiles.artist_name` dan **disabled** (read-only) — ada tooltip "Diambil dari Profile Artis. Edit di halaman Profile Artis".
+   - **Featured Artists** tetap bisa ditambahkan manual via `ArtistSelector` (free input) — tidak diblokir.
+
+3. Saat submit:
+   - `artist_name` di `releases` & `tracks` pakai value dari `artist_profiles.artist_name`.
+   - `artist_user_id` tetap = user.id.
+
+### Untuk role Label/Whitelabel/Admin
+- Tidak terdampak — mereka tetap bisa input nama artis bebas (karena mereka mungkin bikin release untuk artis yang belum punya akun di sistem).
+- TAPI: kalau yang dipilih adalah artis terdaftar (dari dropdown `labelArtists`) yang punya `artist_profiles`, prefer pakai `artist_profiles.artist_name`.
+
+---
+
+## Bagian 5 — Role & Permission Map
+
+| Role | View Profile | Edit Own | Edit Others | Set Verified |
+|---|---|---|---|---|
+| artist | ✓ (own) | ✓ | ✗ | ✗ |
+| label | ✓ (artisnya) | ✗ | ✓ (artis di bawahnya) | ✗ |
+| whitelabel | ✓ (artisnya) | ✗ | ✓ (artis di bawahnya) | ✗ |
+| admin / superadmin | ✓ (semua) | ✓ | ✓ (semua) | ✓ |
+| copyright | — | — | — | — |
+
+RLS `artist_profiles` sudah cover ini, tinggal verifikasi.
+
+---
+
+## File yang akan dibuat / diubah
+
+**Baru:**
+- `supabase/functions/spotify-fetch-artist/index.ts`
+- `src/components/artist-profile/SpotifyConnectCard.tsx`
+- `src/components/artist-profile/ArtistPhotoUpload.tsx`
+- Migration: tambah kolom + helper function
+
+**Diubah:**
+- `src/pages/ArtistProfile.tsx` — section baru lengkap
+- `src/components/releases/ArtistReleaseFormDialog.tsx` — guard + lock main artist name
+- `src/components/releases/ReleaseFormDialog.tsx` — guard + lock untuk role artist
+- `src/hooks/useAuth.tsx` — tambah `artistProfile` state + `refreshArtistProfile()`
+- `src/components/onboarding/ArtistOnboardingDialog.tsx` — sinkron field baru (opsional)
+
+**Tidak diubah:**
+- Storage bucket existing (pakai `avatars`)
+- RPC royalty (tetap pakai `get_user_full_name` untuk konsistensi data lama)
+- Auth/SSO logic (sudah fix, tidak disentuh)
+- Audio clip cutter (sudah selesai)
+
+---
+
+## Catatan Penting
+
+- **Backward compatibility:** Release lama tetap pakai nama lama. Hanya release baru yang pakai `artist_profiles.artist_name`.
+- **Migrasi data:** Untuk artist yang sudah ada tapi belum isi `artist_profiles`, sistem auto-create row dengan `artist_name = profiles.full_name` saat pertama buka halaman Profile Artis (bisa diedit setelahnya).
+- **Spotify rate limit:** Client Credentials token cached server-side. Sync manual (button-triggered), bukan auto-sync di setiap page load.
+- **Featured artists:** Tetap free-input, tidak dipaksa harus punya akun di sistem.
