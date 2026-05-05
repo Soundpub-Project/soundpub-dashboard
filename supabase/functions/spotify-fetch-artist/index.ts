@@ -72,25 +72,49 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } },
     );
     const token = authHeader.replace("Bearer ", "");
-    const { data: claims, error: claimsErr } = await supabase.auth.getClaims(
-      token,
-    );
-    if (claimsErr || !claims?.claims) {
+    const { data: { user }, error: userErr } = await supabase.auth.getUser(token);
+    if (userErr || !user) {
       return json({ error: "Unauthorized" }, 200);
     }
 
     const body = await req.json().catch(() => ({}));
+    const action = String(body?.action ?? (body?.q ? "search" : "fetch"));
+    const accessToken = await getSpotifyToken();
+    const headers = { Authorization: `Bearer ${accessToken}` };
+
+    // ---- SEARCH action ----
+    if (action === "search") {
+      const q = String(body?.q ?? "").trim();
+      if (q.length < 2) {
+        return json({ error: "Minimal 2 karakter untuk search" }, 200);
+      }
+      const sRes = await fetch(
+        `https://api.spotify.com/v1/search?type=artist&limit=8&market=ID&q=${encodeURIComponent(q)}`,
+        { headers },
+      );
+      if (!sRes.ok) {
+        const txt = await sRes.text();
+        return json({ error: `Spotify search error (${sRes.status}): ${txt.slice(0, 200)}` }, 200);
+      }
+      const sData = await sRes.json();
+      const results = (sData.artists?.items ?? []).map((a: any) => ({
+        id: a.id,
+        name: a.name,
+        url: a.external_urls?.spotify,
+        image: a.images?.[0]?.url ?? null,
+        followers: a.followers?.total ?? 0,
+        genres: a.genres ?? [],
+        popularity: a.popularity ?? 0,
+      }));
+      return json({ data: results }, 200);
+    }
+
+    // ---- FETCH action (default) ----
     const input = String(body?.artist_url_or_id ?? "").trim();
     const artistId = parseArtistId(input);
     if (!artistId) {
-      return json(
-        { error: "URL atau ID Spotify Artist tidak valid" },
-        200,
-      );
+      return json({ error: "URL atau ID Spotify Artist tidak valid" }, 200);
     }
-
-    const accessToken = await getSpotifyToken();
-    const headers = { Authorization: `Bearer ${accessToken}` };
 
     const [artistRes, topRes] = await Promise.all([
       fetch(`https://api.spotify.com/v1/artists/${artistId}`, { headers }),
