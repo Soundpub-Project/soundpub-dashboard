@@ -619,6 +619,30 @@ export function ArtistReleaseFormDialog({
           </Alert>
         </div>
 
+        {profileIncomplete && !isEditMode ? (
+          <div className="px-6 pb-6">
+            <Alert className="border-destructive/40 bg-destructive/5">
+              <UserCog className="h-4 w-4 text-destructive" />
+              <AlertDescription className="space-y-3">
+                <p className="text-foreground">
+                  <strong>Profile Artis belum lengkap.</strong> Anda harus mengisi nama artis (stage name)
+                  di Profile Artis terlebih dahulu sebelum membuat release.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    onOpenChange(false);
+                    navigate('/artist-profile');
+                  }}
+                >
+                  <UserCog className="h-4 w-4 mr-2" />
+                  Lengkapi Profile Artis
+                </Button>
+              </AlertDescription>
+            </Alert>
+          </div>
+        ) : (
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <ScrollArea className="max-h-[60vh] px-6">
