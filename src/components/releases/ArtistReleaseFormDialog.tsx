@@ -1016,6 +1016,7 @@ export function ArtistReleaseFormDialog({
             </div>
           </form>
         </Form>
+        )}
       </DialogContent>
     </Dialog>
   );
