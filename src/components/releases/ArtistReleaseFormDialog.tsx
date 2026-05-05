@@ -117,14 +117,34 @@ export function ArtistReleaseFormDialog({
   onSuccess,
 }: ArtistReleaseFormDialogProps) {
   const { user, profile } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [artistProfile, setArtistProfile] = useState<{ artist_name: string } | null>(null);
+  const [profileChecked, setProfileChecked] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isEditMode = !!release;
+
+  // Fetch artist_profiles when opening
+  useEffect(() => {
+    if (!open || !user) return;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from('artist_profiles')
+        .select('artist_name')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      setArtistProfile(data || null);
+      setProfileChecked(true);
+    })();
+  }, [open, user]);
+
+  const stageName = artistProfile?.artist_name || '';
+  const profileIncomplete = profileChecked && !stageName;
 
   const form = useForm<ReleaseFormValues>({
     resolver: zodResolver(releaseFormSchema),
