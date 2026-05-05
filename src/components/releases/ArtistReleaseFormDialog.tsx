@@ -150,7 +150,7 @@ export function ArtistReleaseFormDialog({
     resolver: zodResolver(releaseFormSchema),
     defaultValues: {
       title: '',
-      artist_name: profile?.full_name || '',
+      artist_name: '',
       release_type: 'single',
       genre: '',
       release_date: '',
@@ -175,10 +175,10 @@ export function ArtistReleaseFormDialog({
   useEffect(() => {
     if (open && release) {
       loadReleaseData();
-    } else if (open && !release) {
+    } else if (open && !release && stageName) {
       form.reset({
         title: '',
-        artist_name: profile?.full_name || '',
+        artist_name: stageName,
         release_type: 'single',
         genre: '',
         release_date: '',
@@ -196,7 +196,7 @@ export function ArtistReleaseFormDialog({
       setCoverFile(null);
       setCoverPreview(null);
     }
-  }, [open, release, profile]);
+  }, [open, release, stageName]);
 
   const loadReleaseData = async () => {
     if (!release) return;
