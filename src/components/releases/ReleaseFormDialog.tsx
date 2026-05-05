@@ -367,7 +367,9 @@ export function ReleaseFormDialog({
         const defaultLabelId = isArtist && profile?.parent_label_id
           ? profile.parent_label_id
           : (isLabel || isWhitelabel) && user ? user.id : '';
-        const defaultArtistName = isArtist && profile?.full_name ? profile.full_name : '';
+        const defaultArtistName = isArtist
+          ? (artistStageName || profile?.full_name || '')
+          : '';
 
         form.reset({
           upc: '',
