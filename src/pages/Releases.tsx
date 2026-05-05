@@ -264,8 +264,8 @@ export default function Releases() {
   };
 
   const handleAddRelease = () => {
-    // SSO users must complete artist profile first
-    if (isSsoUser && !isArtistProfileCompleted) {
+    // All artists must complete artist profile first
+    if (isArtist && !isArtistProfileCompleted) {
       setOnboardingOpen(true);
       return;
     }
