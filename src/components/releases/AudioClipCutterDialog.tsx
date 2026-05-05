@@ -298,7 +298,7 @@ export function AudioClipCutterDialog({
             {/* Waveform with draggable handles */}
             <div
               ref={waveContainerRef}
-              className="relative rounded-lg border bg-muted/30 p-3 select-none"
+              className="relative rounded-lg border bg-muted/30 select-none overflow-hidden"
               style={{ touchAction: 'none' }}
               onPointerMove={onPointerMove}
               onPointerUp={endDrag}
@@ -307,17 +307,17 @@ export function AudioClipCutterDialog({
             >
               <canvas
                 ref={canvasRef}
-                className="w-full h-28 block pointer-events-none"
-                style={{ width: '100%', height: '112px' }}
+                className="w-full h-32 block pointer-events-none"
+                style={{ width: '100%', height: '128px' }}
               />
               {duration > 0 && (
                 <>
                   {/* Selection overlay */}
                   <div
-                    className="absolute top-3 bottom-3 bg-primary/15 pointer-events-none"
+                    className="absolute top-0 bottom-0 bg-primary/20 pointer-events-none"
                     style={{
-                      left: `calc(0.75rem + ${(range[0] / duration) * 100}% * (100% - 1.5rem) / 100%)`,
-                      width: `calc(${((range[1] - range[0]) / duration) * 100}% * (100% - 1.5rem) / 100%)`,
+                      left: `${(range[0] / duration) * 100}%`,
+                      width: `${((range[1] - range[0]) / duration) * 100}%`,
                     }}
                   />
                   {/* Start handle */}
@@ -331,11 +331,11 @@ export function AudioClipCutterDialog({
                     tabIndex={0}
                     onPointerDown={beginDrag('start')}
                     onKeyDown={onHandleKey('start')}
-                    className="absolute top-1 bottom-1 w-6 -ml-3 flex items-center justify-center cursor-ew-resize touch-none group"
-                    style={{ left: `calc(0.75rem + (${(range[0] / duration) * 100}% * (100% - 1.5rem) / 100%))` }}
+                    className="absolute top-0 bottom-0 w-6 -ml-3 flex items-center justify-center cursor-ew-resize touch-none group z-10"
+                    style={{ left: `${(range[0] / duration) * 100}%` }}
                   >
                     <div className="h-full w-1.5 rounded bg-primary shadow-md group-hover:w-2 transition-all" data-handle="start" />
-                    <div className="absolute -top-6 px-1.5 py-0.5 rounded bg-primary text-primary-foreground text-[10px] font-mono whitespace-nowrap shadow" data-handle="start">
+                    <div className="absolute top-1 px-1.5 py-0.5 rounded bg-primary text-primary-foreground text-[10px] font-mono whitespace-nowrap shadow pointer-events-none">
                       {formatTime(range[0])}
                     </div>
                   </div>
@@ -350,11 +350,11 @@ export function AudioClipCutterDialog({
                     tabIndex={0}
                     onPointerDown={beginDrag('end')}
                     onKeyDown={onHandleKey('end')}
-                    className="absolute top-1 bottom-1 w-6 -ml-3 flex items-center justify-center cursor-ew-resize touch-none group"
-                    style={{ left: `calc(0.75rem + (${(range[1] / duration) * 100}% * (100% - 1.5rem) / 100%))` }}
+                    className="absolute top-0 bottom-0 w-6 -ml-3 flex items-center justify-center cursor-ew-resize touch-none group z-10"
+                    style={{ left: `${(range[1] / duration) * 100}%` }}
                   >
                     <div className="h-full w-1.5 rounded bg-primary shadow-md group-hover:w-2 transition-all" data-handle="end" />
-                    <div className="absolute -top-6 px-1.5 py-0.5 rounded bg-primary text-primary-foreground text-[10px] font-mono whitespace-nowrap shadow" data-handle="end">
+                    <div className="absolute top-1 px-1.5 py-0.5 rounded bg-primary text-primary-foreground text-[10px] font-mono whitespace-nowrap shadow pointer-events-none">
                       {formatTime(range[1])}
                     </div>
                   </div>
