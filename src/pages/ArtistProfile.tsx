@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
-import { Loader2, Music, User, Save, Upload, BadgeCheck, ExternalLink, RefreshCw, Unlink } from 'lucide-react';
+import { Loader2, Music, User, Save, Upload, BadgeCheck, ExternalLink, RefreshCw, Unlink, Search } from 'lucide-react';
 
 interface ArtistProfileData {
   id: string;
@@ -49,6 +49,9 @@ export default function ArtistProfile() {
   const [artistProfile, setArtistProfile] = useState<ArtistProfileData | null>(null);
   const [ownerName, setOwnerName] = useState('');
   const [spotifyInput, setSpotifyInput] = useState('');
+  const [spotifySearch, setSpotifySearch] = useState('');
+  const [spotifyResults, setSpotifyResults] = useState<any[] | null>(null);
+  const [searchingSpotify, setSearchingSpotify] = useState(false);
 
   const [formData, setFormData] = useState({
     artist_name: '',
@@ -139,7 +142,8 @@ export default function ArtistProfile() {
     setUploadingPhoto(true);
     try {
       const ext = file.name.split('.').pop() || 'jpg';
-      const path = `artist-photos/${targetUserId}-${Date.now()}.${ext}`;
+      // RLS storage policy requires first folder = auth.uid()
+      const path = `${targetUserId}/artist-photo-${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, {
         upsert: true,
         contentType: file.type,
@@ -148,14 +152,23 @@ export default function ArtistProfile() {
       const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
       const url = pub.publicUrl;
 
+      // Upsert (auto-create row if missing) so photo upload works before saving form
       const { error } = await (supabase as any)
         .from('artist_profiles')
-        .update({ profile_image_url: url })
-        .eq('user_id', targetUserId);
+        .upsert(
+          {
+            user_id: targetUserId,
+            artist_name: artistProfile?.artist_name || formData.artist_name || profile?.full_name || 'Artist',
+            artist_type: artistProfile?.artist_type || formData.artist_type || 'solo',
+            profile_image_url: url,
+          },
+          { onConflict: 'user_id' },
+        );
       if (error) throw error;
 
       setArtistProfile(prev => prev ? { ...prev, profile_image_url: url } : prev);
       toast.success('Foto artis berhasil diupload');
+      fetchArtistProfile();
     } catch (err: any) {
       toast.error(err.message || 'Gagal upload foto');
     } finally {
@@ -169,10 +182,14 @@ export default function ArtistProfile() {
       toast.error('Masukkan URL atau ID Spotify Artist');
       return;
     }
+    await runSpotifyFetch(input);
+  };
+
+  const runSpotifyFetch = async (input: string) => {
     setSyncingSpotify(true);
     try {
       const { data, error } = await supabase.functions.invoke('spotify-fetch-artist', {
-        body: { artist_url_or_id: input },
+        body: { action: 'fetch', artist_url_or_id: input },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -180,16 +197,24 @@ export default function ArtistProfile() {
 
       const { error: updErr } = await (supabase as any)
         .from('artist_profiles')
-        .update({
-          spotify_artist_id: sp.id,
-          spotify_artist_url: sp.url,
-          spotify_data: sp,
-          spotify_synced_at: new Date().toISOString(),
-        })
-        .eq('user_id', targetUserId);
+        .upsert(
+          {
+            user_id: targetUserId,
+            artist_name: artistProfile?.artist_name || formData.artist_name || sp.name,
+            artist_type: artistProfile?.artist_type || formData.artist_type || 'solo',
+            spotify_artist_id: sp.id,
+            spotify_artist_url: sp.url,
+            spotify_data: sp,
+            spotify_synced_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' },
+        );
       if (updErr) throw updErr;
 
       toast.success(`Berhasil sync data Spotify: ${sp.name}`);
+      setSpotifyResults(null);
+      setSpotifySearch('');
+      setSpotifyInput('');
       fetchArtistProfile();
     } catch (err: any) {
       toast.error(err.message || 'Gagal sync Spotify');
@@ -197,6 +222,30 @@ export default function ArtistProfile() {
       setSyncingSpotify(false);
     }
   };
+
+  // Debounced live search
+  useEffect(() => {
+    if (!spotifySearch.trim() || spotifySearch.trim().length < 2) {
+      setSpotifyResults(null);
+      return;
+    }
+    const t = setTimeout(async () => {
+      setSearchingSpotify(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('spotify-fetch-artist', {
+          body: { action: 'search', q: spotifySearch.trim() },
+        });
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+        setSpotifyResults(data.data || []);
+      } catch (err: any) {
+        toast.error(err.message || 'Gagal search Spotify');
+      } finally {
+        setSearchingSpotify(false);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [spotifySearch]);
 
   const handleSpotifyDisconnect = async () => {
     if (!targetUserId) return;
