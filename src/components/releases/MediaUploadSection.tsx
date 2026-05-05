@@ -13,8 +13,10 @@ import {
   Loader2,
   Play,
   Pause,
-  Clock
+  Clock,
+  Scissors
 } from 'lucide-react';
+import { AudioClipCutterDialog } from './AudioClipCutterDialog';
 
 interface MediaUploadSectionProps {
   trackIndex: number;
@@ -71,6 +73,7 @@ export function MediaUploadSection({
   const [clipDuration, setClipDuration] = useState<number | null>(null);
   const [clipError, setClipError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<MediaType | null>(null);
+  const [cutterOpen, setCutterOpen] = useState(false);
   
   const audioInputRef = useRef<HTMLInputElement>(null);
   const clipInputRef = useRef<HTMLInputElement>(null);
@@ -348,6 +351,7 @@ export function MediaUploadSection({
     const isUploading = uploading === type;
     const hasFile = !!currentUrl;
     const isDraggedOver = dragOver === type;
+    const canCutFromAudio = type === 'clip' && !!audioUrl && !disabled && !isUploading;
 
     return (
       <div className="space-y-2">
@@ -355,6 +359,19 @@ export function MediaUploadSection({
           {ICON_MAP[type]}
           <span>{LABEL_MAP[type]}</span>
         </div>
+
+        {canCutFromAudio && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={() => setCutterOpen(true)}
+          >
+            <Scissors className="h-4 w-4 mr-1" />
+            {hasFile ? 'Potong Ulang dari Full Audio' : 'Potong dari Full Audio'}
+          </Button>
+        )}
         
         <div className="flex items-center gap-2">
           {hasFile ? (
@@ -494,6 +511,22 @@ export function MediaUploadSection({
         {renderMediaUpload('audio', audioUrl, audioInputRef)}
         {renderMediaUpload('clip', clipUrl, clipInputRef)}
       </div>
+
+      {audioUrl && (
+        <AudioClipCutterDialog
+          open={cutterOpen}
+          onOpenChange={setCutterOpen}
+          audioUrl={audioUrl}
+          onClipReady={async (blob) => {
+            const file = new File(
+              [blob],
+              `clip-${trackIndex}-${Date.now()}.wav`,
+              { type: 'audio/wav' },
+            );
+            await handleUpload(file, 'clip');
+          }}
+        />
+      )}
     </div>
   );
 }
