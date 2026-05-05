@@ -43,34 +43,73 @@ export type Database = {
           artist_name: string
           artist_type: string
           bio: string | null
+          city: string | null
+          country: string | null
           created_at: string | null
+          date_of_birth: string | null
+          gender: string | null
           genre: string | null
           id: string
+          language: string | null
+          legal_name: string | null
+          profile_image_url: string | null
           social_links: Json | null
+          spotify_artist_id: string | null
+          spotify_artist_url: string | null
+          spotify_data: Json | null
+          spotify_synced_at: string | null
           updated_at: string | null
           user_id: string
+          verified: boolean
+          verified_at: string | null
         }
         Insert: {
           artist_name: string
           artist_type?: string
           bio?: string | null
+          city?: string | null
+          country?: string | null
           created_at?: string | null
+          date_of_birth?: string | null
+          gender?: string | null
           genre?: string | null
           id?: string
+          language?: string | null
+          legal_name?: string | null
+          profile_image_url?: string | null
           social_links?: Json | null
+          spotify_artist_id?: string | null
+          spotify_artist_url?: string | null
+          spotify_data?: Json | null
+          spotify_synced_at?: string | null
           updated_at?: string | null
           user_id: string
+          verified?: boolean
+          verified_at?: string | null
         }
         Update: {
           artist_name?: string
           artist_type?: string
           bio?: string | null
+          city?: string | null
+          country?: string | null
           created_at?: string | null
+          date_of_birth?: string | null
+          gender?: string | null
           genre?: string | null
           id?: string
+          language?: string | null
+          legal_name?: string | null
+          profile_image_url?: string | null
           social_links?: Json | null
+          spotify_artist_id?: string | null
+          spotify_artist_url?: string | null
+          spotify_data?: Json | null
+          spotify_synced_at?: string | null
           updated_at?: string | null
           user_id?: string
+          verified?: boolean
+          verified_at?: string | null
         }
         Relationships: []
       }
@@ -840,6 +879,7 @@ export type Database = {
           title: string
         }[]
       }
+      get_user_artist_name: { Args: { _user_id: string }; Returns: string }
       get_user_full_name: { Args: { _user_id: string }; Returns: string }
       get_user_parent_label_id: { Args: { _user_id: string }; Returns: string }
       get_user_release_label_ids: {
