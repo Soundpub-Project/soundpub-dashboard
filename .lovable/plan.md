@@ -1,173 +1,113 @@
 
-# Penyempurnaan Profile Artis sebagai Source of Truth
+# Perbaikan Bug Profil Artis + Pencarian Spotify Langsung
 
-## Tujuan
-
-Membuat `artist_profiles` jadi sumber data utama identitas artis (nama panggung, foto, bio, link Spotify) — terpisah dari `profiles` yang merepresentasikan akun login user. Setiap artis **wajib** isi profile artis sebelum bisa membuat release. Nama artis utama di release auto-fill dari `artist_profiles.artist_name` dan locked, tapi featured artists tetap bisa ditambahkan bebas.
+Tiga masalah yang akan diperbaiki sekaligus, semua sudah berhasil aku reproduksi penyebabnya dari kode + RLS.
 
 ---
 
-## Bagian 1 — Perubahan Database
+## Bug 1 — `supabase.auth.getClaims is not a function`
 
-### A. Tambahkan kolom ke `artist_profiles`
+**Penyebab:** Edge function `spotify-fetch-artist` memakai `supabase.auth.getClaims(token)`. Method ini **tidak ada** di `@supabase/supabase-js@2.49.1` (versi yang dikunci untuk semua edge function di project ini). Jadi setiap kali dipanggil langsung lempar exception → toast "Gagal sync Spotify" muncul.
+
+**Fix:** Ganti validasi JWT pakai `supabase.auth.getUser(token)` yang memang ada di v2.49.1. Pola ini sudah dipakai di edge function lain di project ini (mis. `set-artist-password`, `delete-royalty-upload`).
 
 ```text
-artist_profiles
-├── artist_name         (sudah ada) — nama panggung utama
-├── artist_type         (sudah ada) — solo / band / group
-├── bio                 (sudah ada)
-├── genre               (sudah ada)
-├── social_links        (sudah ada — jsonb)
-├── + legal_name        text       — nama asli (untuk kontrak/royalty)
-├── + profile_image_url text       — foto artis (upload manual)
-├── + country           text
-├── + city              text
-├── + language          text       — bahasa utama lagu
-├── + gender            text       — opsional, untuk DSP
-├── + date_of_birth     date       — opsional
-├── + spotify_artist_id  text
-├── + spotify_artist_url text
-├── + spotify_data       jsonb     — cache hasil fetch (foto, follower, genre, top tracks)
-├── + spotify_synced_at  timestamptz
-├── + verified          boolean    — admin-controlled
-└── + verified_at       timestamptz
+File: supabase/functions/spotify-fetch-artist/index.ts
+- const { data: claims, error: claimsErr } = await supabase.auth.getClaims(token);
+- if (claimsErr || !claims?.claims) { return json({ error: "Unauthorized" }, 200); }
++ const { data: { user }, error: userErr } = await supabase.auth.getUser(token);
++ if (userErr || !user) { return json({ error: "Unauthorized" }, 200); }
 ```
 
-RLS policies sudah ada (artist owner, label, whitelabel, admin) — tetap dipakai, hanya kolom baru otomatis ikut.
+---
 
-### B. Helper function baru
+## Bug 2 — `new row violates row-level security policy` saat upload foto
+
+**Penyebab:** RLS policy storage bucket `avatars` mewajibkan folder pertama = `auth.uid()`:
 
 ```sql
-get_user_artist_name(_user_id uuid) RETURNS text
--- COALESCE(artist_profiles.artist_name, profiles.full_name)
--- Dipakai di RPC release/royalty supaya konsisten.
+((storage.foldername(name))[1] = (auth.uid())::text)
 ```
 
-`get_user_full_name()` lama tetap ada (dipakai untuk auth/RLS yang sudah berjalan).
+Sedangkan kode meng-upload ke path `artist-photos/{userId}-{timestamp}.ext` — folder pertamanya jadi `artist-photos`, **bukan** UUID user. Jadi insert ke `storage.objects` ditolak.
 
-### C. Storage bucket
-
-Pakai bucket **`avatars`** yang sudah ada (atau buat folder `artist-photos/`). Tidak perlu bucket baru.
-
----
-
-## Bagian 2 — Halaman "Profile Artis" (UI)
-
-**Lokasi:** `src/pages/ArtistProfile.tsx` (sudah ada — disempurnakan).
-
-**Section yang ditambahkan:**
-
-1. **Identitas Artis**
-   - Stage Name (artist_name) *required*
-   - Legal Name
-   - Artist Type (solo/band/group)
-   - Genre, Language, Country, City
-   - Bio (textarea)
-
-2. **Foto Artis** — upload manual ke storage `avatars/artist-photos/{user_id}.jpg`. Tampilkan preview circle.
-
-3. **Social Media** — Instagram, YouTube, TikTok, Twitter (jsonb `social_links`).
-
-4. **Spotify Integration** (section khusus):
-   - Input field: paste URL Spotify Artist (contoh `https://open.spotify.com/artist/xxxx`)
-   - Tombol **"Connect & Sync"** → panggil edge function `spotify-fetch-artist`
-   - Setelah sukses, tampilkan card preview: foto Spotify, follower count, genres, top 5 tracks, link "Open in Spotify"
-   - Tombol **"Refresh Data"** untuk re-fetch
-   - Tombol **"Disconnect"** untuk hapus
-
-5. **Status**
-   - Badge "Verified" kalau `verified=true` (admin yang set)
-   - Badge "Profile Lengkap" kalau semua field wajib terisi
-
----
-
-## Bagian 3 — Spotify Integration
-
-### Edge function baru: `spotify-fetch-artist`
+**Fix:** Balik strukturnya jadi `{userId}/artist-photo-{timestamp}.ext`. UUID user jadi folder pertama → policy lolos. Tidak perlu ubah RLS sama sekali (lebih aman).
 
 ```text
-Input:  { artist_url_or_id: string }
-Output: { id, name, images, followers, genres, popularity, top_tracks }
+File: src/pages/ArtistProfile.tsx (handlePhotoUpload)
+- const path = `artist-photos/${targetUserId}-${Date.now()}.${ext}`;
++ const path = `${targetUserId}/artist-photo-${Date.now()}.${ext}`;
 ```
 
-**Flow:**
-1. Parse `artist_id` dari URL/input.
-2. Get OAuth token: POST `accounts.spotify.com/api/token` dengan Client Credentials (Basic auth pakai `SPOTIFY_CLIENT_ID:SPOTIFY_CLIENT_SECRET`). Cache token (1 jam).
-3. GET `api.spotify.com/v1/artists/{id}` + GET `/v1/artists/{id}/top-tracks?market=ID`.
-4. Return data → frontend save ke `artist_profiles.spotify_data` + `spotify_artist_id` + `spotify_synced_at`.
-
-### Secrets yang perlu ditambahkan
-- `SPOTIFY_CLIENT_ID`
-- `SPOTIFY_CLIENT_SECRET`
-
-(Akan di-request via `add_secret` di awal implementasi. User daftar gratis di developer.spotify.com → Create App.)
+Plus:
+- Tambah guard kalau row `artist_profiles` belum ada — auto-insert dulu sebelum update `profile_image_url` (kasus user upload foto sebelum klik Save). Pakai `upsert` dengan `onConflict: 'user_id'`.
 
 ---
 
-## Bagian 4 — Enforcement di Release Form
+## Bug 3 / Fitur baru — Pencarian Spotify Artist Langsung
 
-Lokasi: `src/components/releases/ArtistReleaseFormDialog.tsx` & `ReleaseFormDialog.tsx`.
+Saat ini user harus paste URL/ID Spotify manual. Akan ditambah **search box** yang query Spotify Search API real-time, tampil daftar kandidat dengan foto + follower + genre, tinggal klik untuk connect.
 
-**Logic baru:**
+### Edge function: tambah action `search`
 
-1. Ketika artis buka form release:
-   - Cek `artist_profiles` untuk user ini (sudah ada `artist_profile_completed` flag di profiles).
-   - Kalau **belum** lengkap → blokir form, munculkan dialog: "Lengkapi Profile Artis dulu" → tombol redirect ke `/artist-profile`.
+`spotify-fetch-artist/index.ts` jadi multi-action:
 
-2. Kalau sudah lengkap:
-   - Field "Artist Name" (Main Artist) auto-fill dari `artist_profiles.artist_name` dan **disabled** (read-only) — ada tooltip "Diambil dari Profile Artis. Edit di halaman Profile Artis".
-   - **Featured Artists** tetap bisa ditambahkan manual via `ArtistSelector` (free input) — tidak diblokir.
+```text
+POST body:
+  { action: "search", q: "..." }              → list artists (max 8)
+  { action: "fetch", artist_url_or_id: "..." } → existing flow
+  // backward-compat: kalau body tanpa action tapi ada artist_url_or_id → fetch
+```
 
-3. Saat submit:
-   - `artist_name` di `releases` & `tracks` pakai value dari `artist_profiles.artist_name`.
-   - `artist_user_id` tetap = user.id.
+Endpoint Spotify yang dipakai:
+- `GET /v1/search?type=artist&q={q}&limit=8&market=ID`
 
-### Untuk role Label/Whitelabel/Admin
-- Tidak terdampak — mereka tetap bisa input nama artis bebas (karena mereka mungkin bikin release untuk artis yang belum punya akun di sistem).
-- TAPI: kalau yang dipilih adalah artis terdaftar (dari dropdown `labelArtists`) yang punya `artist_profiles`, prefer pakai `artist_profiles.artist_name`.
+Hasil dipetakan ke `{ id, name, image, followers, genres, url }`.
 
----
+### UI di `ArtistProfile.tsx` — Spotify Connect Card
 
-## Bagian 5 — Role & Permission Map
+```text
+┌─ Spotify Integration ─────────────────────────┐
+│ [ search input: cari nama artis... ] [Cari]   │
+│                                                │
+│ ┌─ result card (klik untuk connect) ────────┐ │
+│ │ [img] Artist Name                          │ │
+│ │       1.2M followers · pop, indie          │ │
+│ └────────────────────────────────────────────┘ │
+│ ┌─ result card ─...                          ┐ │
+│ ...                                            │
+│                                                │
+│ ── atau paste URL manual ──                    │
+│ [ https://open.spotify.com/artist/... ] [Sync] │
+└────────────────────────────────────────────────┘
+```
 
-| Role | View Profile | Edit Own | Edit Others | Set Verified |
-|---|---|---|---|---|
-| artist | ✓ (own) | ✓ | ✗ | ✗ |
-| label | ✓ (artisnya) | ✗ | ✓ (artis di bawahnya) | ✗ |
-| whitelabel | ✓ (artisnya) | ✗ | ✓ (artis di bawahnya) | ✗ |
-| admin / superadmin | ✓ (semua) | ✓ | ✓ (semua) | ✓ |
-| copyright | — | — | — | — |
+Flow:
+1. User ketik nama → debounce 400ms → call `action: "search"`.
+2. Tampilkan max 8 hasil. Klik kartu → langsung jalankan `action: "fetch"` dengan `artist.id` → simpan ke `artist_profiles`.
+3. Mode paste-URL manual tetap ada sebagai fallback.
 
-RLS `artist_profiles` sudah cover ini, tinggal verifikasi.
-
----
-
-## File yang akan dibuat / diubah
-
-**Baru:**
-- `supabase/functions/spotify-fetch-artist/index.ts`
-- `src/components/artist-profile/SpotifyConnectCard.tsx`
-- `src/components/artist-profile/ArtistPhotoUpload.tsx`
-- Migration: tambah kolom + helper function
-
-**Diubah:**
-- `src/pages/ArtistProfile.tsx` — section baru lengkap
-- `src/components/releases/ArtistReleaseFormDialog.tsx` — guard + lock main artist name
-- `src/components/releases/ReleaseFormDialog.tsx` — guard + lock untuk role artist
-- `src/hooks/useAuth.tsx` — tambah `artistProfile` state + `refreshArtistProfile()`
-- `src/components/onboarding/ArtistOnboardingDialog.tsx` — sinkron field baru (opsional)
-
-**Tidak diubah:**
-- Storage bucket existing (pakai `avatars`)
-- RPC royalty (tetap pakai `get_user_full_name` untuk konsistensi data lama)
-- Auth/SSO logic (sudah fix, tidak disentuh)
-- Audio clip cutter (sudah selesai)
+Tooltip kecil di atas search: "Pilih artis kamu yang sesuai. Pastikan benar — ini akan jadi link resmi Spotify untuk profilmu."
 
 ---
 
-## Catatan Penting
+## File yang berubah
 
-- **Backward compatibility:** Release lama tetap pakai nama lama. Hanya release baru yang pakai `artist_profiles.artist_name`.
-- **Migrasi data:** Untuk artist yang sudah ada tapi belum isi `artist_profiles`, sistem auto-create row dengan `artist_name = profiles.full_name` saat pertama buka halaman Profile Artis (bisa diedit setelahnya).
-- **Spotify rate limit:** Client Credentials token cached server-side. Sync manual (button-triggered), bukan auto-sync di setiap page load.
-- **Featured artists:** Tetap free-input, tidak dipaksa harus punya akun di sistem.
+| File | Perubahan |
+|---|---|
+| `supabase/functions/spotify-fetch-artist/index.ts` | Ganti `getClaims` → `getUser`. Tambah action `search` (Spotify `/v1/search`). |
+| `src/pages/ArtistProfile.tsx` | Path upload `{userId}/...`, auto-create row sebelum update foto, search UI + state + debounce, `onSelectSearchResult` handler. |
+
+## Yang TIDAK disentuh
+- Tidak ada migration baru. Skema `artist_profiles` sudah cukup.
+- Tidak ada perubahan RLS storage atau tabel.
+- Audio clip cutter, SSO/login, release form lock — tidak diutak-atik.
+- Secret `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` sudah ada, tidak perlu request lagi.
+
+---
+
+## Catatan untuk user
+
+- Setelah fix, kalau user pernah connect Spotify dengan URL salah, tinggal klik **Disconnect** lalu cari lagi via search box.
+- Spotify Search API butuh nama yang cukup spesifik (>2 karakter). Hint sudah ditampilkan.
+- Token Spotify di-cache server-side 1 jam (sudah ada), jadi search berikutnya cepat.

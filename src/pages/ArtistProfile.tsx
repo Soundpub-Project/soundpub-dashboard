@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
-import { Loader2, Music, User, Save, Upload, BadgeCheck, ExternalLink, RefreshCw, Unlink } from 'lucide-react';
+import { Loader2, Music, User, Save, Upload, BadgeCheck, ExternalLink, RefreshCw, Unlink, Search } from 'lucide-react';
 
 interface ArtistProfileData {
   id: string;
@@ -49,6 +49,9 @@ export default function ArtistProfile() {
   const [artistProfile, setArtistProfile] = useState<ArtistProfileData | null>(null);
   const [ownerName, setOwnerName] = useState('');
   const [spotifyInput, setSpotifyInput] = useState('');
+  const [spotifySearch, setSpotifySearch] = useState('');
+  const [spotifyResults, setSpotifyResults] = useState<any[] | null>(null);
+  const [searchingSpotify, setSearchingSpotify] = useState(false);
 
   const [formData, setFormData] = useState({
     artist_name: '',
@@ -139,7 +142,8 @@ export default function ArtistProfile() {
     setUploadingPhoto(true);
     try {
       const ext = file.name.split('.').pop() || 'jpg';
-      const path = `artist-photos/${targetUserId}-${Date.now()}.${ext}`;
+      // RLS storage policy requires first folder = auth.uid()
+      const path = `${targetUserId}/artist-photo-${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, {
         upsert: true,
         contentType: file.type,
@@ -148,14 +152,23 @@ export default function ArtistProfile() {
       const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
       const url = pub.publicUrl;
 
+      // Upsert (auto-create row if missing) so photo upload works before saving form
       const { error } = await (supabase as any)
         .from('artist_profiles')
-        .update({ profile_image_url: url })
-        .eq('user_id', targetUserId);
+        .upsert(
+          {
+            user_id: targetUserId,
+            artist_name: artistProfile?.artist_name || formData.artist_name || profile?.full_name || 'Artist',
+            artist_type: artistProfile?.artist_type || formData.artist_type || 'solo',
+            profile_image_url: url,
+          },
+          { onConflict: 'user_id' },
+        );
       if (error) throw error;
 
       setArtistProfile(prev => prev ? { ...prev, profile_image_url: url } : prev);
       toast.success('Foto artis berhasil diupload');
+      fetchArtistProfile();
     } catch (err: any) {
       toast.error(err.message || 'Gagal upload foto');
     } finally {
@@ -169,10 +182,14 @@ export default function ArtistProfile() {
       toast.error('Masukkan URL atau ID Spotify Artist');
       return;
     }
+    await runSpotifyFetch(input);
+  };
+
+  const runSpotifyFetch = async (input: string) => {
     setSyncingSpotify(true);
     try {
       const { data, error } = await supabase.functions.invoke('spotify-fetch-artist', {
-        body: { artist_url_or_id: input },
+        body: { action: 'fetch', artist_url_or_id: input },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -180,16 +197,24 @@ export default function ArtistProfile() {
 
       const { error: updErr } = await (supabase as any)
         .from('artist_profiles')
-        .update({
-          spotify_artist_id: sp.id,
-          spotify_artist_url: sp.url,
-          spotify_data: sp,
-          spotify_synced_at: new Date().toISOString(),
-        })
-        .eq('user_id', targetUserId);
+        .upsert(
+          {
+            user_id: targetUserId,
+            artist_name: artistProfile?.artist_name || formData.artist_name || sp.name,
+            artist_type: artistProfile?.artist_type || formData.artist_type || 'solo',
+            spotify_artist_id: sp.id,
+            spotify_artist_url: sp.url,
+            spotify_data: sp,
+            spotify_synced_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' },
+        );
       if (updErr) throw updErr;
 
       toast.success(`Berhasil sync data Spotify: ${sp.name}`);
+      setSpotifyResults(null);
+      setSpotifySearch('');
+      setSpotifyInput('');
       fetchArtistProfile();
     } catch (err: any) {
       toast.error(err.message || 'Gagal sync Spotify');
@@ -197,6 +222,30 @@ export default function ArtistProfile() {
       setSyncingSpotify(false);
     }
   };
+
+  // Debounced live search
+  useEffect(() => {
+    if (!spotifySearch.trim() || spotifySearch.trim().length < 2) {
+      setSpotifyResults(null);
+      return;
+    }
+    const t = setTimeout(async () => {
+      setSearchingSpotify(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('spotify-fetch-artist', {
+          body: { action: 'search', q: spotifySearch.trim() },
+        });
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+        setSpotifyResults(data.data || []);
+      } catch (err: any) {
+        toast.error(err.message || 'Gagal search Spotify');
+      } finally {
+        setSearchingSpotify(false);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [spotifySearch]);
 
   const handleSpotifyDisconnect = async () => {
     if (!targetUserId) return;
@@ -589,21 +638,79 @@ export default function ArtistProfile() {
               </div>
             ) : (
               canEdit && (
-                <div className="space-y-2">
-                  <Label>URL atau ID Spotify Artist</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={spotifyInput}
-                      onChange={(e) => setSpotifyInput(e.target.value)}
-                      placeholder="https://open.spotify.com/artist/..."
-                    />
-                    <Button onClick={handleSpotifySync} disabled={syncingSpotify || !spotifyInput.trim()}>
-                      {syncingSpotify ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Connect'}
-                    </Button>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Cari Artis di Spotify</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={spotifySearch}
+                        onChange={(e) => setSpotifySearch(e.target.value)}
+                        placeholder="Ketik nama artis (mis. Tulus, Raisa, ...)"
+                        className="pl-9"
+                      />
+                      {searchingSpotify && (
+                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Pilih artis yang sesuai. Pastikan benar — link ini jadi profil resmi Spotify Anda.
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Buka profil artis di Spotify, klik tombol "..." → Share → Copy link to artist.
-                  </p>
+
+                  {spotifyResults && spotifyResults.length === 0 && !searchingSpotify && (
+                    <p className="text-sm text-muted-foreground">Tidak ada hasil. Coba kata kunci lain.</p>
+                  )}
+
+                  {spotifyResults && spotifyResults.length > 0 && (
+                    <div className="space-y-2 max-h-80 overflow-y-auto border border-border/50 rounded-lg p-2">
+                      {spotifyResults.map((a: any) => (
+                        <button
+                          key={a.id}
+                          type="button"
+                          disabled={syncingSpotify}
+                          onClick={() => runSpotifyFetch(a.id)}
+                          className="w-full flex items-center gap-3 p-2 rounded hover:bg-muted/50 transition text-left disabled:opacity-50"
+                        >
+                          {a.image ? (
+                            <img src={a.image} alt={a.name} className="h-12 w-12 rounded-full object-cover flex-shrink-0" />
+                          ) : (
+                            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                              <User className="h-5 w-5 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{a.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {a.followers?.toLocaleString()} followers
+                              {a.genres?.length > 0 && ` · ${a.genres.slice(0, 2).join(', ')}`}
+                            </p>
+                          </div>
+                          {syncingSpotify ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          ) : (
+                            <span className="text-xs text-primary">Connect</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Atau paste URL manual</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={spotifyInput}
+                        onChange={(e) => setSpotifyInput(e.target.value)}
+                        placeholder="https://open.spotify.com/artist/..."
+                      />
+                      <Button onClick={handleSpotifySync} disabled={syncingSpotify || !spotifyInput.trim()} variant="outline">
+                        {syncingSpotify ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Connect'}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               )
             )}
