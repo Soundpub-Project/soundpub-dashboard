@@ -708,7 +708,7 @@ export function ReleaseFormDialog({
             release_type: values.release_type,
             genre: values.genre || null,
             release_date: values.release_date || null,
-            status: values.status,
+            status: values.status || 'pending',
             cover_url: coverUrl,
             label_id: labelId,
             created_by: user.id,
