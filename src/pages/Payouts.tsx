@@ -160,7 +160,7 @@ export default function Payouts() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <Card className="bg-card/50 border-border/50">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg flex items-center gap-2"><Wallet className="h-5 w-5" />Saldo Tersedia</CardTitle>
