@@ -426,7 +426,7 @@ export function ReleaseFormDialog({
         release_type: release.release_type || 'single',
         genre: release.genre || '',
         release_date: release.release_date || '',
-        status: release.status,
+        status: release.status || 'pending',
         label_id: release.label_id || '',
         tracks: tracks && tracks.length > 0
           ? tracks.map((t: any) => ({
@@ -610,7 +610,8 @@ export function ReleaseFormDialog({
             release_type: values.release_type,
             genre: values.genre || null,
             release_date: values.release_date || null,
-            status: values.status,
+            // Only admins can change status; for others preserve existing release.status
+            ...(isAdmin && values.status ? { status: values.status } : {}),
             ...(coverUrl !== null ? { cover_url: coverUrl } : {}),
             label_id: updateLabelId,
           })
