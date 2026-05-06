@@ -344,7 +344,7 @@ export default function ArtistProfile() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 max-w-3xl">
+      <div className="space-y-6 w-full">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-3">
             <Music className="h-7 w-7 text-primary" />
