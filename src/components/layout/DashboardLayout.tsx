@@ -89,8 +89,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </header>
 
           {/* Main Content */}
-          <main className="flex-1 p-4 md:p-6 overflow-auto">
-            {children}
+          <main className="flex-1 p-3 sm:p-4 lg:p-6 xl:p-8 overflow-auto">
+            <div className="w-full max-w-[1600px] mx-auto">
+              {children}
+            </div>
           </main>
         </div>
       </div>
