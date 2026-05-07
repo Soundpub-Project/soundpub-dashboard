@@ -276,18 +276,12 @@ Deno.serve(async (req) => {
       `
 
       try {
-        const { error: emailError } = await resend.emails.send({
-          from: 'Soundpub <noreply@soundpub.co>',
+        await sendGmail({
           to: adminEmails,
           subject: `🎵 Royalty Upload: ${formatNumber(payload.insertedCount)} data baru - ${formatCurrency(payload.totalRevenue)}`,
           html: adminHtml,
         })
-
-        if (emailError) {
-          console.error('Error sending admin email:', emailError)
-        } else {
-          console.log(`Admin notification sent to: ${adminEmails.join(', ')}`)
-        }
+        console.log(`Admin notification sent to: ${adminEmails.join(', ')}`)
       } catch (emailErr) {
         console.error('Failed to send admin email:', emailErr)
       }
@@ -361,20 +355,13 @@ Deno.serve(async (req) => {
       `
 
       try {
-        const { error: labelEmailError } = await resend.emails.send({
-          from: 'Soundpub <noreply@soundpub.co>',
-          to: [label.email],
+        await sendGmail({
+          to: label.email,
           subject: `💰 Royalty Baru: ${formatCurrency(labelUpdate.balance_added)} telah ditambahkan ke saldo Anda`,
           html: labelHtml,
         })
-
-        if (labelEmailError) {
-          console.error(`Error sending email to ${label.email}:`, labelEmailError)
-          labelNotifications.push({ email: label.email, success: false })
-        } else {
-          console.log(`Label notification sent to: ${label.email}`)
-          labelNotifications.push({ email: label.email, success: true })
-        }
+        console.log(`Label notification sent to: ${label.email}`)
+        labelNotifications.push({ email: label.email, success: true })
       } catch (labelErr) {
         console.error(`Failed to send email to ${label.email}:`, labelErr)
         labelNotifications.push({ email: label.email, success: false })
