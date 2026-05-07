@@ -59,3 +59,6 @@ verify_jwt = false
 
 [functions.info-soundpub]
 verify_jwt = false
+
+[functions.backup-storage-to-drive]
+verify_jwt = false

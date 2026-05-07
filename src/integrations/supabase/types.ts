@@ -649,6 +649,84 @@ export type Database = {
           },
         ]
       }
+      storage_backup_log: {
+        Row: {
+          bucket: string
+          content_hash: string | null
+          created_at: string
+          drive_file_id: string | null
+          drive_folder_id: string | null
+          id: string
+          last_backed_up_at: string
+          path: string
+          size_bytes: number | null
+          source_updated_at: string | null
+        }
+        Insert: {
+          bucket: string
+          content_hash?: string | null
+          created_at?: string
+          drive_file_id?: string | null
+          drive_folder_id?: string | null
+          id?: string
+          last_backed_up_at?: string
+          path: string
+          size_bytes?: number | null
+          source_updated_at?: string | null
+        }
+        Update: {
+          bucket?: string
+          content_hash?: string | null
+          created_at?: string
+          drive_file_id?: string | null
+          drive_folder_id?: string | null
+          id?: string
+          last_backed_up_at?: string
+          path?: string
+          size_bytes?: number | null
+          source_updated_at?: string | null
+        }
+        Relationships: []
+      }
+      storage_backup_runs: {
+        Row: {
+          details: Json | null
+          error_message: string | null
+          errors_count: number
+          files_skipped: number
+          files_uploaded: number
+          finished_at: string | null
+          id: string
+          started_at: string
+          status: string
+          triggered_by: string
+        }
+        Insert: {
+          details?: Json | null
+          error_message?: string | null
+          errors_count?: number
+          files_skipped?: number
+          files_uploaded?: number
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          triggered_by?: string
+        }
+        Update: {
+          details?: Json | null
+          error_message?: string | null
+          errors_count?: number
+          files_skipped?: number
+          files_uploaded?: number
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          triggered_by?: string
+        }
+        Relationships: []
+      }
       tracks: {
         Row: {
           artist_name: string

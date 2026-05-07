@@ -1,9 +1,57 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { Resend } from 'https://esm.sh/resend@4.0.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+const GMAIL_GATEWAY = 'https://connector-gateway.lovable.dev/google_mail/gmail/v1'
+const FROM_NAME = 'Soundpub'
+const FROM_EMAIL = 'publishersoundpub@gmail.com'
+
+function base64UrlEncode(str: string): string {
+  // Encode UTF-8 string to base64url
+  const bytes = new TextEncoder().encode(str)
+  let binary = ''
+  for (const b of bytes) binary += String.fromCharCode(b)
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+async function sendGmail(opts: { to: string | string[]; subject: string; html: string }) {
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
+  const GOOGLE_MAIL_API_KEY = Deno.env.get('GOOGLE_MAIL_API_KEY')
+  if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY not configured')
+  if (!GOOGLE_MAIL_API_KEY) throw new Error('GOOGLE_MAIL_API_KEY not configured (Gmail connector not linked)')
+
+  const toList = Array.isArray(opts.to) ? opts.to.join(', ') : opts.to
+  const message = [
+    `From: ${FROM_NAME} <${FROM_EMAIL}>`,
+    `To: ${toList}`,
+    `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(opts.subject)))}?=`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/html; charset="UTF-8"',
+    'Content-Transfer-Encoding: 7bit',
+    '',
+    opts.html,
+  ].join('\r\n')
+
+  const raw = base64UrlEncode(message)
+
+  const res = await fetch(`${GMAIL_GATEWAY}/users/me/messages/send`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'X-Connection-Api-Key': GOOGLE_MAIL_API_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ raw }),
+  })
+
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Gmail API failed [${res.status}]: ${body}`)
+  }
+  return await res.json()
 }
 
 interface NotificationPayload {
@@ -29,17 +77,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const resendApiKey = Deno.env.get('RESEND_API_KEY')
-    if (!resendApiKey) {
-      console.error('RESEND_API_KEY not configured')
-      return new Response(
-        JSON.stringify({ success: false, error: 'Email service not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const resend = new Resend(resendApiKey)
-    
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return new Response(
@@ -239,18 +276,12 @@ Deno.serve(async (req) => {
       `
 
       try {
-        const { error: emailError } = await resend.emails.send({
-          from: 'Soundpub <noreply@soundpub.co>',
+        await sendGmail({
           to: adminEmails,
           subject: `🎵 Royalty Upload: ${formatNumber(payload.insertedCount)} data baru - ${formatCurrency(payload.totalRevenue)}`,
           html: adminHtml,
         })
-
-        if (emailError) {
-          console.error('Error sending admin email:', emailError)
-        } else {
-          console.log(`Admin notification sent to: ${adminEmails.join(', ')}`)
-        }
+        console.log(`Admin notification sent to: ${adminEmails.join(', ')}`)
       } catch (emailErr) {
         console.error('Failed to send admin email:', emailErr)
       }
@@ -324,20 +355,13 @@ Deno.serve(async (req) => {
       `
 
       try {
-        const { error: labelEmailError } = await resend.emails.send({
-          from: 'Soundpub <noreply@soundpub.co>',
-          to: [label.email],
+        await sendGmail({
+          to: label.email,
           subject: `💰 Royalty Baru: ${formatCurrency(labelUpdate.balance_added)} telah ditambahkan ke saldo Anda`,
           html: labelHtml,
         })
-
-        if (labelEmailError) {
-          console.error(`Error sending email to ${label.email}:`, labelEmailError)
-          labelNotifications.push({ email: label.email, success: false })
-        } else {
-          console.log(`Label notification sent to: ${label.email}`)
-          labelNotifications.push({ email: label.email, success: true })
-        }
+        console.log(`Label notification sent to: ${label.email}`)
+        labelNotifications.push({ email: label.email, success: true })
       } catch (labelErr) {
         console.error(`Failed to send email to ${label.email}:`, labelErr)
         labelNotifications.push({ email: label.email, success: false })
