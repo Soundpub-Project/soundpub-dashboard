@@ -1,506 +1,150 @@
-# SoundPub Dashboard - Migration Guide v2.2
+# SoundPub Dashboard — Migration Guide
 
-Panduan lengkap untuk migrasi dari Lovable Cloud ke Supabase eksternal atau Self-Hosted di VPS.
-Updated: April 2026
-
-## 📚 Dokumentasi Terkait
-
-| Dokumen | Deskripsi |
-|---------|-----------|
-| **[VPS-SETUP-GUIDE.md](./VPS-SETUP-GUIDE.md)** | Panduan lengkap setup Supabase Self-Hosted di VPS |
-| **[full-schema-v2.sql](./full-schema-v2.sql)** | Schema database terbaru dengan semua RLS policies |
-| **[MIGRATION-CHECKLIST.md](./MIGRATION-CHECKLIST.md)** | Checklist untuk memastikan migrasi lengkap |
-| **[migration-scripts/](./migration-scripts/)** | Script automasi migrasi data |
+Panduan migrasi data dari Lovable Cloud ke Supabase target. Update: Mei 2026.
 
 ---
 
-## Daftar Isi
+## Overview
 
-1. [Persiapan](#1-persiapan)
-2. [Setup Supabase Baru](#2-setup-supabase-baru)
-3. [Migrasi Schema Database](#3-migrasi-schema-database)
-4. [Migrasi Data](#4-migrasi-data)
-5. [Migrasi Storage](#5-migrasi-storage)
-6. [Setup Edge Functions](#6-setup-edge-functions)
-7. [Konfigurasi Environment](#7-konfigurasi-environment)
-8. [Testing & Validasi](#8-testing--validasi)
-9. [Troubleshooting](#9-troubleshooting)
+Migrasi terdiri dari 4 fase:
 
----
-
-## 1. Persiapan
-
-### Prerequisites
-
-- Node.js v18+ terinstall
-- Supabase CLI terinstall (`npm install -g supabase`)
-- Akses ke Lovable Cloud dashboard
-- Akses ke Supabase dashboard target
-
-### Export Data dari Lovable Cloud
-
-1. Buka Lovable Cloud dashboard
-2. Export data dari setiap tabel dalam format CSV
-3. Download semua file dari storage buckets
-
-### Files yang Diperlukan
-
-```
-public/exports/
-├── full-schema-v2.sql        # Schema lengkap database (terbaru)
-├── full-schema.sql           # Schema lama (legacy)
-├── MIGRATION-GUIDE.md        # Panduan ini
-├── MIGRATION-CHECKLIST.md    # Checklist migrasi
-├── VPS-SETUP-GUIDE.md        # Panduan VPS setup
-└── migration-scripts/
-    ├── migrate.js            # Script automasi migrasi
-    ├── package.json          # Dependencies
-    ├── .env.example          # Template environment variables
-    └── README.md             # Dokumentasi script
+```text
+1. Schema      → deploy SQL skema kosong
+2. Data        → import CSV ke tabel
+3. Storage     → upload file dari backup ke bucket
+4. Functions   → deploy edge functions + secrets + webhooks
 ```
 
 ---
 
-## 2. Setup Supabase Baru
+## Fase 1 — Deploy Schema
 
-### Buat Project Baru
+```bash
+# Login Supabase target
+supabase link --project-ref <target-ref>
 
-1. Buka [Supabase Dashboard](https://supabase.com/dashboard)
-2. Klik "New Project"
-3. Isi detail project:
-   - **Name**: SoundPub Dashboard
-   - **Database Password**: (simpan dengan aman!)
-   - **Region**: Pilih yang terdekat dengan users
+# Apply schema
+psql "$DATABASE_URL" -f public/exports/full-schema-v2.sql
+```
 
-### Catat Credentials
-
-Setelah project dibuat, catat:
-
-- **Project URL**: `https://[project-id].supabase.co`
-- **Anon Key**: Di Settings > API > anon public
-- **Service Role Key**: Di Settings > API > service_role (RAHASIA!)
-- **Database URL**: Di Settings > Database > Connection string
+Verifikasi:
+- Semua tabel ter-create (`profiles`, `user_roles`, `releases`, `tracks`, `royalties`, dll)
+- Tabel storage backup: `storage_backup_log`, `storage_backup_runs`
+- Function & trigger SECURITY DEFINER aktif
+- Storage buckets ter-create
 
 ---
 
-## 3. Migrasi Schema Database
+## Fase 2 — Import Data dari CSV
 
-### Jalankan Schema SQL
-
-1. Buka SQL Editor di Supabase Dashboard
-2. Copy seluruh isi file `full-schema-v2.sql`
-3. Paste dan jalankan di SQL Editor
-4. Pastikan tidak ada error
-
-### Schema Highlights (v2)
-
-Schema v2 mencakup fitur-fitur terbaru:
-
-- **ID-based matching**: Kolom `artist_user_id` di tabel `releases`, `tracks`, `royalties`
-- **Hybrid RLS policies**: Primary ID-based, fallback name-based
-- **Function `get_artist_user_id_by_name()`**: Helper untuk artist matching
-- **7 roles**: superadmin, admin, label, whitelabel, artist, copyright, user
-- **SECURITY DEFINER functions**: Mencegah infinite recursion di RLS
-
-### Verifikasi
-
-Cek bahwa semua object telah dibuat:
-
-```sql
--- Cek tables
-SELECT table_name FROM information_schema.tables 
-WHERE table_schema = 'public';
-
--- Cek functions
-SELECT routine_name FROM information_schema.routines 
-WHERE routine_schema = 'public';
-
--- Cek policies
-SELECT tablename, policyname FROM pg_policies 
-WHERE schemaname = 'public';
-```
-
----
-
-## 4. Migrasi Data
-
-### Urutan Import Data
-
-⚠️ **PENTING**: Import harus dilakukan dalam urutan ini karena foreign key dependencies!
-
-1. **Users** (via Supabase Auth)
-2. **profiles**
-3. **user_roles**
-4. **artists**
-5. **releases**
-6. **tracks**
-7. **royalty_uploads**
-8. **royalties**
-9. **composer_royalties**
-10. **payout_requests**
-11. **audit_logs**
-12. **app_settings**
-
-### Migrasi Users
-
-Users harus di-recreate via Supabase Auth API:
-
-```javascript
-const { createClient } = require('@supabase/supabase-js');
-
-const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-
-// Untuk setiap user dari export
-const { data, error } = await supabase.auth.admin.createUser({
-  email: user.email,
-  password: 'temporary-password-123', // User harus reset
-  email_confirm: true,
-  user_metadata: {
-    full_name: user.full_name
-  }
-});
-```
-
-### Import CSV Data
-
-Untuk tabel lainnya, gunakan Supabase Table Editor:
-
-1. Buka Table Editor
-2. Pilih tabel target
-3. Klik "Insert" > "Import data from CSV"
-4. Upload file CSV
-
-Atau gunakan script automasi di `migration-scripts/migrate.js`.
-
-### Post-Migration: Populate artist_user_id
-
-Setelah data di-import, jalankan query berikut untuk mengisi `artist_user_id`:
-
-```sql
--- Populate artist_user_id di releases
-UPDATE releases r
-SET artist_user_id = (
-  SELECT p.id 
-  FROM profiles p
-  JOIN user_roles ur ON p.id = ur.user_id
-  WHERE ur.role = 'artist'
-    AND LOWER(TRIM(r.artist_name)) = LOWER(TRIM(p.full_name))
-    AND (r.label_id = p.parent_label_id OR p.parent_label_id IS NULL)
-  LIMIT 1
-)
-WHERE r.artist_user_id IS NULL;
-
--- Populate artist_user_id di tracks
-UPDATE tracks t
-SET artist_user_id = (
-  SELECT r.artist_user_id 
-  FROM releases r
-  WHERE r.id = t.release_id
-)
-WHERE t.artist_user_id IS NULL;
-
--- Populate artist_user_id di royalties
-UPDATE royalties r
-SET artist_user_id = (
-  SELECT p.id 
-  FROM profiles p
-  JOIN user_roles ur ON p.id = ur.user_id
-  WHERE ur.role = 'artist'
-    AND LOWER(TRIM(r.artist)) = LOWER(TRIM(p.full_name))
-  LIMIT 1
-)
-WHERE r.artist_user_id IS NULL AND r.artist IS NOT NULL;
-```
-
-### Menggunakan Script Automasi
+Gunakan script di `public/exports/migration-scripts/`.
 
 ```bash
 cd public/exports/migration-scripts
-
-# Install dependencies
 npm install
-
-# Setup environment
 cp .env.example .env
-# Edit .env dengan credentials
-
-# Jalankan migrasi
-node migrate.js
+# Edit .env dengan TARGET_SUPABASE_URL & TARGET_SUPABASE_SERVICE_KEY
+mkdir -p exported-data && cp /path/to/csv-export/*.csv exported-data/
+node import-csv.js
 ```
+
+Urutan import:
+1. `profiles` (via Auth Admin API)
+2. `user_roles`
+3. `artists` / `artist_profiles`
+4. `releases` → `tracks`
+5. `royalty_uploads` → `royalties`
+6. `composer_royalties`
+7. `payout_requests`
+8. `audit_logs`
+9. `app_settings`
+
+ID mapping disimpan di `exported-data/id-mapping.json`. FK references otomatis di-rewrite.
 
 ---
 
-## 5. Migrasi Storage
+## Fase 3 — Migrasi Storage
 
-### Download dari Lovable Cloud
+### Opsi A — Restore dari backup Google Drive
 
-1. Buka Storage di Lovable Cloud
-2. Download semua files dari setiap bucket:
-   - `release-covers/`
-   - `track-audio/`
-   - `track-video/`
-   - `audio-clips/`
-   - `label-logos/`
-
-### Upload ke Supabase Baru
-
-1. Buka Storage di Supabase Dashboard baru
-2. Buckets sudah dibuat oleh schema SQL
-3. Upload files ke masing-masing bucket
-4. Pastikan path file sama persis
-
-### Verifikasi URLs
-
-Setelah upload, URLs akan berubah. Jika ada data yang menyimpan full URL (bukan path), perlu di-update:
-
-```sql
--- Contoh update cover_url di releases
-UPDATE releases 
-SET cover_url = REPLACE(cover_url, 
-  'https://old-project.supabase.co', 
-  'https://new-project.supabase.co'
-)
-WHERE cover_url LIKE '%old-project.supabase.co%';
-```
-
----
-
-## 6. Setup Edge Functions
-
-### Deploy Edge Functions
-
-Copy folder `supabase/functions/` ke project baru:
+Backup harian otomatis ke folder `SoundPub-Backup/YYYY-MM-DD/{bucket}/...` di Drive.
+Gunakan rclone atau manual download → upload ke Supabase target.
 
 ```bash
-# Clone/copy edge functions
-cp -r supabase/functions/ /path/to/new-project/supabase/functions/
-
-# Login ke Supabase CLI
-supabase login
-
-# Link ke project baru
-supabase link --project-ref [new-project-id]
-
-# Deploy semua functions
-supabase functions deploy
+# Contoh dengan rclone
+rclone sync gdrive:SoundPub-Backup/2026-05-07 supabase-target:storage/
 ```
 
-### Daftar Edge Functions
+### Opsi B — Re-upload manual
 
-| # | Function | Deskripsi | Status |
-|---|----------|-----------|--------|
-| 1 | `change-own-password` | User ganti password sendiri | ✅ Aktif |
-| 2 | `create-user` | Admin/Label buat user baru | ✅ Aktif |
-| 3 | `create-whitelabel-artist` | Buat artist whitelabel (tanpa password) | ✅ Aktif |
-| 4 | `delete-user` | Admin hapus user | ✅ Aktif |
-| 5 | `get-catalog-tracks` | API publik katalog (releases + tracks + label) | ✅ Aktif |
-| 6 | `get-ga4-config` | Get Google Analytics config | ✅ Aktif |
-| 7 | `process-royalty-upload` | Process CSV royalty (auto-match artist_user_id) | ✅ Aktif |
-| 8 | `remove-artist-from-label` | Hapus artist dari label (validasi releases) | ✅ Aktif |
-| 9 | `send-royalty-notification` | Kirim notifikasi royalty via email (Resend) | ✅ Aktif |
-| 10 | `set-artist-password` | Set password artist whitelabel | ✅ Aktif |
-| 11 | `update-app-settings` | Update settings (superadmin only) | ✅ Aktif |
-| 12 | `update-user-password` | Admin reset password user | ✅ Aktif |
-| 13 | `update-user-status` | Admin ubah status user | ✅ Aktif |
-| 14 | `test-gcs` | Test koneksi GCS | ⚠️ Opsional |
-| 15 | `gcs-upload` | Upload ke Google Cloud Storage | ❌ Disabled |
-| 16 | `gcs-manage` | Manage file di GCS (delete, list) | ❌ Disabled |
-| 17 | `sso-login` | Login SSO via Keycloak/ICCN | ✅ Aktif |
-| 18 | `create-xendit-invoice` | Buat invoice pembayaran Xendit | ✅ Aktif |
-| 19 | `xendit-webhook` | Webhook callback dari Xendit | ✅ Aktif |
+Download semua file dari Lovable Cloud Storage → upload ke bucket target.
+Pastikan path persis sama (URL di DB sudah point ke path lama).
 
-### Edge Function Standards
+---
 
-⚠️ Semua edge functions harus mengikuti standar ini untuk menghindari bundle timeout:
+## Fase 4 — Deploy Functions + Connect External
 
-```typescript
-// 1. Pin version (WAJIB)
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+### 4.1 Edge Functions
 
-// 2. Full CORS headers (WAJIB)
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-}
-
-// 3. Handle preflight (WAJIB)
-if (req.method === 'OPTIONS') {
-  return new Response(null, { headers: corsHeaders })
-}
-```
-
-### Setup Secrets
+Semua function di `supabase/functions/` ter-deploy otomatis di Lovable.
+Untuk Supabase target manual:
 
 ```bash
-# Set secrets untuk edge functions
-supabase secrets set RESEND_API_KEY=re_xxxxxxxxxx
-supabase secrets set GA4_MEASUREMENT_ID=G-XXXXXXXXXX
-supabase secrets set GCS_PROJECT_ID=your-project-id
-supabase secrets set GCS_BUCKET_NAME=your-bucket
-supabase secrets set GCS_SERVICE_ACCOUNT_KEY='{"type":"service_account",...}'
-
-# Payment Gateway (Xendit)
-supabase secrets set XENDIT_SECRET_KEY=xnd_xxxxxxxxxx
-supabase secrets set XENDIT_WEBHOOK_TOKEN=your-webhook-token
-supabase secrets set NOTIFICATION_EMAIL=publisher@soundpub.xyz
-
-# SSO (ICCN)
-supabase secrets set SSO_REALM_URL=https://your-keycloak/realms/your-realm
-supabase secrets set SSO_CLIENT_ID=your-client-id
-supabase secrets set ICCN_MEDIA_LABEL_ID=uuid-of-iccn-media-profile
+supabase functions deploy --project-ref <target-ref>
 ```
+
+### 4.2 Set Secrets
+
+Lihat `.env-DOCS.md`. Set lewat Lovable Cloud → Secrets, atau:
+
+```bash
+supabase secrets set XENDIT_SECRET_KEY=xxx XENDIT_WEBHOOK_TOKEN=xxx ...
+```
+
+### 4.3 Connect Connectors
+
+- **Google Mail** (untuk notifikasi email)
+- **Google Drive** (untuk backup harian)
+
+Setup via Lovable → Connectors.
+
+### 4.4 Webhook Xendit
+
+Update di Xendit Dashboard:
+```
+URL: https://<project-ref>.supabase.co/functions/v1/xendit-webhook
+Token: <XENDIT_WEBHOOK_TOKEN>
+```
+
+### 4.5 SSO ICCN
+
+Update build secrets workspace:
+```
+VITE_SSO_BASE_URL=https://sso.iccn.or.id
+VITE_SSO_REALM=PORTALICCN
+VITE_SSO_CLIENT_ID=soundpub
+```
+
+Update redirect URI di Keycloak ICCN: `https://<custom-domain>/auth`
 
 ---
 
-## 7. Konfigurasi Environment
+## Catatan Penting
 
-### Update Frontend .env
-
-```env
-VITE_SUPABASE_URL=https://[new-project-id].supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=[new-anon-key]
-VITE_SUPABASE_PROJECT_ID=[new-project-id]
-```
-
-### Update Edge Function Secrets
-
-Di Supabase Dashboard > Settings > Edge Functions > Secrets:
-
-- `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `RESEND_API_KEY`
-- `GCS_PROJECT_ID`
-- `GCS_BUCKET_NAME`
-- `GCS_SERVICE_ACCOUNT_KEY`
-- `GA4_MEASUREMENT_ID`
+- **Password user tidak portable** → kirim email reset ke semua user setelah migrasi.
+- **File lama tetap dengan nama lama** (URL di DB sudah final). Hanya upload baru memakai pattern penamaan baru (`{labelId}/{slug}-{stamp}.{ext}`).
+- **RLS Policies wajib aktif** sebelum import data, atau gunakan service role key (script sudah handle).
+- **Cron `daily-storage-backup`** jalan tiap 02:00 WIB. Verifikasi entry di `storage_backup_runs` setelah 24 jam.
 
 ---
 
-## 8. Testing & Validasi
+## Troubleshooting
 
-### Checklist Testing
+| Masalah                              | Solusi                                                 |
+|--------------------------------------|--------------------------------------------------------|
+| RLS recursion error                  | Pastikan SECURITY DEFINER functions ter-create dulu    |
+| `auth.users` insert gagal            | Gunakan Auth Admin API, bukan INSERT langsung          |
+| Webhook Xendit return 403            | Cek `XENDIT_WEBHOOK_TOKEN` match header `x-callback-token` |
+| Email notif tidak terkirim           | Cek connector Google Mail aktif & `NOTIFICATION_EMAIL` |
+| Backup Drive 0 file                  | Cek connector Google Drive + log `storage_backup_runs` |
 
-- [ ] Login/Register berfungsi
-- [ ] Dashboard load dengan benar
-- [ ] Data profiles muncul
-- [ ] Data releases muncul
-- [ ] Upload cover berfungsi
-- [ ] Upload audio/video berfungsi
-- [ ] Royalty upload berfungsi
-- [ ] Royalty Summary & Analytics (RPC functions) berfungsi
-- [ ] Payout request berfungsi
-- [ ] Audit logs tercatat
-- [ ] Role permissions benar (semua 7 role)
-- [ ] Artist bisa buat release lewat ReleaseFormDialog
-- [ ] Edge functions tidak CORS error
-- [ ] `get-catalog-tracks` mengembalikan label info
-- [ ] AllRoyalties page tidak white screen
-
-### Test RLS Policies
-
-```sql
--- Test sebagai user biasa
-SET request.jwt.claims = '{"sub": "[user-id]", "role": "authenticated"}';
-
--- Coba query yang seharusnya dibatasi
-SELECT * FROM profiles; -- Harus hanya return profile sendiri
-SELECT * FROM releases; -- Tergantung role
-```
-
-### Test RPC Functions
-
-```sql
--- Pastikan semua RPC functions terbuat
-SELECT routine_name FROM information_schema.routines 
-WHERE routine_schema = 'public' AND routine_type = 'FUNCTION'
-ORDER BY routine_name;
-
--- Functions yang harus ada:
--- get_royalty_stats, get_royalty_monthly_summary, get_royalty_platform_summary,
--- get_royalty_country_summary, get_royalty_periods, get_royalty_period_summary,
--- get_royalty_comparison, get_royalty_top_performers, get_royalty_label_breakdown,
--- get_royalty_artist_breakdown, get_royalty_track_breakdown,
--- has_role, is_admin, is_whitelabel, get_user_role, get_user_full_name,
--- get_user_parent_label_id, get_user_release_label_ids, get_artist_user_id_by_name,
--- handle_new_user, update_timestamp, update_balance_on_payout_status_change
-```
-
-### Verifikasi Data Count
-
-```sql
--- Bandingkan dengan data di Lovable Cloud
-SELECT 'profiles' as table_name, COUNT(*) FROM profiles
-UNION ALL SELECT 'user_roles', COUNT(*) FROM user_roles
-UNION ALL SELECT 'artists', COUNT(*) FROM artists
-UNION ALL SELECT 'releases', COUNT(*) FROM releases
-UNION ALL SELECT 'tracks', COUNT(*) FROM tracks
-UNION ALL SELECT 'royalties', COUNT(*) FROM royalties
-UNION ALL SELECT 'composer_royalties', COUNT(*) FROM composer_royalties
-UNION ALL SELECT 'payout_requests', COUNT(*) FROM payout_requests
-UNION ALL SELECT 'audit_logs', COUNT(*) FROM audit_logs;
-```
-
----
-
-## 9. Troubleshooting
-
-### Error: "duplicate key value violates unique constraint"
-
-Data sudah ada. Hapus dulu atau gunakan UPSERT:
-
-```sql
-INSERT INTO table_name (...) 
-VALUES (...) 
-ON CONFLICT (id) DO UPDATE SET ...;
-```
-
-### Error: "violates foreign key constraint"
-
-Import dalam urutan yang benar. Parent table harus diisi dulu.
-
-### Error: "permission denied for table"
-
-RLS policies blocking. Gunakan service role key atau cek policy.
-
-### Error: "Bundle generation timed out" (Edge Functions)
-
-1. Pastikan `@supabase/supabase-js` di-pin ke versi `2.49.1`
-2. Jangan import dari shared files (`_shared/cors.ts`) — inline semua
-3. Minimasi dependensi eksternal
-4. Re-deploy function beberapa kali jika perlu
-
-### Error: CORS pada domain production
-
-1. Pastikan CORS headers lengkap termasuk `Access-Control-Allow-Methods`
-2. Pastikan handler `OPTIONS` mengembalikan `Response` dengan status 200
-3. Pastikan `verify_jwt = false` di `config.toml`
-
-### Users Tidak Bisa Login
-
-1. Pastikan email_confirmed = true
-2. Cek password sudah di-set
-3. Kirim reset password email
-
-### Storage Files Tidak Muncul
-
-1. Cek bucket sudah dibuat
-2. Cek path file benar
-3. Cek RLS policies storage
-
-### Edge Functions Error
-
-1. Cek secrets sudah di-set
-2. Cek logs: `supabase functions logs [function-name]`
-3. Test local dulu: `supabase functions serve`
-
----
-
-## Kontak & Support
-
-Jika ada masalah dalam migrasi, hubungi tim development.
-
----
-
-*Dokumen ini di-generate untuk SoundPub Dashboard migration. Updated: April 2026 (v2.2)*
