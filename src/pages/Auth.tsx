@@ -348,7 +348,7 @@ export default function Auth() {
                     Login dengan Google
                   </Button>
 
-                   <Button
+                   {/* <Button
                     type="button"
                     variant="outline"
                     className="w-full"
@@ -365,7 +365,7 @@ export default function Auth() {
                       : ssoLoading
                         ? 'Menghubungkan ke SSO...'
                         : 'Login via SSO'}
-                  </Button>
+                  </Button> */}
 
                   {ssoError && (
                     <p className="text-xs text-destructive text-center">{ssoError}</p>
