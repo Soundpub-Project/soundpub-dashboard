@@ -1,0 +1,22 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+        - VITE_SUPABASE_PUBLISHABLE_KEY=${VITE_SUPABASE_PUBLISHABLE_KEY}
+        - VITE_SSO_BASE_URL=${VITE_SSO_BASE_URL}
+        - VITE_SSO_REALM=${VITE_SSO_REALM}
+        - VITE_SSO_CLIENT_ID=${VITE_SSO_CLIENT_ID}
+    container_name: soundpub-dashboard
+    ports:
+      - "8181:80"
+    restart: always
+    # Jika Anda ingin menyertakan environment variables saat build time (opsional):
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    #   args:
+    #     - VITE_API_URL=${VITE_API_URL}
+
