@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   initKeycloakSilent,
   initKeycloakAndLogin,
@@ -37,6 +38,7 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
   const exchangedRef = useRef(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
 
   const exchangeToken = useCallback(async (payload: { keycloakToken?: string; code?: string; redirectUri?: string; codeVerifier?: string | null }) => {
     try {
@@ -237,9 +239,11 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
 
   const triggerSsoLogout = useCallback(async () => {
     await supabase.auth.signOut();
+    // Bersihkan semua cache data dari React Query sebelum mengalihkan user
+    queryClient.clear();
     clearSsoActive();
     keycloakLogout();
-  }, []);
+  }, [queryClient]);
 
   return (
     <SsoAuthContext.Provider

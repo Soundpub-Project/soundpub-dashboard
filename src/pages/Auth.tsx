@@ -305,7 +305,7 @@ export default function Auth() {
                     </div>
                   </div>
 
-                  <Button
+                  {/* <Button
                     type="button"
                     variant="outline"
                     className="w-full"
@@ -346,9 +346,9 @@ export default function Auth() {
                       </svg>
                     )}
                     Login dengan Google
-                  </Button>
+                  </Button> */}
 
-                   {/* <Button
+                   <Button
                     type="button"
                     variant="outline"
                     className="w-full"
@@ -365,7 +365,7 @@ export default function Auth() {
                       : ssoLoading
                         ? 'Menghubungkan ke SSO...'
                         : 'Login via SSO'}
-                  </Button> */}
+                  </Button>
 
                   {ssoError && (
                     <p className="text-xs text-destructive text-center">{ssoError}</p>
@@ -482,16 +482,16 @@ export default function Auth() {
                     )}
                   </Button>
 
-                  <div className="relative my-2">
+                  {/* <div className="relative my-2">
                     <div className="absolute inset-0 flex items-center">
                       <Separator className="w-full" />
                     </div>
                     <div className="relative flex justify-center text-xs uppercase">
                       <span className="bg-card px-2 text-muted-foreground">atau</span>
                     </div>
-                  </div>
+                  </div> */}
 
-                  <Button
+                  {/* <Button
                     type="button"
                     variant="outline"
                     className="w-full"
@@ -532,7 +532,8 @@ export default function Auth() {
                       </svg>
                     )}
                     Daftar dengan Google
-                  </Button>
+                  </Button> */}
+
                 </form>
               </TabsContent>
             </CardContent>
