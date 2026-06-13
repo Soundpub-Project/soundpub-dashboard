@@ -270,9 +270,14 @@ export function ArtistReleaseFormDialog({
 
     setUploadingCover(true);
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session?.access_token) {
+        throw new Error('Anda harus login terlebih dahulu');
+      }
+      const userId = sessionData.session.user.id;
       const fileExt = coverFile.name.split('.').pop();
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
-      const filePath = `covers/${fileName}`;
+      const filePath = `${userId}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from('release-covers')
