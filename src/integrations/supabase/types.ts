@@ -977,6 +977,24 @@ export type Database = {
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
       is_whitelabel: { Args: { _user_id: string }; Returns: boolean }
+      label_profile_update_safe: {
+        Args: {
+          _artist_revenue: number
+          _balance: number
+          _composer_code: string
+          _email: string
+          _id: string
+          _label_revenue: number
+          _parent_label_id: string
+          _password_set: boolean
+          _sso_provider: string
+          _sso_user_id: string
+          _sso_user_type: string
+          _status: string
+          _subscription_status: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role:
