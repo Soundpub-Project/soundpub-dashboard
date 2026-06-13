@@ -499,7 +499,6 @@ export function ReleaseFormDialog({
     setUploadingCover(true);
     try {
       const fileExt = coverFile.name.split('.').pop()?.toLowerCase();
-      const fileName = `cover-${Date.now()}.${fileExt}`;
       const bucket = 'release-covers';
 
       // Get the session from Supabase
@@ -507,6 +506,8 @@ export function ReleaseFormDialog({
       if (!sessionData?.session?.access_token) {
         throw new Error('Anda harus login terlebih dahulu');
       }
+      const userId = sessionData.session.user.id;
+      const fileName = `${userId}/cover-${Date.now()}.${fileExt}`;
 
       console.log(`Uploading cover to Supabase Storage bucket: ${bucket}, file: ${fileName}`);
 
