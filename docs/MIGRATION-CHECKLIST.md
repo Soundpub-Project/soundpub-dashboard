@@ -63,7 +63,11 @@ Wajib check:
 
 Lihat `.env-DOCS.md` bagian "Cloud Secrets". Wajib:
 - [ ] `XENDIT_SECRET_KEY`, `XENDIT_WEBHOOK_TOKEN`
-- [ ] `SSO_REALM_URL`, `SSO_CLIENT_ID`, `ICCN_MEDIA_LABEL_ID`
+- [ ] **SSO ICCN (backend)**:
+  - [ ] `SSO_REALM_URL` = `https://sso.iccn.or.id/realms/PORTALICCN` (prod)
+  - [ ] `SSO_CLIENT_ID` = `soundpub`
+  - [ ] `ICCN_MEDIA_LABEL_ID` = UUID dari `SELECT id FROM profiles WHERE email='halo.iccn@gmail.com'`
+  - [ ] (opsional fallback) `SSO_BASE_URL`, `SSO_REALM`
 - [ ] `GCS_PROJECT_ID`, `GCS_BUCKET_NAME`, `GCS_SERVICE_ACCOUNT_KEY`
 - [ ] `NOTIFICATION_EMAIL`
 - [ ] Connectors: `GOOGLE_MAIL_API_KEY`, `GOOGLE_DRIVE_API_KEY` (auto-managed)
@@ -76,11 +80,14 @@ Lihat `.env-DOCS.md` bagian "Cloud Secrets". Wajib:
 
 ## 8. Build Secrets (Workspace)
 
-Untuk build frontend di production:
-- [ ] `VITE_SSO_BASE_URL`
-- [ ] `VITE_SSO_REALM`
-- [ ] `VITE_SSO_CLIENT_ID`
-- [ ] `VITE_SSO_AUTO_REDIRECT` (`true`/`false`)
+Untuk build frontend di production (SSO ICCN — keycloak-js):
+- [ ] `VITE_SSO_BASE_URL` = `https://sso.iccn.or.id`
+- [ ] `VITE_SSO_REALM` = `PORTALICCN` (prod) / `playground` (staging)
+- [ ] `VITE_SSO_CLIENT_ID` = `soundpub`
+- [ ] (opsional) `VITE_SSO_AUTO_REDIRECT` = `true` / `false`
+
+> Verifikasi `ICCN_MEDIA_LABEL_ID` adalah UUID valid sebelum go-live —
+> kalau salah, edge function akan fallback ke lookup email dan log warning.
 
 ## 9. Post-Migration
 
