@@ -1,6 +1,29 @@
 // Web Audio API helpers for client-side audio clipping.
 // No external deps. Encodes output as 16-bit PCM WAV.
 
+import { supabase } from '@/integrations/supabase/client';
+
+/**
+ * Convert any track-audio storage URL (public or signed/expired) into a
+ * fresh short-lived signed URL. Returns the original URL if it doesn't
+ * point at the private `track-audio` bucket (e.g. blob:/data: URLs).
+ */
+export async function resolveTrackAudioUrl(url: string): Promise<string> {
+  if (!url) return url;
+  const match = url.match(
+    /\/storage\/v1\/object\/(?:public|sign)\/track-audio\/([^?#]+)/,
+  );
+  if (!match) return url;
+  const path = decodeURIComponent(match[1]);
+  const { data, error } = await supabase.storage
+    .from('track-audio')
+    .createSignedUrl(path, 60 * 60);
+  if (error || !data?.signedUrl) {
+    throw new Error('Gagal mengakses file audio');
+  }
+  return data.signedUrl;
+}
+
 export async function decodeAudioFromUrl(url: string): Promise<AudioBuffer> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Gagal mengunduh audio (${res.status})`);
