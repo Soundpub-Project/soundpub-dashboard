@@ -94,15 +94,58 @@ Di halaman **Users** (`/dashboard/users`), admin dapat:
 
 ## 5. Secrets yang Diperlukan
 
-| Secret | Keterangan |
-|---|---|
-| `SSO_REALM_URL` | URL lengkap realm Keycloak (issuer) |
-| `SSO_CLIENT_ID` | Client ID di Keycloak (e.g., `soundpub`) |
-| `ICCN_MEDIA_LABEL_ID` | UUID label ICCN Media di tabel `profiles` |
+SSO ICCN butuh **dua kelompok** variable yang TERPISAH — jangan dicampur.
 
-### Realm Staging vs Production
+### 5.1 Frontend (build-time, `VITE_*`)
 
-| Environment | `SSO_REALM_URL` | `VITE_SSO_REALM` (frontend) |
+Set di **Workspace Settings → Build Secrets** (atau `.env` untuk dev lokal).
+Dipakai oleh `src/lib/keycloak.ts` saat browser inisialisasi `keycloak-js`.
+
+| Variable | Wajib | Default | Contoh isi |
+|---|---|---|---|
+| `VITE_SSO_BASE_URL` | ✅ | — | `https://sso.iccn.or.id` (tanpa trailing slash) |
+| `VITE_SSO_REALM` | ✅ | `playground` | `playground` (staging) / `PORTALICCN` (prod) |
+| `VITE_SSO_CLIENT_ID` | ✅ | `soundpub` | `soundpub` |
+| `VITE_SSO_AUTO_REDIRECT` | ❌ | `false` | `true` kalau mau auto-redirect ke ICCN saat silent check gagal |
+
+### 5.2 Backend (Cloud Secrets — Edge Function `sso-login`)
+
+Set di **Lovable → Cloud → Secrets**. Dipakai untuk verifikasi JWT
+(signature, issuer, `azp`, expiry) + sinkronisasi profil.
+
+| Secret | Wajib | Contoh isi |
+|---|---|---|
+| `SSO_REALM_URL` | ✅ | `https://sso.iccn.or.id/realms/playground` (staging) atau `https://sso.iccn.or.id/realms/PORTALICCN` (prod) |
+| `SSO_CLIENT_ID` | ✅ | `soundpub` |
+| `ICCN_MEDIA_LABEL_ID` | ✅ | UUID baris di tabel `profiles` milik label "ICCN Media" |
+| `SSO_BASE_URL` | ❌ fallback | `https://sso.iccn.or.id` — dipakai kalau `SSO_REALM_URL` kosong |
+| `SSO_REALM` | ❌ fallback | `playground` / `PORTALICCN` — dipakai bersama `SSO_BASE_URL` |
+
+> Edge function `sso-login` **tidak butuh** `SSO_CLIENT_SECRET` karena client
+> `soundpub` di Keycloak adalah public client (PKCE). Jangan tambahkan secret
+> itu kecuali konfigurasi Keycloak diubah jadi confidential.
+
+### 5.3 Cara mendapatkan `ICCN_MEDIA_LABEL_ID`
+
+Jalankan query berikut di SQL Editor Lovable Cloud:
+
+```sql
+SELECT id, email, full_name
+FROM profiles
+WHERE email = 'halo.iccn@gmail.com';
+```
+
+Salin nilai kolom `id` (format UUID, contoh `3938c13d-f8f7-47ff-8e7f-6a3a8535e894`)
+ke secret `ICCN_MEDIA_LABEL_ID`. Kalau profil belum ada, buat user "ICCN Media"
+lewat halaman Users dulu, lalu jalankan query di atas.
+
+Edge function punya fallback otomatis: kalau `ICCN_MEDIA_LABEL_ID` kosong atau
+bukan UUID valid, ia akan mencari profil dengan email `halo.iccn@gmail.com`.
+Tapi sangat disarankan tetap diset eksplisit supaya tidak tergantung lookup.
+
+### 5.4 Realm Staging vs Production
+
+| Environment | `SSO_REALM_URL` (backend) | `VITE_SSO_REALM` (frontend) |
 |---|---|---|
 | Staging | `https://sso.iccn.or.id/realms/playground` | `playground` |
 | Production | `https://sso.iccn.or.id/realms/PORTALICCN` | `PORTALICCN` |
