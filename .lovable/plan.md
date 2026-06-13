@@ -1,30 +1,54 @@
-# Fix: Auto Clip gagal memuat audio (HTTP 400)
+## Jawaban singkat
 
-## Penyebab
-Bucket `track-audio` bersifat **private**. Saat `AudioClipCutterDialog` dibuka untuk track yang sudah ada di DB, `audio_url` yang tersimpan adalah URL publik (`/storage/v1/object/public/track-audio/...`) — entah karena diupload sebelum kode signed-URL ada, atau karena pernah jatuh ke fallback `getPublicUrl`. `fetch()` ke URL publik bucket privat mengembalikan 400, sehingga decode audio gagal.
+Untuk SSO ICCN ada **dua kelompok** variabel — jangan dicampur:
 
-Signed URL juga punya kedaluwarsa (1 tahun di kode upload), jadi URL lama bisa expired walaupun benar formatnya.
+### A. Frontend (build-time, `VITE_*` di `.env` / Workspace Build Secrets)
+Dipakai oleh `src/lib/keycloak.ts` saat browser inisialisasi keycloak-js.
 
-## Solusi
-Sebelum fetch audio di dalam cutter, **resolve ulang URL** menjadi signed URL yang fresh bila URL menunjuk ke object di bucket `track-audio`. Logikanya tidak menyentuh data DB — hanya konversi runtime sebelum decode.
+| Variable | Wajib | Contoh isi |
+|---|---|---|
+| `VITE_SSO_BASE_URL` | ✅ | `https://sso.iccn.or.id` (tanpa trailing slash) |
+| `VITE_SSO_REALM` | ✅ | `playground` (staging) / `PORTALICCN` (prod) |
+| `VITE_SSO_CLIENT_ID` | ✅ | `soundpub` |
+| `VITE_SSO_AUTO_REDIRECT` | ❌ | `true` / `false` (default `false`) |
 
-### Detail teknis
+### B. Backend (Cloud Secrets — Edge Function `sso-login`)
+Dipakai untuk verifikasi JWT + sinkronisasi profil.
 
-1. Tambah helper baru `resolveTrackAudioUrl(url: string): Promise<string>` di `src/lib/audioClipper.ts`:
-   - Deteksi pola `/storage/v1/object/(public|sign)/track-audio/<path>` dari URL apa pun (public maupun signed yang sudah expired) dengan regex.
-   - Ambil `<path>` (strip query string seperti `?token=...`).
-   - Panggil `supabase.storage.from('track-audio').createSignedUrl(path, 60 * 60)` untuk URL 1 jam.
-   - Jika regex tidak cocok (bukan URL track-audio, mis. blob/data URL saat baru di-upload), kembalikan URL aslinya.
-   - Jika `createSignedUrl` gagal, lempar error dengan pesan jelas ("Gagal mengakses file audio").
+| Secret | Wajib | Contoh isi |
+|---|---|---|
+| `SSO_REALM_URL` | ✅ | `https://sso.iccn.or.id/realms/playground` (staging) atau `https://sso.iccn.or.id/realms/PORTALICCN` (prod) |
+| `SSO_CLIENT_ID` | ✅ | `soundpub` |
+| `ICCN_MEDIA_LABEL_ID` | ✅ | UUID baris di `public.profiles` milik label "ICCN Media" (email `halo.iccn@gmail.com`) |
+| `SSO_BASE_URL` | ❌ fallback | `https://sso.iccn.or.id` — hanya dipakai kalau `SSO_REALM_URL` kosong |
+| `SSO_REALM` | ❌ fallback | `playground` / `PORTALICCN` — sama, fallback saja |
 
-2. Update `AudioClipCutterDialog.tsx` (effect di sekitar baris 51): sebelum memanggil `decodeAudioFromUrl(audioUrl)`, panggil `resolveTrackAudioUrl(audioUrl)` terlebih dahulu, lalu decode hasilnya. Tag pesan error sudah memakai bahasa Indonesia ("Gagal memuat audio") — tetap dipertahankan.
+Jadi **jawaban pertanyaan**: betul, tiga secret backend yang wajib adalah `SSO_CLIENT_ID`, `SSO_REALM_URL`, dan `ICCN_MEDIA_LABEL_ID`. Tapi di frontend masih butuh tiga `VITE_SSO_*` lain agar tombol login bisa redirect ke Keycloak.
 
-3. Tidak ada perubahan skema, RLS, atau bucket policy. Tidak ada perubahan ke `MediaUploadSection` — file baru tetap di-upload sebagai signed URL seperti sekarang.
+> Catatan: edge function `sso-login` saat ini tidak butuh `SSO_CLIENT_SECRET` karena PKCE (public client). Jangan tambahkan secret itu kecuali Keycloak client diubah jadi confidential.
 
-## Yang TIDAK diubah
-- Bucket `track-audio` tetap **private** (sesuai postur keamanan saat ini).
-- Data `tracks.audio_url` yang sudah ada di DB tidak ditulis ulang — resolver bekerja on-the-fly. (Migrasi data opsional bisa dibahas terpisah jika ingin men-standardkan semua URL lama menjadi storage-path-only.)
+---
 
-## File yang akan disentuh
-- `src/lib/audioClipper.ts` — tambah helper `resolveTrackAudioUrl`.
-- `src/components/releases/AudioClipCutterDialog.tsx` — pakai helper sebelum decode.
+## Rencana update
+
+1. **`docs/SSO-INTEGRATION-DOCS.md`** — di section "Secrets yang Diperlukan":
+   - Pisahkan jadi dua tabel: **Frontend (VITE_*)** dan **Backend (Cloud Secrets)**.
+   - Tambah kolom contoh nilai + tandai opsional vs wajib.
+   - Tambah catatan cara mendapatkan `ICCN_MEDIA_LABEL_ID` (query `select id from profiles where email='halo.iccn@gmail.com'`).
+   - Tambah catatan tentang fallback `SSO_BASE_URL` + `SSO_REALM`.
+
+2. **`.env.example`** — di blok "CLOUD SECRETS" tambah contoh isi + opsional fallback, dan rapikan komentar realm staging/production.
+
+3. **`docs/MIGRATION-CHECKLIST.md`** — section SSO:
+   - Pastikan checklist memuat 3 backend secret wajib + 3 frontend VITE wajib + 1 opsional masing-masing.
+   - Tambah langkah verifikasi `ICCN_MEDIA_LABEL_ID` (cek UUID).
+
+4. **`docs/MIGRATION-GUIDE.md`** — bagian SSO env vars:
+   - Update daftar lengkap (saat ini hanya menyebut `VITE_SSO_BASE_URL/REALM/CLIENT_ID`).
+   - Tambahkan langkah set Cloud Secrets backend + cara cari UUID label ICCN Media.
+
+5. **`docs/plan/Integrasi_SSO_ICCN.md`** — pastikan daftar env var di-sync (saat ini menyebut `SSO_BASE_URL/REALM/CLIENT_ID` saja, hilang `SSO_REALM_URL` dan `ICCN_MEDIA_LABEL_ID`).
+
+**Yang TIDAK diubah:** logika edge function, `keycloak.ts`, atau struktur DB — hanya dokumentasi + `.env.example`.
+
+Setuju lanjut implement? Atau ada nilai spesifik (mis. realm production yang dipakai sekarang) yang mau saya hardcode di docs?
