@@ -110,7 +110,6 @@ export function MediaUploadSection({
   // Upload to Supabase Storage
   const uploadToSupabaseStorage = async (file: File, type: MediaType): Promise<string> => {
     const fileExt = file.name.split('.').pop()?.toLowerCase();
-    const fileName = `${type}-${trackIndex}-${Date.now()}.${fileExt}`;
     const bucket = BUCKET_MAP[type];
 
     // Get the session from Supabase
@@ -118,6 +117,10 @@ export function MediaUploadSection({
     if (!sessionData?.session?.access_token) {
       throw new Error('Not authenticated');
     }
+    const userId = sessionData.session.user.id;
+    // Path-scoped to uploader for RLS ownership checks (non-public buckets).
+    const baseName = `${type}-${trackIndex}-${Date.now()}.${fileExt}`;
+    const fileName = bucket === 'audio-clips' ? baseName : `${userId}/${baseName}`;
 
     console.log(`Uploading to Supabase Storage bucket: ${bucket}, file: ${fileName}`);
 
