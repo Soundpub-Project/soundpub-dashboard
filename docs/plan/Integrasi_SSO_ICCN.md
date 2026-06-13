@@ -74,11 +74,17 @@ Fungsi utama:
 - Generate magic link atau sign in: `supabase.auth.admin.generateLink({ type: 'magiclink', email })`
 - Return `{ access_token, refresh_token }` ke frontend
 
-Secrets yang dibutuhkan:
+Secrets yang dibutuhkan (Cloud Secrets — backend):
 
-- `SSO_BASE_URL` = `https://sso.iccn.or.id`
-- `SSO_REALM` = `playground` (staging) / `PORTALICCN` (production)
-- `SSO_CLIENT_ID` = `soundpub`
+- `SSO_REALM_URL` = `https://sso.iccn.or.id/realms/playground` (staging) /
+  `https://sso.iccn.or.id/realms/PORTALICCN` (production) — **wajib**
+- `SSO_CLIENT_ID` = `soundpub` — **wajib**
+- `ICCN_MEDIA_LABEL_ID` = UUID label "ICCN Media" di tabel `profiles` — **wajib**
+- `SSO_BASE_URL` = `https://sso.iccn.or.id` — opsional, fallback
+- `SSO_REALM` = `playground` / `PORTALICCN` — opsional, fallback
+
+Catatan: client `soundpub` di Keycloak adalah public client (PKCE), jadi
+`SSO_CLIENT_SECRET` **tidak** dibutuhkan.
 
 ### 4. Frontend — `src/lib/keycloak.ts`
 
@@ -173,7 +179,8 @@ Context provider yang:
 ## Urutan Implementasi
 
 1. Database migration (tambah `sso_id`)
-2. Add secrets (`SSO_BASE_URL`, `SSO_REALM`, `SSO_CLIENT_ID`)
+2. Add Cloud Secrets (`SSO_REALM_URL`, `SSO_CLIENT_ID`, `ICCN_MEDIA_LABEL_ID`)
+   dan Build Secrets (`VITE_SSO_BASE_URL`, `VITE_SSO_REALM`, `VITE_SSO_CLIENT_ID`)
 3. Edge function `sso-login`
 4. Frontend keycloak wrapper + silent-check-sso.html
 5. SSO context provider
