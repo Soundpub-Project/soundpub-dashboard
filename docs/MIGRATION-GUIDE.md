@@ -118,14 +118,33 @@ Token: <XENDIT_WEBHOOK_TOKEN>
 
 ### 4.5 SSO ICCN
 
-Update build secrets workspace:
+SSO ICCN butuh env variable di **dua tempat**:
+
+**1) Workspace Build Secrets (frontend — keycloak-js):**
 ```
 VITE_SSO_BASE_URL=https://sso.iccn.or.id
-VITE_SSO_REALM=PORTALICCN
+VITE_SSO_REALM=PORTALICCN            # staging: playground
 VITE_SSO_CLIENT_ID=soundpub
+VITE_SSO_AUTO_REDIRECT=false         # opsional
+```
+
+**2) Cloud Secrets (backend — edge function `sso-login`):**
+```
+SSO_REALM_URL=https://sso.iccn.or.id/realms/PORTALICCN   # staging: .../realms/playground
+SSO_CLIENT_ID=soundpub
+ICCN_MEDIA_LABEL_ID=<UUID label "ICCN Media">
+# opsional fallback (kalau SSO_REALM_URL kosong):
+# SSO_BASE_URL=https://sso.iccn.or.id
+# SSO_REALM=PORTALICCN
+```
+
+Cara dapatkan `ICCN_MEDIA_LABEL_ID`:
+```sql
+SELECT id FROM profiles WHERE email = 'halo.iccn@gmail.com';
 ```
 
 Update redirect URI di Keycloak ICCN: `https://<custom-domain>/auth`
+(callback datang via URL fragment, bukan query string — jangan ubah path).
 
 ---
 
