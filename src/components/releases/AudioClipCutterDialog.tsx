@@ -17,6 +17,7 @@ import {
   sliceAudioBuffer,
   encodeWav,
   formatTime,
+  resolveTrackAudioUrl,
 } from '@/lib/audioClipper';
 
 interface AudioClipCutterDialogProps {
@@ -50,6 +51,7 @@ export function AudioClipCutterDialog({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const waveContainerRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef<null | 'start' | 'end'>(null);
+  const [resolvedUrl, setResolvedUrl] = useState<string>('');
 
   // Load + decode audio on open
   useEffect(() => {
@@ -61,7 +63,12 @@ export function AudioClipCutterDialog({
     setPlaying(false);
     setCurrentTime(0);
 
-    decodeAudioFromUrl(audioUrl)
+    resolveTrackAudioUrl(audioUrl)
+      .then((u) => {
+        if (cancelled) throw new Error('cancelled');
+        setResolvedUrl(u);
+        return decodeAudioFromUrl(u);
+      })
       .then((buf) => {
         if (cancelled) return;
         bufferRef.current = buf;
@@ -447,7 +454,7 @@ export function AudioClipCutterDialog({
               </span>
               <audio
                 ref={audioRef}
-                src={audioUrl}
+                src={resolvedUrl || audioUrl}
                 onTimeUpdate={handleTimeUpdate}
                 onEnded={() => setPlaying(false)}
                 preload="auto"
