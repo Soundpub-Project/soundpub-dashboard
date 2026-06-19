@@ -1,7 +1,7 @@
 import Keycloak from 'keycloak-js';
 
 const SSO_BASE_URL = import.meta.env.VITE_SSO_BASE_URL || 'https://sso.iccn.or.id';
-const SSO_REALM = import.meta.env.VITE_SSO_REALM || 'playground';
+const SSO_REALM = import.meta.env.VITE_SSO_REALM || 'PORTALICCN';
 const SSO_CLIENT_ID = import.meta.env.VITE_SSO_CLIENT_ID || 'soundpub';
 const SSO_PKCE_KEY = 'soundpub_iccn_sso_pkce';
 
