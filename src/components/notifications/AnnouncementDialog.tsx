@@ -50,13 +50,14 @@ export function AnnouncementDialog({ open, onOpenChange }: AnnouncementDialogPro
 
       if (error) throw error;
 
-      // Optionally send email to all users
+      // Optionally broadcast email to all opt-in users
       if (sendEmail) {
-        await supabase.functions.invoke('send-royalty-notification', {
+        await supabase.functions.invoke('send-app-email', {
           body: {
-            type: 'announcement',
-            title: title.trim(),
-            message: message.trim(),
+            templateName: 'announcement',
+            broadcastRoles: ['superadmin', 'admin', 'label', 'whitelabel', 'artist', 'copyright'],
+            templateData: { title: title.trim(), message: message.trim() },
+            idempotencyKey: `announcement-${Date.now()}`,
           },
         });
       }

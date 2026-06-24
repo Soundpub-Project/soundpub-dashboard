@@ -97,7 +97,25 @@ Deno.serve(async (req) => {
         await supabase.from('notifications').insert(adminNotifs)
       }
 
-      // Send email notification
+      // Email ke user pembayar (opt-in via send-app-email + Gmail)
+      try {
+        await supabase.functions.invoke('send-app-email', {
+          body: {
+            templateName: 'payment-success',
+            recipientUserId: payment.user_id,
+            templateData: {
+              title: releaseInfo?.title || 'Release',
+              trackCount: payment.track_count,
+              amount: payment.amount,
+            },
+            idempotencyKey: `payment-${payment.id}-paid`,
+          },
+        })
+      } catch (e) {
+        console.error('send-app-email payment-success failed:', e)
+      }
+
+      // Existing admin notification via Resend (legacy, dipertahankan)
       try {
         await sendEmailNotification(payment, supabase)
       } catch (emailError) {

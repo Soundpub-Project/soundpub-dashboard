@@ -211,6 +211,42 @@ export type Database = {
         }
         Relationships: []
       }
+      email_send_log: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          idempotency_key: string | null
+          metadata: Json
+          recipient_email: string
+          recipient_user_id: string | null
+          status: string
+          template_name: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          recipient_email: string
+          recipient_user_id?: string | null
+          status: string
+          template_name: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          recipient_email?: string
+          recipient_user_id?: string | null
+          status?: string
+          template_name?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string
@@ -321,6 +357,10 @@ export type Database = {
           composer_code: string | null
           created_at: string | null
           email: string
+          email_notif_announcement: boolean
+          email_notif_payment: boolean
+          email_notif_payout: boolean
+          email_notif_release: boolean
           full_name: string
           id: string
           label_revenue: number
@@ -349,6 +389,10 @@ export type Database = {
           composer_code?: string | null
           created_at?: string | null
           email: string
+          email_notif_announcement?: boolean
+          email_notif_payment?: boolean
+          email_notif_payout?: boolean
+          email_notif_release?: boolean
           full_name: string
           id: string
           label_revenue?: number
@@ -377,6 +421,10 @@ export type Database = {
           composer_code?: string | null
           created_at?: string | null
           email?: string
+          email_notif_announcement?: boolean
+          email_notif_payment?: boolean
+          email_notif_payout?: boolean
+          email_notif_release?: boolean
           full_name?: string
           id?: string
           label_revenue?: number
