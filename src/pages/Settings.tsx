@@ -14,6 +14,7 @@ import { Loader2, Save, Eye, EyeOff, KeyRound, Camera, Trash2 } from 'lucide-rea
 import { SuperAdminSettings } from '@/components/settings/SuperAdminSettings';
 import { LabelLogoSettings } from '@/components/settings/LabelLogoSettings';
 import { IccnIntegrationSettings } from '@/components/settings/IccnIntegrationSettings';
+import { EmailNotificationSettings } from '@/components/settings/EmailNotificationSettings';
 
 export default function Settings() {
   const { profile, user, role, isLabel, isWhitelabel, isSsoUser, refreshProfile } = useAuth();
@@ -511,6 +512,8 @@ export default function Settings() {
                 </div>
               </CardContent>
             </Card>
+
+            <EmailNotificationSettings />
           </div>
         </div>
       </div>
