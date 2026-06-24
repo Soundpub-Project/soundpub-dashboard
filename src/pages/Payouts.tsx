@@ -120,6 +120,21 @@ export default function Payouts() {
           metadata: { amount, bank: form.bank_name },
         }));
         await supabase.from('notifications').insert(notifs);
+
+        // Email broadcast ke admin (opt-in)
+        supabase.functions.invoke('send-app-email', {
+          body: {
+            templateName: 'payout-requested',
+            broadcastRoles: ['superadmin', 'admin'],
+            templateData: {
+              userName: profile.full_name,
+              amount,
+              bankName: form.bank_name,
+              accountNumber: form.account_number,
+              accountHolderName: form.account_holder_name,
+            },
+          },
+        }).catch((e) => console.error('payout email failed', e));
       }
 
       toast.success('Pengajuan payout berhasil dikirim');
