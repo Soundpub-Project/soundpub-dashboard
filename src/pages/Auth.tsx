@@ -305,6 +305,15 @@ export default function Auth() {
                     </div>
                   </div> */}
 
+                  <div className="relative my-2">
+                    <div className="absolute inset-0 flex items-center">
+                      <Separator className="w-full" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-card px-2 text-muted-foreground">Google Login Maintenance</span>
+                    </div>
+                  </div>
+
                   {/* <Button
                     type="button"
                     variant="outline"
