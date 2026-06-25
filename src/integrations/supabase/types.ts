@@ -594,6 +594,7 @@ export type Database = {
           id: string
           isrc: string
           label_name: string
+          label_user_id: string | null
           net_revenue: number
           period: string
           platform: string
@@ -611,6 +612,7 @@ export type Database = {
           id?: string
           isrc: string
           label_name: string
+          label_user_id?: string | null
           net_revenue?: number
           period: string
           platform: string
@@ -628,6 +630,7 @@ export type Database = {
           id?: string
           isrc?: string
           label_name?: string
+          label_user_id?: string | null
           net_revenue?: number
           period?: string
           platform?: string
@@ -638,6 +641,13 @@ export type Database = {
           upload_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "royalties_label_user_id_fkey"
+            columns: ["label_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "royalties_upload_id_fkey"
             columns: ["upload_id"]
