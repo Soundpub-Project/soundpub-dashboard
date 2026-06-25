@@ -62,6 +62,28 @@ Deno.serve(async (req) => {
     const labelMap: Record<string, string> = {}
     labels?.forEach(l => labelMap[l.id] = l.full_name)
 
+    // Build a stable name -> user_id map for label/whitelabel profiles so we can persist label_user_id
+    // on royalty rows (RLS now depends on this stable identifier instead of the mutable full_name).
+    const { data: labelRoleRows } = await supabaseAdmin
+      .from('user_roles')
+      .select('user_id, role')
+      .in('role', ['label', 'whitelabel'])
+    const labelUserIds = [...new Set((labelRoleRows || []).map((r: any) => r.user_id))]
+    const { data: labelProfiles } = await supabaseAdmin
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', labelUserIds.length ? labelUserIds : ['_'])
+    const nameToLabelId: Record<string, string | null> = {}
+    const nameCounts: Record<string, number> = {}
+    ;(labelProfiles || []).forEach((p: any) => {
+      const key = (p.full_name || '').trim().toLowerCase()
+      if (!key) return
+      nameCounts[key] = (nameCounts[key] || 0) + 1
+      nameToLabelId[key] = p.id
+    })
+    // Mark ambiguous names as null so we don't grant cross-tenant access
+    Object.keys(nameCounts).forEach(k => { if (nameCounts[k] > 1) nameToLabelId[k] = null })
+
     // Insert royalties
     const labelRev: Record<string, number> = {}
     const artistRev: Record<string, number> = {}
@@ -72,6 +94,8 @@ Deno.serve(async (req) => {
         const track = isrcMap[r.isrc]
         const rel = track ? relMap[track.release_id] : null
         const labelName = r.label_name || (rel ? labelMap[rel.label_id] : '') || ''
+        // Stable label identifier: prefer release.label_id (authoritative), fallback to unique name match.
+        const labelUserId = (rel?.label_id) || nameToLabelId[(labelName || '').trim().toLowerCase()] || null
         const artistName = r.artist || track?.artist_name || rel?.artist_name || ''
         
         // Priority: track.artist_user_id > release.artist_user_id (ISRC-based matching)
@@ -90,7 +114,7 @@ Deno.serve(async (req) => {
           labelRev[labelName] = (labelRev[labelName] || 0) + artistShare
         }
 
-        return { ...r, upload_id: upload.id, artist_user_id: artistUserId, label_name: labelName, artist: artistName, upc: r.upc || rel?.upc || '', title: r.title || track?.title || null }
+        return { ...r, upload_id: upload.id, artist_user_id: artistUserId, label_user_id: labelUserId, label_name: labelName, artist: artistName, upc: r.upc || rel?.upc || '', title: r.title || track?.title || null }
       })
 
       const { error } = await supabaseAdmin.from('royalties').insert(batch)
