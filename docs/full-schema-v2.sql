@@ -1573,3 +1573,354 @@ ON CONFLICT (key) DO NOTHING;
 -- =====================================================
 -- END OF SCHEMA EXPORT v2.3
 -- =====================================================
+
+-- =====================================================
+-- APPENDIX v2.4 — Delta Juni–Juli 2026
+-- Terapkan setelah base schema v2.3 di atas. Idempotent
+-- (aman dijalankan ulang kalau sudah pernah apply).
+-- =====================================================
+
+-- ---- 1) Notifications hardening (2026-06-13) ----
+DROP POLICY IF EXISTS "Users can insert own notifications" ON public.notifications;
+CREATE POLICY "Users can insert own notifications"
+  ON public.notifications
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    public.is_admin(auth.uid())
+    OR (user_id = auth.uid() AND COALESCE(is_global, false) = false)
+  );
+
+-- Trigger functions: revoke direct EXECUTE dari anon/PUBLIC
+REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.prevent_profile_privilege_escalation() FROM anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.update_balance_on_payout_status_change() FROM anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.update_timestamp() FROM anon, PUBLIC;
+
+-- ---- 2) Storage: buang policy role-only lama, pakai path-scoped ----
+DROP POLICY IF EXISTS "Labels can delete their own audio files" ON storage.objects;
+DROP POLICY IF EXISTS "Labels can delete their own video files" ON storage.objects;
+DROP POLICY IF EXISTS "Labels can view audio for their releases" ON storage.objects;
+DROP POLICY IF EXISTS "Labels can view video for their releases" ON storage.objects;
+DROP POLICY IF EXISTS "Whitelabels can view track audio" ON storage.objects;
+DROP POLICY IF EXISTS "Whitelabels can view track video" ON storage.objects;
+DROP POLICY IF EXISTS "Labels can upload release covers" ON storage.objects;
+DROP POLICY IF EXISTS "Labels can update their release covers" ON storage.objects;
+DROP POLICY IF EXISTS "Artists can upload release covers" ON storage.objects;
+DROP POLICY IF EXISTS "Whitelabels can upload release covers" ON storage.objects;
+DROP POLICY IF EXISTS "Labels can upload track audio" ON storage.objects;
+DROP POLICY IF EXISTS "Artists can upload track audio" ON storage.objects;
+DROP POLICY IF EXISTS "Whitelabels can upload track audio" ON storage.objects;
+DROP POLICY IF EXISTS "Labels can upload track video" ON storage.objects;
+DROP POLICY IF EXISTS "Artists can upload track video" ON storage.objects;
+DROP POLICY IF EXISTS "Whitelabels can upload track video" ON storage.objects;
+DROP POLICY IF EXISTS "Admins and labels can upload release covers" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users with proper roles can upload to release-cov" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users with proper roles can upload to track-audio" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users with proper roles can upload to audio-clips" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users with proper roles can update track-audio" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users with proper roles can delete from track-audio" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users with proper roles can update audio-clips" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users with proper roles can delete from audio-clips" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users with proper roles can update release-covers" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users with proper roles can delete from release-covers" ON storage.objects;
+DROP POLICY IF EXISTS "Roles can upload to release-covers" ON storage.objects;
+DROP POLICY IF EXISTS "Roles can update release-covers" ON storage.objects;
+DROP POLICY IF EXISTS "Roles can delete release-covers" ON storage.objects;
+DROP POLICY IF EXISTS "Roles can update audio-clips" ON storage.objects;
+DROP POLICY IF EXISTS "Roles can delete audio-clips" ON storage.objects;
+DROP POLICY IF EXISTS "Roles can upload to track-audio" ON storage.objects;
+DROP POLICY IF EXISTS "Roles can update track-audio" ON storage.objects;
+DROP POLICY IF EXISTS "Roles can delete track-audio" ON storage.objects;
+DROP POLICY IF EXISTS "Roles can upload to track-video" ON storage.objects;
+DROP POLICY IF EXISTS "Roles can update track-video" ON storage.objects;
+DROP POLICY IF EXISTS "Roles can delete track-video" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can view release covers" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can read release-covers" ON storage.objects;
+DROP POLICY IF EXISTS "Labels can upload audio for their releases" ON storage.objects;
+DROP POLICY IF EXISTS "Labels can upload video for their releases" ON storage.objects;
+DROP POLICY IF EXISTS "Labels can upload audio clips" ON storage.objects;
+DROP POLICY IF EXISTS "Whitelabels can upload video" ON storage.objects;
+DROP POLICY IF EXISTS "Artists can upload video for their releases" ON storage.objects;
+
+-- release-covers: folder-scoped INSERT + UPDATE + DELETE
+CREATE POLICY "Users can upload release covers to own folder"
+  ON storage.objects FOR INSERT TO authenticated
+  WITH CHECK (
+    bucket_id = 'release-covers'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+    AND (
+      public.has_role(auth.uid(), 'label') OR public.has_role(auth.uid(), 'artist')
+      OR public.has_role(auth.uid(), 'whitelabel') OR public.is_admin(auth.uid())
+    )
+  );
+CREATE POLICY "Users can update release covers in own folder"
+  ON storage.objects FOR UPDATE TO authenticated
+  USING (
+    bucket_id = 'release-covers'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+CREATE POLICY "Owners and admins can update release-covers"
+  ON storage.objects FOR UPDATE TO authenticated
+  USING (
+    bucket_id = 'release-covers'
+    AND (public.is_admin(auth.uid()) OR (storage.foldername(name))[1] = auth.uid()::text)
+  );
+CREATE POLICY "Owners and admins can delete release-covers"
+  ON storage.objects FOR DELETE TO authenticated
+  USING (
+    bucket_id = 'release-covers'
+    AND (public.is_admin(auth.uid()) OR (storage.foldername(name))[1] = auth.uid()::text)
+  );
+
+-- release-covers: scoped read (owner folder / admin / parent label)
+CREATE POLICY "Scoped read release-covers"
+  ON storage.objects FOR SELECT TO authenticated
+  USING (
+    bucket_id = 'release-covers'
+    AND (
+      public.is_admin(auth.uid())
+      OR (storage.foldername(name))[1] = auth.uid()::text
+      OR EXISTS (
+        SELECT 1 FROM public.profiles p
+        WHERE p.id::text = (storage.foldername(name))[1]
+          AND p.parent_label_id = auth.uid()
+      )
+    )
+  );
+
+-- track-audio: folder-scoped INSERT only (UPDATE/DELETE via owner+admin below)
+CREATE POLICY "Users can upload track audio to own folder"
+  ON storage.objects FOR INSERT TO authenticated
+  WITH CHECK (
+    bucket_id = 'track-audio'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+    AND (
+      public.has_role(auth.uid(), 'label') OR public.has_role(auth.uid(), 'artist')
+      OR public.has_role(auth.uid(), 'whitelabel') OR public.is_admin(auth.uid())
+    )
+  );
+
+-- track-video: folder-scoped INSERT
+CREATE POLICY "Users can upload track video to own folder"
+  ON storage.objects FOR INSERT TO authenticated
+  WITH CHECK (
+    bucket_id = 'track-video'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+    AND (
+      public.has_role(auth.uid(), 'label') OR public.has_role(auth.uid(), 'artist')
+      OR public.has_role(auth.uid(), 'whitelabel') OR public.is_admin(auth.uid())
+    )
+  );
+
+-- audio-clips: folder-scoped INSERT + owner/admin update/delete
+CREATE POLICY "Users can upload audio clips to own folder"
+  ON storage.objects FOR INSERT TO authenticated
+  WITH CHECK (
+    bucket_id = 'audio-clips'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+    AND (
+      public.is_admin(auth.uid())
+      OR public.has_role(auth.uid(), 'label')
+      OR public.has_role(auth.uid(), 'whitelabel')
+      OR public.has_role(auth.uid(), 'artist')
+    )
+  );
+CREATE POLICY "Owners and admins can update audio-clips"
+  ON storage.objects FOR UPDATE TO authenticated
+  USING (
+    bucket_id = 'audio-clips'
+    AND (public.is_admin(auth.uid()) OR (storage.foldername(name))[1] = auth.uid()::text)
+  );
+CREATE POLICY "Owners and admins can delete audio-clips"
+  ON storage.objects FOR DELETE TO authenticated
+  USING (
+    bucket_id = 'audio-clips'
+    AND (public.is_admin(auth.uid()) OR (storage.foldername(name))[1] = auth.uid()::text)
+  );
+
+-- ---- 3) Audit logs: buang direct INSERT dari client (edge function only) ----
+DROP POLICY IF EXISTS "Authenticated users can insert own audit logs" ON public.audit_logs;
+
+-- ---- 4) label_profile_update_safe helper ----
+CREATE OR REPLACE FUNCTION public.label_profile_update_safe(
+  _id uuid,
+  _balance numeric,
+  _label_revenue numeric,
+  _artist_revenue numeric,
+  _subscription_status text,
+  _parent_label_id uuid,
+  _composer_code text,
+  _status text,
+  _email text,
+  _sso_provider text,
+  _sso_user_id text,
+  _sso_user_type text,
+  _password_set boolean
+) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.id = _id
+      AND p.balance IS NOT DISTINCT FROM _balance
+      AND p.label_revenue IS NOT DISTINCT FROM _label_revenue
+      AND p.artist_revenue IS NOT DISTINCT FROM _artist_revenue
+      AND p.subscription_status IS NOT DISTINCT FROM _subscription_status
+      AND p.parent_label_id IS NOT DISTINCT FROM _parent_label_id
+      AND p.composer_code IS NOT DISTINCT FROM _composer_code
+      AND p.status IS NOT DISTINCT FROM _status
+      AND p.email IS NOT DISTINCT FROM _email
+      AND p.sso_provider IS NOT DISTINCT FROM _sso_provider
+      AND p.sso_user_id IS NOT DISTINCT FROM _sso_user_id
+      AND p.sso_user_type IS NOT DISTINCT FROM _sso_user_type
+      AND p.password_set IS NOT DISTINCT FROM _password_set
+  )
+$$;
+REVOKE EXECUTE ON FUNCTION public.label_profile_update_safe(uuid,numeric,numeric,numeric,text,uuid,text,text,text,text,text,text,boolean) FROM anon, PUBLIC;
+GRANT EXECUTE ON FUNCTION public.label_profile_update_safe(uuid,numeric,numeric,numeric,text,uuid,text,text,text,text,text,text,boolean) TO authenticated;
+
+-- Profiles: WITH CHECK guard di self-update + label/whitelabel update artist
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
+CREATE POLICY "Users can update their own profile"
+  ON public.profiles FOR UPDATE TO authenticated
+  USING (id = auth.uid())
+  WITH CHECK (
+    id = auth.uid()
+    AND public.label_profile_update_safe(
+      id, balance, label_revenue, artist_revenue,
+      subscription_status, parent_label_id, composer_code,
+      status, email, sso_provider, sso_user_id, sso_user_type, password_set
+    )
+  );
+
+DROP POLICY IF EXISTS "Labels can update their artists" ON public.profiles;
+DROP POLICY IF EXISTS "Whitelabels can update their artists" ON public.profiles;
+CREATE POLICY "Labels can update their artists (safe fields)"
+  ON public.profiles FOR UPDATE TO authenticated
+  USING (public.has_role(auth.uid(), 'label') AND parent_label_id = auth.uid())
+  WITH CHECK (
+    public.has_role(auth.uid(), 'label') AND parent_label_id = auth.uid()
+    AND public.label_profile_update_safe(
+      id, balance, label_revenue, artist_revenue,
+      subscription_status, parent_label_id, composer_code,
+      status, email, sso_provider, sso_user_id, sso_user_type, password_set
+    )
+  );
+CREATE POLICY "Whitelabels can update their artists (safe fields)"
+  ON public.profiles FOR UPDATE TO authenticated
+  USING (public.has_role(auth.uid(), 'whitelabel') AND parent_label_id = auth.uid())
+  WITH CHECK (
+    public.has_role(auth.uid(), 'whitelabel') AND parent_label_id = auth.uid()
+    AND public.label_profile_update_safe(
+      id, balance, label_revenue, artist_revenue,
+      subscription_status, parent_label_id, composer_code,
+      status, email, sso_provider, sso_user_id, sso_user_type, password_set
+    )
+  );
+
+-- payout_requests: restrictive UPDATE hanya admin
+CREATE POLICY "Only admins can update payouts"
+  ON public.payout_requests AS RESTRICTIVE FOR UPDATE TO authenticated
+  USING (public.is_admin(auth.uid()))
+  WITH CHECK (public.is_admin(auth.uid()));
+
+-- ---- 5) Email notification opt-in + email_send_log (2026-06-24) ----
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS email_notif_payout boolean NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS email_notif_release boolean NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS email_notif_payment boolean NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS email_notif_announcement boolean NOT NULL DEFAULT true;
+
+CREATE TABLE IF NOT EXISTS public.email_send_log (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  template_name text NOT NULL,
+  recipient_email text NOT NULL,
+  recipient_user_id uuid,
+  status text NOT NULL,                       -- sent | failed | suppressed
+  error_message text,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  idempotency_key text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+GRANT SELECT ON public.email_send_log TO authenticated;
+GRANT ALL ON public.email_send_log TO service_role;
+ALTER TABLE public.email_send_log ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Admins can view email send log" ON public.email_send_log;
+CREATE POLICY "Admins can view email send log"
+  ON public.email_send_log FOR SELECT TO authenticated
+  USING (public.is_admin(auth.uid()));
+CREATE INDEX IF NOT EXISTS idx_email_send_log_created_at
+  ON public.email_send_log (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_email_send_log_template
+  ON public.email_send_log (template_name, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_email_send_log_idem
+  ON public.email_send_log (idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
+
+-- ---- 6) Royalties: label_user_id stable identifier (2026-06-25) ----
+ALTER TABLE public.royalties
+  ADD COLUMN IF NOT EXISTS label_user_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_royalties_label_user_id ON public.royalties(label_user_id);
+
+-- Backfill dari full_name unik
+WITH unique_labels AS (
+  SELECT lower(trim(p.full_name)) AS name_key, MIN(p.id::text)::uuid AS only_id
+  FROM public.profiles p
+  JOIN public.user_roles ur ON ur.user_id = p.id
+  WHERE ur.role IN ('label','whitelabel')
+    AND p.full_name IS NOT NULL AND trim(p.full_name) <> ''
+  GROUP BY 1
+  HAVING COUNT(*) = 1
+)
+UPDATE public.royalties r
+   SET label_user_id = ul.only_id
+  FROM unique_labels ul
+ WHERE r.label_user_id IS NULL
+   AND lower(trim(r.label_name)) = ul.name_key;
+
+DROP POLICY IF EXISTS "Labels can view royalties for their artists" ON public.royalties;
+CREATE POLICY "Labels can view royalties for their artists"
+  ON public.royalties FOR SELECT TO authenticated
+  USING (public.has_role(auth.uid(), 'label') AND label_user_id = auth.uid());
+
+DROP POLICY IF EXISTS "Whitelabels can view royalties for their artists" ON public.royalties;
+CREATE POLICY "Whitelabels can view royalties for their artists"
+  ON public.royalties FOR SELECT TO authenticated
+  USING (public.has_role(auth.uid(), 'whitelabel') AND label_user_id = auth.uid());
+
+-- ---- 7) prevent_profile_privilege_escalation: service role bypass (2026-06-19) ----
+CREATE OR REPLACE FUNCTION public.prevent_profile_privilege_escalation()
+RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $$
+BEGIN
+  IF auth.uid() IS NULL OR current_setting('role', true) = 'service_role' THEN
+    RETURN NEW;
+  END IF;
+  IF public.is_admin(auth.uid()) THEN
+    RETURN NEW;
+  END IF;
+  IF NEW.balance IS DISTINCT FROM OLD.balance
+     OR NEW.label_revenue IS DISTINCT FROM OLD.label_revenue
+     OR NEW.artist_revenue IS DISTINCT FROM OLD.artist_revenue
+     OR NEW.subscription_status IS DISTINCT FROM OLD.subscription_status
+     OR NEW.subscription_upgraded_at IS DISTINCT FROM OLD.subscription_upgraded_at
+     OR NEW.parent_label_id IS DISTINCT FROM OLD.parent_label_id
+     OR NEW.composer_code IS DISTINCT FROM OLD.composer_code
+     OR NEW.status IS DISTINCT FROM OLD.status
+     OR NEW.sso_provider IS DISTINCT FROM OLD.sso_provider
+     OR NEW.sso_user_id IS DISTINCT FROM OLD.sso_user_id
+     OR NEW.sso_user_type IS DISTINCT FROM OLD.sso_user_type
+     OR NEW.email IS DISTINCT FROM OLD.email
+     OR NEW.password_set IS DISTINCT FROM OLD.password_set
+  THEN
+    RAISE EXCEPTION 'Not allowed to modify privileged profile fields';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+-- =====================================================
+-- END OF APPENDIX v2.4
+-- =====================================================
