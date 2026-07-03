@@ -1,6 +1,13 @@
-# SoundPub Dashboard - Panduan Setup Supabase di VPS
+# SoundPub Dashboard — Panduan Setup Supabase Self-Hosted di VPS
 
-Panduan lengkap untuk setup Supabase Self-Hosted di VPS server pribadi.
+Panduan lengkap deploy **Supabase self-hosted** + **SoundPub Dashboard**
+di VPS pribadi.
+
+Update: Juli 2026.
+
+> Setelah infra siap, ikuti [`MIGRATION-GUIDE.md`](./MIGRATION-GUIDE.md)
+> untuk migrasi data + [`MIGRATION-CHECKLIST.md`](./MIGRATION-CHECKLIST.md)
+> untuk sanity check.
 
 ## Daftar Isi
 
@@ -10,346 +17,289 @@ Panduan lengkap untuk setup Supabase Self-Hosted di VPS server pribadi.
 4. [Konfigurasi Database](#4-konfigurasi-database)
 5. [Deploy Edge Functions](#5-deploy-edge-functions)
 6. [Konfigurasi Storage](#6-konfigurasi-storage)
-7. [Setup SSL/HTTPS](#7-setup-sslhttps)
-8. [Migrasi Data](#8-migrasi-data)
-9. [Monitoring & Maintenance](#9-monitoring--maintenance)
+7. [Nginx + SSL/HTTPS](#7-nginx--sslhttps)
+8. [Email di Self-Host](#8-email-di-self-host)
+9. [Monitoring & Backup](#9-monitoring--backup)
 10. [Troubleshooting](#10-troubleshooting)
-11. [Checklist Lengkap](#11-checklist-lengkap)
+11. [Quick Reference](#11-quick-reference)
 
 ---
 
 ## 1. Persyaratan Server
 
-### Minimum Requirements
-
 | Resource | Minimum | Recommended |
 |----------|---------|-------------|
-| CPU | 2 cores | 4+ cores |
-| RAM | 4 GB | 8+ GB |
-| Storage | 30 GB SSD | 100+ GB SSD |
-| OS | Ubuntu 22.04 LTS | Ubuntu 22.04 LTS |
+| CPU      | 2 cores | 4+ cores    |
+| RAM      | 4 GB    | 8+ GB       |
+| Storage  | 40 GB SSD | 200+ GB SSD (media library besar) |
+| OS       | Ubuntu 22.04 LTS | Ubuntu 22.04/24.04 LTS |
 
-### Software Requirements
+### Software
 
-- Docker Engine 24.0+
-- Docker Compose 2.20+
-- Git
-- curl
-- Supabase CLI (optional, untuk deploy edge functions)
+- Docker Engine 24+
+- Docker Compose plugin 2.20+
+- Git, curl, `psql` (postgres client 15+)
+- (Opsional) Supabase CLI untuk deploy edge functions
+- (Opsional) Node 20 + `bun` untuk build frontend di server
 
-### Domain & Network
+### Domain & Port
 
-- Domain dengan SSL certificate (Let's Encrypt recommended)
-- Port yang perlu dibuka:
-  - `80` - HTTP
-  - `443` - HTTPS
-  - `5432` - PostgreSQL (optional, untuk akses langsung)
-  - `8000` - Kong API Gateway (internal)
+- 3 subdomain (contoh):
+  - `api.yourdomain.com`       → Kong / API gateway
+  - `studio.yourdomain.com`    → Supabase Studio (proteksi IP allowlist)
+  - `dashboard.yourdomain.com` → SoundPub Dashboard (frontend)
+- Port yang wajib dibuka: **80**, **443**, **22** (SSH). Port 5432 (DB)
+  ditutup dari publik — akses via SSH tunnel saja.
 
 ---
 
 ## 2. Instalasi Docker
 
-### Ubuntu 22.04
-
 ```bash
-# Update system
 sudo apt update && sudo apt upgrade -y
-
-# Install prerequisites
 sudo apt install -y ca-certificates curl gnupg lsb-release
 
-# Add Docker's official GPG key
 sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-
-# Add repository
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+  https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-# Install Docker
 sudo apt update
 sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-
-# Add user to docker group
 sudo usermod -aG docker $USER
 newgrp docker
 
-# Verify installation
 docker --version
 docker compose version
-```
-
-### Verifikasi
-
-```bash
-# Test Docker
-docker run hello-world
-
-# Check Docker Compose
-docker compose version
-# Output: Docker Compose version v2.x.x
 ```
 
 ---
 
 ## 3. Setup Supabase Self-Hosted
 
-### Clone Supabase Docker
+### Clone dan konfigurasi
 
 ```bash
-# Create directory
-mkdir -p ~/supabase
-cd ~/supabase
-
-# Clone supabase docker setup
+mkdir -p ~/supabase && cd ~/supabase
 git clone --depth 1 https://github.com/supabase/supabase.git
 cd supabase/docker
-
-# Copy environment file
 cp .env.example .env
 ```
 
-### Konfigurasi Environment
-
-Edit file `.env`:
+### Generate secret
 
 ```bash
-nano .env
+# Postgres password (64 char)
+openssl rand -hex 32
+
+# JWT secret (min 32 char)
+openssl rand -hex 32
+
+# ANON_KEY & SERVICE_ROLE_KEY di-generate dari JWT_SECRET
+# https://supabase.com/docs/guides/self-hosting#api-keys
+#   - anon      : role='anon',         exp=now+10yr
+#   - service   : role='service_role', exp=now+10yr
 ```
 
-**PENTING: Ubah nilai-nilai berikut dengan yang UNIK dan AMAN:**
+### Isi `.env` (bagian yang WAJIB diganti)
 
 ```env
-############
-# Secrets
-############
+POSTGRES_PASSWORD=<hasil openssl>
+JWT_SECRET=<hasil openssl, 32+ hex>
+ANON_KEY=<jwt anon>
+SERVICE_ROLE_KEY=<jwt service_role>
 
-# Generate dengan: openssl rand -hex 32
-POSTGRES_PASSWORD=your_super_secure_password_here
-
-# Generate JWT secret dengan: openssl rand -hex 64
-JWT_SECRET=your_jwt_secret_here
-
-# Generate anon key dan service role key
-# Gunakan: https://supabase.com/docs/guides/self-hosting#api-keys
-ANON_KEY=your_anon_key_here
-SERVICE_ROLE_KEY=your_service_role_key_here
-
-# Dashboard credentials
 DASHBOARD_USERNAME=admin
-DASHBOARD_PASSWORD=your_dashboard_password
+DASHBOARD_PASSWORD=<password kuat>
 
-############
-# URLs
-############
-
-# Ganti dengan domain Anda
-SITE_URL=https://app.yourdomain.com
+SITE_URL=https://dashboard.yourdomain.com
 API_EXTERNAL_URL=https://api.yourdomain.com
+STUDIO_DEFAULT_ORGANIZATION=SoundPub
+STUDIO_DEFAULT_PROJECT=soundpub-self
 
-# Studio (Supabase Dashboard)
-STUDIO_PORT=3000
-
-############
-# Email (SMTP)
-############
-
-SMTP_ADMIN_EMAIL=admin@yourdomain.com
-SMTP_HOST=smtp.yourdomain.com
+# SMTP untuk Auth email (confirm, reset password)
+SMTP_HOST=smtp.yourprovider.com
 SMTP_PORT=587
-SMTP_USER=your_smtp_user
-SMTP_PASS=your_smtp_password
+SMTP_USER=noreply@yourdomain.com
+SMTP_PASS=<smtp password>
 SMTP_SENDER_NAME=SoundPub
+SMTP_ADMIN_EMAIL=admin@yourdomain.com
+
+# Enable auth providers yang dipakai
+ENABLE_EMAIL_SIGNUP=true
+ENABLE_EMAIL_AUTOCONFIRM=false
+GOTRUE_EXTERNAL_GOOGLE_ENABLED=true
+GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID=<google oauth id>
+GOTRUE_EXTERNAL_GOOGLE_SECRET=<google oauth secret>
+GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=https://api.yourdomain.com/auth/v1/callback
 ```
 
-### Generate API Keys
-
-Gunakan script ini untuk generate JWT keys:
+### Start
 
 ```bash
-# Install jwt-cli (optional)
-# atau gunakan online generator di:
-# https://supabase.com/docs/guides/self-hosting#api-keys
-
-# Contoh struktur JWT untuk anon key:
-# {
-#   "role": "anon",
-#   "iss": "supabase",
-#   "iat": 1700000000,
-#   "exp": 2000000000
-# }
-
-# Contoh struktur JWT untuk service_role key:
-# {
-#   "role": "service_role",
-#   "iss": "supabase",
-#   "iat": 1700000000,
-#   "exp": 2000000000
-# }
-```
-
-### Start Supabase
-
-```bash
-# Start all services
 docker compose up -d
-
-# Check status
-docker compose ps
-
-# View logs
-docker compose logs -f
+docker compose ps    # semua service: healthy
+docker compose logs -f    # sanity check
 ```
 
-### Verifikasi Instalasi
+### Verifikasi
 
 ```bash
-# Check all containers are running
-docker compose ps
-
-# Test API endpoint
-curl http://localhost:8000/rest/v1/
-
-# Access Studio (Dashboard)
-# Open browser: http://your-server-ip:3000
+curl -H "apikey: $ANON_KEY" http://localhost:8000/rest/v1/
+# Studio (proxy nanti via Nginx)
+curl -I http://localhost:3000
 ```
 
 ---
 
 ## 4. Konfigurasi Database
 
-### Jalankan Schema Migration
-
-Setelah Supabase berjalan, jalankan schema SQL:
+### Aktifkan extension
 
 ```bash
-# Copy schema file ke server
-scp public/exports/full-schema.sql user@your-server:~/supabase/
-
-# Connect ke PostgreSQL container
-docker exec -it supabase-db psql -U postgres -d postgres
-
-# Atau jalankan langsung
-docker exec -i supabase-db psql -U postgres -d postgres < ~/supabase/full-schema.sql
+docker exec -it supabase-db psql -U postgres -d postgres <<'SQL'
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+SQL
 ```
 
-### Verifikasi Schema
+### Deploy skema
+
+```bash
+scp docs/full-schema-v2.sql user@vps:/tmp/
+docker exec -i supabase-db psql -U postgres -d postgres < /tmp/full-schema-v2.sql
+```
+
+### Cek
 
 ```sql
--- Connect ke database
-docker exec -it supabase-db psql -U postgres -d postgres
-
--- Check tables
 \dt public.*
-
--- Check functions
 \df public.*
-
--- Check RLS policies
-SELECT tablename, policyname FROM pg_policies WHERE schemaname = 'public';
-
--- Exit
-\q
+SELECT COUNT(*) FROM pg_policies WHERE schemaname='public';
+SELECT id, public FROM storage.buckets ORDER BY id;
 ```
 
-### Buat Admin User Pertama
+### Buat admin pertama
+
+```bash
+# via Auth Admin API (jangan INSERT langsung ke auth.users)
+curl -X POST "http://localhost:8000/auth/v1/admin/users" \
+  -H "apikey: $SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@yourdomain.com","password":"KuatSekali!","email_confirm":true,"user_metadata":{"full_name":"Super Admin"}}'
+```
+
+Setelah user dibuat (trigger `handle_new_user` otomatis insert `profiles`
++ `user_roles` role `artist`):
 
 ```sql
--- Via psql atau Supabase Studio SQL Editor
-
--- 1. Daftarkan user via Auth (atau gunakan API)
--- 2. Setelah user terdaftar, update role ke superadmin:
-
-UPDATE public.user_roles 
-SET role = 'superadmin' 
-WHERE user_id = (
-  SELECT id FROM auth.users WHERE email = 'admin@yourdomain.com'
-);
+UPDATE public.user_roles
+   SET role = 'superadmin'
+ WHERE user_id = (SELECT id FROM auth.users WHERE email='admin@yourdomain.com');
 ```
 
 ---
 
 ## 5. Deploy Edge Functions
 
-### Setup Supabase CLI
+Supabase self-hosted memakai container `functions` (Deno). Simpan
+function di path yang di-mount container:
 
 ```bash
-# Install Supabase CLI
-npm install -g supabase
+cd ~/supabase/supabase/docker
+# path default: ./volumes/functions/
+mkdir -p volumes/functions
+rsync -avz path/to/soundpub/supabase/functions/ volumes/functions/
 
-# Login (untuk download dependencies)
-supabase login
+# jangan lupa import_map.json / _shared/ ikut ter-copy
 
-# Link ke project (local)
-cd ~/soundpub-dashboard
-supabase init  # jika belum ada
+docker compose restart functions
+docker compose logs -f functions
 ```
 
-### Deploy Functions ke Self-Hosted
+### Set secret untuk edge function
 
-Untuk self-hosted, edge functions perlu di-deploy secara manual:
+Supabase self-hosted membaca secret dari environment container
+`functions`. Tambahkan di `supabase/docker/.env`:
+
+```env
+# SSO ICCN
+SSO_REALM_URL=https://sso.iccn.or.id/realms/PORTALICCN
+SSO_CLIENT_ID=soundpub
+ICCN_MEDIA_LABEL_ID=<uuid>
+
+# Xendit
+XENDIT_SECRET_KEY=xnd_...
+XENDIT_WEBHOOK_TOKEN=...
+
+# Email
+NOTIFICATION_EMAIL=notif@yourdomain.com
+RESEND_API_KEY=<opsional, kalau pakai Resend>
+
+# GCS media library
+GCS_PROJECT_ID=...
+GCS_BUCKET_NAME=...
+GCS_SERVICE_ACCOUNT_KEY={"type":"service_account",...}
+
+# Spotify
+SPOTIFY_CLIENT_ID=...
+SPOTIFY_CLIENT_SECRET=...
+
+GA4_MEASUREMENT_ID=G-XXXXXXXXXX
+```
+
+Referensikan ke service `functions` di `docker-compose.yml` (block
+`functions.environment`) atau override lewat `.env` yang sudah dibaca
+Compose. Restart:
 
 ```bash
-# Copy functions ke server
-scp -r supabase/functions/ user@your-server:~/supabase/functions/
-
-# Di server, masuk ke folder supabase
-cd ~/supabase/supabase/docker
-
-# Start edge functions container
 docker compose up -d functions
 ```
 
-### Konfigurasi Secrets untuk Edge Functions
+### Test manual
 
 ```bash
-# Set secrets via environment variables di docker-compose.yml
-# atau buat file secrets
-
-# Contoh menambahkan secret:
-docker exec supabase-edge-functions \
-  /bin/sh -c "echo 'RESEND_API_KEY=your_key' >> /etc/supabase/secrets"
+curl -X POST http://localhost:8000/functions/v1/info-soundpub \
+  -H "apikey: $ANON_KEY"
 ```
 
 ---
 
 ## 6. Konfigurasi Storage
 
-### Buat Storage Buckets
+### Buat bucket
 
 ```sql
--- Connect ke database
-docker exec -it supabase-db psql -U postgres -d postgres
-
--- Buat buckets
-INSERT INTO storage.buckets (id, name, public) VALUES 
-  ('release-covers', 'release-covers', false),
-  ('track-audio', 'track-audio', false),
-  ('track-video', 'track-video', false),
-  ('audio-clips', 'audio-clips', true),
-  ('label-logos', 'label-logos', true)
+INSERT INTO storage.buckets (id, name, public) VALUES
+  ('track-audio','track-audio',false),
+  ('track-video','track-video',false),
+  ('audio-clips','audio-clips',true),
+  ('release-covers','release-covers',false),
+  ('label-logos','label-logos',true),
+  ('avatars','avatars',true),
+  ('iccn-gallery','iccn-gallery',true),
+  ('klikus-biolink','klikus-biolink',true)
 ON CONFLICT (id) DO NOTHING;
 ```
 
-### Konfigurasi Storage Volume
+Policy (folder-scoped INSERT/UPDATE/DELETE + `Scoped read release-covers`)
+sudah include di `full-schema-v2.sql`.
 
-Edit `docker-compose.yml` untuk persistent storage:
+### Persistent volume
+
+Edit `docker-compose.yml` (bagian `storage`):
 
 ```yaml
-volumes:
-  db-data:
-    driver: local
-  storage-data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /data/supabase/storage
+services:
+  storage:
+    volumes:
+      - /data/supabase/storage:/var/lib/storage
 ```
-
-### Buat Directory untuk Storage
 
 ```bash
 sudo mkdir -p /data/supabase/storage
@@ -358,207 +308,180 @@ sudo chown -R 1000:1000 /data/supabase/storage
 
 ---
 
-## 7. Setup SSL/HTTPS
-
-### Install Nginx
+## 7. Nginx + SSL/HTTPS
 
 ```bash
-sudo apt install -y nginx
+sudo apt install -y nginx certbot python3-certbot-nginx
 ```
 
-### Install Certbot (Let's Encrypt)
-
-```bash
-sudo apt install -y certbot python3-certbot-nginx
-```
-
-### Konfigurasi Nginx
-
-Buat file `/etc/nginx/sites-available/supabase`:
+`/etc/nginx/sites-available/soundpub`:
 
 ```nginx
-# API Endpoint
+# API gateway (Kong)
 server {
     listen 80;
     server_name api.yourdomain.com;
 
+    client_max_body_size 500M;   # upload track 500MB
+
     location / {
         proxy_pass http://localhost:8000;
+        proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # WebSocket support
-        proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
+        proxy_read_timeout 600s;
     }
 }
 
-# Studio Dashboard
+# Studio (batasi IP admin)
 server {
     listen 80;
     server_name studio.yourdomain.com;
+    allow 203.0.113.10;
+    deny  all;
 
     location / {
         proxy_pass http://localhost:3000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 
-# Frontend App
+# Frontend SoundPub Dashboard
 server {
     listen 80;
-    server_name app.yourdomain.com;
-
-    root /var/www/soundpub;
+    server_name dashboard.yourdomain.com;
+    root /var/www/soundpub-dashboard;
     index index.html;
 
     location / {
         try_files $uri $uri/ /index.html;
     }
 
-    # API proxy (optional - jika ingin via same domain)
-    location /api/ {
-        proxy_pass http://localhost:8000/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
+    # cache asset build
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
     }
 }
 ```
 
-### Enable Site & Get SSL Certificate
-
 ```bash
-# Enable site
-sudo ln -s /etc/nginx/sites-available/supabase /etc/nginx/sites-enabled/
-
-# Test config
-sudo nginx -t
-
-# Reload nginx
-sudo systemctl reload nginx
-
-# Get SSL certificates
-sudo certbot --nginx -d api.yourdomain.com -d studio.yourdomain.com -d app.yourdomain.com
-
-# Auto-renew (crontab)
-sudo crontab -e
-# Add: 0 0 1 * * certbot renew --quiet
+sudo ln -s /etc/nginx/sites-available/soundpub /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d api.yourdomain.com \
+                    -d studio.yourdomain.com \
+                    -d dashboard.yourdomain.com
+# auto renew (systemd timer sudah aktif default certbot)
 ```
 
 ---
 
-## 8. Migrasi Data
+## 8. Email di Self-Host
 
-### Export Data dari Lovable Cloud
+Di Lovable Cloud, edge function `send-app-email` +
+`send-royalty-notification` memakai **Gmail connector** (secret
+`GOOGLE_MAIL_API_KEY`). Connector ini **tidak tersedia** di self-host.
+Pilih salah satu jalur di bawah dan sesuaikan helper email di function.
 
-1. Buka project di Lovable
-2. Export data menggunakan SQL queries atau tools
+### Opsi A — Resend (paling cepat)
 
-### Import Data ke VPS
+1. Set `RESEND_API_KEY` di `.env`.
+2. Di `supabase/functions/send-app-email/index.ts` dan
+   `send-royalty-notification/index.ts`, ganti helper `sendGmail(...)`
+   dengan `fetch("https://api.resend.com/emails", ...)`.
+3. Verifikasi domain sender di Resend + tambah SPF/DKIM record ke DNS.
 
-```bash
-# Copy migration script
-scp -r public/exports/migration-scripts/ user@your-server:~/migration/
+### Opsi B — SMTP langsung (nodemailer / Deno smtp)
 
-# Di server
-cd ~/migration
-npm install
+1. Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`.
+2. Ganti helper email dengan library `denomailer` (`nodemailer` for Deno).
+3. Pakai relay yang sudah punya reputasi (SendGrid/Amazon SES) supaya
+   tidak masuk spam.
 
-# Setup environment
-cp .env.example .env
-nano .env  # Isi dengan credentials
+### Opsi C — Gmail API pakai service account
 
-# Run migration
-npm run migrate
-```
+Butuh Google Workspace + domain-wide delegation. Lebih rumit — hanya
+recommended kalau tim harus tetap kirim dari `@your-workspace-domain`.
 
-### Migrasi Storage Files
-
-```bash
-# Download dari Lovable Cloud storage
-# Upload ke VPS storage via Supabase API atau langsung ke storage folder
-
-# Contoh upload via API:
-curl -X POST "https://api.yourdomain.com/storage/v1/object/release-covers/image.jpg" \
-  -H "Authorization: Bearer YOUR_SERVICE_ROLE_KEY" \
-  -H "Content-Type: image/jpeg" \
-  --data-binary @image.jpg
-```
+> Auth email (confirm/reset) tetap pakai `SMTP_*` di `supabase/docker/.env`
+> — itu di-handle GoTrue, terpisah dari edge function.
 
 ---
 
-## 9. Monitoring & Maintenance
+## 9. Monitoring & Backup
 
-### Setup Monitoring
+### Log rotation Docker
 
-```bash
-# Install monitoring tools
-docker compose -f docker-compose.monitoring.yml up -d
-```
+`/etc/docker/daemon.json`:
 
-### Log Rotation
-
-```bash
-# Edit /etc/docker/daemon.json
+```json
 {
   "log-driver": "json-file",
-  "log-opts": {
-    "max-size": "10m",
-    "max-file": "3"
-  }
+  "log-opts": { "max-size": "10m", "max-file": "3" }
 }
+```
 
-# Restart docker
+```bash
 sudo systemctl restart docker
 ```
 
-### Backup Database
+### Backup harian DB + storage
 
 ```bash
-# Buat script backup
-cat > ~/backup-supabase.sh << 'EOF'
-#!/bin/bash
-BACKUP_DIR="/data/backups"
-DATE=$(date +%Y%m%d_%H%M%S)
-mkdir -p $BACKUP_DIR
-
-# Backup database
-docker exec supabase-db pg_dump -U postgres -d postgres > $BACKUP_DIR/db_$DATE.sql
-
-# Backup storage (jika tidak pakai external storage)
-tar -czf $BACKUP_DIR/storage_$DATE.tar.gz /data/supabase/storage
-
-# Cleanup old backups (keep 7 days)
-find $BACKUP_DIR -type f -mtime +7 -delete
-
-echo "Backup completed: $DATE"
+cat > ~/backup-supabase.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+DIR=/data/backups
+DATE=$(date +%F_%H%M)
+mkdir -p "$DIR"
+docker exec supabase-db pg_dump -U postgres -Fc postgres > "$DIR/db_$DATE.dump"
+tar -czf "$DIR/storage_$DATE.tar.gz" -C /data/supabase storage
+find "$DIR" -type f -mtime +14 -delete
 EOF
-
 chmod +x ~/backup-supabase.sh
 
-# Add to crontab (daily at 2 AM)
+# crontab: harian 03:00 lokal + upload ke offsite (rclone/aws s3)
 crontab -e
-# Add: 0 2 * * * /root/backup-supabase.sh >> /var/log/supabase-backup.log 2>&1
+# 0 3 * * * /home/user/backup-supabase.sh >> /var/log/soundpub-backup.log 2>&1
 ```
 
-### Update Supabase
+### Backup Storage → Google Drive / S3 (app-level)
+
+Cron `daily-storage-backup` di dalam Postgres (`pg_cron`) memanggil edge
+function `backup-storage-to-drive`. Set schedule setelah edge function
+deploy:
+
+```sql
+SELECT cron.schedule(
+  'daily-storage-backup',
+  '0 19 * * *',
+  $$SELECT net.http_post(
+      url := 'https://api.yourdomain.com/functions/v1/backup-storage-to-drive',
+      headers := jsonb_build_object(
+        'Content-Type','application/json',
+        'apikey','<ANON_KEY>',
+        'x-trigger','cron'
+      ),
+      body := '{}'::jsonb
+    );$$
+);
+```
+
+Ganti implementasi function-nya kalau target backup bukan Google Drive
+(mis. S3, B2, Wasabi).
+
+### Update Supabase image
 
 ```bash
 cd ~/supabase/supabase/docker
-
-# Pull latest images
 docker compose pull
-
-# Restart with new images
 docker compose up -d
-
-# Cleanup old images
 docker image prune -f
 ```
 
@@ -569,193 +492,96 @@ docker image prune -f
 ### Container tidak start
 
 ```bash
-# Check logs
-docker compose logs [service-name]
-
-# Check resources
+docker compose ps
+docker compose logs <service>
 docker stats
-
-# Restart specific service
-docker compose restart [service-name]
 ```
 
-### Database connection error
+### Auth email tidak masuk
+
+- Cek `docker compose logs auth` untuk error SMTP.
+- Verifikasi record SPF/DKIM domain sender.
+- Coba `SMTP_PORT=465` + `SMTP_SECURE=true` kalau provider butuh SSL.
+
+### Upload storage 400 / RLS error
+
+- Pastikan file path memakai `{userId}/{filename}` (folder-scoped policy).
+- Cek `SELECT * FROM storage.buckets WHERE id='<bucket>'` — bucket exist.
+- Cek policy: `SELECT policyname, cmd FROM pg_policies WHERE tablename='objects';`
+
+### Edge function 500
 
 ```bash
-# Check if PostgreSQL is running
-docker compose ps db
-
-# Check PostgreSQL logs
-docker compose logs db
-
-# Test connection
-docker exec -it supabase-db psql -U postgres -c "SELECT 1"
+docker compose logs -f functions
+# atau via CLI
+supabase functions logs <name> --project-ref self
 ```
 
-### Storage tidak bisa upload
+### `auth.uid()` selalu NULL
+
+`JWT_SECRET` di `docker/.env` **harus sama** dengan yang dipakai untuk
+generate `ANON_KEY` & `SERVICE_ROLE_KEY`. Regenerate ketiganya kalau
+tidak yakin.
+
+### SSL renew gagal
 
 ```bash
-# Check storage service
-docker compose logs storage
-
-# Check permissions
-ls -la /data/supabase/storage
-
-# Fix permissions
-sudo chown -R 1000:1000 /data/supabase/storage
-```
-
-### Edge Functions error
-
-```bash
-# Check edge functions logs
-docker compose logs functions
-
-# Restart functions
-docker compose restart functions
-```
-
-### SSL Certificate Issues
-
-```bash
-# Renew certificate manually
-sudo certbot renew
-
-# Check certificate status
 sudo certbot certificates
+sudo certbot renew --dry-run
 ```
 
 ---
 
-## 11. Checklist Lengkap
+## 11. Quick Reference
 
-### Pre-Setup
-
-- [ ] VPS sudah dibeli dan dapat diakses via SSH
-- [ ] Domain sudah pointing ke IP VPS
-- [ ] Firewall sudah dikonfigurasi (port 80, 443, 22)
-- [ ] Backup credentials disimpan dengan aman
-
-### Docker Installation
-
-- [ ] Docker Engine terinstall
-- [ ] Docker Compose terinstall
-- [ ] User ditambahkan ke docker group
-- [ ] Docker berjalan dengan baik (hello-world test)
-
-### Supabase Setup
-
-- [ ] Repository Supabase di-clone
-- [ ] File .env dikonfigurasi dengan secrets yang aman
-- [ ] JWT keys di-generate
-- [ ] SMTP dikonfigurasi (untuk auth emails)
-- [ ] Semua containers berjalan
-
-### Database
-
-- [ ] Schema SQL dijalankan
-- [ ] Semua tables terbuat
-- [ ] Semua functions terbuat
-- [ ] RLS policies aktif
-- [ ] Admin user pertama dibuat
-- [ ] Test query berhasil
-
-### Storage
-
-- [ ] Semua buckets terbuat
-- [ ] Storage policies aktif
-- [ ] Volume persistent dikonfigurasi
-- [ ] Test upload berhasil
-
-### Edge Functions
-
-- [ ] Functions ter-deploy
-- [ ] Secrets dikonfigurasi
-- [ ] Test endpoint berhasil
-
-### SSL/HTTPS
-
-- [ ] Nginx terinstall
-- [ ] Virtual hosts dikonfigurasi
-- [ ] SSL certificate ter-generate
-- [ ] Auto-renew terjadwal
-- [ ] Test HTTPS berhasil
-
-### Data Migration
-
-- [ ] Data dari Lovable Cloud di-export
-- [ ] Migration script dikonfigurasi
-- [ ] Data berhasil di-import
-- [ ] Storage files di-upload
-- [ ] Verifikasi data count cocok
-
-### Monitoring & Backup
-
-- [ ] Backup script dibuat
-- [ ] Backup terjadwal (cron)
-- [ ] Log rotation dikonfigurasi
-- [ ] Monitoring aktif (optional)
-
-### Frontend Deployment
-
-- [ ] Build production frontend
-- [ ] Upload ke server
-- [ ] Nginx serving frontend
-- [ ] Environment variables updated
-- [ ] Test semua fitur
-
-### Security
-
-- [ ] Firewall aktif
-- [ ] SSH key-only authentication
-- [ ] Database password kuat
-- [ ] JWT secrets aman
-- [ ] SMTP credentials aman
-- [ ] Regular security updates enabled
-
----
-
-## Quick Reference
-
-### Useful Commands
+### Command
 
 ```bash
-# Start Supabase
+# start / stop
 docker compose up -d
-
-# Stop Supabase
 docker compose down
 
-# Restart specific service
-docker compose restart [service]
+# restart service
+docker compose restart auth      # atau: rest, storage, functions, kong, db
 
-# View logs
-docker compose logs -f [service]
+# log
+docker compose logs -f <service>
 
-# Connect to database
+# psql
 docker exec -it supabase-db psql -U postgres
 
-# Backup database
-docker exec supabase-db pg_dump -U postgres > backup.sql
+# pg_dump
+docker exec supabase-db pg_dump -U postgres -Fc postgres > backup.dump
 
-# Restore database
-docker exec -i supabase-db psql -U postgres < backup.sql
+# restore
+docker exec -i supabase-db pg_restore -U postgres -d postgres < backup.dump
 ```
 
-### Service Names
+### Service & port internal
 
-| Service | Container Name | Port |
-|---------|---------------|------|
-| PostgreSQL | supabase-db | 5432 |
-| Kong (API Gateway) | supabase-kong | 8000 |
-| GoTrue (Auth) | supabase-auth | 9999 |
-| PostgREST | supabase-rest | 3000 |
-| Realtime | supabase-realtime | 4000 |
-| Storage | supabase-storage | 5000 |
-| Studio | supabase-studio | 3000 |
-| Edge Functions | supabase-functions | 9000 |
+| Service         | Container            | Port |
+|-----------------|----------------------|------|
+| PostgreSQL      | `supabase-db`        | 5432 |
+| Kong (API GW)   | `supabase-kong`      | 8000 |
+| GoTrue (Auth)   | `supabase-auth`      | 9999 |
+| PostgREST       | `supabase-rest`      | 3000 |
+| Realtime        | `supabase-realtime`  | 4000 |
+| Storage         | `supabase-storage`   | 5000 |
+| Studio          | `supabase-studio`    | 3000 |
+| Edge Functions  | `supabase-edge-func` | 9000 |
+
+### Struktur URL publik
+
+```
+https://dashboard.yourdomain.com          → Frontend SoundPub
+https://api.yourdomain.com/rest/v1/*      → PostgREST
+https://api.yourdomain.com/auth/v1/*      → GoTrue
+https://api.yourdomain.com/storage/v1/*   → Storage
+https://api.yourdomain.com/functions/v1/* → Edge Functions
+https://studio.yourdomain.com             → Supabase Studio (allowlist)
+```
 
 ---
 
-*Dokumen ini dibuat untuk SoundPub Dashboard VPS Migration*
-*Last updated: January 2026*
+*Dokumen ini bagian dari paket migrasi SoundPub Dashboard.*
+*Last updated: Juli 2026.*
