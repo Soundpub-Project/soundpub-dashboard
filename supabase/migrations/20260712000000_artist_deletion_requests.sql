@@ -74,22 +74,22 @@ DROP POLICY IF EXISTS "Labels can view artist profiles for their artists" ON sou
 CREATE POLICY "Labels can view artist profiles for their artists"
     ON soundpub.artist_profiles FOR SELECT
     TO authenticated
-    USING (EXISTS (SELECT 1 FROM soundpub.profiles WHERE profiles.id = user_id AND profiles.parent_label_id = auth.uid()));
+    USING (auth.uid() = (SELECT parent_label_id FROM soundpub.profiles WHERE id = user_id));
 
 DROP POLICY IF EXISTS "Labels can insert artist profiles for their artists" ON soundpub.artist_profiles;
 CREATE POLICY "Labels can insert artist profiles for their artists"
     ON soundpub.artist_profiles FOR INSERT
     TO authenticated
-    WITH CHECK (EXISTS (SELECT 1 FROM soundpub.profiles WHERE profiles.id = user_id AND profiles.parent_label_id = auth.uid()));
+    WITH CHECK (auth.uid() = (SELECT parent_label_id FROM soundpub.profiles WHERE id = user_id));
 
 DROP POLICY IF EXISTS "Labels can update artist profiles for their artists" ON soundpub.artist_profiles;
 CREATE POLICY "Labels can update artist profiles for their artists"
     ON soundpub.artist_profiles FOR UPDATE
     TO authenticated
-    USING (EXISTS (SELECT 1 FROM soundpub.profiles WHERE profiles.id = user_id AND profiles.parent_label_id = auth.uid()));
+    USING (auth.uid() = (SELECT parent_label_id FROM soundpub.profiles WHERE id = user_id));
 
 DROP POLICY IF EXISTS "Labels can delete artist profiles for their artists" ON soundpub.artist_profiles;
 CREATE POLICY "Labels can delete artist profiles for their artists"
     ON soundpub.artist_profiles FOR DELETE
     TO authenticated
-    USING (EXISTS (SELECT 1 FROM soundpub.profiles WHERE profiles.id = user_id AND profiles.parent_label_id = auth.uid()));
+    USING (auth.uid() = (SELECT parent_label_id FROM soundpub.profiles WHERE id = user_id));
