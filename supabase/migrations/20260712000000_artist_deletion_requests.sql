@@ -11,14 +11,17 @@ CREATE TABLE IF NOT EXISTS soundpub.artist_deletion_requests (
 -- RLS Policies
 ALTER TABLE soundpub.artist_deletion_requests ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Label can view their own requests" ON soundpub.artist_deletion_requests;
 CREATE POLICY "Label can view their own requests" 
     ON soundpub.artist_deletion_requests FOR SELECT 
     USING (label_id = auth.uid());
 
+DROP POLICY IF EXISTS "Label can insert their own requests" ON soundpub.artist_deletion_requests;
 CREATE POLICY "Label can insert their own requests" 
     ON soundpub.artist_deletion_requests FOR INSERT 
     WITH CHECK (label_id = auth.uid());
 
+DROP POLICY IF EXISTS "Admin can view all requests" ON soundpub.artist_deletion_requests;
 CREATE POLICY "Admin can view all requests" 
     ON soundpub.artist_deletion_requests FOR SELECT 
     USING (
@@ -29,6 +32,7 @@ CREATE POLICY "Admin can view all requests"
         )
     );
 
+DROP POLICY IF EXISTS "Admin can update requests" ON soundpub.artist_deletion_requests;
 CREATE POLICY "Admin can update requests" 
     ON soundpub.artist_deletion_requests FOR UPDATE 
     USING (
