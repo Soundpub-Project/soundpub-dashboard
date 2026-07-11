@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS soundpub.artist_deletion_requests (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- RLS Policies
+-- RLS Policies for deletion requests
 ALTER TABLE soundpub.artist_deletion_requests ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Label can view their own requests" ON soundpub.artist_deletion_requests;
@@ -61,3 +61,35 @@ ALTER TABLE soundpub.artist_profiles
 
 -- Ensure 1:1 user to artist_profile on soundpub
 CREATE UNIQUE INDEX IF NOT EXISTS artist_profiles_user_id_unique ON soundpub.artist_profiles(user_id);
+
+-- Additional RLS Policies for Profiles and Artist Profiles to allow Labels to manage their artists
+
+DROP POLICY IF EXISTS "Labels can update their artists" ON soundpub.profiles;
+CREATE POLICY "Labels can update their artists"
+    ON soundpub.profiles FOR UPDATE
+    TO authenticated
+    USING (parent_label_id = auth.uid());
+
+DROP POLICY IF EXISTS "Labels can view artist profiles for their artists" ON soundpub.artist_profiles;
+CREATE POLICY "Labels can view artist profiles for their artists"
+    ON soundpub.artist_profiles FOR SELECT
+    TO authenticated
+    USING (EXISTS (SELECT 1 FROM soundpub.profiles WHERE profiles.id = user_id AND profiles.parent_label_id = auth.uid()));
+
+DROP POLICY IF EXISTS "Labels can insert artist profiles for their artists" ON soundpub.artist_profiles;
+CREATE POLICY "Labels can insert artist profiles for their artists"
+    ON soundpub.artist_profiles FOR INSERT
+    TO authenticated
+    WITH CHECK (EXISTS (SELECT 1 FROM soundpub.profiles WHERE profiles.id = user_id AND profiles.parent_label_id = auth.uid()));
+
+DROP POLICY IF EXISTS "Labels can update artist profiles for their artists" ON soundpub.artist_profiles;
+CREATE POLICY "Labels can update artist profiles for their artists"
+    ON soundpub.artist_profiles FOR UPDATE
+    TO authenticated
+    USING (EXISTS (SELECT 1 FROM soundpub.profiles WHERE profiles.id = user_id AND profiles.parent_label_id = auth.uid()));
+
+DROP POLICY IF EXISTS "Labels can delete artist profiles for their artists" ON soundpub.artist_profiles;
+CREATE POLICY "Labels can delete artist profiles for their artists"
+    ON soundpub.artist_profiles FOR DELETE
+    TO authenticated
+    USING (EXISTS (SELECT 1 FROM soundpub.profiles WHERE profiles.id = user_id AND profiles.parent_label_id = auth.uid()));
