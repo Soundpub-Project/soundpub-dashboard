@@ -117,7 +117,7 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/dashboard/artist-profile/:userId" element={
-                <ProtectedRoute requireAdmin>
+                <ProtectedRoute allowedRoles={["superadmin", "admin", "label", "whitelabel"]}>
                   <ArtistProfile />
                 </ProtectedRoute>
               } />

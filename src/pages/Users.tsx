@@ -4,6 +4,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -243,7 +245,14 @@ export default function Users() {
           <p className="text-muted-foreground">Kelola pengguna platform</p>
         </div>
 
-        <Card className="bg-card/50 border-border/50">
+        <Tabs defaultValue="users" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
+            <TabsTrigger value="users">Daftar User</TabsTrigger>
+            <TabsTrigger value="requests">Permintaan Hapus Artis</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="users">
+            <Card className="bg-card/50 border-border/50">
           <CardHeader>
             <div className="flex flex-col gap-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -449,6 +458,12 @@ export default function Users() {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="requests">
+            <DeletionRequestsTable />
+          </TabsContent>
+        </Tabs>
       </div>
 
       <ChangeRoleDialog
@@ -493,5 +508,174 @@ export default function Users() {
         onSuccess={fetchUsers}
       />
     </DashboardLayout>
+  );
+}
+
+function DeletionRequestsTable() {
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchRequests();
+  }, []);
+
+  const fetchRequests = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('artist_deletion_requests')
+        .select(`
+          id,
+          artist_id,
+          label_id,
+          reason,
+          status,
+          created_at,
+          artist:profiles!artist_id(full_name, email),
+          label:profiles!label_id(full_name)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setRequests(data || []);
+    } catch (error) {
+      console.error('Error fetching deletion requests:', error);
+      toast.error('Gagal memuat permintaan penghapusan');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApprove = async (reqId: string, artistId: string, artistName: string) => {
+    setProcessingId(reqId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await supabase.functions.invoke('delete-user', {
+        body: { user_id: artistId },
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+      });
+
+      if (response.error || !response.data?.success) {
+        throw new Error(response.data?.error || response.error?.message || 'Gagal menghapus user');
+      }
+
+      toast.success(`Profil artis ${artistName} berhasil dihapus permanen`);
+      fetchRequests();
+    } catch (error: any) {
+      console.error('Error approving deletion:', error);
+      toast.error(error.message || 'Gagal menyetujui permintaan');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleReject = async (reqId: string) => {
+    setProcessingId(reqId);
+    try {
+      const { error } = await supabase
+        .from('artist_deletion_requests')
+        .update({ status: 'rejected' })
+        .eq('id', reqId);
+
+      if (error) throw error;
+
+      toast.success('Permintaan penghapusan ditolak');
+      fetchRequests();
+    } catch (error: any) {
+      console.error('Error rejecting deletion:', error);
+      toast.error(error.message || 'Gagal menolak permintaan');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  return (
+    <Card className="bg-card/50 border-border/50">
+      <CardHeader>
+        <CardTitle>Daftar Pengajuan Penghapusan Artis</CardTitle>
+        <CardDescription>Meninjau pengajuan penghapusan profil artis oleh Label</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : requests.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <Trash2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>Belum ada pengajuan penghapusan</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nama Artis</TableHead>
+                  <TableHead>Diajukan Oleh (Label)</TableHead>
+                  <TableHead>Alasan</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Tanggal Pengajuan</TableHead>
+                  <TableHead className="text-right">Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {requests.map((req) => (
+                  <TableRow key={req.id}>
+                    <TableCell className="font-medium">
+                      {req.artist?.full_name || 'Artis Terhapus'}
+                      <div className="text-xs text-muted-foreground">{req.artist?.email}</div>
+                    </TableCell>
+                    <TableCell>{req.label?.full_name || '-'}</TableCell>
+                    <TableCell className="max-w-xs truncate" title={req.reason}>
+                      {req.reason}
+                    </TableCell>
+                    <TableCell>
+                      <Badge 
+                        variant={
+                          req.status === 'pending' ? 'secondary' :
+                          req.status === 'approved' ? 'default' : 'destructive'
+                        }
+                        className="capitalize"
+                      >
+                        {req.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(req.created_at).toLocaleDateString('id-ID')}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {req.status === 'pending' && (
+                        <div className="flex justify-end gap-2">
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => handleReject(req.id)}
+                            disabled={processingId !== null}
+                          >
+                            Tolak
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                            onClick={() => handleApprove(req.id, req.artist_id, req.artist?.full_name)}
+                            disabled={processingId !== null}
+                          >
+                            Setujui Hapus
+                          </Button>
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

@@ -41,7 +41,7 @@ const REQUIRED_FIELDS: (keyof ArtistProfileData)[] = ['artist_name', 'artist_typ
 
 export default function ArtistProfile() {
   const { userId } = useParams<{ userId?: string }>();
-  const { user, profile, isAdmin, refreshProfile } = useAuth();
+  const { user, profile, isAdmin, isLabel, isWhitelabel, refreshProfile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -71,9 +71,11 @@ export default function ArtistProfile() {
     website: '',
   });
 
+  const [artistUserProfile, setArtistUserProfile] = useState<any>(null);
   const targetUserId = userId || user?.id;
   const isViewingOther = !!userId && userId !== user?.id;
-  const canEdit = !isViewingOther || isAdmin;
+  const isParentLabel = artistUserProfile?.parent_label_id === user?.id;
+  const canEdit = !isViewingOther || isAdmin || isParentLabel;
 
   useEffect(() => {
     if (targetUserId) {
@@ -84,8 +86,11 @@ export default function ArtistProfile() {
 
   const fetchOwnerName = async () => {
     if (!userId) return;
-    const { data } = await supabase.from('profiles').select('full_name').eq('id', userId).single();
-    if (data) setOwnerName(data.full_name);
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    if (data) {
+      setOwnerName(data.full_name);
+      setArtistUserProfile(data);
+    }
   };
 
   const fetchArtistProfile = async () => {

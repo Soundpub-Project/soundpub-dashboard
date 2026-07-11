@@ -15,11 +15,15 @@ const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options:
 // Input validation schema
 const CreateUserSchema = z.object({
   email: z.string()
-    .email('Format email tidak valid')
-    .max(255, 'Email terlalu panjang'),
+    .max(255, 'Email terlalu panjang')
+    .optional()
+    .nullable()
+    .or(z.literal('')),
   password: z.string()
-    .min(6, 'Password minimal 6 karakter')
-    .max(128, 'Password terlalu panjang'),
+    .max(128, 'Password terlalu panjang')
+    .optional()
+    .nullable()
+    .or(z.literal('')),
   full_name: z.string()
     .min(2, 'Nama minimal 2 karakter')
     .max(200, 'Nama terlalu panjang')
@@ -106,7 +110,28 @@ Deno.serve(async (req) => {
       )
     }
     
-    const { email, password, full_name, phone, role, parent_label_id } = validationResult.data
+    let { email, password, full_name, phone, role, parent_label_id } = validationResult.data
+
+    // For label creating artists, email & password are not inputted. We generate them.
+    if (isLabel && role === 'artist') {
+      if (!email || email.trim() === '') {
+        const dummyUuid = crypto.randomUUID()
+        email = `artist_${dummyUuid}@managed.soundpub.local`
+      }
+      if (!password || password.trim() === '') {
+        password = crypto.randomUUID() + crypto.randomUUID()
+      }
+    } else {
+      if (!email || email.trim() === '') {
+        throw new Error('Email is required')
+      }
+      if (!password || password.trim() === '') {
+        throw new Error('Password is required')
+      }
+      if (password.length < 6) {
+        throw new Error('Password minimal 6 karakter')
+      }
+    }
 
     // Validate role permissions
     if ((isLabel || isWhitelabel) && role !== 'artist') {
