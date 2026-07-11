@@ -74,22 +74,24 @@ export function DeleteUserDialog({
             <AlertTriangle className="h-5 w-5" />
             Hapus User
           </AlertDialogTitle>
-          <AlertDialogDescription className="space-y-3">
-            <p>
-              Apakah Anda yakin ingin menghapus user berikut? Tindakan ini tidak dapat dibatalkan.
-            </p>
-            {user && (
-              <div className="bg-muted/50 rounded-lg p-3 border">
-                <p className="font-medium text-foreground">{user.full_name}</p>
-                <p className="text-sm">{user.email}</p>
-                {user.role && (
-                  <p className="text-xs mt-1 capitalize">Role: {user.role}</p>
-                )}
-              </div>
-            )}
-            <p className="text-destructive font-medium">
-              Semua data terkait user ini akan dihapus permanen!
-            </p>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <p>
+                Apakah Anda yakin ingin menghapus user berikut? Tindakan ini tidak dapat dibatalkan.
+              </p>
+              {user && (
+                <div className="bg-muted/50 rounded-lg p-3 border">
+                  <p className="font-medium text-foreground">{user.full_name}</p>
+                  <p className="text-sm">{user.email}</p>
+                  {user.role && (
+                    <p className="text-xs mt-1 capitalize">Role: {user.role}</p>
+                  )}
+                </div>
+              )}
+              <p className="text-destructive font-medium">
+                Semua data terkait user ini akan dihapus permanen!
+              </p>
+            </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
