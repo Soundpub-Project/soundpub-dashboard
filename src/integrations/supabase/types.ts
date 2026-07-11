@@ -12,7 +12,1063 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
-  public: {
+  soundpub: {
+    Tables: {
+      app_settings: {
+        Row: {
+          created_at: string | null
+          id: string
+          key: string
+          updated_at: string | null
+          value: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          key: string
+          updated_at?: string | null
+          value?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          key?: string
+          updated_at?: string | null
+          value?: string | null
+        }
+        Relationships: []
+      }
+      artist_profiles: {
+        Row: {
+          artist_name: string
+          artist_type: string
+          bio: string | null
+          city: string | null
+          country: string | null
+          created_at: string | null
+          date_of_birth: string | null
+          gender: string | null
+          genre: string | null
+          id: string
+          language: string | null
+          legal_name: string | null
+          profile_image_url: string | null
+          social_links: Json | null
+          spotify_artist_id: string | null
+          spotify_artist_url: string | null
+          spotify_data: Json | null
+          spotify_synced_at: string | null
+          updated_at: string | null
+          user_id: string
+          verified: boolean
+          verified_at: string | null
+        }
+        Insert: {
+          artist_name: string
+          artist_type?: string
+          bio?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string | null
+          date_of_birth?: string | null
+          gender?: string | null
+          genre?: string | null
+          id?: string
+          language?: string | null
+          legal_name?: string | null
+          profile_image_url?: string | null
+          social_links?: Json | null
+          spotify_artist_id?: string | null
+          spotify_artist_url?: string | null
+          spotify_data?: Json | null
+          spotify_synced_at?: string | null
+          updated_at?: string | null
+          user_id: string
+          verified?: boolean
+          verified_at?: string | null
+        }
+        Update: {
+          artist_name?: string
+          artist_type?: string
+          bio?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string | null
+          date_of_birth?: string | null
+          gender?: string | null
+          genre?: string | null
+          id?: string
+          language?: string | null
+          legal_name?: string | null
+          profile_image_url?: string | null
+          social_links?: Json | null
+          spotify_artist_id?: string | null
+          spotify_artist_url?: string | null
+          spotify_data?: Json | null
+          spotify_synced_at?: string | null
+          updated_at?: string | null
+          user_id?: string
+          verified?: boolean
+          verified_at?: string | null
+        }
+        Relationships: []
+      }
+      artists: {
+        Row: {
+          created_at: string | null
+          id: string
+          label_id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          label_id: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          label_id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "artists_label_id_fkey"
+            columns: ["label_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_logs: {
+        Row: {
+          action: string
+          actor_id: string
+          created_at: string
+          details: Json | null
+          id: string
+          ip_address: string | null
+          target_id: string | null
+          target_type: string | null
+        }
+        Insert: {
+          action: string
+          actor_id: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Relationships: []
+      }
+      composer_royalties: {
+        Row: {
+          composer_id: string
+          composer_name: string
+          created_at: string
+          id: string
+          period: string | null
+          total_net_royalti: number
+          updated_at: string
+          upload_id: string | null
+        }
+        Insert: {
+          composer_id: string
+          composer_name: string
+          created_at?: string
+          id?: string
+          period?: string | null
+          total_net_royalti?: number
+          updated_at?: string
+          upload_id?: string | null
+        }
+        Update: {
+          composer_id?: string
+          composer_name?: string
+          created_at?: string
+          id?: string
+          period?: string | null
+          total_net_royalti?: number
+          updated_at?: string
+          upload_id?: string | null
+        }
+        Relationships: []
+      }
+      email_send_log: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          idempotency_key: string | null
+          metadata: Json
+          recipient_email: string
+          recipient_user_id: string | null
+          status: string
+          template_name: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          recipient_email: string
+          recipient_user_id?: string | null
+          status: string
+          template_name: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          recipient_email?: string
+          recipient_user_id?: string | null
+          status?: string
+          template_name?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_global: boolean
+          is_read: boolean
+          message: string
+          metadata: Json | null
+          title: string
+          type: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_global?: boolean
+          is_read?: boolean
+          message: string
+          metadata?: Json | null
+          title: string
+          type?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_global?: boolean
+          is_read?: boolean
+          message?: string
+          metadata?: Json | null
+          title?: string
+          type?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      payout_requests: {
+        Row: {
+          account_holder_name: string
+          account_number: string
+          amount: number
+          bank_name: string
+          created_at: string | null
+          id: string
+          notes: string | null
+          processed_at: string | null
+          processed_by: string | null
+          status: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          account_holder_name: string
+          account_number: string
+          amount: number
+          bank_name: string
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          processed_at?: string | null
+          processed_by?: string | null
+          status?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          account_holder_name?: string
+          account_number?: string
+          amount?: number
+          bank_name?: string
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          processed_at?: string | null
+          processed_by?: string | null
+          status?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payout_requests_processed_by_fkey"
+            columns: ["processed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payout_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          address: string | null
+          artist_profile_completed: boolean | null
+          artist_revenue: number
+          avatar_url: string | null
+          balance: number
+          city: string | null
+          composer_code: string | null
+          created_at: string | null
+          email: string
+          email_notif_announcement: boolean
+          email_notif_payment: boolean
+          email_notif_payout: boolean
+          email_notif_release: boolean
+          full_name: string
+          id: string
+          label_revenue: number
+          logo_url: string | null
+          logo_url_dark: string | null
+          logo_url_light: string | null
+          parent_label_id: string | null
+          password_set: boolean | null
+          phone: string | null
+          province: string | null
+          sso_provider: string | null
+          sso_user_id: string | null
+          sso_user_type: string | null
+          status: string
+          subscription_status: string | null
+          subscription_upgraded_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          address?: string | null
+          artist_profile_completed?: boolean | null
+          artist_revenue?: number
+          avatar_url?: string | null
+          balance?: number
+          city?: string | null
+          composer_code?: string | null
+          created_at?: string | null
+          email: string
+          email_notif_announcement?: boolean
+          email_notif_payment?: boolean
+          email_notif_payout?: boolean
+          email_notif_release?: boolean
+          full_name: string
+          id: string
+          label_revenue?: number
+          logo_url?: string | null
+          logo_url_dark?: string | null
+          logo_url_light?: string | null
+          parent_label_id?: string | null
+          password_set?: boolean | null
+          phone?: string | null
+          province?: string | null
+          sso_provider?: string | null
+          sso_user_id?: string | null
+          sso_user_type?: string | null
+          status?: string
+          subscription_status?: string | null
+          subscription_upgraded_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          address?: string | null
+          artist_profile_completed?: boolean | null
+          artist_revenue?: number
+          avatar_url?: string | null
+          balance?: number
+          city?: string | null
+          composer_code?: string | null
+          created_at?: string | null
+          email?: string
+          email_notif_announcement?: boolean
+          email_notif_payment?: boolean
+          email_notif_payout?: boolean
+          email_notif_release?: boolean
+          full_name?: string
+          id?: string
+          label_revenue?: number
+          logo_url?: string | null
+          logo_url_dark?: string | null
+          logo_url_light?: string | null
+          parent_label_id?: string | null
+          password_set?: boolean | null
+          phone?: string | null
+          province?: string | null
+          sso_provider?: string | null
+          sso_user_id?: string | null
+          sso_user_type?: string | null
+          status?: string
+          subscription_status?: string | null
+          subscription_upgraded_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_parent_label_id_fkey"
+            columns: ["parent_label_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      release_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string
+          id: string
+          paid_at: string | null
+          price_per_track: number
+          release_id: string
+          status: string
+          track_count: number
+          updated_at: string
+          user_id: string
+          xendit_invoice_id: string | null
+          xendit_invoice_url: string | null
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          paid_at?: string | null
+          price_per_track?: number
+          release_id: string
+          status?: string
+          track_count?: number
+          updated_at?: string
+          user_id: string
+          xendit_invoice_id?: string | null
+          xendit_invoice_url?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          paid_at?: string | null
+          price_per_track?: number
+          release_id?: string
+          status?: string
+          track_count?: number
+          updated_at?: string
+          user_id?: string
+          xendit_invoice_id?: string | null
+          xendit_invoice_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "release_payments_release_id_fkey"
+            columns: ["release_id"]
+            isOneToOne: false
+            referencedRelation: "releases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      releases: {
+        Row: {
+          archived_at: string | null
+          artist_name: string
+          artist_user_id: string | null
+          cover_url: string | null
+          created_at: string | null
+          created_by: string | null
+          genre: string | null
+          id: string
+          label_id: string
+          release_date: string | null
+          release_type: string | null
+          status: string
+          title: string
+          upc: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          archived_at?: string | null
+          artist_name: string
+          artist_user_id?: string | null
+          cover_url?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          genre?: string | null
+          id?: string
+          label_id: string
+          release_date?: string | null
+          release_type?: string | null
+          status?: string
+          title: string
+          upc?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          archived_at?: string | null
+          artist_name?: string
+          artist_user_id?: string | null
+          cover_url?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          genre?: string | null
+          id?: string
+          label_id?: string
+          release_date?: string | null
+          release_type?: string | null
+          status?: string
+          title?: string
+          upc?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "releases_artist_user_id_fkey"
+            columns: ["artist_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "releases_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "releases_label_id_fkey"
+            columns: ["label_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      royalties: {
+        Row: {
+          artist: string | null
+          artist_user_id: string | null
+          country: string
+          created_at: string | null
+          id: string
+          isrc: string
+          label_name: string
+          label_user_id: string | null
+          net_revenue: number
+          period: string
+          platform: string
+          sales_type: string | null
+          sales_unit: number
+          title: string | null
+          upc: string
+          upload_id: string
+        }
+        Insert: {
+          artist?: string | null
+          artist_user_id?: string | null
+          country: string
+          created_at?: string | null
+          id?: string
+          isrc: string
+          label_name: string
+          label_user_id?: string | null
+          net_revenue?: number
+          period: string
+          platform: string
+          sales_type?: string | null
+          sales_unit?: number
+          title?: string | null
+          upc: string
+          upload_id: string
+        }
+        Update: {
+          artist?: string | null
+          artist_user_id?: string | null
+          country?: string
+          created_at?: string | null
+          id?: string
+          isrc?: string
+          label_name?: string
+          label_user_id?: string | null
+          net_revenue?: number
+          period?: string
+          platform?: string
+          sales_type?: string | null
+          sales_unit?: number
+          title?: string | null
+          upc?: string
+          upload_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "royalties_label_user_id_fkey"
+            columns: ["label_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "royalties_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "royalty_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      royalty_uploads: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          filename: string
+          id: string
+          inserted_records: number
+          original_filename: string
+          status: string
+          summary: Json | null
+          total_records: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          filename: string
+          id?: string
+          inserted_records?: number
+          original_filename: string
+          status: string
+          summary?: Json | null
+          total_records?: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          filename?: string
+          id?: string
+          inserted_records?: number
+          original_filename?: string
+          status?: string
+          summary?: Json | null
+          total_records?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "royalty_uploads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      storage_backup_log: {
+        Row: {
+          bucket: string
+          content_hash: string | null
+          created_at: string
+          drive_file_id: string | null
+          drive_folder_id: string | null
+          id: string
+          last_backed_up_at: string
+          path: string
+          size_bytes: number | null
+          source_updated_at: string | null
+        }
+        Insert: {
+          bucket: string
+          content_hash?: string | null
+          created_at?: string
+          drive_file_id?: string | null
+          drive_folder_id?: string | null
+          id?: string
+          last_backed_up_at?: string
+          path: string
+          size_bytes?: number | null
+          source_updated_at?: string | null
+        }
+        Update: {
+          bucket?: string
+          content_hash?: string | null
+          created_at?: string
+          drive_file_id?: string | null
+          drive_folder_id?: string | null
+          id?: string
+          last_backed_up_at?: string
+          path?: string
+          size_bytes?: number | null
+          source_updated_at?: string | null
+        }
+        Relationships: []
+      }
+      storage_backup_runs: {
+        Row: {
+          details: Json | null
+          error_message: string | null
+          errors_count: number
+          files_skipped: number
+          files_uploaded: number
+          finished_at: string | null
+          id: string
+          started_at: string
+          status: string
+          triggered_by: string
+        }
+        Insert: {
+          details?: Json | null
+          error_message?: string | null
+          errors_count?: number
+          files_skipped?: number
+          files_uploaded?: number
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          triggered_by?: string
+        }
+        Update: {
+          details?: Json | null
+          error_message?: string | null
+          errors_count?: number
+          files_skipped?: number
+          files_uploaded?: number
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          triggered_by?: string
+        }
+        Relationships: []
+      }
+      tracks: {
+        Row: {
+          artist_name: string
+          artist_user_id: string | null
+          artists: Json | null
+          audio_url: string | null
+          clip_url: string | null
+          composer: string | null
+          contributors: Json | null
+          created_at: string | null
+          duration: number | null
+          explicit_lyrics: boolean | null
+          genre: string | null
+          id: string
+          isrc: string | null
+          lyricist: string | null
+          lyrics: string | null
+          release_id: string
+          title: string
+          updated_at: string | null
+          video_url: string | null
+        }
+        Insert: {
+          artist_name: string
+          artist_user_id?: string | null
+          artists?: Json | null
+          audio_url?: string | null
+          clip_url?: string | null
+          composer?: string | null
+          contributors?: Json | null
+          created_at?: string | null
+          duration?: number | null
+          explicit_lyrics?: boolean | null
+          genre?: string | null
+          id?: string
+          isrc?: string | null
+          lyricist?: string | null
+          lyrics?: string | null
+          release_id: string
+          title: string
+          updated_at?: string | null
+          video_url?: string | null
+        }
+        Update: {
+          artist_name?: string
+          artist_user_id?: string | null
+          artists?: Json | null
+          audio_url?: string | null
+          clip_url?: string | null
+          composer?: string | null
+          contributors?: Json | null
+          created_at?: string | null
+          duration?: number | null
+          explicit_lyrics?: boolean | null
+          genre?: string | null
+          id?: string
+          isrc?: string | null
+          lyricist?: string | null
+          lyrics?: string | null
+          release_id?: string
+          title?: string
+          updated_at?: string | null
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tracks_artist_user_id_fkey"
+            columns: ["artist_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tracks_release_id_fkey"
+            columns: ["release_id"]
+            isOneToOne: false
+            referencedRelation: "releases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      get_artist_user_id_by_name: {
+        Args: { _artist_name: string; _label_id?: string }
+        Returns: string
+      }
+      get_royalty_artist_breakdown: {
+        Args: { _limit?: number; _period?: string }
+        Returns: {
+          admin_share: number
+          artist_name: string
+          artist_share: number
+          is_soundpub: boolean
+          label_share: number
+          revenue: number
+          streams: number
+          track_count: number
+        }[]
+      }
+      get_royalty_comparison: {
+        Args: { _current_periods: string[]; _previous_periods: string[] }
+        Returns: {
+          data_type: string
+          period: string
+          revenue: number
+          streams: number
+        }[]
+      }
+      get_royalty_country_summary: {
+        Args: { _limit?: number }
+        Returns: {
+          country: string
+          revenue: number
+          streams: number
+        }[]
+      }
+      get_royalty_label_breakdown: {
+        Args: { _period?: string }
+        Returns: {
+          admin_share: number
+          artist_share: number
+          label_name: string
+          label_share: number
+          revenue: number
+          streams: number
+        }[]
+      }
+      get_royalty_monthly_summary: {
+        Args: never
+        Returns: {
+          period: string
+          revenue: number
+          streams: number
+        }[]
+      }
+      get_royalty_period_summary: {
+        Args: never
+        Returns: {
+          growth: number
+          period: string
+          revenue: number
+          streams: number
+          top_country: string
+          top_platform: string
+          unique_artists: number
+          unique_labels: number
+          unique_tracks: number
+        }[]
+      }
+      get_royalty_periods: {
+        Args: never
+        Returns: {
+          period: string
+        }[]
+      }
+      get_royalty_platform_summary: {
+        Args: { _limit?: number }
+        Returns: {
+          platform: string
+          revenue: number
+          streams: number
+        }[]
+      }
+      get_royalty_stats: {
+        Args: never
+        Returns: {
+          total_revenue: number
+          total_streams: number
+          unique_artists: number
+          unique_labels: number
+          unique_platforms: number
+          unique_tracks: number
+        }[]
+      }
+      get_royalty_top_performers: {
+        Args: {
+          _current_periods: string[]
+          _group_by?: string
+          _limit?: number
+          _previous_periods: string[]
+        }
+        Returns: {
+          growth: number
+          name: string
+          revenue: number
+          streams: number
+        }[]
+      }
+      get_royalty_track_breakdown: {
+        Args: { _period?: string }
+        Returns: {
+          admin_share: number
+          artist_name: string
+          artist_share: number
+          country_count: number
+          is_soundpub: boolean
+          isrc: string
+          label: string
+          label_share: number
+          platform_count: number
+          revenue: number
+          streams: number
+          title: string
+        }[]
+      }
+      get_user_artist_name: { Args: { _user_id: string }; Returns: string }
+      get_user_full_name: { Args: { _user_id: string }; Returns: string }
+      get_user_parent_label_id: { Args: { _user_id: string }; Returns: string }
+      get_user_release_label_ids: {
+        Args: { _user_id: string }
+        Returns: string[]
+      }
+      get_user_role: {
+        Args: { _user_id: string }
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_whitelabel: { Args: { _user_id: string }; Returns: boolean }
+      label_profile_update_safe: {
+        Args: {
+          _artist_revenue: number
+          _balance: number
+          _composer_code: string
+          _email: string
+          _id: string
+          _label_revenue: number
+          _parent_label_id: string
+          _password_set: boolean
+          _sso_provider: string
+          _sso_user_id: string
+          _sso_user_type: string
+          _status: string
+          _subscription_status: string
+        }
+        Returns: boolean
+      }
+    }
+    Enums: {
+      app_role:
+        | "superadmin"
+        | "admin"
+        | "label"
+        | "artist"
+        | "user"
+        | "copyright"
+        | "whitelabel"
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+public: {
     Tables: {
       app_settings: {
         Row: {

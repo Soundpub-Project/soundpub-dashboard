@@ -1,4 +1,14 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+
+const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
+  const existingDb = options.db || {}
+  return createClient(supabaseUrl, supabaseKey, {
+    ...options,
+    db: { ...existingDb, schema: getDatabaseSchema() },
+  })
+}
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -80,19 +90,19 @@ type TemplateOutput = { subject: string; html: string; scope: 'payout' | 'releas
 const TEMPLATES: Record<string, (data: any, recipientName: string) => TemplateOutput> = {
   'payout-requested': (d, _name) => ({
     scope: 'payout',
-    subject: `🔔 Payout request baru — ${fmtIDR(d.amount)}`,
+    subject: `ðŸ”” Payout request baru â€” ${fmtIDR(d.amount)}`,
     html: layout('Pengajuan Payout Baru', 'linear-gradient(135deg,#f59e0b 0%,#ea580c 100%)', `
       <p>Ada pengajuan penarikan saldo baru menunggu review:</p>
       <table style="width:100%;border-collapse:collapse;">
         <tr><td style="padding:8px 0;color:#6b7280;">User</td><td style="padding:8px 0;text-align:right;font-weight:600;">${d.userName}</td></tr>
         <tr><td style="padding:8px 0;color:#6b7280;">Jumlah</td><td style="padding:8px 0;text-align:right;font-weight:600;color:#d97706;">${fmtIDR(d.amount)}</td></tr>
-        <tr><td style="padding:8px 0;color:#6b7280;">Bank</td><td style="padding:8px 0;text-align:right;">${d.bankName} — ${d.accountNumber}</td></tr>
+        <tr><td style="padding:8px 0;color:#6b7280;">Bank</td><td style="padding:8px 0;text-align:right;">${d.bankName} â€” ${d.accountNumber}</td></tr>
         <tr><td style="padding:8px 0;color:#6b7280;">Atas Nama</td><td style="padding:8px 0;text-align:right;">${d.accountHolderName}</td></tr>
       </table>`, 'Review di Dashboard', `${APP_URL}/admin/payouts`),
   }),
   'payout-approved': (d, name) => ({
     scope: 'payout',
-    subject: `✅ Payout disetujui — ${fmtIDR(d.amount)}`,
+    subject: `âœ… Payout disetujui â€” ${fmtIDR(d.amount)}`,
     html: layout('Payout Disetujui', 'linear-gradient(135deg,#10b981 0%,#059669 100%)', `
       <p>Halo ${name},</p>
       <p>Pengajuan penarikan saldo sebesar <strong>${fmtIDR(d.amount)}</strong> telah <strong>disetujui</strong>. Dana akan segera ditransfer ke rekening Anda.</p>
@@ -101,7 +111,7 @@ const TEMPLATES: Record<string, (data: any, recipientName: string) => TemplateOu
   }),
   'payout-rejected': (d, name) => ({
     scope: 'payout',
-    subject: `❌ Payout ditolak — ${fmtIDR(d.amount)}`,
+    subject: `âŒ Payout ditolak â€” ${fmtIDR(d.amount)}`,
     html: layout('Payout Ditolak', 'linear-gradient(135deg,#ef4444 0%,#dc2626 100%)', `
       <p>Halo ${name},</p>
       <p>Pengajuan penarikan saldo sebesar <strong>${fmtIDR(d.amount)}</strong> <strong>tidak disetujui</strong>.</p>
@@ -111,7 +121,7 @@ const TEMPLATES: Record<string, (data: any, recipientName: string) => TemplateOu
   }),
   'payout-paid': (d, name) => ({
     scope: 'payout',
-    subject: `💸 Dana telah ditransfer — ${fmtIDR(d.amount)}`,
+    subject: `ðŸ’¸ Dana telah ditransfer â€” ${fmtIDR(d.amount)}`,
     html: layout('Dana Telah Ditransfer', 'linear-gradient(135deg,#7c3aed 0%,#5b21b6 100%)', `
       <p>Halo ${name},</p>
       <p>Dana sebesar <strong>${fmtIDR(d.amount)}</strong> telah ditransfer ke rekening <strong>${d.bankName}</strong> (${d.accountNumber}).</p>
@@ -120,7 +130,7 @@ const TEMPLATES: Record<string, (data: any, recipientName: string) => TemplateOu
   }),
   'release-submitted': (d, _name) => ({
     scope: 'release',
-    subject: `🎵 Release baru menunggu review: ${d.title}`,
+    subject: `ðŸŽµ Release baru menunggu review: ${d.title}`,
     html: layout('Release Baru Disubmit', 'linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%)', `
       <p>Ada release baru menunggu review admin:</p>
       <table style="width:100%;border-collapse:collapse;">
@@ -131,7 +141,7 @@ const TEMPLATES: Record<string, (data: any, recipientName: string) => TemplateOu
   }),
   'release-approved': (d, name) => ({
     scope: 'release',
-    subject: `✅ Release disetujui: ${d.title}`,
+    subject: `âœ… Release disetujui: ${d.title}`,
     html: layout('Release Disetujui', 'linear-gradient(135deg,#10b981 0%,#059669 100%)', `
       <p>Halo ${name},</p>
       <p>Release <strong>${d.title}</strong> telah <strong>disetujui</strong> dan akan segera dirilis ke platform.</p>`,
@@ -139,7 +149,7 @@ const TEMPLATES: Record<string, (data: any, recipientName: string) => TemplateOu
   }),
   'release-rejected': (d, name) => ({
     scope: 'release',
-    subject: `❌ Release perlu revisi: ${d.title}`,
+    subject: `âŒ Release perlu revisi: ${d.title}`,
     html: layout('Release Perlu Revisi', 'linear-gradient(135deg,#ef4444 0%,#dc2626 100%)', `
       <p>Halo ${name},</p>
       <p>Release <strong>${d.title}</strong> belum dapat disetujui.</p>
@@ -148,7 +158,7 @@ const TEMPLATES: Record<string, (data: any, recipientName: string) => TemplateOu
   }),
   'payment-success': (d, name) => ({
     scope: 'payment',
-    subject: `✅ Pembayaran berhasil — ${d.title}`,
+    subject: `âœ… Pembayaran berhasil â€” ${d.title}`,
     html: layout('Pembayaran Berhasil', 'linear-gradient(135deg,#10b981 0%,#059669 100%)', `
       <p>Halo ${name},</p>
       <p>Pembayaran untuk release <strong>${d.title}</strong> telah berhasil diterima.</p>
@@ -161,7 +171,7 @@ const TEMPLATES: Record<string, (data: any, recipientName: string) => TemplateOu
   }),
   'announcement': (d, name) => ({
     scope: 'announcement',
-    subject: `📢 ${d.title}`,
+    subject: `ðŸ“¢ ${d.title}`,
     html: layout(d.title, 'linear-gradient(135deg,#667eea 0%,#764ba2 100%)', `
       <p>Halo ${name},</p>
       <div style="white-space:pre-wrap;background:#f9fafb;border-radius:8px;padding:16px;margin:16px 0;">${d.message}</div>`,
@@ -189,7 +199,7 @@ interface SendInput {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
 
-  const supabase = createClient(
+  const supabase = createSoundpubClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
@@ -251,7 +261,7 @@ Deno.serve(async (req) => {
         recipients = [{ user_id: (p as any).id, email: (p as any).email, full_name: (p as any).full_name || 'User', optin: (p as any)[optinCol] !== false }]
       }
     } else if (input.recipientEmail) {
-      // Direct send (no opt-in check — only used for admin notifications by user_id lookup)
+      // Direct send (no opt-in check â€” only used for admin notifications by user_id lookup)
       const { data: p } = await supabase
         .from('profiles')
         .select(`id, full_name, ${optinCol}`)

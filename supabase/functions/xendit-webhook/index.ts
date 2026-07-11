@@ -1,4 +1,14 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+
+const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
+  const existingDb = options.db || {}
+  return createClient(supabaseUrl, supabaseKey, {
+    ...options,
+    db: { ...existingDb, schema: getDatabaseSchema() },
+  })
+}
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -31,7 +41,7 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    const supabase = createSoundpubClient(supabaseUrl, supabaseServiceKey)
 
     const { data: payment, error: paymentError } = await supabase
       .from('release_payments')
@@ -167,7 +177,7 @@ async function sendEmailNotification(payment: any, supabase: any) {
   const amount = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(payment.amount)
 
   const emailHtml = `
-    <h2>🎵 Release Baru - Pembayaran Diterima</h2>
+    <h2>ðŸŽµ Release Baru - Pembayaran Diterima</h2>
     <table style="border-collapse: collapse; width: 100%;">
       <tr><td style="padding: 8px; border: 1px solid #ddd;"><strong>Release</strong></td><td style="padding: 8px; border: 1px solid #ddd;">${release.title || 'N/A'}</td></tr>
       <tr><td style="padding: 8px; border: 1px solid #ddd;"><strong>Artist</strong></td><td style="padding: 8px; border: 1px solid #ddd;">${release.artist_name || 'N/A'}</td></tr>

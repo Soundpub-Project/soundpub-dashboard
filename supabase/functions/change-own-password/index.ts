@@ -1,4 +1,14 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+
+const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
+  const existingDb = options.db || {}
+  return createClient(supabaseUrl, supabaseKey, {
+    ...options,
+    db: { ...existingDb, schema: getDatabaseSchema() },
+  })
+}
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,7 +36,7 @@ Deno.serve(async (req) => {
     }
 
     // Create Supabase client with user's token
-    const supabase = createClient(
+    const supabase = createSoundpubClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } }
@@ -59,7 +69,7 @@ Deno.serve(async (req) => {
     }
 
     // Create admin client for password update
-    const supabaseAdmin = createClient(
+    const supabaseAdmin = createSoundpubClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );

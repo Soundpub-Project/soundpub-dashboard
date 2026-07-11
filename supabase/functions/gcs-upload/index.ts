@@ -14,6 +14,16 @@
  */
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+
+const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
+  const existingDb = options.db || {}
+  return createClient(supabaseUrl, supabaseKey, {
+    ...options,
+    db: { ...existingDb, schema: getDatabaseSchema() },
+  })
+}
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

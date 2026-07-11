@@ -68,7 +68,7 @@ interface TopPlatform {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { profile, isAdmin, isLabel, isArtist, isSsoUser, isArtistProfileCompleted, refreshProfile } = useAuth();
+  const { profile, isAdmin, isLabel, isArtist, isWhitelabel, isSsoUser, isArtistProfileCompleted, refreshProfile } = useAuth();
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [stats, setStats] = useState<DashboardStats>({
     totalReleases: 0,
@@ -91,14 +91,14 @@ export default function Dashboard() {
   const topPlatforms = (platformData || []).map(d => ({ platform: d.platform, revenue: d.revenue, streams: d.streams }));
 
   useEffect(() => {
-    if (royaltyStats) {
+    if (royaltyStats && isAdmin) {
       setStats(prev => ({
         ...prev,
         totalRevenue: royaltyStats.totalRevenue,
         totalStreams: royaltyStats.totalStreams,
       }));
     }
-  }, [royaltyStats]);
+  }, [royaltyStats, isAdmin]);
 
   useEffect(() => {
     if (profile) {
@@ -115,12 +115,33 @@ export default function Dashboard() {
 
   const fetchBasicStats = async () => {
     try {
+      let releasesQuery = supabase.from('releases').select('*', { count: 'exact', head: true });
+      let pendingQuery = supabase.from('releases').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+      let recentQuery = supabase
+        .from('releases')
+        .select('id, title, artist_name, cover_url, status, release_date, release_type')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (!isAdmin && profile?.id) {
+        if (isArtist) {
+          releasesQuery = releasesQuery.eq('artist_user_id', profile.id);
+          pendingQuery = pendingQuery.eq('artist_user_id', profile.id);
+          recentQuery = recentQuery.eq('artist_user_id', profile.id);
+        }
+        if (isLabel || isWhitelabel) {
+          releasesQuery = releasesQuery.eq('label_id', profile.id);
+          pendingQuery = pendingQuery.eq('label_id', profile.id);
+          recentQuery = recentQuery.eq('label_id', profile.id);
+        }
+      }
+
       // Fetch counts in parallel - these are fast queries
       const [releasesRes, pendingRes, tracksRes, recentReleasesRes] = await Promise.all([
-        supabase.from('releases').select('*', { count: 'exact', head: true }),
-        supabase.from('releases').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        releasesQuery,
+        pendingQuery,
         supabase.from('tracks').select('*', { count: 'exact', head: true }),
-        supabase.from('releases').select('id, title, artist_name, cover_url, status, release_date, release_type').order('created_at', { ascending: false }).limit(5),
+        recentQuery,
       ]);
 
       // Admin-only stats
@@ -136,10 +157,32 @@ export default function Dashboard() {
         pendingPayoutsCount = payoutRes.count || 0;
       }
 
+      let roleRevenue = isAdmin ? (royaltyStats?.totalRevenue || 0) : 0;
+      let roleStreams = isAdmin ? (royaltyStats?.totalStreams || 0) : 0;
+      let roleTrackCount = tracksRes.count || 0;
+
+      if (!isAdmin && profile?.id) {
+        let royaltyQuery = supabase
+          .from('royalties')
+          .select('net_revenue, artist_revenue, unit_penjualan, artist_user_id, label_user_id, isrc');
+
+        if (isArtist) royaltyQuery = royaltyQuery.eq('artist_user_id', profile.id);
+        if (isLabel || isWhitelabel) royaltyQuery = royaltyQuery.eq('label_user_id', profile.id);
+
+        const { data: roleRoyalties, error: roleRoyaltyError } = await royaltyQuery;
+        if (roleRoyaltyError) throw roleRoyaltyError;
+
+        roleRevenue = (roleRoyalties || []).reduce((sum: number, row: any) => sum + Number(row.net_revenue || 0), 0);
+        roleStreams = (roleRoyalties || []).reduce((sum: number, row: any) => sum + Number(row.unit_penjualan || 0), 0);
+        roleTrackCount = new Set((roleRoyalties || []).map((row: any) => row.isrc).filter(Boolean)).size;
+      }
+
       setStats(prev => ({
         ...prev,
         totalReleases: releasesRes.count || 0,
-        totalTracks: tracksRes.count || 0,
+        totalTracks: roleTrackCount,
+        totalRevenue: roleRevenue,
+        totalStreams: roleStreams,
         balance: profile?.balance || 0,
         totalUsers: usersCount,
         pendingPayouts: pendingPayoutsCount,

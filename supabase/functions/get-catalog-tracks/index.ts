@@ -1,5 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+
+const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
+  const existingDb = options.db || {}
+  return createClient(supabaseUrl, supabaseKey, {
+    ...options,
+    db: { ...existingDb, schema: getDatabaseSchema() },
+  })
+}
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,7 +25,7 @@ serve(async (req) => {
 
   try {
     // Use service role to bypass RLS - this is safe because we only return public data
-    const supabaseAdmin = createClient(
+    const supabaseAdmin = createSoundpubClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
       { auth: { persistSession: false } },

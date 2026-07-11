@@ -1,6 +1,16 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts'
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+
+const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
+  const existingDb = options.db || {}
+  return createClient(supabaseUrl, supabaseKey, {
+    ...options,
+    db: { ...existingDb, schema: getDatabaseSchema() },
+  })
+}
+
 
 // Input validation schema
 const CreateUserSchema = z.object({
@@ -42,7 +52,7 @@ Deno.serve(async (req) => {
     }
 
     // Create a client with the user's token to check their permissions
-    const supabaseClient = createClient(
+    const supabaseClient = createSoundpubClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       {
@@ -67,9 +77,10 @@ Deno.serve(async (req) => {
 
     const isAdmin = userRole?.role === 'superadmin' || userRole?.role === 'admin'
     const isLabel = userRole?.role === 'label'
+    const isWhitelabel = userRole?.role === 'whitelabel'
 
-    if (!isAdmin && !isLabel) {
-      throw new Error('Only admins and labels can create users')
+    if (!isAdmin && !isLabel && !isWhitelabel) {
+      throw new Error('Only admins, labels, and whitelabels can create users')
     }
 
     // Parse and validate request body
@@ -98,8 +109,8 @@ Deno.serve(async (req) => {
     const { email, password, full_name, phone, role, parent_label_id } = validationResult.data
 
     // Validate role permissions
-    if (isLabel && role !== 'artist') {
-      throw new Error('Labels can only create artists')
+    if ((isLabel || isWhitelabel) && role !== 'artist') {
+      throw new Error('Labels and whitelabels can only create artists')
     }
 
     if (!isAdmin && (role === 'admin' || role === 'superadmin')) {
@@ -107,7 +118,7 @@ Deno.serve(async (req) => {
     }
 
     // Create admin client for user creation
-    const supabaseAdmin = createClient(
+    const supabaseAdmin = createSoundpubClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       {
@@ -142,15 +153,14 @@ Deno.serve(async (req) => {
     // Update role to the specified role
     const { error: roleError } = await supabaseAdmin
       .from('user_roles')
-      .update({ role })
-      .eq('user_id', newUser.user.id)
+      .upsert({ user_id: newUser.user.id, role }, { onConflict: 'user_id' })
 
     if (roleError) {
       console.error('Error updating role:', roleError)
     }
 
     // Set parent_label_id and phone if provided (for artists under a label)
-    const labelId = parent_label_id || (isLabel ? currentUser.id : null)
+    const labelId = parent_label_id || ((isLabel || isWhitelabel) ? currentUser.id : null)
     
     // Update profile with additional fields
     const profileUpdate: Record<string, unknown> = {}
@@ -216,7 +226,7 @@ Deno.serve(async (req) => {
     )
   } catch (error: unknown) {
     console.error('Error creating user:', error)
-    const SAFE_MESSAGES = ['Unauthorized', 'Only admins', 'Labels can only', 'Failed to create user', 'User already registered']
+    const SAFE_MESSAGES = ['Unauthorized', 'Only admins', 'Labels can only', 'Labels and whitelabels can only', 'Failed to create user', 'User already registered', 'already been registered']
     let safeMessage = 'Failed to create user'
     if (error instanceof Error && SAFE_MESSAGES.some(m => error.message.startsWith(m) || error.message.includes(m))) {
       safeMessage = error.message
@@ -233,3 +243,4 @@ Deno.serve(async (req) => {
     )
   }
 })
+

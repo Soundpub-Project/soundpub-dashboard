@@ -314,8 +314,36 @@ export function ReleaseFormDialog({
   const fetchLabelArtists = async (labelId: string) => {
     setLoadingArtists(true);
     try {
-      // Fetch artists from artists table
-      const { data: artistsData, error: artistsError } = await supabase
+      // Fetch only valid artist user accounts under this label/whitelabel.
+      const { data: roleRows, error: roleError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'artist');
+
+      if (roleError) throw roleError;
+
+      const artistUserIds = (roleRows || []).map((row) => row.user_id);
+      const { data: artistProfiles, error: profilesError } = artistUserIds.length > 0
+        ? await supabase
+            .from('profiles')
+            .select('id, full_name, parent_label_id, status')
+            .eq('parent_label_id', labelId)
+            .in('id', artistUserIds)
+            .order('full_name')
+        : { data: [], error: null };
+
+      if (profilesError) throw profilesError;
+
+      const profileArtists = (artistProfiles || [])
+        .filter((profile) => !['suspended', 'deleted'].includes(String(profile.status || '').toLowerCase()))
+        .map((profile) => ({
+          id: profile.id,
+          name: profile.full_name,
+          label_id: labelId,
+          user_id: profile.id,
+        }));
+
+      const { data: artistRows, error: artistsError } = await supabase
         .from('artists')
         .select('id, name, label_id')
         .eq('label_id', labelId)
@@ -323,28 +351,17 @@ export function ReleaseFormDialog({
 
       if (artistsError) throw artistsError;
 
-      // Also fetch artist profiles to get user_id for ID-based matching
-      const { data: artistProfiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .eq('parent_label_id', labelId);
+      const existingNames = new Set(profileArtists.map((artist) => artist.name.trim().toLowerCase()));
+      const fallbackArtists = (artistRows || [])
+        .filter((artist) => !existingNames.has(String(artist.name || '').trim().toLowerCase()))
+        .map((artist) => ({
+          id: artist.id,
+          name: artist.name,
+          label_id: artist.label_id,
+          user_id: null,
+        }));
 
-      if (profilesError) {
-        console.error('Error fetching artist profiles:', profilesError);
-      }
-
-      // Merge artist data with user_id from profiles
-      const artistsWithUserId = (artistsData || []).map(artist => {
-        const matchingProfile = (artistProfiles || []).find(
-          p => p.full_name.toLowerCase().trim() === artist.name.toLowerCase().trim()
-        );
-        return {
-          ...artist,
-          user_id: matchingProfile?.id || undefined
-        };
-      });
-
-      setLabelArtists(artistsWithUserId);
+      setLabelArtists([...profileArtists, ...fallbackArtists]);
     } catch (error) {
       console.error('Error fetching artists:', error);
       setLabelArtists([]);
@@ -1671,3 +1688,7 @@ export function ReleaseFormDialog({
     </Dialog>
   );
 }
+
+
+
+

@@ -1,4 +1,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+
+const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
+  const existingDb = options.db || {}
+  return createClient(supabaseUrl, supabaseKey, {
+    ...options,
+    db: { ...existingDb, schema: getDatabaseSchema() },
+  })
+}
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -352,7 +362,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+    const supabaseAdmin = createSoundpubClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
@@ -372,7 +382,7 @@ Deno.serve(async (req) => {
     if (existingProfile) {
       userId = existingProfile.id;
 
-      // Only update fields that are NOT already set — never overwrite existing data
+      // Only update fields that are NOT already set â€” never overwrite existing data
       const updates: Record<string, unknown> = {};
       if (!existingProfile.sso_provider) updates.sso_provider = "iccn";
       if (!existingProfile.parent_label_id) updates.parent_label_id = iccnMediaLabelId;
@@ -384,7 +394,7 @@ Deno.serve(async (req) => {
       if (!(existingProfile as Record<string, unknown>).sso_user_type && ssoUserType) updates.sso_user_type = ssoUserType;
 
       if (Object.keys(updates).length > 0) {
-        // Preserve existing values — only fill in what's missing
+        // Preserve existing values â€” only fill in what's missing
         updates.sso_provider = updates.sso_provider || existingProfile.sso_provider;
         updates.parent_label_id = updates.parent_label_id || existingProfile.parent_label_id;
 

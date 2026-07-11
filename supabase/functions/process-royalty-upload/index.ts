@@ -1,4 +1,14 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+
+const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
+  const existingDb = options.db || {}
+  return createClient(supabaseUrl, supabaseKey, {
+    ...options,
+    db: { ...existingDb, schema: getDatabaseSchema() },
+  })
+}
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,6 +17,14 @@ const corsHeaders = {
 
 const normalizeISRC = (isrc: string) => isrc.replace(/-/g, '').toUpperCase()
 
+const SOUNDPUB_LABEL_ID = '423ecca4-2cd0-429d-b9f8-f9a8e8135289'
+const SOUNDPUB_LABEL_NAME = 'SOUNDPUB MUSIC'
+const SOUNDPUB_LABEL_ALIASES = new Set(['soundpub', 'soundpub music', 'soundpub music ecosystem'])
+const normalizeName = (value: string | null | undefined) => (value || '').trim().toLowerCase()
+const isSoundpubLabel = (labelUserId: string | null | undefined, labelName: string | null | undefined) => {
+  return labelUserId === SOUNDPUB_LABEL_ID || SOUNDPUB_LABEL_ALIASES.has(normalizeName(labelName))
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -14,13 +32,14 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) return new Response(JSON.stringify({ success: false, error: 'Auth required' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
-    const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
-    const supabaseUser = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } })
+    const supabaseAdmin = createSoundpubClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+    const supabaseUser = createSoundpubClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } })
 
     const { data: { user } } = await supabaseUser.auth.getUser()
     if (!user) return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
-    const { data: isAdmin } = await supabaseAdmin.rpc('is_admin', { _user_id: user.id })
+    const { data: isAdmin, error: adminError } = await supabaseAdmin.rpc('is_admin', { user_id: user.id })
+    if (adminError) console.error('Admin check failed:', adminError)
     if (!isAdmin) return new Response(JSON.stringify({ success: false, error: 'Admin only' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
     const { rows, filename, originalFilename } = await req.json()
@@ -87,38 +106,68 @@ Deno.serve(async (req) => {
     // Insert royalties
     const labelRev: Record<string, number> = {}
     const artistRev: Record<string, number> = {}
+    const labelRevById: Record<string, number> = {}
     let inserted = 0
 
     for (let i = 0; i < validRows.length; i += 100) {
       const batch = validRows.slice(i, i + 100).map((r: any) => {
         const track = isrcMap[r.isrc]
         const rel = track ? relMap[track.release_id] : null
-        const labelName = r.label_name || (rel ? labelMap[rel.label_id] : '') || ''
+        const sourceLabelName = r.label_name || (rel ? labelMap[rel.label_id] : '') || ''
+        const matchedLabelId = (rel?.label_id) || nameToLabelId[normalizeName(sourceLabelName)] || null
+        const soundpubLabel = isSoundpubLabel(matchedLabelId, sourceLabelName)
+        const labelName = soundpubLabel ? SOUNDPUB_LABEL_NAME : sourceLabelName
         // Stable label identifier: prefer release.label_id (authoritative), fallback to unique name match.
-        const labelUserId = (rel?.label_id) || nameToLabelId[(labelName || '').trim().toLowerCase()] || null
+        const labelUserId = soundpubLabel ? SOUNDPUB_LABEL_ID : matchedLabelId
         const artistName = r.artist || track?.artist_name || rel?.artist_name || ''
         
         // Priority: track.artist_user_id > release.artist_user_id (ISRC-based matching)
         const artistUserId = track?.artist_user_id || rel?.artist_user_id || null
 
-        // Revenue split: 70% Artist, 21% Label, 9% Admin (flat for all labels)
-        const adminShare = r.net_revenue * 0.09
-        const labelShare = r.net_revenue * 0.21
-        const artistShare = r.net_revenue * 0.70
+        // Revenue split:
+        // SOUNDPUB MUSIC: 70% artist, 30% Soundpub label.
+        // Other label/whitelabel: 49% artist, 21% label, 30% admin.
+        // If no artist account is linked, the whole non-admin pool goes to the label.
+        const adminShare = soundpubLabel ? 0 : r.net_revenue * 0.30
+        const labelShare = soundpubLabel ? r.net_revenue * 0.30 : (artistUserId ? r.net_revenue * 0.21 : r.net_revenue * 0.70)
+        const artistShare = artistUserId ? (soundpubLabel ? r.net_revenue * 0.70 : r.net_revenue * 0.49) : 0
 
+        if (labelUserId) labelRevById[labelUserId] = (labelRevById[labelUserId] || 0) + labelShare
         if (labelName) labelRev[labelName] = (labelRev[labelName] || 0) + labelShare
         if (artistUserId) {
           artistRev[artistUserId] = (artistRev[artistUserId] || 0) + artistShare
-        } else if (labelName) {
-          // If no artist account, artist share goes to label
-          labelRev[labelName] = (labelRev[labelName] || 0) + artistShare
         }
 
-        return { ...r, upload_id: upload.id, artist_user_id: artistUserId, label_user_id: labelUserId, label_name: labelName, artist: artistName, upc: r.upc || rel?.upc || '', title: r.title || track?.title || null }
+        return {
+          upload_id: upload.id,
+          period: r.period,
+          isrc: r.isrc,
+          upc: r.upc || rel?.upc || '',
+          title: r.title || track?.title || null,
+          artist: artistName,
+          artist_name: artistName,
+          label_name: labelName,
+          platform: r.platform,
+          country: r.country,
+          sales_type: r.sales_type || '',
+          unit_penjualan: r.sales_unit,
+          pendapatan_kotor_dsp: r.net_revenue,
+          pendapatan_label_artis: r.net_revenue,
+          pendapatan_bersih_soundpub: adminShare,
+          artist_revenue: artistShare,
+          label_revenue: labelShare,
+          soundpub_revenue: adminShare,
+          net_revenue: r.net_revenue,
+          artist_user_id: artistUserId,
+          label_user_id: labelUserId,
+        }
       })
 
       const { error } = await supabaseAdmin.from('royalties').insert(batch)
-      if (error) throw error
+      if (error) {
+        console.error('Royalty batch insert failed:', error)
+        throw new Error(`Failed to insert royalties: ${error.message}`)
+      }
       inserted += batch.length
     }
 
@@ -136,18 +185,33 @@ Deno.serve(async (req) => {
       profilesByNormalizedName[p.full_name.trim().toLowerCase()] = p
     })
 
-    // Update label balances with case-insensitive matching + per-item error handling
+    // Update label/whitelabel balances by stable user id first, fallback by name.
     const balanceErrors: string[] = []
+    for (const [id, amount] of Object.entries(labelRevById)) {
+      try {
+        const { data: p } = await supabaseAdmin.from('profiles').select('balance, label_revenue').eq('id', id).single()
+        if (p) {
+          await supabaseAdmin.from('profiles').update({ 
+            balance: Number(p.balance || 0) + amount, 
+            label_revenue: Number(p.label_revenue || 0) + amount 
+          }).eq('id', id)
+        }
+      } catch (e) {
+        console.error(`Failed to update label balance for user "${id}":`, e)
+        balanceErrors.push(`Label update failed: ${id}`)
+      }
+    }
+
     for (const [name, amount] of Object.entries(labelRev)) {
       try {
         const normalizedName = name.trim().toLowerCase()
         const p = profilesByNormalizedName[normalizedName]
-        if (p) {
+        if (p && !labelRevById[p.id]) {
           await supabaseAdmin.from('profiles').update({ 
-            balance: (p.balance || 0) + amount, 
-            label_revenue: (p.label_revenue || 0) + amount 
+            balance: Number(p.balance || 0) + amount, 
+            label_revenue: Number(p.label_revenue || 0) + amount 
           }).eq('id', p.id)
-        } else {
+        } else if (!p) {
           console.warn(`Label profile not found: "${name}" (normalized: "${normalizedName}")`)
           balanceErrors.push(`Label not found: ${name}`)
         }
@@ -163,8 +227,8 @@ Deno.serve(async (req) => {
         const { data: p } = await supabaseAdmin.from('profiles').select('balance, artist_revenue').eq('id', id).single()
         if (p) {
           await supabaseAdmin.from('profiles').update({ 
-            balance: (p.balance || 0) + amount, 
-            artist_revenue: (p.artist_revenue || 0) + amount 
+            balance: Number(p.balance || 0) + amount, 
+            artist_revenue: Number(p.artist_revenue || 0) + amount 
           }).eq('id', id)
         }
       } catch (e) {

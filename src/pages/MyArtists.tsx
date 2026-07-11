@@ -233,6 +233,7 @@ export default function MyArtists() {
         onOpenChange={setAddArtistDialogOpen}
         onSuccess={fetchArtists}
         allowedRoles={['artist']}
+        isWhitelabelMode={isWhitelabel}
       />
 
       <EditArtistDialog
@@ -258,3 +259,4 @@ export default function MyArtists() {
     </DashboardLayout>
   );
 }
+

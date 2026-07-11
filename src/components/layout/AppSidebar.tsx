@@ -35,7 +35,6 @@ import {
   ScrollText,
   FolderArchive,
   PieChart,
-  Crown,
   Shield,
   HardDrive,
   ListMusic,
@@ -197,9 +196,9 @@ const labelManagementItems: NavItem[] = [
     roles: ['label'],
   },
   { 
-    title: 'Panel Whitelabel', 
-    url: '/dashboard/whitelabel', 
-    icon: Crown,
+    title: 'Artis Saya',
+    url: '/dashboard/my-artists',
+    icon: Users,
     roles: ['whitelabel'],
   },
 ];
@@ -238,7 +237,7 @@ export function AppSidebar() {
             .from('profiles')
             .select('logo_url_light, logo_url_dark, logo_url')
             .eq('id', profile.parent_label_id)
-            .single();
+            .maybeSingle();
 
           if (!labelError && labelProfile) {
             const themeLogo = resolvedTheme === 'dark' 
@@ -505,3 +504,7 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
+
+
+
+

@@ -1,5 +1,15 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+
+const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
+  const existingDb = options.db || {}
+  return createClient(supabaseUrl, supabaseKey, {
+    ...options,
+    db: { ...existingDb, schema: getDatabaseSchema() },
+  })
+}
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,7 +28,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createSoundpubClient(supabaseUrl, supabaseServiceKey);
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -57,7 +67,8 @@ serve(async (req) => {
       if (!setting.key || !ALLOWED_KEYS.includes(setting.key)) {
         throw new Error(`Invalid setting key: ${setting.key}`);
       }
-      if (setting.value && setting.value.length > 2000) {
+      const maxValueLength = setting.key === 'iccn_service_photos' ? 20000 : 5000;
+      if (setting.value && setting.value.length > maxValueLength) {
         throw new Error(`Value too long for key: ${setting.key}`);
       }
     }

@@ -111,12 +111,24 @@ export default function WhitelabelDashboard() {
     if (!user) return;
     
     try {
-      // Fetch artists under this whitelabel
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('parent_label_id', user.id)
-        .order('created_at', { ascending: false });
+      // Fetch only valid artist user accounts under this whitelabel.
+      const { data: roleRows, error: roleError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'artist');
+
+      if (roleError) throw roleError;
+
+      const artistUserIds = (roleRows || []).map((row) => row.user_id);
+      const { data: profiles, error: profilesError } = artistUserIds.length > 0
+        ? await supabase
+            .from('profiles')
+            .select('*')
+            .eq('parent_label_id', user.id)
+            .eq('status', 'active')
+            .in('id', artistUserIds)
+            .order('created_at', { ascending: false })
+        : { data: [], error: null };
 
       if (profilesError) throw profilesError;
 
@@ -136,7 +148,8 @@ export default function WhitelabelDashboard() {
       // Fetch royalties
       const { data: royaltiesData } = await supabase
         .from('royalties')
-        .select('net_revenue');
+        .select('net_revenue, artist_user_id')
+        .eq('label_user_id', user.id);
 
       const totalRevenue = royaltiesData?.reduce(
         (sum, r) => sum + Number(r.net_revenue || 0),

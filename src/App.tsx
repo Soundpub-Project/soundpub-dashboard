@@ -25,7 +25,6 @@ import UploadRoyalty from "./pages/UploadRoyalty";
 import MyArtists from "./pages/MyArtists";
 import Export from "./pages/Export";
 import ComposerRoyalties from "./pages/ComposerRoyalties";
-import WhitelabelDashboard from "./pages/WhitelabelDashboard";
 import CopyrightDashboard from "./pages/CopyrightDashboard";
 import CopyrightAnalytics from "./pages/CopyrightAnalytics";
 import CopyrightRoyaltySummary from "./pages/CopyrightRoyaltySummary";
@@ -126,7 +125,7 @@ const App = () => (
               {/* Whitelabel-specific routes */}
               <Route path="/dashboard/whitelabel" element={
                 <ProtectedRoute requireWhitelabel>
-                  <WhitelabelDashboard />
+    <MyArtists />
                 </ProtectedRoute>
               } />
               
@@ -225,3 +224,5 @@ const App = () => (
 );
 
 export default App;
+
+

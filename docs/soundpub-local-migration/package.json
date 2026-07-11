@@ -1,0 +1,14 @@
+{
+  "name": "soundpub-local-migration",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "import:csv": "node import-csv-soundpub.js",
+    "check:csv": "node import-csv-soundpub.js --check-only"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.90.1",
+    "dotenv": "^16.4.7"
+  }
+}

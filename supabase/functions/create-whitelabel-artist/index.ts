@@ -1,5 +1,15 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+
+const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
+  const existingDb = options.db || {}
+  return createClient(supabaseUrl, supabaseKey, {
+    ...options,
+    db: { ...existingDb, schema: getDatabaseSchema() },
+  })
+}
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,7 +29,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    const supabase = createSoundpubClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
@@ -88,6 +98,10 @@ serve(async (req) => {
     const { error: profileError } = await supabase
       .from('profiles')
       .update({
+        full_name,
+        email,
+        phone: (body as any).phone || null,
+        status: 'active',
         password_set: false,
         parent_label_id: user.id,
       })
@@ -97,11 +111,10 @@ serve(async (req) => {
       console.error('Error updating profile:', profileError);
     }
 
-    // Update user role to artist
+    // Ensure user role is artist. The signup trigger may create a default role first.
     const { error: roleUpdateError } = await supabase
       .from('user_roles')
-      .update({ role: 'artist' })
-      .eq('user_id', newUser.user.id);
+      .upsert({ user_id: newUser.user.id, role: 'artist' }, { onConflict: 'user_id' });
 
     if (roleUpdateError) {
       console.error('Error updating role:', roleUpdateError);
@@ -156,3 +169,5 @@ serve(async (req) => {
     );
   }
 });
+
+

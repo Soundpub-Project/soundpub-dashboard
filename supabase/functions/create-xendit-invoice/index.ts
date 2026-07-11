@@ -1,4 +1,14 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+
+const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
+  const existingDb = options.db || {}
+  return createClient(supabaseUrl, supabaseKey, {
+    ...options,
+    db: { ...existingDb, schema: getDatabaseSchema() },
+  })
+}
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,7 +38,7 @@ Deno.serve(async (req) => {
     }
 
     // Get user from token
-    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
+    const supabaseUser = createSoundpubClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } }
     })
     const { data: { user }, error: authError } = await supabaseUser.auth.getUser()
@@ -42,7 +52,7 @@ Deno.serve(async (req) => {
     }
 
     // Use service role for all DB operations
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    const supabase = createSoundpubClient(supabaseUrl, supabaseServiceKey)
 
     // ===== CHECK FOR EXISTING PENDING PAYMENT =====
     const { data: existingPayment } = await supabase

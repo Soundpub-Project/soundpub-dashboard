@@ -1,4 +1,14 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+
+const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
+  const existingDb = options.db || {}
+  return createClient(supabaseUrl, supabaseKey, {
+    ...options,
+    db: { ...existingDb, schema: getDatabaseSchema() },
+  })
+}
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -88,8 +98,8 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
-    const supabaseUser = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+    const supabaseAdmin = createSoundpubClient(supabaseUrl, supabaseServiceKey)
+    const supabaseUser = createSoundpubClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
       global: { headers: { Authorization: authHeader } }
     })
 
@@ -103,7 +113,7 @@ Deno.serve(async (req) => {
     }
 
     // Check if user is admin
-    const { data: isAdminResult } = await supabaseAdmin.rpc('is_admin', { _user_id: user.id })
+    const { data: isAdminResult } = await supabaseAdmin.rpc('is_admin', { user_id: user.id })
     if (!isAdminResult) {
       return new Response(
         JSON.stringify({ success: false, error: 'Only admins can send notifications' }),
@@ -204,7 +214,7 @@ Deno.serve(async (req) => {
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #374151; margin: 0; padding: 0; background-color: #f3f4f6;">
           <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
             <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px 12px 0 0; padding: 30px; text-align: center;">
-              <h1 style="color: white; margin: 0; font-size: 24px;">📊 Royalty Upload Notification</h1>
+              <h1 style="color: white; margin: 0; font-size: 24px;">Ã°Å¸â€œÅ  Royalty Upload Notification</h1>
             </div>
             
             <div style="background: white; border-radius: 0 0 12px 12px; padding: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
@@ -213,7 +223,7 @@ Deno.serve(async (req) => {
               <p>Data royalti baru telah berhasil diupload ke sistem Soundpub.</p>
               
               <div style="background: #f9fafb; border-radius: 8px; padding: 20px; margin: 20px 0;">
-                <h3 style="margin-top: 0; color: #1f2937;">📋 Ringkasan Upload</h3>
+                <h3 style="margin-top: 0; color: #1f2937;">Ã°Å¸â€œâ€¹ Ringkasan Upload</h3>
                 <table style="width: 100%; border-collapse: collapse;">
                   <tr>
                     <td style="padding: 8px 0; color: #6b7280;">Upload ID:</td>
@@ -244,7 +254,7 @@ Deno.serve(async (req) => {
               
               ${payload.balanceUpdates.length > 0 ? `
               <div style="margin: 20px 0;">
-                <h3 style="color: #1f2937;">💰 Update Saldo per Label</h3>
+                <h3 style="color: #1f2937;">Ã°Å¸â€™Â° Update Saldo per Label</h3>
                 <div style="overflow-x: auto;">
                   <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
                     <thead>
@@ -278,7 +288,7 @@ Deno.serve(async (req) => {
       try {
         await sendGmail({
           to: adminEmails,
-          subject: `🎵 Royalty Upload: ${formatNumber(payload.insertedCount)} data baru - ${formatCurrency(payload.totalRevenue)}`,
+          subject: `Ã°Å¸Å½Âµ Royalty Upload: ${formatNumber(payload.insertedCount)} data baru - ${formatCurrency(payload.totalRevenue)}`,
           html: adminHtml,
         })
         console.log(`Admin notification sent to: ${adminEmails.join(', ')}`)
@@ -305,7 +315,7 @@ Deno.serve(async (req) => {
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #374151; margin: 0; padding: 0; background-color: #f3f4f6;">
           <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
             <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 12px 12px 0 0; padding: 30px; text-align: center;">
-              <h1 style="color: white; margin: 0; font-size: 24px;">💰 Royalty Baru Masuk!</h1>
+              <h1 style="color: white; margin: 0; font-size: 24px;">Ã°Å¸â€™Â° Royalty Baru Masuk!</h1>
             </div>
             
             <div style="background: white; border-radius: 0 0 12px 12px; padding: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
@@ -319,7 +329,7 @@ Deno.serve(async (req) => {
               </div>
               
               <div style="background: #f9fafb; border-radius: 8px; padding: 20px; margin: 20px 0;">
-                <h3 style="margin-top: 0; color: #1f2937;">📊 Rincian Pembagian</h3>
+                <h3 style="margin-top: 0; color: #1f2937;">Ã°Å¸â€œÅ  Rincian Pembagian</h3>
                 <table style="width: 100%; border-collapse: collapse;">
                   <tr>
                     <td style="padding: 10px 0; color: #6b7280;">Label Revenue:</td>
@@ -357,7 +367,7 @@ Deno.serve(async (req) => {
       try {
         await sendGmail({
           to: label.email,
-          subject: `💰 Royalty Baru: ${formatCurrency(labelUpdate.balance_added)} telah ditambahkan ke saldo Anda`,
+          subject: `Ã°Å¸â€™Â° Royalty Baru: ${formatCurrency(labelUpdate.balance_added)} telah ditambahkan ke saldo Anda`,
           html: labelHtml,
         })
         console.log(`Label notification sent to: ${label.email}`)

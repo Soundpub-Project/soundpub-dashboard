@@ -43,7 +43,7 @@ const ACCEPT_MAP: Record<MediaType, string> = {
 };
 
 const MAX_SIZE_MAP: Record<MediaType, number> = {
-  audio: 500 * 1024 * 1024, // 500MB for full audio (no limit practically)
+  audio: 2 * 1024 * 1024 * 1024, // 2GB for full audio
   clip: 20 * 1024 * 1024, // 20MB for clips
 };
 
@@ -141,6 +141,9 @@ export function MediaUploadSection({
       }
       if (error.message?.includes('duplicate')) {
         throw new Error('File dengan nama yang sama sudah ada.');
+      }
+      if (error.message?.includes('maximum allowed size')) {
+        throw new Error(`File terlalu besar untuk Storage. Ukuran file ${formatFileSize(file.size)}. Naikkan limit bucket track-audio di Supabase.`);
       }
       throw new Error(error.message || 'Gagal mengupload file');
     }
