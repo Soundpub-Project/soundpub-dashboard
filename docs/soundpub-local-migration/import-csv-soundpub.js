@@ -1,4 +1,4 @@
-require('dotenv').config();
+﻿require('dotenv').config();
 
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
@@ -458,11 +458,14 @@ async function main() {
     country: row.country || 'Unknown',
     sales_type: row.sales_type || 'unknown',
     unit_penjualan: asInteger(row.unit_penjualan ?? row.sales_unit),
-    pendapatan_kotor_dsp: asNumber(row.pendapatan_kotor_dsp),
+    net_revenue: asNumber(row.net_revenue ?? row.pendapatan_kotor_dsp),
+    pendapatan_kotor_dsp: asNumber(row.pendapatan_kotor_dsp ?? row.net_revenue),
     pendapatan_label_artis: asNumber(row.pendapatan_label_artis),
     pendapatan_bersih_soundpub: asNumber(row.pendapatan_bersih_soundpub),
-    artist_revenue: asNumber(row.artist_revenue ?? row.net_revenue),
+    artist_revenue: asNumber(row.artist_revenue),
     soundpub_revenue: asNumber(row.soundpub_revenue),
+    artist_user_id: mapUserId(row.artist_user_id),
+    label_user_id: mapUserId(row.label_user_id),
     title: row.title,
     artist: row.artist,
     created_at: row.created_at,
@@ -512,3 +515,5 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+
+

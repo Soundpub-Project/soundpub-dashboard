@@ -370,6 +370,10 @@ export function ReleaseFormDialog({
     }
   };
 
+  const findArtistUserIdByName = (artistName: string) => {
+    const normalizedName = artistName.toLowerCase().trim();
+    return labelArtists.find((artist) => artist.name.toLowerCase().trim() === normalizedName)?.user_id || null;
+  };
   // Reset all state when dialog opens or release prop changes
   useEffect(() => {
     if (open) {
@@ -617,6 +621,7 @@ export function ReleaseFormDialog({
         const selectedArtist = labelArtists.find(
           a => a.name.toLowerCase().trim() === values.artist_name.toLowerCase().trim()
         );
+        const artistUserId = selectedArtist?.user_id || release.artist_user_id || null;
         
         const { error: releaseError } = await supabase
           .from('releases')
@@ -624,7 +629,7 @@ export function ReleaseFormDialog({
             upc: values.upc || null,
             title: values.title,
             artist_name: values.artist_name,
-            artist_user_id: selectedArtist?.user_id || release.artist_user_id || null,
+            artist_user_id: artistUserId,
             release_type: values.release_type,
             genre: values.genre || null,
             release_date: values.release_date || null,
@@ -664,6 +669,7 @@ export function ReleaseFormDialog({
                 isrc: track.isrc || null,
                 title: track.title,
                 artist_name: primaryArtist,
+                artist_user_id: findArtistUserIdByName(primaryArtist) || artistUserId || null,
                 artists: track.artists,
                 composer: track.composer || null,
                 lyricist: track.lyricist || null,
@@ -684,7 +690,8 @@ export function ReleaseFormDialog({
               isrc: track.isrc || null,
               title: track.title,
               artist_name: primaryArtist,
-              artists: track.artists,
+            artist_user_id: findArtistUserIdByName(primaryArtist) || artistUserId || null,
+            artists: track.artists,
               composer: track.composer || null,
               lyricist: track.lyricist || null,
               genre: track.genre || null,
@@ -712,9 +719,7 @@ export function ReleaseFormDialog({
         }
 
         // Find artist_user_id: for artist role use own ID, otherwise match from label artists
-        const artistUserId = isArtist ? user.id : (labelArtists.find(
-          a => a.name.toLowerCase().trim() === values.artist_name.toLowerCase().trim()
-        )?.user_id || null);
+        const artistUserId = isArtist ? user.id : (findArtistUserIdByName(values.artist_name));
 
         const { data: newRelease, error: releaseError } = await supabase
           .from('releases')
@@ -743,6 +748,7 @@ export function ReleaseFormDialog({
             isrc: track.isrc || null,
             title: track.title,
             artist_name: primaryArtist,
+            artist_user_id: findArtistUserIdByName(primaryArtist) || artistUserId || null,
             artists: track.artists,
             composer: track.composer || null,
             lyricist: track.lyricist || null,
@@ -809,9 +815,7 @@ export function ReleaseFormDialog({
         return;
       }
 
-      const artistUserId = isArtist ? user.id : (labelArtists.find(
-        a => a.name.toLowerCase().trim() === values.artist_name.toLowerCase().trim()
-      )?.user_id || null);
+      const artistUserId = isArtist ? user.id : (findArtistUserIdByName(values.artist_name));
 
       let releaseId: string;
 
@@ -859,6 +863,7 @@ export function ReleaseFormDialog({
             isrc: track.isrc || null,
             title: track.title,
             artist_name: primaryArtist,
+            artist_user_id: findArtistUserIdByName(primaryArtist) || artistUserId || null,
             artists: track.artists,
             composer: track.composer || null,
             lyricist: track.lyricist || null,
@@ -1688,6 +1693,8 @@ export function ReleaseFormDialog({
     </Dialog>
   );
 }
+
+
 
 
 

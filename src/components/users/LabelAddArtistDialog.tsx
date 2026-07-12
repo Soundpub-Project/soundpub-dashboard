@@ -81,6 +81,12 @@ export function LabelAddArtistDialog({ open, onOpenChange, onSuccess }: LabelAdd
           full_name: fullName,
           role: 'artist',
           parent_label_id: currentUser?.id,
+          artist_type: artistType,
+          genre,
+          social_links: {
+            spotify: hasSpotify,
+            apple_music: hasAppleMusic,
+          },
         },
       });
 
@@ -111,33 +117,9 @@ export function LabelAddArtistDialog({ open, onOpenChange, onSuccess }: LabelAdd
             .update({ avatar_url: profileImageUrl })
             .eq('id', newUserId);
         }
-      }
-
-      // Create artist_profiles record
-      const socialLinks = {
-        spotify: hasSpotify,
-        apple_music: hasAppleMusic
-      };
-
-      const { error: artistProfileError } = await supabase
-        .from('artist_profiles')
-        .insert({
-          user_id: newUserId,
-          artist_name: fullName,
-          artist_type: artistType,
-          genre: genre,
-          social_links: socialLinks,
-          profile_image_url: profileImageUrl,
-        });
-
-      if (artistProfileError) {
-        console.error('Error creating artist profile:', artistProfileError);
-      }
-      
-      // Also update profiles to set artist_profile_completed = true
-      await supabase.from('profiles')
-        .update({ artist_profile_completed: true })
-        .eq('id', newUserId);
+      }
+      // Artist profile metadata is created in create-user Edge Function to avoid client RLS issues.
+      // artist_profile_completed is set in create-user Edge Function.
 
       toast.success('Artist berhasil ditambahkan');
       resetForm();

@@ -142,9 +142,15 @@ export default function UploadRoyalty() {
     insertedCount: number;
     totalErrors: number;
     balanceUpdates: BalanceUpdate[];
+    managedArtistsCreated?: number;
+    managedArtistsReused?: number;
+    replacedUploads?: number;
+    replacedRows?: number;
   } | null>(null);
   const [isrcMatchResults, setIsrcMatchResults] = useState<ISRCMatchResult[]>([]);
   const [isCheckingISRC, setIsCheckingISRC] = useState(false);
+  const [replaceExisting, setReplaceExisting] = useState(false);
+  const [replaceMode, setReplaceMode] = useState<'filename_period' | 'period'>('filename_period');
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -542,6 +548,8 @@ export default function UploadRoyalty() {
           rows: parsedData,
           filename: `royalty_${Date.now()}.csv`,
           originalFilename: selectedFile.name,
+          replaceExisting,
+          replaceMode,
         },
       });
 
@@ -588,6 +596,10 @@ export default function UploadRoyalty() {
         insertedCount: data.insertedCount,
         totalErrors: data.totalErrors,
         balanceUpdates: data.balanceUpdates || [],
+        managedArtistsCreated: data.managedArtistsCreated || 0,
+        managedArtistsReused: data.managedArtistsReused || 0,
+        replacedUploads: data.replacedUploads || 0,
+        replacedRows: data.replacedRows || 0,
       });
 
       toast({
@@ -599,6 +611,8 @@ export default function UploadRoyalty() {
       setSelectedFile(null);
       setParsedData([]);
       setParseErrors([]);
+      setReplaceExisting(false);
+      setReplaceMode('filename_period');
       fetchUploadHistory();
 
     } catch (error: any) {
@@ -733,6 +747,17 @@ export default function UploadRoyalty() {
                       {lastUploadResult.balanceUpdates.filter(b => b.success).length} label
                     </p>
                   </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 text-sm">
+                <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-3">
+                  <p className="text-muted-foreground">Managed Artist Dibuat</p>
+                  <p className="text-lg font-semibold">{lastUploadResult.managedArtistsCreated || 0}</p>
+                </div>
+                <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
+                  <p className="text-muted-foreground">Data Lama Direplace</p>
+                  <p className="text-lg font-semibold">{lastUploadResult.replacedRows || 0} baris</p>
                 </div>
               </div>
 
@@ -1111,6 +1136,53 @@ export default function UploadRoyalty() {
                   </div>
                 )}
 
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 space-y-2">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4 rounded border-border"
+                      checked={replaceExisting}
+                      onChange={(event) => setReplaceExisting(event.target.checked)}
+                    />
+                    <span>
+                      <span className="block font-medium">Replace upload lama dengan nama file yang sama</span>
+                      <span className="block text-sm text-muted-foreground">
+                        Aktifkan jika ini adalah upload ulang/koreksi. Default hanya mengganti data dengan nama file dan periode yang sama.
+                      </span>
+                    </span>
+                  </label>
+                  {replaceExisting && (
+                    <div className="ml-7 mt-3 space-y-2 text-sm">
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="replaceMode"
+                          className="mt-1"
+                          checked={replaceMode === 'filename_period'}
+                          onChange={() => setReplaceMode('filename_period')}
+                        />
+                        <span>
+                          <span className="block font-medium">Default: original filename + period</span>
+                          <span className="block text-muted-foreground">Hanya mengganti upload lama dengan nama file sama dan periode yang ada di file baru.</span>
+                        </span>
+                      </label>
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="replaceMode"
+                          className="mt-1"
+                          checked={replaceMode === 'period'}
+                          onChange={() => setReplaceMode('period')}
+                        />
+                        <span>
+                          <span className="block font-medium text-amber-700 dark:text-amber-300">Manual: replace semua data pada period ini</span>
+                          <span className="block text-muted-foreground">Gunakan untuk revisi file berbeda nama. Semua royalty lama pada periode di file ini akan diganti.</span>
+                        </span>
+                      </label>
+                    </div>
+                  )}
+                </div>
+
                 {/* Upload Progress */}
                 {isUploading && (
                   <div className="p-4 rounded-lg bg-primary/10 border border-primary/30">
@@ -1134,7 +1206,7 @@ export default function UploadRoyalty() {
                       disabled={isUploading}
                     >
                       <Upload className="h-4 w-4 mr-2" />
-                      Import {parsedData.length} Data
+                      {replaceExisting ? 'Replace & Import' : 'Import'} {parsedData.length} Data
                     </Button>
                     <Button
                       variant="outline"

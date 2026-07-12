@@ -236,6 +236,13 @@ Kalau role user hasil import tidak sesuai dengan export Lovable, jalankan file i
 
 File ini hanya mengubah `soundpub.user_roles` untuk user yang ada di `exported-data/user_roles_2026-07-10.csv`. Data `auth.users`, `soundpub.profiles`, releases, tracks, royalties, dan data lain tidak dihapus.
 
+Catatan penting:
+
+- Jalankan script ini setelah user Auth dari `profiles.csv` sudah dibuat oleh `pnpm import:csv` atau proses import Auth lain.
+- `soundpub.user_roles.user_id` punya foreign key ke `auth.users(id)`, jadi role tidak bisa dibuat untuk UUID yang belum ada di Auth.
+- Script ini sudah dibuat aman: user CSV yang belum ada di `auth.users` akan ditampilkan sebagai `SKIPPED_MISSING_AUTH_USER`, bukan membuat migrasi gagal.
+- Jika masih ada skipped user, jalankan/import Auth user dulu, lalu ulangi script `10`.
+
 Expected role dari CSV:
 
 - `artist`: 78

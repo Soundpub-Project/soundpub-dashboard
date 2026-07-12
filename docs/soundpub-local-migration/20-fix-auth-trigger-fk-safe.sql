@@ -1,17 +1,16 @@
 ﻿-- =============================================
--- SOUNDPUB SIGNUP DEFAULT ARTIST ROLE PATCH
--- Run this after schema/import when manual signup should create artists under Soundpub.
--- This does not reset data.
+-- SOUNDPUB FIX AUTH SIGNUP TRIGGER FK-SAFE
+-- Run this before pnpm import:csv if Auth Admin createUser returns:
+--   insert or update on table "profiles" violates foreign key constraint
+--   "profiles_parent_label_id_fkey"
+-- This does not reset or delete data.
 -- =============================================
 
 BEGIN;
 
--- Ensure the role enum supports the roles used by the app/import.
 ALTER TYPE soundpub.app_role ADD VALUE IF NOT EXISTS 'copyright';
 ALTER TYPE soundpub.app_role ADD VALUE IF NOT EXISTS 'whitelabel';
 
--- New self-registered users become artists under Soundpub Music Ecosystem.
--- Local mapped ID for original Lovable profile 74c1b87a-2c9b-45c8-a9af-5cdb3d88f419.
 CREATE OR REPLACE FUNCTION soundpub.handle_new_user()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -25,10 +24,6 @@ DECLARE
 BEGIN
   provider := NEW.raw_app_meta_data ->> 'provider';
 
-  
-  -- During a fresh CSV import, auth.users is created before soundpub.profiles is
-  -- fully restored. Avoid breaking Auth signup/import with a FK violation when
-  -- the default Soundpub label profile does not exist yet.
   SELECT p.id INTO resolved_parent_label_id
   FROM soundpub.profiles p
   WHERE p.id = soundpub_label_id;
@@ -74,47 +69,12 @@ CREATE TRIGGER on_auth_user_created
 AFTER INSERT ON auth.users
 FOR EACH ROW EXECUTE FUNCTION soundpub.handle_new_user();
 
--- Optional fix for already self-registered users that still have role user and no label.
-UPDATE soundpub.profiles p
-SET parent_label_id = '423ecca4-2cd0-429d-b9f8-f9a8e8135289'::uuid,
-    updated_at = now()
-WHERE p.parent_label_id IS NULL
-  AND EXISTS (
-    SELECT 1 FROM soundpub.user_roles ur
-    WHERE ur.user_id = p.id AND ur.role = 'user'::soundpub.app_role
-  );
-
-DELETE FROM soundpub.user_roles ur
-WHERE ur.role = 'user'::soundpub.app_role
-  AND EXISTS (
-    SELECT 1 FROM soundpub.profiles p
-    WHERE p.id = ur.user_id
-      AND p.parent_label_id = '423ecca4-2cd0-429d-b9f8-f9a8e8135289'::uuid
-  );
-
-INSERT INTO soundpub.user_roles (user_id, role)
-SELECT p.id, 'artist'::soundpub.app_role
-FROM soundpub.profiles p
-WHERE p.parent_label_id = '423ecca4-2cd0-429d-b9f8-f9a8e8135289'::uuid
-  AND NOT EXISTS (
-    SELECT 1 FROM soundpub.user_roles ur
-    WHERE ur.user_id = p.id AND ur.role = 'artist'::soundpub.app_role
-  );
-
 COMMIT;
 
 -- Verification
 SELECT
-  p.id,
-  p.email,
-  p.full_name,
-  p.parent_label_id,
-  array_agg(ur.role::text ORDER BY ur.role::text) AS roles
-FROM soundpub.profiles p
-LEFT JOIN soundpub.user_roles ur ON ur.user_id = p.id
-WHERE p.parent_label_id = '423ecca4-2cd0-429d-b9f8-f9a8e8135289'::uuid
-GROUP BY p.id, p.email, p.full_name, p.parent_label_id
-ORDER BY p.created_at DESC
-LIMIT 20;
-
-
+  proname,
+  prosecdef AS security_definer
+FROM pg_proc
+WHERE pronamespace = 'soundpub'::regnamespace
+  AND proname = 'handle_new_user';
