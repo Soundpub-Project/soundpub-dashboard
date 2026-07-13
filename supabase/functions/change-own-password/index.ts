@@ -20,8 +20,8 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: 'Missing authorization header' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -36,8 +36,8 @@ Deno.serve(async (req) => {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: 'Unauthorized' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -46,15 +46,15 @@ Deno.serve(async (req) => {
 
     if (!new_password) {
       return new Response(
-        JSON.stringify({ error: 'new_password is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: 'Password baru wajib diisi' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     if (new_password.length < 6 || new_password.length > 128) {
       return new Response(
-        JSON.stringify({ error: 'Password must be 6-128 characters' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: 'Password harus 6-128 karakter' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -72,9 +72,16 @@ Deno.serve(async (req) => {
 
     if (updateError) {
       console.error('Error updating password:', updateError);
+      const anyErr = updateError as unknown as { code?: string; reasons?: string[]; message?: string }
+      let msg = 'Gagal mengubah password'
+      if (anyErr.code === 'weak_password' || (Array.isArray(anyErr.reasons) && anyErr.reasons.includes('pwned'))) {
+        msg = 'Password ini terlalu lemah atau pernah bocor di internet. Silakan pilih password yang lebih kuat dan unik.'
+      } else if (anyErr.message?.toLowerCase().includes('same')) {
+        msg = 'Password baru tidak boleh sama dengan password lama.'
+      }
       return new Response(
-        JSON.stringify({ error: 'Failed to update password' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: msg }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -121,14 +128,14 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Error in change-own-password:', error);
-    const SAFE_MESSAGES = ['Missing authorization', 'Unauthorized', 'new_password is required', 'Password must be']
-    let safeMessage = 'An error occurred'
+    const SAFE_MESSAGES = ['Missing authorization', 'Unauthorized', 'Password']
+    let safeMessage = 'Terjadi kesalahan saat mengubah password'
     if (error instanceof Error && SAFE_MESSAGES.some(m => error.message.startsWith(m) || error.message.includes(m))) {
       safeMessage = error.message
     }
     return new Response(
-      JSON.stringify({ error: safeMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: false, error: safeMessage }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
