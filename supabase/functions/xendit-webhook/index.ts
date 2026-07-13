@@ -15,7 +15,12 @@ Deno.serve(async (req) => {
     const webhookToken = Deno.env.get('XENDIT_WEBHOOK_TOKEN')
     const callbackToken = req.headers.get('x-callback-token')
 
-    if (webhookToken && callbackToken !== webhookToken) {
+    // Fail closed: reject if the webhook secret is not configured
+    if (!webhookToken) {
+      console.error('XENDIT_WEBHOOK_TOKEN is not configured; rejecting webhook')
+      return new Response(JSON.stringify({ error: 'Webhook not configured' }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+    if (callbackToken !== webhookToken) {
       console.error('Invalid webhook token')
       return new Response(JSON.stringify({ error: 'Invalid callback token' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
