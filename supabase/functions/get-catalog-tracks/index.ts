@@ -26,7 +26,12 @@ serve(async (req) => {
     const limit = Math.min(parseInt(url.searchParams.get("limit") || "50"), 500); // Max 100
     const offset = parseInt(url.searchParams.get("offset") || "0");
     const genre = url.searchParams.get("genre");
-    const search = url.searchParams.get("search");
+    const rawSearch = url.searchParams.get("search");
+    // Sanitize search: strip PostgREST filter meta-chars (comma, parentheses, colon, period)
+    // and cap length to prevent filter-syntax injection into .or().
+    const search = rawSearch
+      ? rawSearch.replace(/[,()*:.\\%]/g, " ").trim().slice(0, 100)
+      : null;
 
     // Build query for active releases with tracks
     let query = supabaseAdmin
@@ -67,7 +72,8 @@ serve(async (req) => {
       query = query.eq("genre", genre);
     }
     if (search) {
-      query = query.or(`title.ilike.%${search}%,artist_name.ilike.%${search}%`);
+      const pattern = `%${search}%`;
+      query = query.or(`title.ilike.${pattern},artist_name.ilike.${pattern}`);
     }
 
     // Apply pagination
@@ -91,7 +97,8 @@ serve(async (req) => {
       countQuery = countQuery.eq("genre", genre);
     }
     if (search) {
-      countQuery = countQuery.or(`title.ilike.%${search}%,artist_name.ilike.%${search}%`);
+      const pattern = `%${search}%`;
+      countQuery = countQuery.or(`title.ilike.${pattern},artist_name.ilike.${pattern}`);
     }
 
     const { count, error: countError } = await countQuery;
