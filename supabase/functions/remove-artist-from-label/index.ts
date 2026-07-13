@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
     if (!authHeader) {
       return new Response(
         JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
     if (userError || !user) {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
       console.error('Error fetching role:', roleError);
       return new Response(
         JSON.stringify({ error: 'Failed to verify permissions' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
     if (!isLabel && !isWhitelabel && !isAdmin) {
       return new Response(
         JSON.stringify({ error: 'Only labels or whitelabels can remove artists' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
     if (!artist_id) {
       return new Response(
         JSON.stringify({ error: 'artist_id is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
     if (artistError || !artistData) {
       return new Response(
         JSON.stringify({ error: 'Artist not found' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
     if ((isLabel || isWhitelabel) && artistData.parent_label_id !== user.id) {
       return new Response(
         JSON.stringify({ error: 'This artist is not under your label' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
         JSON.stringify({ 
           error: `Artis ini memiliki ${activeReleases.length} release aktif/pending dan tidak bisa dihapus. Releases: ${releaseNames}` 
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -152,7 +152,7 @@ Deno.serve(async (req) => {
       console.error('Error removing artist:', updateError);
       return new Response(
         JSON.stringify({ error: updateError.message }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -183,7 +183,7 @@ Deno.serve(async (req) => {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
       JSON.stringify({ error: message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
