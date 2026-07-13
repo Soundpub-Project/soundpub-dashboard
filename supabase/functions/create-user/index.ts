@@ -81,11 +81,11 @@ Deno.serve(async (req) => {
         field: e.path.join('.'),
         message: e.message
       }))
-      
+      const summary = errors.map(e => `${e.field}: ${e.message}`).join('; ')
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Validation failed',
+          error: `Validasi gagal — ${summary}`,
           details: errors
         }),
         { 
