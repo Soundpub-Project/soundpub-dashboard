@@ -194,6 +194,39 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
 
+  // ---------- Authorization ----------
+  // Only allow admin/superadmin users, or internal invocations using the service-role JWT.
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader?.startsWith('Bearer ')) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+  const callerToken = authHeader.replace('Bearer ', '')
+  let callerIsAuthorized = false
+  try {
+    const { data: claimsData } = await supabase.auth.getClaims(callerToken)
+    const claims = claimsData?.claims as { sub?: string; role?: string } | undefined
+    if (claims?.role === 'service_role') {
+      callerIsAuthorized = true
+    } else if (claims?.sub) {
+      const { data: roleRow } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', claims.sub)
+        .in('role', ['admin', 'superadmin'])
+        .maybeSingle()
+      if (roleRow) callerIsAuthorized = true
+    }
+  } catch (_e) {
+    // fall through
+  }
+  if (!callerIsAuthorized) {
+    return new Response(JSON.stringify({ error: 'Forbidden: admin role required' }), {
+      status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+
   try {
     const input: SendInput = await req.json()
     const tpl = TEMPLATES[input.templateName]
