@@ -115,10 +115,57 @@ Deno.serve(async (req) => {
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   const supabase = createClient(supabaseUrl, serviceKey)
 
+  // ---------- Authorization ----------
+  // Only allow: (a) cron caller with matching X-Cron-Secret header,
+  //             (b) service-role JWT (internal invoke), or
+  //             (c) an authenticated admin/superadmin user.
+  const cronSecret = Deno.env.get('CRON_BACKUP_SECRET')
+  const providedCronSecret = req.headers.get('x-cron-secret')
+  let authorized = false
+  let triggeredBy = 'unknown'
+
+  if (cronSecret && providedCronSecret && providedCronSecret === cronSecret) {
+    authorized = true
+    triggeredBy = 'cron'
+  } else {
+    const authHeader = req.headers.get('Authorization')
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.replace('Bearer ', '')
+      try {
+        const { data: claimsData } = await supabase.auth.getClaims(token)
+        const claims = claimsData?.claims as { sub?: string; role?: string } | undefined
+        if (claims?.role === 'service_role') {
+          authorized = true
+          triggeredBy = 'service_role'
+        } else if (claims?.sub) {
+          const { data: roleRow } = await supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', claims.sub)
+            .in('role', ['admin', 'superadmin'])
+            .maybeSingle()
+          if (roleRow) {
+            authorized = true
+            triggeredBy = `admin:${claims.sub}`
+          }
+        }
+      } catch (_e) {
+        // fall through to unauthorized
+      }
+    }
+  }
+
+  if (!authorized) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+
   // Insert run record
   const { data: runRow } = await supabase
     .from('storage_backup_runs')
-    .insert({ status: 'running', triggered_by: req.headers.get('x-trigger') ?? 'cron' })
+    .insert({ status: 'running', triggered_by: req.headers.get('x-trigger') ?? triggeredBy })
     .select('id')
     .single()
   const runId = runRow?.id
