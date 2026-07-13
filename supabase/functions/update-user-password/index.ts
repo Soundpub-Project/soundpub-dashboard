@@ -172,7 +172,11 @@ Deno.serve(async (req) => {
     const SAFE_MESSAGES = ['Unauthorized', 'Password must be', 'Missing required', 'Only admins', 'Only superadmins', 'User not found', 'You can only update']
     let safeMessage = 'Failed to update password'
     if (error instanceof Error) {
-      if (SAFE_MESSAGES.some(m => error.message.startsWith(m) || error.message.includes(m))) {
+      // Surface Supabase auth weak-password (HIBP) errors clearly
+      const anyErr = error as unknown as { code?: string; reasons?: string[] }
+      if (anyErr.code === 'weak_password' || (Array.isArray(anyErr.reasons) && anyErr.reasons.includes('pwned'))) {
+        safeMessage = 'Password ini terlalu lemah atau pernah bocor di internet. Silakan pilih password yang lebih kuat dan unik.'
+      } else if (SAFE_MESSAGES.some(m => error.message.startsWith(m) || error.message.includes(m))) {
         safeMessage = error.message
       }
     }
