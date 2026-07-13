@@ -187,7 +187,9 @@ Deno.serve(async (req) => {
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400
+        // Return 200 so supabase-js exposes the JSON body to the client
+        // (non-2xx responses are surfaced as a generic FunctionsHttpError).
+        status: 200
       }
     )
   }
