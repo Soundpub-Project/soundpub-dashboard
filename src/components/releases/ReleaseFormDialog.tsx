@@ -343,25 +343,8 @@ export function ReleaseFormDialog({
           user_id: profile.id,
         }));
 
-      const { data: artistRows, error: artistsError } = await supabase
-        .from('artists')
-        .select('id, name, label_id')
-        .eq('label_id', labelId)
-        .order('name');
-
-      if (artistsError) throw artistsError;
-
-      const existingNames = new Set(profileArtists.map((artist) => artist.name.trim().toLowerCase()));
-      const fallbackArtists = (artistRows || [])
-        .filter((artist) => !existingNames.has(String(artist.name || '').trim().toLowerCase()))
-        .map((artist) => ({
-          id: artist.id,
-          name: artist.name,
-          label_id: artist.label_id,
-          user_id: null,
-        }));
-
-      setLabelArtists([...profileArtists, ...fallbackArtists]);
+      // For release creation we only want active artist profiles that belong to the selected label.
+      setLabelArtists(profileArtists);
     } catch (error) {
       console.error('Error fetching artists:', error);
       setLabelArtists([]);
@@ -1158,7 +1141,10 @@ export function ReleaseFormDialog({
                                         <CommandItem
                                           key={artist.id}
                                           value={artist.name}
-                                          onSelect={() => field.onChange(artist.name)}
+                                          onSelect={() => {
+                                            field.onChange(artist.name);
+                                            form.setValue('artist_user_id' as any, artist.user_id || null);
+                                          }}
                                         >
                                           <Check
                                             className={cn(
@@ -1191,7 +1177,14 @@ export function ReleaseFormDialog({
                                 </p>
                               </div>
                               <FormControl>
-                                <Input placeholder="Atau ketik nama artist baru" {...field} />
+                                <Input
+                                  placeholder="Atau ketik nama artist baru"
+                                  {...field}
+                                  onChange={(event) => {
+                                    field.onChange(event.target.value);
+                                    form.setValue('artist_user_id' as any, null);
+                                  }}
+                                />
                               </FormControl>
                             </div>
                           )

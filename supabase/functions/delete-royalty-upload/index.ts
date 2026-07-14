@@ -10,13 +10,6 @@ const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options:
 }
 
 
-const SOUNDPUB_LABEL_ID = '423ecca4-2cd0-429d-b9f8-f9a8e8135289'
-const SOUNDPUB_LABEL_ALIASES = new Set(['soundpub', 'soundpub music', 'soundpub music ecosystem'])
-const normalizeName = (value: string | null | undefined) => (value || '').trim().toLowerCase()
-const isSoundpubLabel = (labelUserId: string | null | undefined, labelName: string | null | undefined) => {
-  return labelUserId === SOUNDPUB_LABEL_ID || SOUNDPUB_LABEL_ALIASES.has(normalizeName(labelName))
-}
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -75,112 +68,17 @@ Deno.serve(async (req) => {
       return respond(false, { error: "Upload not found" });
     }
 
-    // 2. Get all royalties for this upload (handle >1000 rows)
-    let allRoyalties: Array<{ net_revenue: number; artist_user_id: string | null; label_user_id: string | null; label_name: string }> = [];
-    let from = 0;
-    const pageSize = 1000;
-    while (true) {
-      const { data: page, error: pageError } = await supabaseAdmin
-        .from("royalties")
-        .select("net_revenue, artist_user_id, label_user_id, label_name")
-        .eq("upload_id", upload_id)
-        .range(from, from + pageSize - 1);
+    // 2. Count royalties for this upload. Balances are rebuilt after delete from source-of-truth rows.
+    const { count: deletedCount, error: countError } = await supabaseAdmin
+      .from("royalties")
+      .select("id", { count: "exact", head: true })
+      .eq("upload_id", upload_id);
 
-      if (pageError) throw new Error(`Failed to fetch royalties: ${pageError.message}`);
-      if (!page || page.length === 0) break;
-      allRoyalties = allRoyalties.concat(page);
-      if (page.length < pageSize) break;
-      from += pageSize;
-    }
-
-    // 3. Calculate balance rollbacks per artist_user_id
-    const balanceMap: Record<string, { balance: number; artistRevenue: number; labelRevenue: number }> = {};
-
-    for (const row of allRoyalties) {
-      if (!row.artist_user_id) continue;
-      const uid = row.artist_user_id;
-      if (!balanceMap[uid]) {
-        balanceMap[uid] = { balance: 0, artistRevenue: 0, labelRevenue: 0 };
-      }
-      const soundpubLabel = isSoundpubLabel(row.label_user_id, row.label_name);
-      const artistShare = Number(row.net_revenue) * (soundpubLabel ? 0.70 : 0.49);
-      balanceMap[uid].balance += artistShare;
-      balanceMap[uid].artistRevenue += artistShare;
-    }
-
-    // Label/whitelabel revenue rollback by stable label_user_id, fallback by label_name.
-    const labelRevenueMap: Record<string, number> = {};
-    const labelRevenueById: Record<string, number> = {};
-    for (const row of allRoyalties) {
-      const soundpubLabel = isSoundpubLabel(row.label_user_id, row.label_name);
-      const labelShare = soundpubLabel
-        ? Number(row.net_revenue) * 0.30
-        : (row.artist_user_id ? Number(row.net_revenue) * 0.21 : Number(row.net_revenue) * 0.70);
-      if (row.label_user_id) labelRevenueById[row.label_user_id] = (labelRevenueById[row.label_user_id] || 0) + labelShare;
-      if (row.label_name) labelRevenueMap[row.label_name] = (labelRevenueMap[row.label_name] || 0) + labelShare;
-    }
-
-    // 4. Rollback artist balances
-    const rollbackResults: Array<{ user_id: string; balance_deducted: number }> = [];
-    for (const [uid, amounts] of Object.entries(balanceMap)) {
-      const { data: profile } = await supabaseAdmin
-        .from("profiles")
-        .select("balance, artist_revenue")
-        .eq("id", uid)
-        .single();
-
-      if (profile) {
-        const newBalance = Math.max(0, Number(profile.balance) - amounts.balance);
-        const newArtistRevenue = Math.max(0, Number(profile.artist_revenue) - amounts.artistRevenue);
-
-        await supabaseAdmin
-          .from("profiles")
-          .update({ balance: newBalance, artist_revenue: newArtistRevenue })
-          .eq("id", uid);
-
-        rollbackResults.push({ user_id: uid, balance_deducted: amounts.balance });
-      }
-    }
-
-    // 5. Rollback label/whitelabel balance and label_revenue.
-    for (const [id, amount] of Object.entries(labelRevenueById)) {
-      const { data: profile } = await supabaseAdmin
-        .from("profiles")
-        .select("balance, label_revenue")
-        .eq("id", id)
-        .single();
-
-      if (profile) {
-        await supabaseAdmin
-          .from("profiles")
-          .update({
-            balance: Math.max(0, Number(profile.balance) - amount),
-            label_revenue: Math.max(0, Number(profile.label_revenue) - amount),
-          })
-          .eq("id", id);
-      }
-    }
-
-    // Fallback: rollback label_revenue for label profiles (case-insensitive)
-    for (const [labelName, amount] of Object.entries(labelRevenueMap)) {
-      const { data: labelProfiles } = await supabaseAdmin
-        .from("profiles")
-        .select("id, balance, label_revenue")
-        .ilike("full_name", labelName.trim());
-
-      for (const lp of labelProfiles || []) {
-        if (labelRevenueById[lp.id]) continue;
-        const newLabelRevenue = Math.max(0, Number(lp.label_revenue) - amount);
-        await supabaseAdmin
-          .from("profiles")
-          .update({ label_revenue: newLabelRevenue, balance: Math.max(0, Number((lp as any).balance || 0) - amount) })
-          .eq("id", lp.id);
-      }
-    }
+    if (countError) throw new Error(`Failed to count royalties: ${countError.message}`);
 
     // 6. Delete royalties
     // Delete directly by upload_id to avoid very long URLs from `.in("id", ids)`.
-    const deleted = allRoyalties.length;
+    const deleted = deletedCount || 0;
     const { error: delErr } = await supabaseAdmin
       .from("royalties")
       .delete()
@@ -197,6 +95,45 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to delete upload: ${deleteUploadError.message}`);
     }
 
+    // 8. Rebuild royalty-derived balances from remaining royalties.
+    const { error: resetBalanceError } = await supabaseAdmin
+      .from("profiles")
+      .update({ balance: 0, artist_revenue: 0, label_revenue: 0 })
+      .not("id", "is", null);
+    if (resetBalanceError) throw new Error(`Balance reset failed: ${resetBalanceError.message}`);
+
+    const { data: remainingRoyalties, error: remainingRoyaltiesError } = await supabaseAdmin
+      .from("royalties")
+      .select("artist_user_id,label_user_id,artist_revenue,label_revenue");
+    if (remainingRoyaltiesError) throw new Error(`Balance rebuild source failed: ${remainingRoyaltiesError.message}`);
+
+    const rebuiltBalances: Record<string, { balance: number; artist_revenue: number; label_revenue: number }> = {};
+    for (const row of remainingRoyalties || []) {
+      if ((row as any).artist_user_id) {
+        const id = (row as any).artist_user_id;
+        rebuiltBalances[id] ||= { balance: 0, artist_revenue: 0, label_revenue: 0 };
+        const amount = Number((row as any).artist_revenue || 0);
+        rebuiltBalances[id].balance += amount;
+        rebuiltBalances[id].artist_revenue += amount;
+      }
+      if ((row as any).label_user_id) {
+        const id = (row as any).label_user_id;
+        rebuiltBalances[id] ||= { balance: 0, artist_revenue: 0, label_revenue: 0 };
+        const amount = Number((row as any).label_revenue || 0);
+        rebuiltBalances[id].balance += amount;
+        rebuiltBalances[id].label_revenue += amount;
+      }
+    }
+
+    const rebuildErrors: string[] = [];
+    for (const [profileId, totals] of Object.entries(rebuiltBalances)) {
+      const { error: rebuildError } = await supabaseAdmin
+        .from("profiles")
+        .update(totals)
+        .eq("id", profileId);
+      if (rebuildError) rebuildErrors.push(profileId);
+    }
+
     // 8. Audit log
     await supabaseAdmin.from("audit_logs").insert({
       action: "delete_royalty_upload",
@@ -206,13 +143,15 @@ Deno.serve(async (req) => {
       details: {
         filename: upload.original_filename,
         deleted_records: deleted,
-        balance_rollbacks: rollbackResults,
+        balance_rebuilt: true,
+        rebuild_errors: rebuildErrors,
       },
     });
 
     return respond(true, {
       deletedRecords: deleted,
-      balanceRollbacks: rollbackResults,
+      balanceRebuilt: true,
+      rebuildErrors,
     });
   } catch (error) {
     console.error("Delete royalty upload error:", error);

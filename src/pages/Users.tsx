@@ -17,7 +17,7 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table';
-import { Users as UsersIcon, Search, Loader2, Shield, Music, Building2, User, Edit, UserPlus, KeyRound, MoreHorizontal, UserCog, Trash2, Filter, X, Hash } from 'lucide-react';
+import { Users as UsersIcon, Search, Loader2, Shield, Music, Building2, User, Edit, UserPlus, KeyRound, MoreHorizontal, UserCog, Trash2, Filter, X, Hash, UserX } from 'lucide-react';
 import { ChangeRoleDialog } from '@/components/users/ChangeRoleDialog';
 import { AddUserDialog } from '@/components/users/AddUserDialog';
 import { ChangePasswordDialog } from '@/components/users/ChangePasswordDialog';
@@ -263,10 +263,16 @@ export default function Users() {
                     {hasActiveFilters && ' (filtered)'}
                   </CardDescription>
                 </div>
-                <Button onClick={() => setAddUserDialogOpen(true)} className="gradient-primary">
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  Tambah User
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" onClick={() => navigate('/dashboard/users/orphan-audit')}>
+                    <UserX className="h-4 w-4 mr-2" />
+                    Audit Orphan User
+                  </Button>
+                  <Button onClick={() => setAddUserDialogOpen(true)} className="gradient-primary">
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Tambah User
+                  </Button>
+                </div>
               </div>
               
               {/* Filter Section */}

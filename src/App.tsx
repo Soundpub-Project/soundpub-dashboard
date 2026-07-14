@@ -17,6 +17,7 @@ import Royalties from "./pages/Royalties";
 import RoyaltySummary from "./pages/RoyaltySummary";
 import Analytics from "./pages/Analytics";
 import Users from "./pages/Users";
+import UserOrphanAudit from "./pages/UserOrphanAudit";
 import Payouts from "./pages/Payouts";
 import AdminPayouts from "./pages/AdminPayouts";
 import AuditLogs from "./pages/AuditLogs";
@@ -150,6 +151,11 @@ const App = () => (
               <Route path="/dashboard/users" element={
                 <ProtectedRoute requireAdmin>
                   <Users />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/users/orphan-audit" element={
+                <ProtectedRoute requireAdmin>
+                  <UserOrphanAudit />
                 </ProtectedRoute>
               } />
               <Route path="/dashboard/upload" element={

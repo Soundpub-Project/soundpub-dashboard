@@ -13,7 +13,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
-import { Loader2, Music, User, Save, Upload, BadgeCheck, ExternalLink, RefreshCw, Unlink, Search } from 'lucide-react';
+import { Loader2, Music, User, Save, Upload, BadgeCheck, ExternalLink, RefreshCw, Unlink, Search, TrendingUp } from 'lucide-react';
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 interface ArtistProfileData {
   id: string;
@@ -37,7 +38,44 @@ interface ArtistProfileData {
   verified: boolean;
 }
 
+
+type ArtistSummary = {
+  totals: {
+    totalRevenue: number;
+    artistBalance: number;
+    totalStreams: number;
+    uniqueTracks: number;
+    releaseCount: number;
+    trackCount: number;
+  };
+  topTracks: Array<{
+    title: string;
+    isrc: string | null;
+    total_revenue: number;
+    artist_revenue: number;
+    streams: number;
+    platform_count: number;
+  }>;
+  recentReleases: Array<{
+    id: string;
+    title: string;
+    status: string;
+    release_type: string | null;
+    cover_url: string | null;
+    upc: string | null;
+    created_at: string;
+    release_date: string | null;
+  }>;
+  monthlyRevenue: Array<{
+    period: string;
+    total_revenue: number;
+    artist_revenue: number;
+    streams: number;
+  }>;
+};
+
 const REQUIRED_FIELDS: (keyof ArtistProfileData)[] = ['artist_name', 'artist_type', 'genre', 'country'];
+const formatCurrency = (value: number) => `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
 
 export default function ArtistProfile() {
   const { userId } = useParams<{ userId?: string }>();
@@ -52,6 +90,7 @@ export default function ArtistProfile() {
   const [spotifySearch, setSpotifySearch] = useState('');
   const [spotifyResults, setSpotifyResults] = useState<any[] | null>(null);
   const [searchingSpotify, setSearchingSpotify] = useState(false);
+  const [artistSummary, setArtistSummary] = useState<ArtistSummary | null>(null);
 
   const [formData, setFormData] = useState({
     artist_name: '',
@@ -80,9 +119,25 @@ export default function ArtistProfile() {
   useEffect(() => {
     if (targetUserId) {
       fetchArtistProfile();
+      fetchArtistSummary();
+      fetchArtistSummary();
       if (isViewingOther) fetchOwnerName();
     }
   }, [targetUserId]);
+
+
+  const fetchArtistSummary = async () => {
+    if (!targetUserId) return;
+    try {
+      const { data, error } = await supabase.rpc('get_artist_profile_summary' as any, {
+        _artist_user_id: targetUserId,
+      });
+      if (error) throw error;
+      setArtistSummary((data || null) as ArtistSummary | null);
+    } catch (error) {
+      console.error('Error fetching artist summary:', error);
+    }
+  };
 
   const fetchOwnerName = async () => {
     if (!userId) return;
@@ -157,18 +212,25 @@ export default function ArtistProfile() {
       const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
       const url = pub.publicUrl;
 
-      // Upsert (auto-create row if missing) so photo upload works before saving form
-      const { error } = await (supabase as any)
+      const existingPayload = {
+        user_id: targetUserId,
+        artist_name: artistProfile?.artist_name || formData.artist_name || profile?.full_name || 'Artist',
+        artist_type: artistProfile?.artist_type || formData.artist_type || 'solo',
+        profile_image_url: url,
+      };
+
+      const { data: existingRow, error: existingError } = await (supabase as any)
         .from('artist_profiles')
-        .upsert(
-          {
-            user_id: targetUserId,
-            artist_name: artistProfile?.artist_name || formData.artist_name || profile?.full_name || 'Artist',
-            artist_type: artistProfile?.artist_type || formData.artist_type || 'solo',
-            profile_image_url: url,
-          },
-          { onConflict: 'user_id' },
-        );
+        .select('id')
+        .eq('user_id', targetUserId)
+        .maybeSingle();
+      if (existingError) throw existingError;
+
+      const mutation = existingRow
+        ? (supabase as any).from('artist_profiles').update(existingPayload).eq('user_id', targetUserId)
+        : (supabase as any).from('artist_profiles').insert(existingPayload);
+
+      const { error } = await mutation;
       if (error) throw error;
 
       setArtistProfile(prev => prev ? { ...prev, profile_image_url: url } : prev);
@@ -302,9 +364,18 @@ export default function ArtistProfile() {
         social_links: Object.keys(socialLinks).length > 0 ? socialLinks : null,
       };
 
-      const { error } = await (supabase as any)
+      const { data: existingRow, error: existingError } = await (supabase as any)
         .from('artist_profiles')
-        .upsert(profileData, { onConflict: 'user_id' });
+        .select('id')
+        .eq('user_id', targetUserId)
+        .maybeSingle();
+      if (existingError) throw existingError;
+
+      const mutation = existingRow
+        ? (supabase as any).from('artist_profiles').update(profileData).eq('user_id', targetUserId)
+        : (supabase as any).from('artist_profiles').insert(profileData);
+
+      const { error } = await mutation;
 
       if (error) throw error;
 
@@ -322,6 +393,7 @@ export default function ArtistProfile() {
       if (!isViewingOther) await refreshProfile();
       toast.success('Profil artis berhasil disimpan');
       fetchArtistProfile();
+      fetchArtistSummary();
     } catch (error: any) {
       console.error('Error saving artist profile:', error);
       toast.error(error.message || 'Gagal menyimpan profil artis');
@@ -382,7 +454,120 @@ export default function ArtistProfile() {
               </div>
             </div>
           </CardHeader>
+
         </Card>
+
+        {/* Artist Summary */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <Card className="bg-card/50 border-border/50">
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Total Revenue Gross</CardTitle></CardHeader>
+            <CardContent><div className="text-2xl font-bold text-green-400">{formatCurrency(artistSummary?.totals.totalRevenue || 0)}</div></CardContent>
+          </Card>
+          <Card className="bg-card/50 border-border/50">
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Saldo Artist</CardTitle></CardHeader>
+            <CardContent><div className="text-2xl font-bold text-yellow-400">{formatCurrency(artistSummary?.totals.artistBalance || 0)}</div></CardContent>
+          </Card>
+          <Card className="bg-card/50 border-border/50">
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Total Streams</CardTitle></CardHeader>
+            <CardContent><div className="text-2xl font-bold">{Number(artistSummary?.totals.totalStreams || 0).toLocaleString('id-ID')}</div></CardContent>
+          </Card>
+          <Card className="bg-card/50 border-border/50">
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Rilis / Track</CardTitle></CardHeader>
+            <CardContent><div className="text-2xl font-bold">{artistSummary?.totals.releaseCount || 0} / {artistSummary?.totals.trackCount || 0}</div></CardContent>
+          </Card>
+        </div>
+
+        <Card className="bg-card/50 border-border/50">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2"><TrendingUp className="h-5 w-5 text-primary" /> Tren Royalti Bulanan</CardTitle>
+            <CardDescription>Gross revenue dan saldo artist berdasarkan periode royalty</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {(artistSummary?.monthlyRevenue || []).length === 0 ? (
+              <div className="text-sm text-muted-foreground py-10 text-center">Belum ada data tren royalti.</div>
+            ) : (
+              <div className="h-[280px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={(artistSummary?.monthlyRevenue || []).map((row) => ({
+                    period: row.period,
+                    revenue: Number(row.total_revenue || 0),
+                    artist: Number(row.artist_revenue || 0),
+                    streams: Number(row.streams || 0),
+                  }))} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="artistProfileRevenue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35}/>
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="artistProfileShare" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(45 93% 47%)" stopOpacity={0.28}/>
+                        <stop offset="95%" stopColor="hsl(45 93% 47%)" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" vertical={false} />
+                    <XAxis dataKey="period" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                    <YAxis className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} tickFormatter={(value) => `${Number(value) / 1000}K`} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '12px' }}
+                      formatter={(value: any, name: any) => [formatCurrency(Number(value || 0)), name === 'artist' ? 'Saldo Artist' : 'Total Revenue']}
+                    />
+                    <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" fill="url(#artistProfileRevenue)" strokeWidth={2} name="Total Revenue" />
+                    <Area type="monotone" dataKey="artist" stroke="hsl(45 93% 47%)" fill="url(#artistProfileShare)" strokeWidth={2} name="Saldo Artist" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <Card className="bg-card/50 border-border/50">
+            <CardHeader>
+              <CardTitle className="text-lg">Top Lagu</CardTitle>
+              <CardDescription>Ringkasan royalti singkat per lagu</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {(artistSummary?.topTracks || []).length === 0 ? (
+                <div className="text-sm text-muted-foreground">Belum ada data royalti lagu.</div>
+              ) : (
+                (artistSummary?.topTracks || []).slice(0, 6).map((track) => (
+                  <div key={`${track.isrc || track.title}`} className="rounded-xl border border-border/60 p-3 flex items-start justify-between gap-4">
+                    <div>
+                      <div className="font-medium">{track.title}</div>
+                      <div className="text-xs text-muted-foreground">{track.isrc || '-'} · {Number(track.streams || 0).toLocaleString('id-ID')} streams</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-green-400 font-medium">{formatCurrency(track.total_revenue || 0)}</div>
+                      <div className="text-xs text-yellow-400">Artist: {formatCurrency(track.artist_revenue || 0)}</div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card/50 border-border/50">
+            <CardHeader>
+              <CardTitle className="text-lg">Rilis Terbaru</CardTitle>
+              <CardDescription>Rilis artist ini</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {(artistSummary?.recentReleases || []).length === 0 ? (
+                <div className="text-sm text-muted-foreground">Belum ada rilis.</div>
+              ) : (
+                (artistSummary?.recentReleases || []).map((rel) => (
+                  <div key={rel.id} className="rounded-xl border border-border/60 p-3 flex items-start justify-between gap-4">
+                    <div>
+                      <div className="font-medium">{rel.title}</div>
+                      <div className="text-xs text-muted-foreground">{rel.release_type || '-'} · {rel.release_date || rel.created_at?.slice(0, 10) || '-'}</div>
+                    </div>
+                    <Badge variant={rel.status === 'active' ? 'default' : 'secondary'}>{rel.status}</Badge>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Foto Artis */}
         <Card className="bg-card/50 border-border/50">

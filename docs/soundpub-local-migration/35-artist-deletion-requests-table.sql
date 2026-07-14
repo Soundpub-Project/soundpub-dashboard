@@ -1,3 +1,9 @@
+﻿-- 35-artist-deletion-requests-table.sql
+-- Purpose:
+--   Create soundpub.artist_deletion_requests and related RLS/grants used by /dashboard/users.
+--   Run this when Users page shows: Could not find table soundpub.artist_deletion_requests.
+
+BEGIN;
 CREATE TABLE IF NOT EXISTS soundpub.artist_deletion_requests (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     artist_id UUID NOT NULL REFERENCES soundpub.profiles(id) ON DELETE CASCADE,
@@ -99,3 +105,5 @@ GRANT SELECT, INSERT, UPDATE ON soundpub.artist_deletion_requests TO authenticat
 GRANT SELECT, INSERT, UPDATE, DELETE ON soundpub.artist_profiles TO authenticated;
 GRANT SELECT, UPDATE ON soundpub.profiles TO authenticated;
 NOTIFY pgrst, 'reload schema';
+
+COMMIT;

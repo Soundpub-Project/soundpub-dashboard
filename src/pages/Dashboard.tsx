@@ -160,21 +160,21 @@ export default function Dashboard() {
       let roleRevenue = isAdmin ? (royaltyStats?.totalRevenue || 0) : 0;
       let roleStreams = isAdmin ? (royaltyStats?.totalStreams || 0) : 0;
       let roleTrackCount = tracksRes.count || 0;
+      let roleBalance = Number(profile?.balance || 0);
 
-      if (!isAdmin && profile?.id) {
-        let royaltyQuery = supabase
-          .from('royalties')
-          .select('net_revenue, artist_revenue, unit_penjualan, artist_user_id, label_user_id, isrc');
+      if (profile?.id) {
+        const { data: dashboardStats, error: dashboardStatsError } = await supabase
+          .rpc('get_dashboard_role_stats' as any)
+          .single();
 
-        if (isArtist) royaltyQuery = royaltyQuery.eq('artist_user_id', profile.id);
-        if (isLabel || isWhitelabel) royaltyQuery = royaltyQuery.eq('label_user_id', profile.id);
-
-        const { data: roleRoyalties, error: roleRoyaltyError } = await royaltyQuery;
-        if (roleRoyaltyError) throw roleRoyaltyError;
-
-        roleRevenue = (roleRoyalties || []).reduce((sum: number, row: any) => sum + Number(row.net_revenue || 0), 0);
-        roleStreams = (roleRoyalties || []).reduce((sum: number, row: any) => sum + Number(row.unit_penjualan || 0), 0);
-        roleTrackCount = new Set((roleRoyalties || []).map((row: any) => row.isrc).filter(Boolean)).size;
+        if (!dashboardStatsError && dashboardStats) {
+          roleRevenue = Number((dashboardStats as any).total_revenue || 0);
+          roleStreams = Number((dashboardStats as any).total_streams || 0);
+          roleTrackCount = Number((dashboardStats as any).unique_tracks || roleTrackCount);
+          roleBalance = Number((dashboardStats as any).available_balance || 0);
+        } else if (dashboardStatsError) {
+          console.warn('Dashboard role stats RPC failed, falling back to profile balance:', dashboardStatsError);
+        }
       }
 
       setStats(prev => ({
@@ -183,7 +183,7 @@ export default function Dashboard() {
         totalTracks: roleTrackCount,
         totalRevenue: roleRevenue,
         totalStreams: roleStreams,
-        balance: profile?.balance || 0,
+        balance: roleBalance,
         totalUsers: usersCount,
         pendingPayouts: pendingPayoutsCount,
         pendingReleases: pendingRes.count || 0,

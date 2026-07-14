@@ -406,65 +406,7 @@ Deno.serve(async (req) => {
       inserted_records: inserted 
     }).eq('id', upload.id)
 
-    // Pre-fetch ALL profiles for case-insensitive name matching
-    const allLabelNames = Object.keys(labelRev)
-    const { data: allProfiles } = await supabaseAdmin.from('profiles').select('id, full_name, balance, label_revenue')
-    const profilesByNormalizedName: Record<string, any> = {}
-    allProfiles?.forEach(p => {
-      profilesByNormalizedName[p.full_name.trim().toLowerCase()] = p
-    })
-
-    // Update label/whitelabel balances by stable user id first, fallback by name.
     const balanceErrors: string[] = []
-    for (const [id, amount] of Object.entries(labelRevById)) {
-      try {
-        const { data: p } = await supabaseAdmin.from('profiles').select('balance, label_revenue').eq('id', id).single()
-        if (p) {
-          await supabaseAdmin.from('profiles').update({ 
-            balance: Number(p.balance || 0) + amount, 
-            label_revenue: Number(p.label_revenue || 0) + amount 
-          }).eq('id', id)
-        }
-      } catch (e) {
-        console.error(`Failed to update label balance for user "${id}":`, e)
-        balanceErrors.push(`Label update failed: ${id}`)
-      }
-    }
-
-    for (const [name, amount] of Object.entries(labelRev)) {
-      try {
-        const normalizedName = name.trim().toLowerCase()
-        const p = profilesByNormalizedName[normalizedName]
-        if (p && !labelRevById[p.id]) {
-          await supabaseAdmin.from('profiles').update({ 
-            balance: Number(p.balance || 0) + amount, 
-            label_revenue: Number(p.label_revenue || 0) + amount 
-          }).eq('id', p.id)
-        } else if (!p) {
-          console.warn(`Label profile not found: "${name}" (normalized: "${normalizedName}")`)
-          balanceErrors.push(`Label not found: ${name}`)
-        }
-      } catch (e) {
-        console.error(`Failed to update label balance for "${name}":`, e)
-        balanceErrors.push(`Label update failed: ${name}`)
-      }
-    }
-
-    // Update artist balances with per-item error handling
-    for (const [id, amount] of Object.entries(artistRev)) {
-      try {
-        const { data: p } = await supabaseAdmin.from('profiles').select('balance, artist_revenue').eq('id', id).single()
-        if (p) {
-          await supabaseAdmin.from('profiles').update({ 
-            balance: Number(p.balance || 0) + amount, 
-            artist_revenue: Number(p.artist_revenue || 0) + amount 
-          }).eq('id', id)
-        }
-      } catch (e) {
-        console.error(`Failed to update artist balance for "${id}":`, e)
-        balanceErrors.push(`Artist update failed: ${id}`)
-      }
-    }
 
     // Rebuild royalty-derived balances from the whole royalties table.
     // This makes replacement/re-upload idempotent and prevents double-counted profile balances.

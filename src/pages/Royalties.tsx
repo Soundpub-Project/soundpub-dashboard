@@ -517,10 +517,10 @@ export default function Royalties() {
                               <TableCell>{royalty.platform}</TableCell>
                               <TableCell>{royalty.country}</TableCell>
                               <TableCell className="text-right">
-                                {royalty.sales_unit.toLocaleString('id-ID')}
+                                {Number(royalty.sales_unit || 0).toLocaleString('id-ID')}
                               </TableCell>
                               <TableCell className="text-right font-medium text-green-500">
-                                Rp {Number(royalty.net_revenue).toLocaleString('id-ID')}
+                                Rp {Number(royalty.net_revenue || 0).toLocaleString('id-ID')}
                               </TableCell>
                             </TableRow>
                           ))}

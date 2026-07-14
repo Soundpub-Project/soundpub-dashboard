@@ -1290,10 +1290,12 @@ export default function UploadRoyalty() {
                             <AlertDialogContent>
                               <AlertDialogHeader>
                                 <AlertDialogTitle>Hapus Upload Royalti?</AlertDialogTitle>
-                                <AlertDialogDescription className="space-y-2">
-                                  <p>Anda akan menghapus upload <strong>{upload.original_filename}</strong> ({(upload.inserted_records || upload.total_records).toLocaleString('id-ID')} record).</p>
-                                  <p className="text-destructive font-medium">⚠️ Saldo artis yang sudah terupdate dari upload ini akan di-rollback (dikurangi kembali).</p>
-                                  <p>Tindakan ini tidak dapat dibatalkan.</p>
+                                <AlertDialogDescription asChild>
+                                  <div className="space-y-2 text-sm text-muted-foreground">
+                                    <div>Anda akan menghapus upload <strong>{upload.original_filename}</strong> ({(upload.inserted_records || upload.total_records).toLocaleString('id-ID')} record).</div>
+                                    <div className="text-destructive font-medium">⚠️ Saldo akan dihitung ulang dari data royalti yang tersisa.</div>
+                                    <div>Tindakan ini tidak dapat dibatalkan.</div>
+                                  </div>
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>

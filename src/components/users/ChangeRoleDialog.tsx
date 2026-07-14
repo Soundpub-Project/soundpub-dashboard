@@ -17,8 +17,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Shield, Music, Building2, User, Crown, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Loader2, Shield, Music, Building2, User, Crown, ShieldCheck } from 'lucide-react';
 
 type AppRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user' | 'copyright' | 'whitelabel';
 
@@ -91,6 +92,7 @@ export function ChangeRoleDialog({
   const [labels, setLabels] = useState<LabelOption[]>([]);
   const [loadingLabels, setLoadingLabels] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [transferConfirmation, setTransferConfirmation] = useState('');
 
   // Fetch labels when dialog opens
   useEffect(() => {
@@ -181,21 +183,38 @@ export function ChangeRoleDialog({
         if (roleError) throw roleError;
       }
 
-      // Update parent_label_id in profiles table
-      // Set it for artists, clear it for other roles
+      // Update parent_label_id safely. Artist label transfer must go through
+      // an edge function so historical royalties/releases stay with the old label.
       const newParentLabelId = selectedRole === 'artist' ? selectedLabelId : null;
-      
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ parent_label_id: newParentLabelId })
-        .eq('id', user.id);
 
-      if (profileError) throw profileError;
+      if (labelChanged && selectedRole === 'artist') {
+        if (transferConfirmation !== 'PINDAH LABEL') {
+          toast.error('Ketik PINDAH LABEL untuk konfirmasi perpindahan label artist');
+          setLoading(false);
+          return;
+        }
 
-      // CRITICAL: Sync to artists table for immediate integration
-      // This ensures artist appears in release forms without manual re-adding
-      if (selectedRole === 'artist' && selectedLabelId) {
-        // Check if artist already exists in artists table
+        const { error: transferError } = await supabase.functions.invoke('transfer-artist-label', {
+          body: {
+            artist_id: user.id,
+            new_label_id: selectedLabelId,
+            confirmation_phrase: transferConfirmation,
+            royalty_transfer_mode: 'keep_old_label',
+          },
+        });
+
+        if (transferError) throw transferError;
+      } else {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({ parent_label_id: newParentLabelId })
+          .eq('id', user.id);
+
+        if (profileError) throw profileError;
+      }
+
+      // CRITICAL: Sync to artists table for immediate integration for non-transfer artist assignments.
+      if (selectedRole === 'artist' && selectedLabelId && !labelChanged) {
         const { data: existingArtist } = await supabase
           .from('artists')
           .select('id')
@@ -335,6 +354,28 @@ export function ChangeRoleDialog({
               </p>
             </div>
           )}
+
+          {selectedRole === 'artist' && selectedLabelId && selectedLabelId !== (user?.parent_label_id || '') && (
+            <div className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3">
+              <div className="flex gap-2 text-sm">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                <div className="space-y-1">
+                  <p className="font-medium text-destructive">Konfirmasi perpindahan label artist</p>
+                  <p className="text-muted-foreground">
+                    Histori release, track, royalty, dan balance lama tetap di label lama. Label baru hanya berlaku untuk relasi artist dan data baru ke depan.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Ketik PINDAH LABEL</Label>
+                <Input
+                  value={transferConfirmation}
+                  onChange={(event) => setTransferConfirmation(event.target.value)}
+                  placeholder="PINDAH LABEL"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <DialogFooter>
@@ -343,7 +384,7 @@ export function ChangeRoleDialog({
           </Button>
           <Button 
             onClick={handleSave} 
-            disabled={loading || (selectedRole === currentRole && (!showLabelSelect || selectedLabelId === (user?.parent_label_id || ''))) || (showLabelSelect && !selectedLabelId)}
+            disabled={loading || (selectedRole === currentRole && (!showLabelSelect || selectedLabelId === (user?.parent_label_id || ''))) || (showLabelSelect && !selectedLabelId) || (selectedRole === 'artist' && selectedLabelId !== (user?.parent_label_id || '') && transferConfirmation !== 'PINDAH LABEL')}
           >
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Simpan

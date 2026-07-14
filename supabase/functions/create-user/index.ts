@@ -38,6 +38,9 @@ const CreateUserSchema = z.object({
     errorMap: () => ({ message: 'Role tidak valid' })
   }),
   parent_label_id: z.string().uuid('Format parent_label_id tidak valid').optional().nullable(),
+  artist_type: z.string().max(100, 'Jenis artist terlalu panjang').optional().nullable(),
+  genre: z.string().max(100, 'Genre terlalu panjang').optional().nullable(),
+  social_links: z.record(z.any()).optional().nullable(),
 })
 
 type CreateUserRequest = z.infer<typeof CreateUserSchema>
@@ -110,10 +113,11 @@ Deno.serve(async (req) => {
       )
     }
     
-    let { email, password, full_name, phone, role, parent_label_id } = validationResult.data
+    let { email, password, full_name, phone, role, parent_label_id, artist_type, genre, social_links } = validationResult.data
+    const isManagedArtistCreation = isLabel && role === 'artist'
 
     // For label creating artists, email & password are not inputted. We generate them.
-    if (isLabel && role === 'artist') {
+    if (isManagedArtistCreation) {
       if (!email || email.trim() === '') {
         const dummyUuid = crypto.randomUUID()
         email = `artist_${dummyUuid}@managed.soundpub.local`
@@ -161,6 +165,9 @@ Deno.serve(async (req) => {
       email_confirm: true, // Auto-confirm email
       user_metadata: {
         full_name,
+        managed_artist: isManagedArtistCreation,
+        auth_user_status: isManagedArtistCreation ? 'managed_only' : 'linked',
+        password_set: !isManagedArtistCreation,
       },
     })
 
@@ -191,6 +198,12 @@ Deno.serve(async (req) => {
     const profileUpdate: Record<string, unknown> = {}
     if (labelId && role === 'artist') {
       profileUpdate.parent_label_id = labelId
+      profileUpdate.artist_profile_completed = true
+    }
+    if (isManagedArtistCreation) {
+      profileUpdate.is_managed_artist = true
+      profileUpdate.auth_user_status = 'managed_only'
+      profileUpdate.password_set = false
     }
     if (phone) {
       profileUpdate.phone = phone
@@ -207,6 +220,22 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Create or update artist profile metadata server-side to avoid client RLS issues.
+    if (role === 'artist') {
+      const { error: artistProfileError } = await supabaseAdmin
+        .from('artist_profiles')
+        .upsert({
+          user_id: newUser.user.id,
+          artist_name: full_name,
+          artist_type: artist_type || 'solo',
+          genre: genre || null,
+          social_links: social_links || {},
+        }, { onConflict: 'user_id' })
+
+      if (artistProfileError) {
+        console.error('Error syncing artist profile:', artistProfileError)
+      }
+    }
     // CRITICAL: Sync to artists table for label/whitelabel integration
     // This ensures artists appear in release forms immediately without manual re-adding
     if (role === 'artist' && labelId) {
@@ -268,4 +297,5 @@ Deno.serve(async (req) => {
     )
   }
 })
+
 

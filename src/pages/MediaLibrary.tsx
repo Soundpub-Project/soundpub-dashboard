@@ -50,6 +50,8 @@ interface StorageFile {
   publicUrl: string;
   folder: string | null;
   bucket: string;
+  urlStatus: 'ready' | 'unavailable';
+  urlError?: string;
 }
 
 interface OrphanFile extends StorageFile {
@@ -64,6 +66,111 @@ const BUCKET_CONFIG: Record<BucketType, { label: string; icon: React.ReactNode; 
   'release-covers': { label: 'Cover Images', icon: <ImageIcon className="h-4 w-4" />, color: 'bg-blue-500', isPublic: false },
   'track-audio': { label: 'Full Audio', icon: <Music className="h-4 w-4" />, color: 'bg-green-500', isPublic: false },
   'audio-clips': { label: 'Audio Clips', icon: <FileAudio className="h-4 w-4" />, color: 'bg-purple-500', isPublic: true },
+};
+
+type StorageListItem = {
+  id?: string | null;
+  name?: string | null;
+  metadata?: { size?: number; mimetype?: string } | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+const isFolderLikeStorageItem = (item: StorageListItem) => {
+  return !item.id && !item.created_at && !item.metadata;
+};
+
+const buildStorageFile = async (bucket: BucketType, item: StorageListItem, folderPath = ''): Promise<StorageFile | null> => {
+  if (!item.name || isFolderLikeStorageItem(item)) return null;
+
+  const objectPath = folderPath ? `${folderPath}/${item.name}` : item.name;
+
+  const bucketConfig = BUCKET_CONFIG[bucket];
+  let publicUrl = '';
+  let urlStatus: StorageFile['urlStatus'] = 'ready';
+  let urlError: string | undefined;
+
+  if (bucketConfig.isPublic) {
+    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(objectPath);
+    publicUrl = urlData.publicUrl;
+  } else {
+    const { data: signedData, error } = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(objectPath, 3600);
+
+    if (error || !signedData?.signedUrl) {
+      urlStatus = 'unavailable';
+      urlError = error?.message || 'Signed URL tidak tersedia';
+    } else {
+      publicUrl = signedData.signedUrl;
+    }
+  }
+
+  return {
+    name: objectPath,
+    size: item.metadata?.size || 0,
+    contentType: item.metadata?.mimetype,
+    created: item.created_at || '',
+    updated: item.updated_at || item.created_at || '',
+    publicUrl,
+    folder: null,
+    bucket,
+    urlStatus,
+    urlError,
+  };
+};
+
+const listStorageFilesRecursive = async (bucket: BucketType, folderPath = ''): Promise<StorageFile[]> => {
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .list(folderPath, { limit: 1000, sortBy: { column: 'created_at', order: 'desc' } });
+
+  if (error) throw error;
+
+  const results = await Promise.all(
+    (data || []).map(async (item) => {
+      if (!item.name) return [] as StorageFile[];
+
+      if (isFolderLikeStorageItem(item)) {
+        const nextPath = folderPath ? `${folderPath}/${item.name}` : item.name;
+        return listStorageFilesRecursive(bucket, nextPath);
+      }
+
+      const file = await buildStorageFile(bucket, item, folderPath);
+      return file ? [file] : [];
+    })
+  );
+
+  return results.flat();
+};
+
+const getStorageReferenceKeys = (url: string | null, bucket: BucketType) => {
+  const keys = new Set<string>();
+  if (!url) return keys;
+
+  const addPath = (path: string) => {
+    const cleanPath = decodeURIComponent(path).replace(/^\/+/, '');
+    if (!cleanPath) return;
+    keys.add(`${bucket}:${cleanPath}`);
+    const fileName = cleanPath.split('/').pop();
+    if (fileName) keys.add(`${bucket}:${fileName}`);
+  };
+
+  try {
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split('/').filter(Boolean);
+    const bucketIndex = pathParts.findIndex(part => part === bucket);
+
+    if (bucketIndex >= 0 && pathParts[bucketIndex + 1]) {
+      addPath(pathParts.slice(bucketIndex + 1).join('/'));
+    } else {
+      addPath(pathParts[pathParts.length - 1] || '');
+    }
+  } catch {
+    addPath(url.split('/').pop() || url);
+  }
+
+  return keys;
 };
 
 export default function MediaLibrary() {
@@ -98,36 +205,12 @@ export default function MediaLibrary() {
 
       if (error) throw error;
 
-      const bucketConfig = BUCKET_CONFIG[bucket];
       
-      // Transform to our file format
-      const filesList: StorageFile[] = await Promise.all(
-        (data || []).filter(item => item.name).map(async (item) => {
-          let publicUrl = '';
-          
-          if (bucketConfig.isPublic) {
-            const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(item.name);
-            publicUrl = urlData.publicUrl;
-          } else {
-            // Generate signed URL for private buckets
-            const { data: signedData } = await supabase.storage
-              .from(bucket)
-              .createSignedUrl(item.name, 3600); // 1 hour validity
-            publicUrl = signedData?.signedUrl || '';
-          }
-          
-          return {
-            name: item.name,
-            size: item.metadata?.size || 0,
-            contentType: item.metadata?.mimetype,
-            created: item.created_at || '',
-            updated: item.updated_at || item.created_at || '',
-            publicUrl,
-            folder: null,
-            bucket,
-          };
-        })
-      );
+      // Transform to our file format. Supabase list() can return folder prefixes;
+      // skip those so private bucket signed URL calls do not fail with 400.
+      const filesList = (await Promise.all(
+        (data || []).map(item => buildStorageFile(bucket, item))
+      )).filter((file): file is StorageFile => Boolean(file));
       
       setFiles(filesList);
 
@@ -155,36 +238,7 @@ export default function MediaLibrary() {
     try {
       // Load all files from all buckets
       const allFilesPromises = BUCKETS.map(async (bucket) => {
-        const { data } = await supabase.storage.from(bucket).list('', { limit: 1000 });
-        
-        const bucketConfig = BUCKET_CONFIG[bucket];
-        
-        return Promise.all(
-          (data || []).filter(item => item.name).map(async (item) => {
-            let publicUrl = '';
-            
-            if (bucketConfig.isPublic) {
-              const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(item.name);
-              publicUrl = urlData.publicUrl;
-            } else {
-              const { data: signedData } = await supabase.storage
-                .from(bucket)
-                .createSignedUrl(item.name, 3600);
-              publicUrl = signedData?.signedUrl || '';
-            }
-            
-            return {
-              name: item.name,
-              size: item.metadata?.size || 0,
-              contentType: item.metadata?.mimetype,
-              created: item.created_at || '',
-              updated: item.updated_at || item.created_at || '',
-              publicUrl,
-              folder: null,
-              bucket,
-            } as StorageFile;
-          })
-        );
+        return listStorageFilesRecursive(bucket);
       });
 
       const results = await Promise.all(allFilesPromises);
@@ -198,33 +252,18 @@ export default function MediaLibrary() {
 
       const referencedUrls = new Set<string>();
       
-      // Extract file names from URLs for comparison
-      const extractFileName = (url: string | null) => {
-        if (!url) return null;
-        try {
-          const urlObj = new URL(url);
-          const pathParts = urlObj.pathname.split('/');
-          return pathParts[pathParts.length - 1];
-        } catch {
-          return url.split('/').pop() || null;
-        }
-      };
-      
       releasesResult.data?.forEach(r => {
-        const fileName = extractFileName(r.cover_url);
-        if (fileName) referencedUrls.add(fileName);
+        getStorageReferenceKeys(r.cover_url, 'release-covers').forEach(key => referencedUrls.add(key));
       });
       
       tracksResult.data?.forEach(t => {
-        const audioName = extractFileName(t.audio_url);
-        const clipName = extractFileName(t.clip_url);
-        if (audioName) referencedUrls.add(audioName);
-        if (clipName) referencedUrls.add(clipName);
+        getStorageReferenceKeys(t.audio_url, 'track-audio').forEach(key => referencedUrls.add(key));
+        getStorageReferenceKeys(t.clip_url, 'audio-clips').forEach(key => referencedUrls.add(key));
       });
 
       // Find orphan files
       const orphans: OrphanFile[] = allFiles
-        .filter(file => !referencedUrls.has(file.name))
+        .filter(file => !referencedUrls.has(`${file.bucket}:${file.name}`) && !referencedUrls.has(`${file.bucket}:${file.name.split('/').pop()}`))
         .map(file => ({
           ...file,
           reason: 'Tidak ada referensi di database',
@@ -556,7 +595,7 @@ export default function MediaLibrary() {
                             <TableRow key={file.name}>
                               <TableCell>
                                 <div className="flex items-center gap-2">
-                                  {activeBucket === 'release-covers' ? (
+                                  {activeBucket === 'release-covers' && file.publicUrl ? (
                                     <img
                                       src={file.publicUrl}
                                       alt={file.name}
@@ -570,9 +609,16 @@ export default function MediaLibrary() {
                                       <Music className="h-5 w-5 text-muted-foreground" />
                                     </div>
                                   )}
-                                  <span className="font-mono text-xs truncate max-w-[200px]">
-                                    {file.name}
-                                  </span>
+                                  <div className="min-w-0 space-y-1">
+                                    <span className="block font-mono text-xs truncate max-w-[200px]">
+                                      {file.name}
+                                    </span>
+                                    {file.urlStatus === 'unavailable' && (
+                                      <Badge variant="destructive" className="text-[10px]">
+                                        URL tidak tersedia
+                                      </Badge>
+                                    )}
+                                  </div>
                                 </div>
                               </TableCell>
                               <TableCell>
@@ -587,8 +633,9 @@ export default function MediaLibrary() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    onClick={() => window.open(file.publicUrl, '_blank')}
-                                    title="Lihat file"
+                                    onClick={() => file.publicUrl && window.open(file.publicUrl, '_blank')}
+                                    title={file.urlError || 'Lihat file'}
+                                    disabled={!file.publicUrl}
                                   >
                                     <ExternalLink className="h-4 w-4" />
                                   </Button>
@@ -596,13 +643,15 @@ export default function MediaLibrary() {
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => {
+                                      if (!file.publicUrl) return;
                                       const link = document.createElement('a');
                                       link.href = file.publicUrl;
                                       link.download = file.name;
                                       link.target = '_blank';
                                       link.click();
                                     }}
-                                    title="Download file"
+                                    title={file.urlError || 'Download file'}
+                                    disabled={!file.publicUrl}
                                   >
                                     <Download className="h-4 w-4" />
                                   </Button>
