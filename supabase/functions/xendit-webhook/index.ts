@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
     const body = await req.json()
     console.log('Xendit webhook received:', JSON.stringify(body))
 
-    const { id: invoiceId, status } = body
+    const { id: invoiceId, external_id: externalId, status } = body
 
     if (!invoiceId || !status) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -38,15 +38,29 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    const { data: payment, error: paymentError } = await supabase
+    // Try lookup by xendit_invoice_id first, then fall back to external_id
+    let { data: payment } = await supabase
       .from('release_payments')
       .select('*, releases:release_id(id, title, artist_name, label_id)')
       .eq('xendit_invoice_id', invoiceId)
-      .single()
+      .maybeSingle()
 
-    if (paymentError || !payment) {
-      console.error('Payment not found for invoice:', invoiceId)
-      return new Response(JSON.stringify({ error: 'Payment record not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    if (!payment && externalId) {
+      const { data: byExternal } = await supabase
+        .from('release_payments')
+        .select('*, releases:release_id(id, title, artist_name, label_id)')
+        .eq('external_id', externalId)
+        .maybeSingle()
+      payment = byExternal
+    }
+
+    if (!payment) {
+      // Acknowledge with 200 so Xendit's "Test" button and unknown events don't retry forever
+      console.warn('Payment not found for invoice:', invoiceId, 'external_id:', externalId)
+      return new Response(
+        JSON.stringify({ success: true, ignored: true, reason: 'payment_not_found', invoice_id: invoiceId, external_id: externalId }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
     const statusMap: Record<string, string> = {
