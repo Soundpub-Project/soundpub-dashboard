@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useState } from 'react';
+﻿import { ReactNode, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
@@ -42,15 +42,23 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
         
-        <div className="flex-1 flex flex-col">
+        <div className="min-w-0 flex-1 flex flex-col">
           {/* Top Header */}
-          <header className="h-14 border-b border-border bg-card sticky top-0 z-10">
-            <div className="h-full flex items-center justify-between px-4">
-              <div className="flex items-center gap-4">
-                <SidebarTrigger />
+          <header className="sticky top-0 z-20 h-14 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+            <div className="h-full flex items-center justify-between gap-3 px-3 sm:px-4">
+              <div className="flex min-w-0 items-center gap-2">
+                <SidebarTrigger className="h-10 w-10" />
+                <div className="min-w-0 sm:hidden">
+                  <p className="truncate text-sm font-semibold text-foreground">SoundPub</p>
+                  {profile && (
+                  <>
+                    <p className="truncate text-xs text-muted-foreground">{profile.full_name}</p>
+                  </>
+                  )}
+                </div>
               </div>
               
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-1 sm:gap-2">
                 <ThemeToggle />
 
                 {isAdmin && (
@@ -67,6 +75,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 <NotificationBell />
                 
                 {profile && (
+                  <>
                   <div className="hidden sm:flex items-center gap-3">
                     <div className="text-right">
                       <p className="text-sm font-medium text-foreground">{profile.full_name}</p>
@@ -74,7 +83,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                         Balance: Rp {profile.balance.toLocaleString('id-ID')}
                       </p>
                     </div>
-                    <Avatar className="h-8 w-8">
+                    <Avatar className="h-9 w-9">
                       {profile.avatar_url ? (
                         <AvatarImage src={profile.avatar_url} alt={profile.full_name} />
                       ) : null}
@@ -83,14 +92,23 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                       </AvatarFallback>
                     </Avatar>
                   </div>
+                  <Avatar className="h-9 w-9 sm:hidden">
+                    {profile.avatar_url ? (
+                      <AvatarImage src={profile.avatar_url} alt={profile.full_name} />
+                    ) : null}
+                    <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                      {profile.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  </>
                 )}
               </div>
             </div>
           </header>
 
           {/* Main Content */}
-          <main className="flex-1 p-3 sm:p-4 lg:p-6 xl:p-8 overflow-auto">
-            <div className="w-full max-w-[1600px] mx-auto">
+          <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-3 sm:p-4 lg:p-6 xl:p-8">
+            <div className="mx-auto w-full max-w-[1600px] min-w-0">
               {children}
             </div>
           </main>

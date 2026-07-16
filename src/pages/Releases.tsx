@@ -271,7 +271,7 @@ export default function Releases() {
     }
     setSelectedRelease(null);
     setLyricsOnlyMode(false);
-    setFormOpen(true);
+    navigate('/dashboard/releases/new');
   };
 
   const handleEditRelease = (release: Release) => {
@@ -617,7 +617,88 @@ export default function Releases() {
               </div>
             ) : (
               <>
-                <div className="overflow-x-auto">
+                <div className="space-y-3 md:hidden">
+                  {paginatedReleases.map((release) => (
+                    <div key={release.id} className="rounded-xl border bg-card p-4 shadow-sm">
+                      <div className="flex gap-3">
+                        {canManageReleases && (
+                          <Checkbox
+                            className="mt-2"
+                            checked={selectedIds.includes(release.id)}
+                            onCheckedChange={() => toggleSelectRelease(release.id)}
+                          />
+                        )}
+                        <div className="h-14 w-14 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
+                          {release.cover_url ? (
+                            <img src={release.cover_url} alt={release.title} className="h-full w-full object-cover" />
+                          ) : (
+                            <Disc3 className="h-6 w-6 text-muted-foreground" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold leading-tight">{release.title}</p>
+                              <p className="truncate text-sm text-muted-foreground">{release.artist_name}</p>
+                            </div>
+                            <Badge
+                              variant={getStatusBadge(release.status)}
+                              className={`shrink-0 capitalize ${release.status === 'pending_paid' ? 'bg-green-600 text-white border-green-600' : ''}`}
+                            >
+                              {getStatusLabel(release.status)}
+                            </Badge>
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-xs">
+                            <Badge variant="outline" className="capitalize">{release.release_type}</Badge>
+                            <Badge variant="outline">{getLabelName(release.label_id)}</Badge>
+                            {release.archived_at && <Badge variant="outline">Archived</Badge>}
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                            <div>
+                              <span className="block font-medium text-foreground">UPC</span>
+                              <span className="font-mono">{release.upc || '-'}</span>
+                            </div>
+                            <div>
+                              <span className="block font-medium text-foreground">Release Date</span>
+                              <span>{release.release_date ? new Date(release.release_date).toLocaleDateString('id-ID') : '-'}</span>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/releases/${release.id}`)}>
+                              <Eye className="h-4 w-4 mr-1" /> Detail
+                            </Button>
+                            {(release.status === 'pending' || release.status === 'draft' || (release.status === 'active' && isAdmin)) && (
+                              <Button variant="outline" size="sm" onClick={() => handleEditRelease(release)}>
+                                <Pencil className="h-4 w-4 mr-1" /> Edit
+                              </Button>
+                            )}
+                            {canManageReleases && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleArchiveRelease(release)}>
+                                    {release.archived_at ? <ArchiveRestore className="h-4 w-4 mr-2" /> : <Archive className="h-4 w-4 mr-2" />}
+                                    {release.archived_at ? 'Pulihkan' : 'Arsipkan'}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={() => handleDeleteRelease(release)} className="text-destructive">
+                                    <Trash2 className="h-4 w-4 mr-2" /> Hapus
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="hidden overflow-x-auto md:block">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -806,7 +887,7 @@ export default function Releases() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between mt-4">
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm text-muted-foreground">
                       Menampilkan {((currentPage - 1) * parseInt(pageSize)) + 1} - {Math.min(currentPage * parseInt(pageSize), filteredReleases.length)} dari {filteredReleases.length}
                     </p>

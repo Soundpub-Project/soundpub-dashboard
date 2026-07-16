@@ -135,6 +135,17 @@ File >200MB di-skip dan tercatat di `storage_backup_runs.details`.
 
 Proses CSV royalty (matching ISRC, hitung net split 70/21/9, update balance).
 
+**Revenue Split System:**
+- **70%** Artist Share
+- **21%** Label Share
+- **9%** Admin/Platform Share
+
+Sistem ini berlaku flat untuk semua label termasuk Soundpub Music.
+Jika artist tidak memiliki akun, maka label mendapat 91% dan admin 9%.
+
+> **Database Migration:** `supabase/migrations/20260316171710_376bc60b-ff6e-4231-9c84-54e889b1a4f8.sql`
+> Migration ini mengupdate RPC functions untuk menghitung summary dengan split flat 70/21/9.
+
 **Request:**
 ```json
 { "upload_id": "uuid" }

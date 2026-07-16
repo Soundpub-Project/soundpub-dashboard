@@ -370,14 +370,14 @@ export default function RoyaltySummary() {
 
             {/* Tabs for different views */}
             <Tabs defaultValue="periods" className="space-y-4">
-              <TabsList className="grid w-full lg:w-auto lg:inline-grid grid-cols-3 lg:grid-cols-5">
-                <TabsTrigger value="periods">Per Periode</TabsTrigger>
-                <TabsTrigger value="platforms">Per Platform</TabsTrigger>
-                <TabsTrigger value="tracks">Per Lagu</TabsTrigger>
+              <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-3 lg:inline-grid lg:w-auto lg:grid-cols-5">
+                <TabsTrigger value="periods" className="text-xs sm:text-sm">Per Periode</TabsTrigger>
+                <TabsTrigger value="platforms" className="text-xs sm:text-sm">Per Platform</TabsTrigger>
+                <TabsTrigger value="tracks" className="text-xs sm:text-sm">Per Lagu</TabsTrigger>
                 {!isArtist && (
                   <>
-                    <TabsTrigger value="labels">Per Label</TabsTrigger>
-                    <TabsTrigger value="artists">Per Artist</TabsTrigger>
+                    <TabsTrigger value="labels" className="text-xs sm:text-sm">Per Label</TabsTrigger>
+                    <TabsTrigger value="artists" className="text-xs sm:text-sm">Per Artist</TabsTrigger>
                   </>
                 )}
               </TabsList>
@@ -393,8 +393,8 @@ export default function RoyaltySummary() {
                     {periodLoading ? (
                       <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
                     ) : (
-                      <div className="overflow-x-auto">
-                        <Table>
+                      <div className="overflow-x-auto rounded-lg border border-border/50 md:border-0">
+                        <Table className="min-w-[760px]">
                           <TableHeader>
                             <TableRow>
                               <TableHead>Periode</TableHead>
@@ -496,15 +496,15 @@ export default function RoyaltySummary() {
                   <CardHeader>
                     <CardTitle>Breakdown per Label dengan Revenue Split</CardTitle>
                     <CardDescription>
-                      Soundpub Music: 70% Artist, 30% Label | Label lain: 49% Artist, 21% Label, 30% Admin
+                      Sistem Share: 70% Artist Share, 21% Label Share, 9% Admin Share.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     {labelLoading ? (
                       <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
                     ) : (
-                      <div className="overflow-x-auto">
-                        <Table>
+                      <div className="overflow-x-auto rounded-lg border border-border/50 md:border-0">
+                        <Table className="min-w-[760px]">
                           <TableHeader>
                             <TableRow>
                               <TableHead>Label</TableHead>
@@ -555,8 +555,8 @@ export default function RoyaltySummary() {
                     {artistLoading ? (
                       <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
                     ) : (
-                      <div className="overflow-x-auto">
-                        <Table>
+                      <div className="overflow-x-auto rounded-lg border border-border/50 md:border-0">
+                        <Table className="min-w-[760px]">
                           <TableHeader>
                             <TableRow>
                               <TableHead>#</TableHead>
@@ -627,8 +627,8 @@ export default function RoyaltySummary() {
                       <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
                     ) : (
                       <>
-                        <div className="overflow-x-auto">
-                          <Table>
+                        <div className="overflow-x-auto rounded-lg border border-border/50 md:border-0">
+                          <Table className="min-w-[760px]">
                             <TableHeader>
                               <TableRow>
                                 <TableHead>#</TableHead>
@@ -656,9 +656,6 @@ export default function RoyaltySummary() {
                                   <TableCell>
                                     <div className="flex items-center gap-1">
                                       <Badge variant="outline" className="text-xs">{track.label}</Badge>
-                                      {track.isSoundpub && (
-                                        <Badge variant="outline" className="text-xs bg-primary/10 text-primary">70/30</Badge>
-                                      )}
                                     </div>
                                   </TableCell>
                                   <TableCell className="text-right text-green-500 font-medium">{formatCurrency(track.revenue)}</TableCell>

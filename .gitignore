@@ -5,6 +5,7 @@
 # Dependency directories
 *.csv
 .env-old
+*.env
 .env
 
 # Logs

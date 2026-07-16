@@ -353,13 +353,10 @@ Deno.serve(async (req) => {
           artistUserId = await createManagedArtist(artistName, labelUserId)
         }
 
-        // Revenue split:
-        // SOUNDPUB MUSIC: 70% artist, 30% Soundpub label.
-        // Other label/whitelabel: 49% artist, 21% label, 30% admin.
-        // If no artist account is linked, the whole non-admin pool goes to the label.
-        const adminShare = soundpubLabel ? 0 : r.net_revenue * 0.30
-        const labelShare = soundpubLabel ? r.net_revenue * 0.30 : (artistUserId ? r.net_revenue * 0.21 : r.net_revenue * 0.70)
-        const artistShare = artistUserId ? (soundpubLabel ? r.net_revenue * 0.70 : r.net_revenue * 0.49) : 0
+        // Revenue split: flat 70/21/9 for all labels (including Soundpub)
+        const adminShare = r.net_revenue * 0.09
+        const labelShare = artistUserId ? r.net_revenue * 0.21 : r.net_revenue * 0.91
+        const artistShare = artistUserId ? r.net_revenue * 0.70 : 0
 
         if (labelUserId) labelRevById[labelUserId] = (labelRevById[labelUserId] || 0) + labelShare
         if (labelName) labelRev[labelName] = (labelRev[labelName] || 0) + labelShare
