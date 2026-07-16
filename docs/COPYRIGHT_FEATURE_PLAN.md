@@ -483,3 +483,16 @@ Tambahan status workflow:
 - Apakah kontrak perlu e-Meterai sebelum user tanda tangan, atau setelah admin approve?
 - Apakah satu kontrak butuh 1 e-Meterai atau 2 e-Meterai untuk kedua pihak?
 - Apakah payment gateway yang dipakai akan sama dengan sistem pembayaran existing?
+
+## Keputusan Produk Terkunci — 2026-07-17
+
+- Pendaftaran Hak Cipta MVP wajib login dulu.
+- User bisa menyimpan pendaftaran sebagai draft.
+- Draft kontrak PDF boleh didownload sebelum pembayaran dengan watermark `DRAFT - BELUM DIBAYAR / BELUM DITANDATANGANI`.
+- Submit final membutuhkan pembayaran registrasi `Rp100.000`.
+- Biaya `Rp100.000` sudah termasuk `1 e-Meterai` untuk MVP.
+- MVP e-Meterai memakai proses manual/semi-manual oleh admin; integrasi API tetap disiapkan melalui abstraksi database/provider.
+- Setelah pembayaran berhasil, status menjadi `paid_pending_review`.
+- Setelah admin approve dan kontrak aktif, user mendapat role `copyright` dan `composer_code`.
+- Fase awal memakai model `1 akun = 1 composer_code`.
+- Payout Hak Cipta dipisah secara logical dari payout royalti DSP.

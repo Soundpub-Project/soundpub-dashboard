@@ -20,24 +20,24 @@ Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai, `[!]` butuh keputusan
 
 ## Tahap 0 — Keputusan Produk
 
-- [ ] Tentukan pendaftaran publik: wajib login dulu atau bisa dari public landing page.
-- [ ] Tentukan apakah approval otomatis membuat role `copyright`.
-- [ ] Tentukan format kontrak awal: HTML/PDF dulu atau langsung DOCX template.
-- [ ] Tentukan tanda tangan: upload signed file atau e-signature di app.
-- [ ] Tentukan apakah satu akun boleh punya banyak `composer_code`.
-- [ ] Tentukan apakah payout Hak Cipta pakai balance yang sama atau wallet terpisah.
+- [x] Tentukan pendaftaran publik: wajib login dulu untuk MVP.
+- [x] Tentukan apakah approval otomatis membuat role `copyright`: ya, setelah approved/active.
+- [x] Tentukan format kontrak awal: HTML preview + PDF download dulu.
+- [x] Tentukan tanda tangan: MVP upload signed/bermeterai manual oleh admin.
+- [x] Tentukan apakah satu akun boleh punya banyak `composer_code`: fase awal 1 akun = 1 composer_code.
+- [x] Tentukan payout Hak Cipta: dipisah secara logical dari royalti DSP.
 
 ## Tahap 1 — Database dan Security
 
-- [ ] Buat migration `copyright_registrations`.
-- [ ] Buat migration `copyright_registration_works`.
-- [ ] Buat migration `copyright_registration_files`.
-- [ ] Buat migration `copyright_contracts`.
-- [ ] Tambah/rapikan index `composer_code`.
-- [ ] Buat RPC `get_my_composer_royalties()`.
-- [ ] Update RLS `composer_royalties` agar berbasis `profiles.composer_code`.
-- [ ] Buat RPC/admin action untuk review registration.
-- [ ] Buat generator `composer_code` dan `contract_number`.
+- [x] Buat migration `copyright_registrations`.
+- [x] Buat migration `copyright_registration_works`.
+- [x] Buat migration `copyright_registration_files`.
+- [x] Buat migration `copyright_contracts`.
+- [x] Tambah/rapikan index `composer_code`.
+- [x] Buat RPC `get_my_composer_royalties()`.
+- [x] Update RLS `composer_royalties` agar berbasis `profiles.composer_code`.
+- [x] Buat RPC/admin action untuk review registration.
+- [x] Buat generator `composer_code` dan `contract_number`.
 - [ ] Validasi migration di local/Supabase.
 
 ## Tahap 2 — Frontend Informasi dan Registrasi
@@ -118,15 +118,30 @@ Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai, `[!]` butuh keputusan
 
 ## Tahap 0A — E-Meterai, PDF, dan Pembayaran Registrasi
 
-- [ ] Putuskan biaya Rp100.000 sudah termasuk e-Meterai atau belum.
-- [ ] Putuskan jumlah e-Meterai per kontrak: 1 atau 2 keping.
-- [ ] Putuskan MVP e-Meterai: manual/semi-manual atau langsung API.
+- [x] Putuskan biaya Rp100.000: sudah termasuk 1 e-Meterai untuk MVP.
+- [x] Putuskan jumlah e-Meterai per kontrak: 1 keping untuk MVP.
+- [x] Putuskan MVP e-Meterai: manual/semi-manual dulu, API disiapkan sebagai fase lanjut.
 - [ ] Pilih shortlist provider e-Meterai untuk dicek: Mekari Sign, EZMeterai, PDS/Peruri, Privy.
 - [ ] Buat halaman preview kontrak HTML sebelum submit.
-- [ ] Buat fitur download draft kontrak PDF.
+- [ ] Buat fitur download draft kontrak PDF dengan watermark sebelum bayar.
 - [ ] Tambah status `awaiting_payment` dan `paid_pending_review`.
 - [ ] Tambah pembayaran registrasi Rp100.000 sebelum final submit.
-- [ ] Tambah tabel `copyright_registration_payments`.
-- [ ] Tambah field e-Meterai/stamping di `copyright_contracts`.
+- [x] Tambah tabel `copyright_registration_payments`.
+- [x] Tambah field e-Meterai/stamping di `copyright_contracts`.
 - [ ] Buat fallback upload kontrak bermeterai manual oleh admin.
-- [ ] Rancang abstraksi provider e-Meterai agar bisa upgrade ke API.
+- [x] Rancang abstraksi provider e-Meterai agar bisa upgrade ke API.
+
+
+
+## Kontrak Kerja Schema — 2026-07-17
+
+- Jangan mengubah schema selain `soundpub`.
+- Semua tabel, RPC, RLS, trigger, index, dan perubahan database baru untuk fitur Soundpub harus berada di schema `soundpub`.
+- Schema lain seperti `public`, `finance`, `extensions`, `auth`, dan schema non-Soundpub tidak boleh disentuh kecuali user memberi instruksi eksplisit.
+- Jika lint remote menampilkan error dari schema lain, catat saja sebagai issue existing dan jangan diperbaiki dalam task Soundpub.
+
+## Catatan Schema Untuk Tahap 1
+
+- Migration Hak Cipta harus memakai schema `soundpub`.
+- Jangan deploy versi migration yang membuat objek di `public`.
+- Referensi `auth.users` boleh untuk FK, tetapi tidak boleh mengubah schema `auth`.

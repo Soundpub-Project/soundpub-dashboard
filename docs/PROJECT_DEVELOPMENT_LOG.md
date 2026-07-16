@@ -151,3 +151,52 @@ Dokumentasi ini merangkum pengembangan yang sudah diterapkan di branch ini supay
 - Rancangan e-Meterai, preview/download PDF kontrak, dan biaya registrasi Rp100.000 ditambahkan ke `docs/COPYRIGHT_FEATURE_PLAN.md`.
 - TODO baru `Tahap 0A — E-Meterai, PDF, dan Pembayaran Registrasi` ditambahkan ke `docs/COPYRIGHT_TODO.md`.
 - Rekomendasi MVP: generate preview/PDF kontrak lebih dulu, gunakan e-Meterai manual/semi-manual, lalu siapkan abstraksi database agar mudah upgrade ke API.
+
+## Update 2026-07-17 — Keputusan MVP Hak Cipta
+
+- Tahap 0 dan sebagian Tahap 0A dikunci untuk MVP.
+- Registrasi wajib login, bisa simpan draft, dan draft PDF boleh didownload sebelum bayar dengan watermark.
+- Biaya registrasi `Rp100.000` sudah termasuk 1 e-Meterai untuk MVP.
+- E-Meterai MVP memakai proses manual/semi-manual oleh admin; API disiapkan untuk fase lanjut.
+
+## Update 2026-07-17 — Tahap 1 Database Hak Cipta
+
+- Migration database Hak Cipta dibuat di `supabase/migrations/20260717090000_copyright_publishing_registration.sql`.
+- Tabel baru mencakup registration, works, files, contracts, dan payments.
+- RLS dasar ditambahkan untuk user/admin.
+- RPC `get_my_composer_royalties()` dibuat agar data royalti copyright dibatasi melalui `profiles.composer_code`.
+- RPC admin review, generator `composer_code`, dan generator nomor kontrak dibuat.
+- Validasi `supabase db lint --local` belum bisa berjalan karena Postgres Supabase lokal di `127.0.0.1:54322` belum aktif.
+
+### Catatan Koneksi Supabase Self-Hosted
+
+- Dari docker compose/env self-hosted, port host `5432` dipetakan ke `supabase-pooler`, bukan direct container `db`.
+- Format koneksi yang berhasil untuk lint: user pooler `postgres.<POOLER_TENANT_ID>` ke `20.20.20.173:5432/postgres`.
+- `supabase db lint --db-url ...` berhasil terhubung ke remote database melalui Supavisor.
+- Hasil lint remote masih menemukan issue existing yang tidak berasal dari migration Hak Cipta baru:
+  - `extensions.index_advisor` warning cast type.
+  - `finance.update_overdue_daily` error kolom `status` tidak ada.
+  - `public.get_royalty_*_breakdown` error unqualified `is_admin(uuid)` tidak ditemukan di lint context.
+- Migration Hak Cipta baru belum diaplikasikan ke remote; validasi syntax penuh perlu dry-run/apply di environment DB yang siap rollback atau deploy terkontrol.
+
+## Update 2026-07-17 — Kontrak Kerja Schema
+
+- User menegaskan bahwa project menggunakan schema `soundpub`.
+- Jangan mengubah schema selain `soundpub`.
+- Migration Hak Cipta harus disesuaikan agar memakai schema `soundpub`, bukan `public`.
+- Issue lint dari schema lain hanya dicatat, tidak diperbaiki dalam task ini.
+
+### Penyesuaian Migration Hak Cipta
+
+- Migration `20260717090000_copyright_publishing_registration.sql` sudah disesuaikan agar seluruh objek aplikasi dibuat di schema `soundpub`.
+- Referensi ke `auth.users` tetap dipakai hanya sebagai FK auth, bukan perubahan schema auth.
+- Tidak ada objek baru Hak Cipta yang dibuat di schema `public`.
+
+### Validasi Schema `soundpub` — 2026-07-17
+
+- `supabase db lint --schema soundpub` berhasil terhubung ke remote DB melalui Supavisor dengan user pooler.
+- Lint schema `soundpub` hanya melaporkan issue existing pada fungsi `soundpub.repair_orphan_artist_link`:
+  - `function min(uuid) does not exist`
+  - Penyebab: query memakai `min(p.id)` pada kolom UUID.
+- Issue tersebut tidak berasal dari migration Hak Cipta baru dan belum diperbaiki dalam tahap ini.
+- Definisi existing `soundpub.composer_royalties` sudah cocok dengan RPC Hak Cipta baru: `composer_id`, `composer_name`, `total_net_royalti`, `period`, `upload_id`, `created_at`.
