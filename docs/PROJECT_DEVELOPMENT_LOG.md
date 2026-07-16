@@ -211,3 +211,9 @@ Dokumentasi ini merangkum pengembangan yang sudah diterapkan di branch ini supay
   - `docs/services/copyright-publishing/TODO.md`
   - `docs/services/copyright-publishing/deployment-notes.md`
 - Update berikutnya terkait service ini harus disimpan di folder tersebut.
+
+## Update 2026-07-17 — Folder Migration Service Hak Cipta
+
+- SQL migration khusus service Hak Cipta/Publishing sekarang juga disimpan di `docs/services/copyright-publishing/migrations/`.
+- File pertama yang disalin: `20260717090000_copyright_publishing_registration.sql`.
+- File di `supabase/migrations/` tetap dipertahankan untuk kompatibilitas tooling Supabase.

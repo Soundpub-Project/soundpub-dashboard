@@ -30,3 +30,13 @@ Folder ini menjadi pusat dokumentasi dan implementasi service Hak Cipta / Publis
 - E-Meterai MVP manual/semi-manual oleh admin; API disiapkan untuk fase lanjut.
 - Fase awal memakai model 1 akun = 1 `composer_code`.
 - Matching royalti wajib berbasis `composer_code`.
+
+## SQL Migrations Service
+
+- Semua SQL migration baru khusus service Hak Cipta/Publishing harus disimpan juga di folder `migrations/` ini.
+- Untuk kompatibilitas Supabase CLI, file migration tetap perlu ada di `supabase/migrations/` saat akan dijalankan oleh tooling Supabase.
+- Folder ini menjadi pusat referensi service agar mudah diaudit tanpa mencari di seluruh repo.
+- Jika ada perubahan SQL, update kedua lokasi:
+  1. `docs/services/copyright-publishing/migrations/`
+  2. `supabase/migrations/`
+- Jangan membuat migration service ini di schema selain `soundpub`.
