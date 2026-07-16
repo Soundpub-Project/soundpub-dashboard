@@ -140,16 +140,16 @@ Dokumentasi ini merangkum pengembangan yang sudah diterapkan di branch ini supay
 
 ## Update 2026-07-16 — Rancangan Hak Cipta / Publishing
 
-- Rancangan fitur Hak Cipta/Publishing dibuat di `docs/COPYRIGHT_FEATURE_PLAN.md`.
-- TODO pengembangan bertahap dibuat di `docs/COPYRIGHT_TODO.md`.
+- Rancangan fitur Hak Cipta/Publishing dibuat di `docs/services/copyright-publishing/FEATURE_PLAN.md`.
+- TODO pengembangan bertahap dibuat di `docs/services/copyright-publishing/TODO.md`.
 - Acuan dokumen kontrak: `C:/Users/bimok/Downloads/DRAFT KONTRAK SOUNDPUB COMPLETE.docx`.
 - Keputusan awal: matching royalti harus distandarkan ke `composer_code`, bukan nama bebas.
 - Tahap berikutnya sebelum implementasi: finalisasi keputusan produk pada Tahap 0 di TODO.
 
 ## Update 2026-07-16 — Addendum E-Meterai dan Biaya Registrasi Hak Cipta
 
-- Rancangan e-Meterai, preview/download PDF kontrak, dan biaya registrasi Rp100.000 ditambahkan ke `docs/COPYRIGHT_FEATURE_PLAN.md`.
-- TODO baru `Tahap 0A — E-Meterai, PDF, dan Pembayaran Registrasi` ditambahkan ke `docs/COPYRIGHT_TODO.md`.
+- Rancangan e-Meterai, preview/download PDF kontrak, dan biaya registrasi Rp100.000 ditambahkan ke `docs/services/copyright-publishing/FEATURE_PLAN.md`.
+- TODO baru `Tahap 0A — E-Meterai, PDF, dan Pembayaran Registrasi` ditambahkan ke `docs/services/copyright-publishing/TODO.md`.
 - Rekomendasi MVP: generate preview/PDF kontrak lebih dulu, gunakan e-Meterai manual/semi-manual, lalu siapkan abstraksi database agar mudah upgrade ke API.
 
 ## Update 2026-07-17 — Keputusan MVP Hak Cipta
@@ -200,3 +200,14 @@ Dokumentasi ini merangkum pengembangan yang sudah diterapkan di branch ini supay
   - Penyebab: query memakai `min(p.id)` pada kolom UUID.
 - Issue tersebut tidak berasal dari migration Hak Cipta baru dan belum diperbaiki dalam tahap ini.
 - Definisi existing `soundpub.composer_royalties` sudah cocok dengan RPC Hak Cipta baru: `composer_id`, `composer_name`, `total_net_royalti`, `period`, `upload_id`, `created_at`.
+
+
+## Update 2026-07-17 — Folder Service Hak Cipta
+
+- Semua dokumentasi dan catatan implementasi service Hak Cipta/Publishing dipusatkan di `docs/services/copyright-publishing/`.
+- File utama service:
+  - `docs/services/copyright-publishing/README.md`
+  - `docs/services/copyright-publishing/FEATURE_PLAN.md`
+  - `docs/services/copyright-publishing/TODO.md`
+  - `docs/services/copyright-publishing/deployment-notes.md`
+- Update berikutnya terkait service ini harus disimpan di folder tersebut.

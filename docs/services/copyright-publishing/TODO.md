@@ -16,7 +16,7 @@ Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai, `[!]` butuh keputusan
   - Lainnya: 50% Komposer / 50% Publisher.
 - Sistem saat ini sudah punya role `copyright`, `composer_royalties`, dan `profiles.composer_code`.
 - Masalah existing: query copyright masih banyak filter client-side; perlu RPC/RLS berbasis `composer_code`.
-- Dokumen rancangan utama: `docs/COPYRIGHT_FEATURE_PLAN.md`.
+- Dokumen rancangan utama: `docs/services/copyright-publishing/FEATURE_PLAN.md`.
 
 ## Tahap 0 — Keputusan Produk
 
@@ -145,3 +145,4 @@ Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai, `[!]` butuh keputusan
 - Migration Hak Cipta harus memakai schema `soundpub`.
 - Jangan deploy versi migration yang membuat objek di `public`.
 - Referensi `auth.users` boleh untuk FK, tetapi tidak boleh mengubah schema `auth`.
+

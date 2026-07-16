@@ -260,7 +260,7 @@ RLS prinsip:
 - `docs/API-DOCS.md`
 - `docs/PROJECT_DEVELOPMENT_LOG.md`
 - `docs/MIGRATION-GUIDE.md`
-- Dokumen baru ini: `docs/COPYRIGHT_FEATURE_PLAN.md`
+- Dokumen baru ini: `docs/services/copyright-publishing/FEATURE_PLAN.md`
 
 ## Pertanyaan Produk yang Masih Terbuka
 
@@ -496,3 +496,4 @@ Tambahan status workflow:
 - Setelah admin approve dan kontrak aktif, user mendapat role `copyright` dan `composer_code`.
 - Fase awal memakai model `1 akun = 1 composer_code`.
 - Payout Hak Cipta dipisah secara logical dari payout royalti DSP.
+
