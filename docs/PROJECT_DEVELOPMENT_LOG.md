@@ -137,3 +137,17 @@ Dokumentasi ini merangkum pengembangan yang sudah diterapkan di branch ini supay
 
 - Samakan spacing section, card density, heading hierarchy, dan empty state lintas halaman.
 - Hindari text terlalu kecil, tombol ikon tanpa label di mobile, dan horizontal overflow yang tidak disengaja.
+
+## Update 2026-07-16 — Rancangan Hak Cipta / Publishing
+
+- Rancangan fitur Hak Cipta/Publishing dibuat di `docs/COPYRIGHT_FEATURE_PLAN.md`.
+- TODO pengembangan bertahap dibuat di `docs/COPYRIGHT_TODO.md`.
+- Acuan dokumen kontrak: `C:/Users/bimok/Downloads/DRAFT KONTRAK SOUNDPUB COMPLETE.docx`.
+- Keputusan awal: matching royalti harus distandarkan ke `composer_code`, bukan nama bebas.
+- Tahap berikutnya sebelum implementasi: finalisasi keputusan produk pada Tahap 0 di TODO.
+
+## Update 2026-07-16 — Addendum E-Meterai dan Biaya Registrasi Hak Cipta
+
+- Rancangan e-Meterai, preview/download PDF kontrak, dan biaya registrasi Rp100.000 ditambahkan ke `docs/COPYRIGHT_FEATURE_PLAN.md`.
+- TODO baru `Tahap 0A — E-Meterai, PDF, dan Pembayaran Registrasi` ditambahkan ke `docs/COPYRIGHT_TODO.md`.
+- Rekomendasi MVP: generate preview/PDF kontrak lebih dulu, gunakan e-Meterai manual/semi-manual, lalu siapkan abstraksi database agar mudah upgrade ke API.
