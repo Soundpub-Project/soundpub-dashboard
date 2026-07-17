@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { CheckCircle2, Clock3, FileText, Loader2, Search, Shield, Sparkles, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock3, Download, FileText, Loader2, Search, Shield, Sparkles, Upload, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface CopyrightRegistration {
@@ -60,10 +60,28 @@ const contractStageButtons = [
 
 const contractStatusOrder = ['draft', 'generated', 'stamping_pending', 'stamped', 'signed', 'active', 'void'] as const;
 
+const pdfServiceUrl = (import.meta as { env?: Record<string, string> }).env?.VITE_PDF_SERVICE_URL || 'http://localhost:3001';
+const contractBucket = (import.meta as { env?: Record<string, string> }).env?.VITE_CONTRACT_BUCKET || 'contracts';
+
+const templatePath = 'FINAL%20-%20DRAFT%20KONTRAK%20SOUNDPUB%20COMPLETE.docx';
+
 const getContractStatusIndex = (status?: string | null) => {
   if (!status) return -1;
   return contractStatusOrder.indexOf(status as (typeof contractStatusOrder)[number]);
 };
+
+const buildContractData = (registration: CopyrightRegistration, contract: CopyrightContract | null) => ({
+  nama_pihak_kedua: registration.legal_name,
+  nomor_surat: registration.contract_number || contract?.contract_number || '-',
+  nomor_ktp: '-',
+  alamat: '-',
+  tempat_lahir: '-',
+  tanggal_lahir: '-',
+  email: registration.email,
+  composer_code: registration.composer_code || '-',
+  applicant_type: registration.applicant_type,
+  contract_status: contract?.status || registration.status,
+});
 
 const statusStyles: Record<string, string> = {
   draft: 'bg-slate-500/20 text-slate-500',
@@ -239,6 +257,87 @@ export default function CopyrightRegistrationReview() {
   const canSignContract = selectedContract?.status === 'stamped';
   const canActivateContract = selectedContract?.status === 'signed';
 
+  const downloadDraftPdf = async () => {
+    if (!selected) return;
+
+    try {
+      const response = await fetch(`${pdfServiceUrl}/api/contracts/generate-pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          templatePath,
+          registrationId: selected.id,
+          contractData: buildContractData(selected, selectedContract),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Gagal generate PDF draft');
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = `soundpub-contract-draft-${selected.id}.pdf`;
+      link.click();
+      URL.revokeObjectURL(objectUrl);
+      toast.success('Draft PDF berhasil diunduh');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Gagal download PDF draft');
+    }
+  };
+
+  const uploadStampedPdf = async (file: File | null) => {
+    if (!selected || !file) return;
+    setSavingId(selected.id);
+
+    try {
+      const filePath = `stamped/${selected.id}/${Date.now()}-${file.name}`;
+      const { error: uploadError } = await supabase.storage.from(contractBucket).upload(filePath, file, {
+        contentType: file.type || 'application/pdf',
+        upsert: true,
+      });
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from(contractBucket).getPublicUrl(filePath);
+      const publicUrl = data.publicUrl;
+
+      const { error: contractError } = await supabase.rpc('admin_update_copyright_contract', {
+        _registration_id: selected.id,
+        _status: 'stamped',
+        _preview_html_url: selectedContract?.preview_html_url ?? null,
+        _draft_pdf_url: selectedContract?.draft_pdf_url ?? null,
+        _generated_pdf_url: selectedContract?.generated_pdf_url ?? null,
+        _stamped_pdf_url: publicUrl,
+      });
+
+      if (contractError) throw contractError;
+
+      toast.success('PDF bermeterai berhasil diupload');
+      const [{ data: registrationsData }, { data: contractData }] = await Promise.all([
+        supabase
+          .from('copyright_registrations')
+          .select('id, legal_name, email, status, composer_code, contract_number, applicant_type, submitted_at, reviewed_at, approved_at, rejected_at, admin_notes, revision_notes, created_at, updated_at')
+          .order('updated_at', { ascending: false }),
+        supabase
+          .from('copyright_contracts')
+          .select('id, registration_id, contract_sequence, contract_month_roman, contract_code, contract_year, contract_number, status, template_version, preview_html_url, draft_pdf_url, generated_pdf_url, stamped_pdf_url, signed_at, stamped_at, stamp_provider, stamp_status')
+          .eq('registration_id', selected.id)
+          .maybeSingle(),
+      ]);
+
+      setRegistrations((registrationsData ?? []) as CopyrightRegistration[]);
+      setSelectedContract((contractData as CopyrightContract | null) ?? null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Gagal upload PDF bermeterai');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   if (!isAdmin) return null;
 
   return (
@@ -384,12 +483,28 @@ export default function CopyrightRegistrationReview() {
                   <div className="flex flex-wrap gap-2">
                     {contractUrlRows.map((row) => (
                       row.value ? (
-                        <Button key={row.label} variant="outline" onClick={() => window.open(row.value!, '_blank', 'noopener,noreferrer')}>
-                          <FileText className="mr-2 h-4 w-4" />
-                          Buka {row.label}
-                        </Button>
+                        <div key={row.label} className="flex items-center gap-2">
+                          <Button variant="outline" onClick={() => window.open(row.value!, '_blank', 'noopener,noreferrer')}>
+                            <FileText className="mr-2 h-4 w-4" />
+                            Buka {row.label}
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => navigator.clipboard.writeText(row.value!).then(() => toast.success('URL disalin'))}>
+                            Salin
+                          </Button>
+                        </div>
                       ) : null
                     ))}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="secondary" onClick={downloadDraftPdf} disabled={!selected || savingId === selected.id}>
+                      <Download className="mr-2 h-4 w-4" />
+                      Download Draft PDF
+                    </Button>
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted">
+                      <Upload className="h-4 w-4" />
+                      Upload PDF Bermeterai
+                      <input type="file" accept="application/pdf" className="hidden" onChange={(event) => uploadStampedPdf(event.target.files?.[0] ?? null)} />
+                    </label>
                   </div>
                   {selected.revision_notes && <Alert><Sparkles className="h-4 w-4" /><AlertTitle>Catatan Revisi</AlertTitle><AlertDescription>{selected.revision_notes}</AlertDescription></Alert>}
                 </>
