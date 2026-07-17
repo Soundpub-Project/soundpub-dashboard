@@ -40,6 +40,7 @@ import {
   ListMusic,
   FileText,
   Bell,
+  ClipboardList,
 } from 'lucide-react';
 
 interface NavItem {
@@ -91,6 +92,12 @@ const musicDashboardItems: NavItem[] = [
 
 // === DASBOR HAK CIPTA ===
 const copyrightDashboardItems: NavItem[] = [
+  { 
+    title: 'Registrasi Hak Cipta', 
+    url: '/dashboard/copyright-registration', 
+    icon: FileText,
+    roles: ['superadmin', 'admin', 'copyright', 'user', 'label', 'artist', 'whitelabel'],
+  },
   { 
     title: 'Dasbor', 
     url: '/dashboard/copyright', 
@@ -159,6 +166,12 @@ const administrationItems: NavItem[] = [
     title: 'Pengaturan Pembayaran', 
     url: '/dashboard/payment-settings', 
     icon: Settings,
+    roles: ['superadmin', 'admin'],
+  },
+  {
+    title: 'Review Hak Cipta',
+    url: '/dashboard/copyright-registration/review',
+    icon: ClipboardList,
     roles: ['superadmin', 'admin'],
   },
   { 

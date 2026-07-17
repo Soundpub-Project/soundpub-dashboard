@@ -33,5 +33,4 @@ dist-ssr
 *.sln
 *.sw?
 
-
-
+temp-supabase

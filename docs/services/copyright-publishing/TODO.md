@@ -66,6 +66,13 @@ Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai, `[!]` butuh keputusan
 - [ ] Upload/generate kontrak final.
 - [ ] Aktivasi role/akses `copyright`.
 
+## Update 2026-07-17 — Admin Review Awal
+
+- [x] Buat route review pendaftaran untuk admin.
+- [x] Buat daftar pendaftaran dengan filter status dan search.
+- [x] Tampilkan detail pendaftaran, `composer_code`, dan `contract_number`.
+- [x] Sediakan aksi in review, revision request, approve, dan reject.
+
 ## Tahap 4 — Kontrak
 
 - [ ] Mapping field kontrak dari form ke template.
@@ -146,3 +153,38 @@ Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai, `[!]` butuh keputusan
 - Jangan deploy versi migration yang membuat objek di `public`.
 - Referensi `auth.users` boleh untuk FK, tetapi tidak boleh mengubah schema `auth`.
 
+
+## Update 2026-07-16 — Tahap 2 Frontend Registrasi
+
+- Route baru registrasi Hak Cipta ditambahkan:
+  - `/dashboard/copyright-registration`
+  - `/dashboard/copyright-registration/new`
+- Halaman informasi service Hak Cipta dibuat di `src/pages/CopyrightRegistrationInfo.tsx`.
+- Wizard registrasi draft dibuat di `src/pages/CopyrightRegistrationForm.tsx`.
+- Sidebar Hak Cipta ditambah entry `Registrasi Hak Cipta`.
+- Form awal sudah menyiapkan simpan draft ke schema `soundpub` untuk registration, works, dan payments.
+- Build terakhir berhasil.
+
+## Update 2026-07-16 — Tahap 2 Refinement
+
+- Wizard registrasi diperkuat dengan validasi langkah sebelum lanjut.
+- Halaman review kini menampilkan preview draft kontrak ringkas.
+- Form masih mode MVP: simpan draft dan siapkan submit ke pembayaran Rp100.000.
+
+## Update 2026-07-17 — Draft Reload Flow
+
+- Form registrasi sekarang memuat draft terakhir milik user jika statusnya masih `draft`, `revision_requested`, atau `awaiting_payment`.
+- Metadata file draft tetap ditampilkan dari tabel service, walaupun file actual belum diupload ke storage.
+- Validasi draft mewajibkan minimal KTP dan bukti karya, atau metadata file lama yang sudah tersimpan.
+- Build terakhir sukses setelah perbaikan loader draft.
+
+## Tahap 1A — Nomor Surat Kontrak
+
+- [x] Tambah kolom komponen nomor surat pada `copyright_contracts`.
+- [x] Buat `contract_sequence` yang reset setiap bulan.
+- [x] Buat `contract_month_roman` untuk bulan Romawi.
+- [x] Buat `contract_code` statis `PBLSR`.
+- [x] Buat `contract_year`.
+- [x] Buat `contract_number` utuh dengan format `P00009/Soundpub/XII/PBLSR/2024`.
+- [x] Sambungkan generator nomor surat ke flow admin approve/generate kontrak.
+- [ ] Tampilkan nomor surat di preview kontrak dan halaman admin review.

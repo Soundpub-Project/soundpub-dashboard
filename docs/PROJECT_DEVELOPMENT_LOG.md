@@ -217,3 +217,33 @@ Dokumentasi ini merangkum pengembangan yang sudah diterapkan di branch ini supay
 - SQL migration khusus service Hak Cipta/Publishing sekarang juga disimpan di `docs/services/copyright-publishing/migrations/`.
 - File pertama yang disalin: `20260717090000_copyright_publishing_registration.sql`.
 - File di `supabase/migrations/` tetap dipertahankan untuk kompatibilitas tooling Supabase.
+
+## Update 2026-07-16 — Tahap 2 Frontend Registrasi
+
+- Frontend service Hak Cipta mulai dikerjakan.
+- Halaman info layanan dan wizard registrasi awal sudah ditambahkan.
+- Route dan sidebar Hak Cipta sudah dihubungkan ke halaman registrasi.
+- Build terakhir sukses.
+
+## Update 2026-07-16 — Tahap 2 Refinement
+
+- Validasi step registrasi ditambahkan agar user tidak bisa lanjut tanpa data minimum.
+- Preview draft kontrak ringkas ditambahkan di halaman review.
+- Build terbaru tetap sukses.
+
+## Update 2026-07-17 — Draft Reload Flow
+
+- Form registrasi Hak Cipta sekarang bisa memuat draft terakhir user agar sesi pendaftaran bisa dilanjutkan.
+- Metadata file draft tetap dibaca dari tabel service untuk menjaga jejak dokumen.
+- Build terakhir sukses.
+
+## Update 2026-07-17 — Nomor Surat Kontrak
+
+- Nomor surat kontrak Hak Cipta kini punya komponen terpisah:
+  - `contract_sequence` → nomor urut bulanan, reset tiap bulan
+  - `contract_month_roman` → nomor bulan Romawi
+  - `contract_code` → kode surat statis `PBLSR`
+  - `contract_year` → tahun
+  - `contract_number` → format utuh, contoh `P00009/Soundpub/XII/PBLSR/2024`
+- Generator nomor kontrak di schema `soundpub` sudah disesuaikan agar reset per bulan.
+- Migration service dan `supabase/migrations` sama-sama diperbarui.

@@ -92,6 +92,10 @@ CREATE TABLE IF NOT EXISTS soundpub.copyright_registration_files (
 CREATE TABLE IF NOT EXISTS soundpub.copyright_contracts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   registration_id uuid NOT NULL UNIQUE REFERENCES soundpub.copyright_registrations(id) ON DELETE CASCADE,
+  contract_sequence integer,
+  contract_month_roman text,
+  contract_code text DEFAULT 'PBLSR',
+  contract_year integer,
   contract_number text UNIQUE,
   template_version text NOT NULL DEFAULT 'soundpub-publishing-v1',
   status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'generated', 'stamping_pending', 'stamped', 'signed', 'active', 'void')),
@@ -399,14 +403,25 @@ $$;
 REVOKE EXECUTE ON FUNCTION soundpub.generate_composer_code(text) FROM anon, PUBLIC;
 GRANT EXECUTE ON FUNCTION soundpub.generate_composer_code(text) TO authenticated;
 
-CREATE OR REPLACE FUNCTION soundpub.generate_copyright_contract_number(_prefix text DEFAULT 'Soundpub')
-RETURNS text
+DROP FUNCTION IF EXISTS soundpub.generate_copyright_contract_number(text);
+
+CREATE FUNCTION soundpub.generate_copyright_contract_number(_prefix text DEFAULT 'Soundpub')
+RETURNS TABLE(
+  contract_sequence integer,
+  contract_month_roman text,
+  contract_code text,
+  contract_year integer,
+  contract_number text
+)
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = soundpub
 AS $$
 DECLARE
   _next_number integer;
+  _current_month integer := EXTRACT(MONTH FROM now())::integer;
+  _roman_month text;
+  _current_year integer := EXTRACT(YEAR FROM now())::integer;
 BEGIN
   IF NOT soundpub.is_admin(auth.uid()) THEN
     RAISE EXCEPTION 'Only admins can generate contract numbers';
@@ -414,9 +429,29 @@ BEGIN
 
   SELECT COUNT(*)::integer + 1 INTO _next_number
   FROM soundpub.copyright_contracts
-  WHERE date_trunc('year', created_at) = date_trunc('year', now());
+  WHERE date_trunc('month', created_at) = date_trunc('month', now());
 
-  RETURN 'P' || lpad(_next_number::text, 5, '0') || '/' || _prefix || '/' || to_char(now(), 'MM') || '/PBLSR/' || to_char(now(), 'YYYY');
+  _roman_month := CASE _current_month
+    WHEN 1 THEN 'I'
+    WHEN 2 THEN 'II'
+    WHEN 3 THEN 'III'
+    WHEN 4 THEN 'IV'
+    WHEN 5 THEN 'V'
+    WHEN 6 THEN 'VI'
+    WHEN 7 THEN 'VII'
+    WHEN 8 THEN 'VIII'
+    WHEN 9 THEN 'IX'
+    WHEN 10 THEN 'X'
+    WHEN 11 THEN 'XI'
+    WHEN 12 THEN 'XII'
+  END;
+
+  contract_sequence := _next_number;
+  contract_month_roman := _roman_month;
+  contract_code := 'PBLSR';
+  contract_year := _current_year;
+  contract_number := 'P' || lpad(_next_number::text, 5, '0') || '/' || _prefix || '/' || _roman_month || '/' || contract_code || '/' || _current_year::text;
+  RETURN NEXT;
 END;
 $$;
 
@@ -424,6 +459,7 @@ REVOKE EXECUTE ON FUNCTION soundpub.generate_copyright_contract_number(text) FRO
 GRANT EXECUTE ON FUNCTION soundpub.generate_copyright_contract_number(text) TO authenticated;
 
 CREATE OR REPLACE FUNCTION soundpub.admin_review_copyright_registration(
+
   _registration_id uuid,
   _status text,
   _admin_notes text DEFAULT NULL,
@@ -438,6 +474,11 @@ SET search_path = soundpub
 AS $$
 DECLARE
   _updated soundpub.copyright_registrations;
+  _generated_contract_number text;
+  _generated_contract_sequence integer;
+  _generated_contract_month_roman text;
+  _generated_contract_code text;
+  _generated_contract_year integer;
 BEGIN
   IF NOT soundpub.is_admin(auth.uid()) THEN
     RAISE EXCEPTION 'Only admins can review copyright registrations';
@@ -475,6 +516,54 @@ BEGIN
     RAISE EXCEPTION 'Copyright registration not found: %', _registration_id;
   END IF;
 
+  IF _status IN ('approved', 'contract_generated', 'stamping_pending', 'stamped', 'contract_signed', 'active')
+     AND _updated.contract_number IS NULL THEN
+    SELECT contract_sequence, contract_month_roman, contract_code, contract_year, contract_number
+    INTO _generated_contract_sequence, _generated_contract_month_roman, _generated_contract_code, _generated_contract_year, _generated_contract_number
+    FROM soundpub.generate_copyright_contract_number('Soundpub');
+
+    UPDATE soundpub.copyright_registrations
+    SET contract_number = _generated_contract_number,
+        updated_at = now()
+    WHERE id = _updated.id
+    RETURNING * INTO _updated;
+  END IF;
+
+  IF _status IN ('approved', 'contract_generated', 'stamping_pending', 'stamped', 'contract_signed', 'active') THEN
+    INSERT INTO soundpub.copyright_contracts (
+      registration_id,
+      contract_sequence,
+      contract_month_roman,
+      contract_code,
+      contract_year,
+      contract_number,
+      status
+    )
+    VALUES (
+      _updated.id,
+      _generated_contract_sequence,
+      _generated_contract_month_roman,
+      _generated_contract_code,
+      _generated_contract_year,
+      _updated.contract_number,
+      CASE
+        WHEN _status = 'approved' THEN 'draft'
+        WHEN _status = 'contract_generated' THEN 'generated'
+        WHEN _status = 'stamping_pending' THEN 'stamping_pending'
+        WHEN _status = 'stamped' THEN 'stamped'
+        WHEN _status = 'contract_signed' THEN 'signed'
+        WHEN _status = 'active' THEN 'active'
+        ELSE 'draft'
+      END
+    )
+    ON CONFLICT (registration_id) DO UPDATE
+    SET contract_number = EXCLUDED.contract_number,
+        contract_code = EXCLUDED.contract_code,
+        contract_year = EXCLUDED.contract_year,
+        status = EXCLUDED.status,
+        updated_at = now();
+  END IF;
+
   IF _updated.composer_code IS NOT NULL THEN
     UPDATE soundpub.profiles
     SET composer_code = _updated.composer_code,
@@ -503,8 +592,90 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS soundpub.admin_update_copyright_contract(uuid, text, text, text, text, text);
+
+CREATE FUNCTION soundpub.admin_update_copyright_contract(
+  _registration_id uuid,
+  _status text,
+  _preview_html_url text DEFAULT NULL,
+  _draft_pdf_url text DEFAULT NULL,
+  _generated_pdf_url text DEFAULT NULL,
+  _stamped_pdf_url text DEFAULT NULL
+)
+RETURNS soundpub.copyright_contracts
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = soundpub
+AS $$
+DECLARE
+  _contract soundpub.copyright_contracts;
+BEGIN
+  IF NOT soundpub.is_admin(auth.uid()) THEN
+    RAISE EXCEPTION 'Only admins can update copyright contracts';
+  END IF;
+
+  IF _status NOT IN ('draft', 'generated', 'contract_generated', 'stamping_pending', 'stamped', 'signed', 'contract_signed', 'active', 'void') THEN
+    RAISE EXCEPTION 'Invalid copyright contract status: %', _status;
+  END IF;
+
+  IF _status = 'contract_generated' THEN
+    _status := 'generated';
+  ELSIF _status = 'contract_signed' THEN
+    _status := 'signed';
+  END IF;
+
+  INSERT INTO soundpub.copyright_contracts (
+    registration_id,
+    status,
+    preview_html_url,
+    draft_pdf_url,
+    generated_pdf_url,
+    stamped_pdf_url
+  )
+  VALUES (
+    _registration_id,
+    _status,
+    _preview_html_url,
+    _draft_pdf_url,
+    _generated_pdf_url,
+    _stamped_pdf_url
+  )
+  ON CONFLICT (registration_id) DO UPDATE
+  SET status = EXCLUDED.status,
+      preview_html_url = COALESCE(EXCLUDED.preview_html_url, soundpub.copyright_contracts.preview_html_url),
+      draft_pdf_url = COALESCE(EXCLUDED.draft_pdf_url, soundpub.copyright_contracts.draft_pdf_url),
+      generated_pdf_url = COALESCE(EXCLUDED.generated_pdf_url, soundpub.copyright_contracts.generated_pdf_url),
+      stamped_pdf_url = COALESCE(EXCLUDED.stamped_pdf_url, soundpub.copyright_contracts.stamped_pdf_url),
+      updated_at = now()
+  RETURNING * INTO _contract;
+
+  UPDATE soundpub.copyright_registrations
+  SET status = CASE
+        WHEN _status = 'draft' THEN status
+        WHEN _status = 'generated' THEN 'contract_generated'
+        WHEN _status = 'stamping_pending' THEN 'stamping_pending'
+        WHEN _status = 'stamped' THEN 'stamped'
+        WHEN _status = 'signed' THEN 'contract_signed'
+        WHEN _status = 'active' THEN 'active'
+        ELSE status
+      END,
+      updated_at = now()
+  WHERE id = _registration_id;
+
+  RETURN _contract;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION soundpub.admin_update_copyright_contract(uuid,text,text,text,text,text) FROM anon, PUBLIC;
+GRANT EXECUTE ON FUNCTION soundpub.admin_update_copyright_contract(uuid,text,text,text,text,text) TO authenticated;
+
 REVOKE EXECUTE ON FUNCTION soundpub.admin_review_copyright_registration(uuid,text,text,text,text,text) FROM anon, PUBLIC;
 GRANT EXECUTE ON FUNCTION soundpub.admin_review_copyright_registration(uuid,text,text,text,text,text) TO authenticated;
+
+
+
+
+
 
 
 

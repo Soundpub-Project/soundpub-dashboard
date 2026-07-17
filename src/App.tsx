@@ -30,6 +30,9 @@ import ComposerRoyalties from "./pages/ComposerRoyalties";
 import CopyrightDashboard from "./pages/CopyrightDashboard";
 import CopyrightAnalytics from "./pages/CopyrightAnalytics";
 import CopyrightRoyaltySummary from "./pages/CopyrightRoyaltySummary";
+import CopyrightRegistrationInfo from "./pages/CopyrightRegistrationInfo";
+import CopyrightRegistrationForm from "./pages/CopyrightRegistrationForm";
+import CopyrightRegistrationReview from "./pages/CopyrightRegistrationReview";
 import MediaLibrary from "./pages/MediaLibrary";
 import LandingPage from "./pages/LandingPage";
 import AllRoyalties from "./pages/AllRoyalties";
@@ -150,6 +153,21 @@ const App = () => (
               <Route path="/dashboard/copyright-royalty-summary" element={
                 <ProtectedRoute allowedRoles={['superadmin', 'admin', 'copyright']}>
                   <CopyrightRoyaltySummary />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/copyright-registration" element={
+                <ProtectedRoute allowedRoles={['superadmin', 'admin', 'copyright', 'user', 'label', 'whitelabel', 'artist']}>
+                  <CopyrightRegistrationInfo />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/copyright-registration/new" element={
+                <ProtectedRoute allowedRoles={['superadmin', 'admin', 'copyright', 'user', 'label', 'whitelabel', 'artist']}>
+                  <CopyrightRegistrationForm />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/copyright-registration/review" element={
+                <ProtectedRoute requireAdmin>
+                  <CopyrightRegistrationReview />
                 </ProtectedRoute>
               } />
               

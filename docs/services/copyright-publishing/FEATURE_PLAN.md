@@ -497,3 +497,9 @@ Tambahan status workflow:
 - Fase awal memakai model `1 akun = 1 composer_code`.
 - Payout Hak Cipta dipisah secara logical dari payout royalti DSP.
 
+
+## Update 2026-07-17 — Nomor Surat Kontrak
+
+- Struktur nomor surat kontrak sekarang disimpan per komponen dan utuh.
+- Format target: `P00009/Soundpub/XII/PBLSR/2024`.
+- Nomor urut reset setiap bulan.
