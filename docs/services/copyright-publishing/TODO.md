@@ -1,4 +1,4 @@
-ï»¿# TODO Pengembangan Hak Cipta / Publishing
+# TODO Pengembangan Hak Cipta / Publishing
 
 Update: 2026-07-16
 Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai, `[!]` butuh keputusan.
@@ -18,7 +18,7 @@ Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai, `[!]` butuh keputusan
 - Masalah existing: query copyright masih banyak filter client-side; perlu RPC/RLS berbasis `composer_code`.
 - Dokumen rancangan utama: `docs/services/copyright-publishing/FEATURE_PLAN.md`.
 
-## Tahap 0 â€” Keputusan Produk
+## Tahap 0 — Keputusan Produk
 
 - [x] Tentukan pendaftaran publik: wajib login dulu untuk MVP.
 - [x] Tentukan apakah approval otomatis membuat role `copyright`: ya, setelah approved/active.
@@ -27,7 +27,7 @@ Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai, `[!]` butuh keputusan
 - [x] Tentukan apakah satu akun boleh punya banyak `composer_code`: fase awal 1 akun = 1 composer_code.
 - [x] Tentukan payout Hak Cipta: dipisah secara logical dari royalti DSP.
 
-## Tahap 1 â€” Database dan Security
+## Tahap 1 — Database dan Security
 
 - [x] Buat migration `copyright_registrations`.
 - [x] Buat migration `copyright_registration_works`.
@@ -40,7 +40,7 @@ Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai, `[!]` butuh keputusan
 - [x] Buat generator `composer_code` dan `contract_number`.
 - [ ] Validasi migration di local/Supabase.
 
-## Tahap 2 â€” Frontend Informasi dan Registrasi
+## Tahap 2 — Frontend Informasi dan Registrasi
 
 - [ ] Buat halaman informasi layanan Hak Cipta.
 - [ ] Buat CTA `Daftar Perlindungan Hak Cipta`.
@@ -54,7 +54,7 @@ Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai, `[!]` butuh keputusan
 - [ ] Tambah upload file KTP/NPWP/bukti karya/audio.
 - [ ] Tambah save draft dan submit.
 
-## Tahap 3 â€” Admin Review
+## Tahap 3 — Admin Review
 
 - [ ] Buat menu admin pendaftaran Hak Cipta.
 - [ ] Buat list submissions dengan filter status.
@@ -66,14 +66,14 @@ Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai, `[!]` butuh keputusan
 - [ ] Upload/generate kontrak final.
 - [ ] Aktivasi role/akses `copyright`.
 
-## Update 2026-07-17 â€” Admin Review Awal
+## Update 2026-07-17 — Admin Review Awal
 
 - [x] Buat route review pendaftaran untuk admin.
 - [x] Buat daftar pendaftaran dengan filter status dan search.
 - [x] Tampilkan detail pendaftaran, `composer_code`, dan `contract_number`.
 - [x] Sediakan aksi in review, revision request, approve, dan reject.
 
-## Tahap 4 â€” Kontrak
+## Tahap 4 — Kontrak
 
 - [ ] Mapping field kontrak dari form ke template.
 - [ ] Generate preview kontrak.
@@ -83,7 +83,7 @@ Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai, `[!]` butuh keputusan
 - [ ] Ubah status ke `contract_signed` atau `active`.
 - [ ] Dokumentasikan versi template kontrak.
 
-## Tahap 5 â€” Dashboard User Hak Cipta
+## Tahap 5 — Dashboard User Hak Cipta
 
 - [ ] Refactor dashboard agar pakai RPC `get_my_composer_royalties()`.
 - [ ] Tampilkan ringkasan royalti by period.
@@ -92,7 +92,7 @@ Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai, `[!]` butuh keputusan
 - [ ] Tampilkan histori payout Hak Cipta.
 - [ ] Pastikan data user lain tidak pernah bocor ke frontend.
 
-## Tahap 6 â€” Upload Royalti Hak Cipta
+## Tahap 6 — Upload Royalti Hak Cipta
 
 - [ ] Standarkan CSV baru: `composer_code`, `composer_name`, `total_net_royalti`, `period`.
 - [ ] Pertahankan alias lama `composer_id` sebagai `composer_code` sementara.
@@ -102,7 +102,7 @@ Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai, `[!]` butuh keputusan
 - [ ] Tambah upload history/delete upload jika diperlukan.
 - [ ] Update UI preview upload.
 
-## Tahap 7 â€” Dokumentasi dan QA
+## Tahap 7 — Dokumentasi dan QA
 
 - [ ] Update `docs/API-DOCS.md`.
 - [ ] Update `docs/MIGRATION-GUIDE.md`.
@@ -123,7 +123,7 @@ Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai, `[!]` butuh keputusan
 - [ ] Auto-generate invoice/statement royalti.
 - [ ] Export statement PDF per periode.
 
-## Tahap 0A â€” E-Meterai, PDF, dan Pembayaran Registrasi
+## Tahap 0A — E-Meterai, PDF, dan Pembayaran Registrasi
 
 - [x] Putuskan biaya Rp100.000: sudah termasuk 1 e-Meterai untuk MVP.
 - [x] Putuskan jumlah e-Meterai per kontrak: 1 keping untuk MVP.
@@ -140,7 +140,19 @@ Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai, `[!]` butuh keputusan
 
 
 
-## Kontrak Kerja Schema â€” 2026-07-17
+## Update 2026-07-17 — Admin Review Page & Contract Status Management
+
+- Halaman /dashboard/copyright-registration/review sekarang aktif untuk admin.
+- List submissions dengan filter status dan search by nama/email/kode/nomor kontrak.
+- Detail panel menampilkan data registrasi, metadata kontrak, URL panel dengan tombol buka & salin.
+- Aksi review: in review, request revision, approve, reject.
+- Aksi kontrak: generate, stamp pending, stamped, signed, activate.
+- Status buttons ketat: tombol yang tidak sesuai alur terkunci otomatis.
+- Backend sync: RPC auto-update status registrasi saat kontrak berubah.
+- Nomor surat auto-generate saat approve dengan format P00009/Soundpub/XII/PBLSR/2024.
+- Commit: 649bbf5 ke branch eature/copyright-admin-review.
+
+## Kontrak Kerja Schema — 2026-07-17
 
 - Jangan mengubah schema selain `soundpub`.
 - Semua tabel, RPC, RLS, trigger, index, dan perubahan database baru untuk fitur Soundpub harus berada di schema `soundpub`.
@@ -154,7 +166,7 @@ Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai, `[!]` butuh keputusan
 - Referensi `auth.users` boleh untuk FK, tetapi tidak boleh mengubah schema `auth`.
 
 
-## Update 2026-07-16 â€” Tahap 2 Frontend Registrasi
+## Update 2026-07-16 — Tahap 2 Frontend Registrasi
 
 - Route baru registrasi Hak Cipta ditambahkan:
   - `/dashboard/copyright-registration`
@@ -165,20 +177,20 @@ Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai, `[!]` butuh keputusan
 - Form awal sudah menyiapkan simpan draft ke schema `soundpub` untuk registration, works, dan payments.
 - Build terakhir berhasil.
 
-## Update 2026-07-16 â€” Tahap 2 Refinement
+## Update 2026-07-16 — Tahap 2 Refinement
 
 - Wizard registrasi diperkuat dengan validasi langkah sebelum lanjut.
 - Halaman review kini menampilkan preview draft kontrak ringkas.
 - Form masih mode MVP: simpan draft dan siapkan submit ke pembayaran Rp100.000.
 
-## Update 2026-07-17 â€” Draft Reload Flow
+## Update 2026-07-17 — Draft Reload Flow
 
 - Form registrasi sekarang memuat draft terakhir milik user jika statusnya masih `draft`, `revision_requested`, atau `awaiting_payment`.
 - Metadata file draft tetap ditampilkan dari tabel service, walaupun file actual belum diupload ke storage.
 - Validasi draft mewajibkan minimal KTP dan bukti karya, atau metadata file lama yang sudah tersimpan.
 - Build terakhir sukses setelah perbaikan loader draft.
 
-## Tahap 1A â€” Nomor Surat Kontrak
+## Tahap 1A — Nomor Surat Kontrak
 
 - [x] Tambah kolom komponen nomor surat pada `copyright_contracts`.
 - [x] Buat `contract_sequence` yang reset setiap bulan.
@@ -188,3 +200,4 @@ Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai, `[!]` butuh keputusan
 - [x] Buat `contract_number` utuh dengan format `P00009/Soundpub/XII/PBLSR/2024`.
 - [x] Sambungkan generator nomor surat ke flow admin approve/generate kontrak.
 - [ ] Tampilkan nomor surat di preview kontrak dan halaman admin review.
+
