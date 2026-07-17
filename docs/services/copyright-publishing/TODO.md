@@ -1,7 +1,7 @@
 # TODO Pengembangan Hak Cipta / Publishing
 
 Update: 2026-07-17
-Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai.
+Status legend: `[ ]` belum, `[x]` selesai.
 
 ## Working Memory Singkat
 
@@ -68,7 +68,7 @@ Status legend: `[ ]` belum, `[~]` berjalan, `[x]` selesai.
 - [x] Template Word resmi di Supabase bucket `template`.
 - [x] Tombol download draft PDF di admin panel.
 - [x] Tombol upload PDF bermeterai manual di admin panel.
-- [ ] Validasi payment status sebelum download draft PDF.
+- [x] Validasi payment status sebelum download draft PDF.
 - [ ] Generate PDF final/preview yang benar-benar match template Word.
 - [ ] Update status kontrak saat upload PDF bermeterai.
 - [ ] Dokumentasikan alur manual upload final.

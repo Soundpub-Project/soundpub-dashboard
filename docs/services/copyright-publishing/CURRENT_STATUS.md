@@ -3,8 +3,8 @@
 ## Sudah Dikerjakan
 
 ### Database & Backend (Tahap 1)
-- [x] Buat tabel: `copyright_registrations`, `copyright_registration_works`, `copyright_registration_files`, `copyright_contracts`, `copyright_registration_payments`
-- [x] RPC `generate_copyright_contract_number()` untuk format nomor surat `P00009/Soundpub/XII/PBLSR/2024`
+- [x] Tabel: `copyright_registrations`, `copyright_registration_works`, `copyright_registration_files`, `copyright_contracts`, `copyright_registration_payments`
+- [x] RPC `generate_copyright_contract_number()` untuk format `P00009/Soundpub/XII/PBLSR/2024`
 - [x] RPC `admin_review_copyright_registration()` untuk review registrasi dan auto-generate kontrak
 - [x] RPC `admin_update_copyright_contract()` untuk sinkron status kontrak dan registrasi
 - [x] RLS policies untuk copyright tables
@@ -36,22 +36,20 @@
 - [x] Stack: Express + mammoth + puppeteer + Supabase storage client
 - [x] Template Word resmi sudah disiapkan di Supabase bucket `template`
 - [x] Frontend admin review punya tombol download draft PDF dan upload PDF bermeterai
+- [x] Validasi payment status sebelum download draft PDF
 
 ### Git & Docs
 - [x] Branch `feature/copyright-admin-review` sudah push
-- [x] Commit utama: `649bbf5`, `7e5b5a3`, `d55e384`, `29751fd`
+- [x] Commit utama: `649bbf5`, `7e5b5a3`, `d55e384`, `29751fd`, `da70e1b`
 - [x] Docs service, TODO, dan current status sudah diperbarui
-
----
 
 ## Belum Dikerjakan
 
 ### Tahap 4 ? Kontrak & PDF Manual
-- [ ] Generate PDF kontrak dari template Word
-- [ ] Validasi payment status sebelum download
-- [ ] Upload PDF bermeterai manual
-- [ ] Update status saat upload PDF bermeterai
-- [ ] Dokumenkan alur manual upload final
+- [ ] Generate PDF final/preview yang benar-benar match template Word
+- [ ] Update status kontrak saat upload PDF bermeterai
+- [ ] Dokumentasikan alur manual upload final
+- [ ] Archive: e-Meterai API integration untuk fase lanjutan
 
 ### Tahap 5 ? Dashboard User Hak Cipta
 - [ ] Refactor dashboard pakai RPC `get_my_composer_royalties()`
@@ -61,10 +59,10 @@
 - [ ] Histori payout
 
 ### Tahap 6 ? Upload Royalti Hak Cipta
-- [ ] CSV baru: composer_code, composer_name, total_net_royalti, period
+- [ ] CSV baru: `composer_code`, `composer_name`, `total_net_royalti`, `period`
 - [ ] Validasi composer code
 - [ ] Warning match by name only
-- [ ] Upload batch safe
+- [ ] Upload batch aman
 - [ ] Upload history/delete
 
 ### Tahap 7 ? QA & Deployment
@@ -81,8 +79,6 @@
 - [ ] Public tracking status
 - [ ] Email/WhatsApp notifikasi
 
----
-
 ## Working Memory Singkat
 
 **Project**: Soundpub Copyright Publishing Service MVP
@@ -92,7 +88,7 @@
 **Focus Terbaru**:
 - E-Meterai API integration di-archive/defer.
 - Fokus sekarang: manual upload workflow + PDF generation service.
-- Payment Rp100.000 wajib sebelum proses dan sebelum download draft PDF.
+- Payment Rp100.000 wajib sebelum proses kontrak dan sebelum download draft PDF.
 
 **Key Files**:
 - `supabase/migrations/20260717090000_copyright_publishing_registration.sql`

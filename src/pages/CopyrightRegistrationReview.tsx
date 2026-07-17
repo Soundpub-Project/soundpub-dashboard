@@ -30,6 +30,17 @@ interface CopyrightRegistration {
   updated_at: string;
 }
 
+interface CopyrightPayment {
+  id: string;
+  registration_id: string;
+  payment_status: string;
+  amount: number;
+  currency: string;
+  paid_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 interface CopyrightContract {
   id: string;
   registration_id: string;
@@ -106,6 +117,7 @@ export default function CopyrightRegistrationReview() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedPayment, setSelectedPayment] = useState<CopyrightPayment | null>(null);
   const [selectedContract, setSelectedContract] = useState<CopyrightContract | null>(null);
 
   useEffect(() => {
@@ -143,6 +155,33 @@ export default function CopyrightRegistrationReview() {
   }, [registrations, search, statusFilter]);
 
   const selected = filtered.find((item) => item.id === selectedId) ?? filtered[0] ?? null;
+
+  useEffect(() => {
+    const loadPayment = async () => {
+      if (!selected?.id) {
+        setSelectedPayment(null);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('copyright_registration_payments')
+        .select('id, registration_id, payment_status, amount, currency, paid_at, created_at, updated_at')
+        .eq('registration_id', selected.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error loading copyright payment:', error);
+        setSelectedPayment(null);
+        return;
+      }
+
+      setSelectedPayment((data as CopyrightPayment | null) ?? null);
+    };
+
+    loadPayment();
+  }, [selected?.id]);
 
   useEffect(() => {
     const loadContract = async () => {
@@ -256,9 +295,14 @@ export default function CopyrightRegistrationReview() {
   const canStampContract = selectedContract?.status === 'generated' || selectedContract?.status === 'stamping_pending';
   const canSignContract = selectedContract?.status === 'stamped';
   const canActivateContract = selectedContract?.status === 'signed';
+  const canDownloadDraftPdf = selectedPayment?.payment_status === 'paid';
 
   const downloadDraftPdf = async () => {
     if (!selected) return;
+    if (!canDownloadDraftPdf) {
+      toast.error('Draft PDF hanya bisa diunduh setelah pembayaran Rp100.000 berstatus paid.');
+      return;
+    }
 
     try {
       const response = await fetch(`${pdfServiceUrl}/api/contracts/generate-pdf`, {
@@ -434,6 +478,15 @@ export default function CopyrightRegistrationReview() {
                     <div className="rounded-lg border p-3"><p className="text-muted-foreground">Tipe Pemohon</p><p className="font-medium">{selected.applicant_type}</p></div>
                   </div>
                   <div className="rounded-lg border p-3 text-sm">
+                    <p className="mb-2 font-medium">Status Pembayaran</p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div><span className="text-muted-foreground">Payment Status:</span> {selectedPayment?.payment_status ?? 'Belum ada'}</div>
+                      <div><span className="text-muted-foreground">Amount:</span> Rp {Number(selectedPayment?.amount ?? 0).toLocaleString('id-ID')}</div>
+                      <div><span className="text-muted-foreground">Currency:</span> {selectedPayment?.currency ?? '-'}</div>
+                      <div><span className="text-muted-foreground">Paid At:</span> {selectedPayment?.paid_at ? new Date(selectedPayment.paid_at).toLocaleString('id-ID') : '-'}</div>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border p-3 text-sm">
                     <p className="mb-2 font-medium">Detail Kontrak</p>
                     <div className="grid gap-2 sm:grid-cols-2">
                       <div><span className="text-muted-foreground">Sequence:</span> {selectedContract?.contract_sequence ?? '-'}</div>
@@ -496,7 +549,7 @@ export default function CopyrightRegistrationReview() {
                     ))}
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button variant="secondary" onClick={downloadDraftPdf} disabled={!selected || savingId === selected.id}>
+                    <Button variant="secondary" onClick={downloadDraftPdf} disabled={!selected || savingId === selected.id || !canDownloadDraftPdf}>
                       <Download className="mr-2 h-4 w-4" />
                       Download Draft PDF
                     </Button>
