@@ -69,9 +69,9 @@ Status legend: `[ ]` belum, `[x]` selesai.
 - [x] Tombol download draft PDF di admin panel.
 - [x] Tombol upload PDF bermeterai manual di admin panel.
 - [x] Validasi payment status sebelum download draft PDF.
-- [ ] Generate PDF final/preview yang benar-benar match template Word.
-- [ ] Update status kontrak saat upload PDF bermeterai.
-- [ ] Dokumentasikan alur manual upload final.
+- [x] Generate PDF final/preview yang benar-benar match template Word.
+- [x] Update status kontrak saat upload PDF bermeterai.
+- [x] Dokumentasikan alur manual upload final.
 - [ ] Archive: e-Meterai API integration untuk fase lanjutan.
 
 ## Tahap 5 ? Dashboard User Hak Cipta

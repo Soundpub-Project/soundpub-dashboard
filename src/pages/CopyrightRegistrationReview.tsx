@@ -81,14 +81,32 @@ const getContractStatusIndex = (status?: string | null) => {
   return contractStatusOrder.indexOf(status as (typeof contractStatusOrder)[number]);
 };
 
+const formatContractDateText = () => {
+  const now = new Date();
+  return now.toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+};
+
 const buildContractData = (registration: CopyrightRegistration, contract: CopyrightContract | null) => ({
   nama_pihak_kedua: registration.legal_name,
   nomor_surat: registration.contract_number || contract?.contract_number || '-',
   nomor_ktp: '-',
+  nomor_npwp: '-',
+  nomor_rekening: '-',
+  nama_bank: '-',
   alamat: '-',
+  unit_cabang: 'Soundpub',
+  nomor_telp: '-',
   tempat_lahir: '-',
   tanggal_lahir: '-',
+  tanggal_nomor: formatContractDateText(),
+  tanggal_text: formatContractDateText(),
   email: registration.email,
+  file_lampiran_ktp: '-',
+  file_lampiran_npwp: '-',
   composer_code: registration.composer_code || '-',
   applicant_type: registration.applicant_type,
   contract_status: contract?.status || registration.status,

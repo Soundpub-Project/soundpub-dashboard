@@ -646,6 +646,8 @@ BEGIN
       draft_pdf_url = COALESCE(EXCLUDED.draft_pdf_url, soundpub.copyright_contracts.draft_pdf_url),
       generated_pdf_url = COALESCE(EXCLUDED.generated_pdf_url, soundpub.copyright_contracts.generated_pdf_url),
       stamped_pdf_url = COALESCE(EXCLUDED.stamped_pdf_url, soundpub.copyright_contracts.stamped_pdf_url),
+      stamped_at = CASE WHEN EXCLUDED.status = 'stamped' THEN COALESCE(soundpub.copyright_contracts.stamped_at, now()) ELSE soundpub.copyright_contracts.stamped_at END,
+      signed_at = CASE WHEN EXCLUDED.status IN ('signed', 'active') THEN COALESCE(soundpub.copyright_contracts.signed_at, now()) ELSE soundpub.copyright_contracts.signed_at END,
       updated_at = now()
   RETURNING * INTO _contract;
 
@@ -659,6 +661,7 @@ BEGIN
         WHEN _status = 'active' THEN 'active'
         ELSE status
       END,
+      approved_at = CASE WHEN _status IN ('generated', 'stamping_pending', 'stamped', 'signed', 'active') THEN COALESCE(approved_at, now()) ELSE approved_at END,
       updated_at = now()
   WHERE id = _registration_id;
 

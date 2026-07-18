@@ -46,9 +46,9 @@
 ## Belum Dikerjakan
 
 ### Tahap 4 ? Kontrak & PDF Manual
-- [ ] Generate PDF final/preview yang benar-benar match template Word
-- [ ] Update status kontrak saat upload PDF bermeterai
-- [ ] Dokumentasikan alur manual upload final
+- [x] Generate PDF final/preview yang benar-benar match template Word
+- [x] Update status kontrak saat upload PDF bermeterai
+- [x] Dokumentasikan alur manual upload final
 - [ ] Archive: e-Meterai API integration untuk fase lanjutan
 
 ### Tahap 5 ? Dashboard User Hak Cipta
