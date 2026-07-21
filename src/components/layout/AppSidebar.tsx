@@ -41,6 +41,8 @@ import {
   FileText,
   Bell,
   ClipboardList,
+  Upload,
+  History,
 } from 'lucide-react';
 
 interface NavItem {

@@ -1,4 +1,4 @@
-import { Toaster } from "@/components/ui/toaster";
+﻿import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -30,6 +30,8 @@ import ComposerRoyalties from "./pages/ComposerRoyalties";
 import CopyrightDashboard from "./pages/CopyrightDashboard";
 import CopyrightAnalytics from "./pages/CopyrightAnalytics";
 import CopyrightRoyaltySummary from "./pages/CopyrightRoyaltySummary";
+import CopyrightRoyaltyUpload from "./pages/CopyrightRoyaltyUpload";
+import CopyrightRoyaltyUploadHistory from "./pages/CopyrightRoyaltyUploadHistory";
 import CopyrightRegistrationInfo from "./pages/CopyrightRegistrationInfo";
 import CopyrightRegistrationForm from "./pages/CopyrightRegistrationForm";
 import CopyrightRegistrationReview from "./pages/CopyrightRegistrationReview";
@@ -153,6 +155,16 @@ const App = () => (
               <Route path="/dashboard/copyright-royalty-summary" element={
                 <ProtectedRoute allowedRoles={['superadmin', 'admin', 'copyright']}>
                   <CopyrightRoyaltySummary />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/royalties/copyright-upload" element={
+                <ProtectedRoute requireAdmin>
+                  <CopyrightRoyaltyUpload />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/royalties/copyright-uploads" element={
+                <ProtectedRoute requireAdmin>
+                  <CopyrightRoyaltyUploadHistory />
                 </ProtectedRoute>
               } />
               <Route path="/dashboard/copyright-registration" element={
