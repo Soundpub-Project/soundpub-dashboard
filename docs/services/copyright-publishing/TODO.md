@@ -1,6 +1,6 @@
-# TODO Pengembangan Hak Cipta / Publishing
+﻿# TODO Pengembangan Hak Cipta / Publishing
 
-Update: 2026-07-17
+Update: 2026-07-21
 Status legend: `[ ]` belum, `[x]` selesai.
 
 ## Working Memory Singkat
@@ -76,11 +76,11 @@ Status legend: `[ ]` belum, `[x]` selesai.
 
 ## Tahap 5 ? Dashboard User Hak Cipta
 
-- [ ] Refactor dashboard pakai RPC `get_my_composer_royalties()`.
-- [ ] Tampil ringkasan royalti by period.
-- [ ] Daftar karya terdaftar.
-- [ ] Status kontrak.
-- [ ] Histori payout.
+- [x] Refactor dashboard pakai RPC `get_my_composer_royalties()`.
+- [x] Tampil ringkasan royalti by period.
+- [x] Daftar karya terdaftar.
+- [x] Status kontrak.
+- [x] Histori payout.
 
 ## Tahap 6 ? Upload Royalti Hak Cipta
 

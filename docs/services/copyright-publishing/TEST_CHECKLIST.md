@@ -2,9 +2,10 @@
 
 ## Pre-requisites
 
-### [ ] 1. Database Migration
+### [✅] 1. Database Migration
+
 - **Action**: Jalankan migration `20260717090000_copyright_publishing_registration.sql` ke database remote
-- **Verify**: 
+- **Verify**:
   - Query: `SELECT table_name FROM information_schema.tables WHERE table_schema = 'soundpub' AND table_name LIKE 'copyright%';`
   - Ekspektasi: 5 tabel muncul:
     - `copyright_registrations`
@@ -14,7 +15,8 @@
     - `copyright_contracts`
 - **Status**: ❌ Belum / ✅ Sudah
 
-### [ ] 2. Template Word di Bucket
+### [✅] 2. Template Word di Bucket
+
 - **Action**: Upload file `FINAL - DRAFT KONTRAK SOUNDPUB COMPLETE.docx` ke bucket `template`
 - **Path**: `template/FINAL - DRAFT KONTRAK SOUNDPUB COMPLETE.docx`
 - **Verify**: Akses URL: `https://supabase.carubra.com/storage/v1/object/public/template/FINAL%20-%20DRAFT%20KONTRAK%20SOUNDPUB%20COMPLETE.docx`
@@ -22,15 +24,17 @@
 - **Status**: ❌ Belum / ✅ Sudah
 
 ### [ ] 3. Bucket untuk PDF Hasil
+
 - **Action**: Buat bucket baru (atau pakai existing) untuk hasil PDF kontrak
 - **Nama bucket**: `contracts` (atau sesuai pilihan kamu)
-- **Policy**: 
+- **Policy**:
   - Service role bisa write
   - Public read optional (atau pakai signed URL)
 - **Status**: ❌ Belum / ✅ Sudah
 
 ### [ ] 4. Backend PDF Service Setup
-- **Action**: 
+
+- **Action**:
   1. `cd I:\website-devops\soundpub-project\soundpub-pdf-service`
   2. Copy `.env.example` ke `.env`
   3. Isi `.env`:
@@ -42,12 +46,13 @@
      ```
   4. `npm install`
   5. `npm run dev`
-- **Verify**: 
+- **Verify**:
   - Akses: `http://localhost:3001/api/contracts/health`
   - Ekspektasi: Response `{"status":"ok"}`
 - **Status**: ❌ Belum / ✅ Sudah
 
 ### [ ] 5. Frontend Environment
+
 - **Action**: Pastikan frontend tahu URL PDF service
 - **File**: `.env` atau `.env.local`
 - **Isi**: `VITE_PDF_SERVICE_URL=http://localhost:3001` (atau IP server kalau beda mesin)
@@ -58,8 +63,9 @@
 ## Test Case 1: User Registrasi Hak Cipta
 
 ### [ ] TC1.1 - Buka Halaman Info
+
 - **Action**: Login sebagai user biasa, buka `/dashboard/copyright-registration`
-- **Ekspektasi**: 
+- **Ekspektasi**:
   - Halaman info muncul
   - Ada penjelasan layanan Hak Cipta
   - Ada keterangan biaya `Rp100.000` + 1 e-Meterai
@@ -68,6 +74,7 @@
 - **Error (jika ada)**: _______________________
 
 ### [ ] TC1.2 - Isi Form Registrasi (Step 1: Data Pemohon)
+
 - **Action**: Klik `Mulai Pendaftaran`, isi form:
   - Nama lengkap: `John Doe Composer`
   - Email: `john@example.com`
@@ -79,6 +86,7 @@
 - **Error (jika ada)**: _______________________
 
 ### [ ] TC1.3 - Isi Form Registrasi (Step 2: Pajak & Pembayaran)
+
 - **Action**: Isi form:
   - NPWP: `12.345.678.9-012.000`
   - Nama bank: `BCA`
@@ -89,6 +97,7 @@
 - **Error (jika ada)**: _______________________
 
 ### [ ] TC1.4 - Isi Form Registrasi (Step 3: Data Karya)
+
 - **Action**: Tambah karya:
   - Judul lagu: `Test Song One`
   - Nama pencipta: `John Doe`
@@ -102,6 +111,7 @@
 - **Error (jika ada)**: _______________________
 
 ### [ ] TC1.5 - Simpan Draft
+
 - **Action**: Klik `Simpan Draft`
 - **Ekspektasi**:
   - Alert sukses muncul
@@ -116,6 +126,7 @@
 - **Error (jika ada)**: _______________________
 
 ### [ ] TC1.6 - Lanjut Submit Final
+
 - **Action**: Klik `Lanjutkan Pembayaran`
 - **Ekspektasi**:
   - Status berubah ke `awaiting_payment`
@@ -135,6 +146,7 @@
 ## Test Case 2: Simulasi Pembayaran Sukses
 
 ### [ ] TC2.1 - Update Payment Status Manual
+
 - **Action**: Update status payment di DB (simulasi):
   ```sql
   UPDATE soundpub.copyright_registration_payments
@@ -151,6 +163,7 @@
 - **Status**: ❌ Gagal / ✅ Berhasil
 
 ### [ ] TC2.2 - Update Registration Status
+
 - **Action**: Update status registrasi:
   ```sql
   UPDATE soundpub.copyright_registrations
@@ -170,6 +183,7 @@
 ## Test Case 3: Admin Review & Approve
 
 ### [ ] TC3.1 - Buka Halaman Admin Review
+
 - **Action**: Login sebagai admin, buka `/dashboard/copyright-registration/review`
 - **Ekspektasi**:
   - Halaman admin review muncul
@@ -179,6 +193,7 @@
 - **Error (jika ada)**: _______________________
 
 ### [ ] TC3.2 - Pilih Registrasi untuk Review
+
 - **Action**: Klik registrasi `John Doe Composer`
 - **Ekspektasi**:
   - Detail panel muncul di kanan
@@ -193,6 +208,7 @@
 - **Error (jika ada)**: _______________________
 
 ### [ ] TC3.3 - Set Status In Review
+
 - **Action**: Klik tombol `In Review`
 - **Ekspektasi**:
   - Status berubah ke `in_review`
@@ -206,6 +222,7 @@
 - **Status**: ❌ Gagal / ✅ Berhasil
 
 ### [ ] TC3.4 - Approve Registrasi
+
 - **Action**: Klik tombol `Approve`
 - **Ekspektasi**:
   - Status berubah ke `approved`
@@ -242,6 +259,7 @@
 ## Test Case 4: Generate PDF Draft
 
 ### [ ] TC4.1 - Verifikasi Tombol Download Aktif
+
 - **Action**: Di panel admin, cek tombol `Download Draft PDF`
 - **Ekspektasi**:
   - Tombol aktif (tidak disabled)
@@ -249,6 +267,7 @@
 - **Status**: ❌ Gagal / ✅ Berhasil
 
 ### [ ] TC4.2 - Klik Download Draft PDF
+
 - **Action**: Klik tombol `Download Draft PDF`
 - **Ekspektasi**:
   - Browser download file PDF
@@ -266,6 +285,7 @@
 - **Error (jika ada)**: _______________________
 
 ### [ ] TC4.3 - Verify Storage & Database
+
 - **Action**: Cek bucket `contracts/generated/`
 - **Ekspektasi**: File PDF tersimpan dengan nama yang sesuai
 - **Verify DB**:
@@ -285,6 +305,7 @@
 ## Test Case 5: Upload PDF Bermeterai Manual
 
 ### [ ] TC5.1 - Simulasi Apply e-Meterai Manual
+
 - **Action**: (Di luar sistem)
   1. Download PDF dari TC4.2
   2. Print atau save
@@ -294,6 +315,7 @@
 - **Status**: ❌ Belum / ✅ Sudah
 
 ### [ ] TC5.2 - Upload PDF Bermeterai
+
 - **Action**: Di panel admin, klik tombol `Upload PDF Bermeterai`
 - **Ekspektasi**:
   - File picker muncul
@@ -304,6 +326,7 @@
 - **Error (jika ada)**: _______________________
 
 ### [ ] TC5.3 - Verify Status Kontrak
+
 - **Action**: Refresh panel detail
 - **Ekspektasi**:
   - Status kontrak berubah ke `stamped`
@@ -322,6 +345,7 @@
 - **Status**: ❌ Gagal / ✅ Berhasil
 
 ### [ ] TC5.4 - Update Status ke Signed/Active
+
 - **Action**: Klik tombol `Mark as Signed` atau `Activate Contract`
 - **Ekspektasi**:
   - Status kontrak berubah ke `signed` atau `active`
@@ -331,7 +355,7 @@
   SELECT signed_at, status 
   FROM soundpub.copyright_contracts 
   WHERE registration_id = '<id dari TC1.5>';
-  
+
   SELECT status FROM soundpub.copyright_registrations 
   WHERE id = '<id dari TC1.5>';
   ```
@@ -345,6 +369,7 @@
 ## Test Case 6: User Dashboard Hak Cipta (Belum Implementasi)
 
 ### [ ] TC6.1 - User Login dengan Role Copyright
+
 - **Action**: Logout admin, login sebagai user `john@example.com`
 - **Ekspektasi**:
   - Menu `Dashboard Hak Cipta` muncul di sidebar
@@ -352,6 +377,7 @@
 - **Status**: ❌ Gagal / ✅ Berhasil / ⏸️ Belum Implementasi
 
 ### [ ] TC6.2 - Buka Dashboard Hak Cipta
+
 - **Action**: Klik menu `Dashboard Hak Cipta`
 - **Ekspektasi**:
   - Halaman dashboard muncul
@@ -367,6 +393,7 @@
 ## Test Case 7: Upload Royalti Hak Cipta (Belum Implementasi)
 
 ### [ ] TC7.1 - Admin Upload Royalti CSV
+
 - **Action**: Upload CSV dengan format:
   ```csv
   composer_id,composer_name,total_net_royalti,period
@@ -378,6 +405,7 @@
 - **Status**: ❌ Gagal / ✅ Berhasil / ⏸️ Belum Implementasi
 
 ### [ ] TC7.2 - User Lihat Royalti
+
 - **Action**: User buka dashboard Hak Cipta
 - **Ekspektasi**:
   - Royalti bulan `2026-07` muncul
@@ -389,6 +417,7 @@
 ## Test Case 8: Edge Cases & Validasi
 
 ### [ ] TC8.1 - Registrasi Tanpa Payment Tidak Bisa Download
+
 - **Action**: Buat registrasi baru, approve tanpa update payment ke `paid`
 - **Ekspektasi**:
   - Tombol `Download Draft PDF` disabled
@@ -396,12 +425,14 @@
 - **Status**: ❌ Gagal / ✅ Berhasil
 
 ### [ ] TC8.2 - Admin Tidak Bisa Generate PDF Sebelum Approve
+
 - **Action**: Pilih registrasi dengan status `paid_pending_review`
 - **Ekspektasi**:
   - Tombol `Download Draft PDF` tidak muncul/disabled
 - **Status**: ❌ Gagal / ✅ Berhasil
 
 ### [ ] TC8.3 - Nomor Surat Unique per Bulan
+
 - **Action**: Approve 2 registrasi di bulan yang sama
 - **Ekspektasi**:
   - Nomor surat sequence increment:
@@ -417,6 +448,7 @@
 - **Status**: ❌ Gagal / ✅ Berhasil
 
 ### [ ] TC8.4 - Sequence Reset Bulan Baru
+
 - **Action**: Approve registrasi di bulan berikutnya
 - **Ekspektasi**:
   - Sequence kembali ke `00001`
@@ -428,18 +460,21 @@
 ## Catatan Error & Issue
 
 ### Issue 1:
+
 - **Test Case**: _______________________
 - **Error Message**: _______________________
 - **Screenshot/Log**: _______________________
 - **Status**: ❌ Unresolved / 🔧 In Progress / ✅ Fixed
 
 ### Issue 2:
+
 - **Test Case**: _______________________
 - **Error Message**: _______________________
 - **Screenshot/Log**: _______________________
 - **Status**: ❌ Unresolved / 🔧 In Progress / ✅ Fixed
 
 ### Issue 3:
+
 - **Test Case**: _______________________
 - **Error Message**: _______________________
 - **Screenshot/Log**: _______________________
