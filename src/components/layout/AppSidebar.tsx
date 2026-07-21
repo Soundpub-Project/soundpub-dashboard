@@ -40,9 +40,7 @@ import {
   ListMusic,
   FileText,
   Bell,
-  ClipboardList,
-  Upload,
-  History,
+  ClipboardList, History,
 } from 'lucide-react';
 
 interface NavItem {
@@ -519,6 +517,7 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
+
 
 
 

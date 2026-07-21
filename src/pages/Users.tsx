@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -232,7 +232,7 @@ export default function Users() {
     return <Navigate to="/auth" replace />;
   }
 
-  // Logged in but not admin → kick to dashboard
+  // Logged in but not admin â†’ kick to dashboard
   if (!isAdmin) {
     return <Navigate to="/dashboard" replace />;
   }
@@ -566,7 +566,13 @@ function DeletionRequestsTable() {
       });
 
       if (response.error || !response.data?.success) {
-        throw new Error(response.data?.error || response.error?.message || 'Gagal menghapus user');
+        const errorMsg = response.data?.error || response.error?.message || 'Gagal menghapus user';
+        if (errorMsg.includes('503') || errorMsg.includes('FunctionsRelayError') || errorMsg.includes('FunctionsFetchError')) {
+          throw new Error(
+            'Edge Function tidak tersedia (Error 503). Silakan hubungi administrator untuk deploy edge functions. Lihat file DEPLOY_EDGE_FUNCTIONS.md untuk panduan.'
+          );
+        }
+        throw new Error(errorMsg);
       }
 
       toast.success(`Profil artis ${artistName} berhasil dihapus permanen`);
@@ -685,3 +691,4 @@ function DeletionRequestsTable() {
     </Card>
   );
 }
+

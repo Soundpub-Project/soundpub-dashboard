@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   AlertDialog,
@@ -48,7 +48,13 @@ export function DeleteUserDialog({
       });
 
       if (response.error) {
-        throw new Error(response.error.message || 'Failed to delete user');
+        const errorMsg = response.error.message || 'Failed to delete user';
+        if (errorMsg.includes('503') || errorMsg.includes('FunctionsRelayError') || errorMsg.includes('FunctionsFetchError')) {
+          throw new Error(
+            'Edge Function tidak tersedia (Error 503). Silakan hubungi administrator untuk deploy edge functions. Lihat file DEPLOY_EDGE_FUNCTIONS.md untuk panduan.'
+          );
+        }
+        throw new Error(errorMsg);
       }
 
       if (!response.data?.success) {
@@ -109,3 +115,4 @@ export function DeleteUserDialog({
     </AlertDialog>
   );
 }
+

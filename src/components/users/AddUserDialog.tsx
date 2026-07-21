@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
@@ -221,10 +221,14 @@ export function AddUserDialog({
             phone: phone || null,
             parent_label_id: parentLabelId,
           },
-        });
-
-        if (response.error) {
-          throw new Error(response.error.message || 'Gagal membuat artist');
+        });        if (response.error) {
+          const errorMsg = response.error.message || 'Gagal membuat artist';
+          if (errorMsg.includes('503') || errorMsg.includes('FunctionsRelayError') || errorMsg.includes('FunctionsFetchError')) {
+            throw new Error(
+              'Edge Function tidak tersedia (Error 503). Silakan hubungi administrator untuk deploy edge functions. Lihat file DEPLOY_EDGE_FUNCTIONS.md untuk panduan.'
+            );
+          }
+          throw new Error(errorMsg);
         }
 
         if (!response.data.success) {
@@ -244,7 +248,13 @@ export function AddUserDialog({
         });
 
         if (response.error) {
-          throw new Error(response.error.message || 'Gagal membuat user');
+          const errorMsg = response.error.message || 'Gagal membuat user';
+          if (errorMsg.includes('503') || errorMsg.includes('FunctionsRelayError') || errorMsg.includes('FunctionsFetchError')) {
+            throw new Error(
+              'Edge Function tidak tersedia (Error 503). Silakan hubungi administrator untuk deploy edge functions. Lihat file DEPLOY_EDGE_FUNCTIONS.md untuk panduan.'
+            );
+          }
+          throw new Error(errorMsg);
         }
 
         if (!response.data.success) {
@@ -459,3 +469,5 @@ export function AddUserDialog({
     </Dialog>
   );
 }
+
+
