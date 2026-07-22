@@ -1,0 +1,16 @@
+﻿{
+    "name":  "soundpub-local-migration",
+    "version":  "1.0.0",
+    "private":  true,
+    "type":  "commonjs",
+    "scripts":  {
+                    "import:csv":  "node import-csv-soundpub.js",
+                    "check:csv":  "node import-csv-soundpub.js --check-only",
+                    "backfill:managed-artists":  "node backfill-managed-artists-for-royalties.js",
+                    "backfill:managed-artists:dry":  "node backfill-managed-artists-for-royalties.js --dry-run"
+                },
+    "dependencies":  {
+                         "@supabase/supabase-js":  "^2.90.1",
+                         "dotenv":  "^16.4.7"
+                     }
+}

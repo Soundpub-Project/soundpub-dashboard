@@ -26,28 +26,40 @@ import {
   Download,
   TrendingUp,
   Users,
-  DollarSign
+  DollarSign,
+  Trash2
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface RoyaltyRow {
   period: string;
   isrc: string;
   upc: string;
-  artist_name: string;
-  label_name: string;
-  platform: string;
-  country: string;
-  unit_penjualan: number;
-  pendapatan_label_artis: number;
-  pendapatan_bersih_soundpub: number;
   title?: string;
   artist?: string;
+  label_name?: string; // Now optional - will be auto-filled from UPC match
+  platform: string;
+  country: string;
+  sales_type?: string;
+  sales_unit: number;
+  net_revenue: number;
 }
 
 interface ValidationError {
   row: number;
   field: string;
   message: string;
+  severity: 'error' | 'warning';
 }
 
 interface BalanceUpdate {
@@ -63,6 +75,17 @@ interface UploadSummary {
   balanceUpdates?: BalanceUpdate[];
 }
 
+interface RevenueSplitPreview {
+  label: string;
+  totalRevenue: number;
+  labelShare: number;
+  artistShare: number;
+  adminShare: number;
+  labelPercentage: number;
+  artistPercentage: number;
+  adminPercentage: number;
+}
+
 interface UploadHistory {
   id: string;
   original_filename: string;
@@ -73,18 +96,31 @@ interface UploadHistory {
   summary?: UploadSummary | null;
 }
 
+interface ISRCMatchResult {
+  isrc: string;
+  upc: string;
+  existsInTracks: boolean;
+  existsInReleases: boolean;
+  trackTitle?: string;
+  trackArtist?: string;
+  releaseTitle?: string;
+  labelName?: string;
+  labelId?: string;
+  artistUserId?: string;
+}
+
+// ISRC is the primary key for matching (per-song royalties)
 const REQUIRED_COLUMNS = [
   'period',
   'isrc',
-  'upc',
-  'artist_name',
-  'label_name',
   'platform',
   'country',
-  'unit_penjualan',
-  'pendapatan_label_artis',
-  'pendapatan_bersih_soundpub',
+  'sales_unit',
+  'net_revenue',
 ];
+
+// Optional columns that can be auto-filled from database
+const OPTIONAL_COLUMNS = ['upc', 'artist', 'label_name', 'title', 'sales_type'];
 
 export default function UploadRoyalty() {
   const navigate = useNavigate();
@@ -95,7 +131,8 @@ export default function UploadRoyalty() {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [parsedData, setParsedData] = useState<RoyaltyRow[]>([]);
-  const [parseErrors, setParseErrors] = useState<string[]>([]);
+  const [parseErrors, setParseErrors] = useState<ValidationError[]>([]);
+  const [revenueSplitPreview, setRevenueSplitPreview] = useState<RevenueSplitPreview[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStage, setUploadStage] = useState<string>('');
@@ -105,7 +142,15 @@ export default function UploadRoyalty() {
     insertedCount: number;
     totalErrors: number;
     balanceUpdates: BalanceUpdate[];
+    managedArtistsCreated?: number;
+    managedArtistsReused?: number;
+    replacedUploads?: number;
+    replacedRows?: number;
   } | null>(null);
+  const [isrcMatchResults, setIsrcMatchResults] = useState<ISRCMatchResult[]>([]);
+  const [isCheckingISRC, setIsCheckingISRC] = useState(false);
+  const [replaceExisting, setReplaceExisting] = useState(false);
+  const [replaceMode, setReplaceMode] = useState<'filename_period' | 'period'>('filename_period');
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -136,13 +181,13 @@ export default function UploadRoyalty() {
     }
   };
 
-  const parseCSV = (text: string): { data: RoyaltyRow[]; errors: string[] } => {
+  const parseCSV = (text: string): { data: RoyaltyRow[]; errors: ValidationError[] } => {
     const lines = text.trim().split('\n');
-    const errors: string[] = [];
+    const errors: ValidationError[] = [];
     const data: RoyaltyRow[] = [];
 
     if (lines.length < 2) {
-      errors.push('File CSV kosong atau tidak memiliki data');
+      errors.push({ row: 0, field: 'file', message: 'File CSV kosong atau tidak memiliki data', severity: 'error' });
       return { data, errors };
     }
 
@@ -153,7 +198,12 @@ export default function UploadRoyalty() {
     // Check required columns
     const missingColumns = REQUIRED_COLUMNS.filter(col => !headers.includes(col));
     if (missingColumns.length > 0) {
-      errors.push(`Kolom yang diperlukan tidak ditemukan: ${missingColumns.join(', ')}`);
+      errors.push({ 
+        row: 1, 
+        field: 'header', 
+        message: `Kolom yang diperlukan tidak ditemukan: ${missingColumns.join(', ')}`, 
+        severity: 'error' 
+      });
       return { data, errors };
     }
 
@@ -184,34 +234,212 @@ export default function UploadRoyalty() {
       values.push(current.trim());
 
       try {
-        const row: RoyaltyRow = {
-          period: values[getIndex('period')] || '',
-          isrc: values[getIndex('isrc')] || '',
-          upc: values[getIndex('upc')] || '',
-          artist_name: values[getIndex('artist_name')] || '',
-          label_name: values[getIndex('label_name')] || '',
-          platform: values[getIndex('platform')] || '',
-          country: values[getIndex('country')] || '',
-          unit_penjualan: parseInt(values[getIndex('unit_penjualan')] || '0', 10) || 0,
-          pendapatan_label_artis: parseFloat(values[getIndex('pendapatan_label_artis')] || '0') || 0,
-          pendapatan_bersih_soundpub: parseFloat(values[getIndex('pendapatan_bersih_soundpub')] || '0') || 0,
-          title: headers.includes('title') ? values[getIndex('title')] : undefined,
-          artist: headers.includes('artist') ? values[getIndex('artist')] : undefined,
-        };
-
-        // Basic client-side validation
-        if (!row.period || !row.isrc || !row.upc) {
-          errors.push(`Baris ${i + 1}: Data period, isrc, atau upc kosong`);
+        const period = values[getIndex('period')] || '';
+        const isrcRaw = values[getIndex('isrc')] || '';
+        const upc = values[getIndex('upc')] || '';
+        const artist = values[getIndex('artist')] || '';
+        const label_name = values[getIndex('label_name')] || '';
+        const platform = values[getIndex('platform')] || '';
+        const country = values[getIndex('country')] || '';
+        const salesUnitRaw = values[getIndex('sales_unit')] || '0';
+        const netRevenueRaw = values[getIndex('net_revenue')] || '0';
+        
+        // Validate period format (YYYY-MM or similar)
+        if (!period) {
+          errors.push({ row: i + 1, field: 'period', message: 'Period tidak boleh kosong', severity: 'error' });
           continue;
         }
+        
+        // Normalize ISRC - remove dashes for consistent matching
+        // This allows both formats: FR-X76-25-98330 and FRX762598330
+        const isrc = isrcRaw.replace(/-/g, '').toUpperCase();
+        
+        // Validate ISRC format (should be 12 characters after normalization)
+        if (!isrc) {
+          errors.push({ row: i + 1, field: 'isrc', message: 'ISRC tidak boleh kosong', severity: 'error' });
+          continue;
+        }
+        if (isrc.length !== 12) {
+          errors.push({ row: i + 1, field: 'isrc', message: `ISRC "${isrcRaw}" harus 12 karakter setelah normalisasi (saat ini: ${isrc.length})`, severity: 'warning' });
+        }
+        
+        // UPC is now OPTIONAL - will be auto-filled from database
+        // Only validate format if provided
+        if (upc && !/^\d{12,13}$/.test(upc)) {
+          errors.push({ row: i + 1, field: 'upc', message: `UPC "${upc}" harus 12-13 digit angka`, severity: 'warning' });
+        }
+        
+        // Artist and label_name are optional (will be auto-filled from ISRC match)
+        // No warnings needed - system will auto-fill from database
+        
+        // Validate platform
+        if (!platform) {
+          errors.push({ row: i + 1, field: 'platform', message: 'Platform tidak boleh kosong', severity: 'error' });
+          continue;
+        }
+        
+        // Validate country
+        if (!country) {
+          errors.push({ row: i + 1, field: 'country', message: 'Country tidak boleh kosong', severity: 'error' });
+          continue;
+        }
+        
+        // Validate numeric fields
+        const salesUnit = parseInt(salesUnitRaw, 10);
+        if (isNaN(salesUnit)) {
+          errors.push({ row: i + 1, field: 'sales_unit', message: `Sales unit "${salesUnitRaw}" bukan angka valid`, severity: 'error' });
+          continue;
+        }
+        if (salesUnit < 0) {
+          errors.push({ row: i + 1, field: 'sales_unit', message: 'Sales unit tidak boleh negatif', severity: 'warning' });
+        }
+        
+        const netRevenue = parseFloat(netRevenueRaw);
+        if (isNaN(netRevenue)) {
+          errors.push({ row: i + 1, field: 'net_revenue', message: `Net revenue "${netRevenueRaw}" bukan angka valid`, severity: 'error' });
+          continue;
+        }
+        if (netRevenue < 0) {
+          errors.push({ row: i + 1, field: 'net_revenue', message: 'Net revenue negatif terdeteksi', severity: 'warning' });
+        }
+
+        const row: RoyaltyRow = {
+          period,
+          isrc,
+          upc,
+          title: headers.includes('title') ? values[getIndex('title')] : undefined,
+          artist: artist || undefined, // Optional now
+          label_name: label_name || undefined, // Optional now
+          platform,
+          country,
+          sales_type: headers.includes('sales_type') ? values[getIndex('sales_type')] : undefined,
+          sales_unit: salesUnit,
+          net_revenue: netRevenue,
+        };
 
         data.push(row);
       } catch (err) {
-        errors.push(`Baris ${i + 1}: Format data tidak valid`);
+        errors.push({ row: i + 1, field: 'parsing', message: 'Format data tidak valid', severity: 'error' });
       }
     }
 
     return { data, errors };
+  };
+
+  // Calculate revenue split preview per label
+  const calculateRevenueSplitPreview = (data: RoyaltyRow[]): RevenueSplitPreview[] => {
+    const labelTotals: Record<string, number> = {};
+    
+    data.forEach(row => {
+      labelTotals[row.label_name] = (labelTotals[row.label_name] || 0) + row.net_revenue;
+    });
+    
+    return Object.entries(labelTotals).map(([label, totalRevenue]) => {
+      // Flat split for all labels: 70% Artist, 21% Label, 9% Admin
+      const artistShare = totalRevenue * 0.70;
+      const labelShare = totalRevenue * 0.21;
+      const adminShare = totalRevenue * 0.09;
+      return {
+        label,
+        totalRevenue,
+        labelShare,
+        artistShare,
+        adminShare,
+        labelPercentage: 21,
+        artistPercentage: 70,
+        adminPercentage: 9,
+      };
+    }).sort((a, b) => b.totalRevenue - a.totalRevenue);
+  };
+
+  // Check which UPCs/ISRCs from CSV exist in the database
+  const checkISRCsInDatabase = async (data: RoyaltyRow[]) => {
+    if (data.length === 0) return;
+    
+    setIsCheckingISRC(true);
+    try {
+      // Get unique UPCs and ISRCs from parsed data
+      const uniqueUpcs = [...new Set(data.map(row => row.upc))];
+      const uniqueIsrcs = [...new Set(data.map(row => row.isrc))];
+      
+      // Query releases table for UPC matching
+      const { data: releases, error: releasesError } = await supabase
+        .from('releases')
+        .select('upc, title, label_id, artist_user_id, artist_name');
+      
+      // Query tracks table for ISRC matching
+      const { data: tracks, error: tracksError } = await supabase
+        .from('tracks')
+        .select('isrc, title, artist_name, artist_user_id');
+      
+      // Query profiles for label names
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name');
+      
+      if (releasesError) console.error('Error checking releases:', releasesError);
+      if (tracksError) console.error('Error checking tracks:', tracksError);
+      
+      // Create maps for lookup
+      const releaseMap = new Map<string, { title: string; labelId: string; labelName: string; artistUserId: string | null; artistName: string }>();
+      const profileMap = new Map<string, string>();
+      
+      (profiles || []).forEach(p => profileMap.set(p.id, p.full_name));
+      
+      (releases || []).forEach(release => {
+        if (release.upc) {
+          releaseMap.set(release.upc, {
+            title: release.title,
+            labelId: release.label_id,
+            labelName: profileMap.get(release.label_id) || '',
+            artistUserId: release.artist_user_id,
+            artistName: release.artist_name,
+          });
+        }
+      });
+      
+      const trackMap = new Map<string, { title: string; artist: string; artistUserId: string | null }>();
+      (tracks || []).forEach(track => {
+        if (track.isrc) {
+          const normalizedDbIsrc = track.isrc.replace(/-/g, '').toUpperCase();
+          trackMap.set(normalizedDbIsrc, {
+            title: track.title,
+            artist: track.artist_name,
+            artistUserId: track.artist_user_id,
+          });
+        }
+      });
+      
+      // Build results combining UPC and ISRC matches
+      const results: ISRCMatchResult[] = data.map(row => {
+        const releaseInfo = releaseMap.get(row.upc);
+        const trackInfo = trackMap.get(row.isrc);
+        
+        return {
+          isrc: row.isrc,
+          upc: row.upc,
+          existsInTracks: !!trackInfo,
+          existsInReleases: !!releaseInfo,
+          trackTitle: trackInfo?.title,
+          trackArtist: trackInfo?.artist || releaseInfo?.artistName,
+          releaseTitle: releaseInfo?.title,
+          labelName: releaseInfo?.labelName,
+          labelId: releaseInfo?.labelId,
+          artistUserId: trackInfo?.artistUserId || releaseInfo?.artistUserId || undefined,
+        };
+      });
+      
+      // Deduplicate by ISRC+UPC combination
+      const uniqueResults = Array.from(
+        new Map(results.map(r => [`${r.isrc}-${r.upc}`, r])).values()
+      );
+      
+      setIsrcMatchResults(uniqueResults);
+    } catch (error) {
+      console.error('Error checking ISRCs/UPCs:', error);
+    } finally {
+      setIsCheckingISRC(false);
+    }
   };
 
   const handleFileSelect = (file: File) => {
@@ -236,19 +464,37 @@ export default function UploadRoyalty() {
     setSelectedFile(file);
     setParsedData([]);
     setParseErrors([]);
+    setRevenueSplitPreview([]);
     setLastUploadResult(null);
+    setIsrcMatchResults([]);
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const text = e.target?.result as string;
       const { data, errors } = parseCSV(text);
       setParsedData(data);
       setParseErrors(errors);
+      
+      // Calculate revenue split preview
+      if (data.length > 0) {
+        setRevenueSplitPreview(calculateRevenueSplitPreview(data));
+        // Check ISRCs in database
+        await checkISRCsInDatabase(data);
+      }
 
+      const errorCount = errors.filter(e => e.severity === 'error').length;
+      const warningCount = errors.filter(e => e.severity === 'warning').length;
+      
       if (data.length > 0) {
         toast({
           title: 'File Berhasil Diparsing',
-          description: `${data.length} baris data siap diimport`,
+          description: `${data.length} baris valid${warningCount > 0 ? `, ${warningCount} peringatan` : ''}`,
+        });
+      } else if (errorCount > 0) {
+        toast({
+          title: 'Parsing Gagal',
+          description: `Ditemukan ${errorCount} error yang harus diperbaiki`,
+          variant: 'destructive',
         });
       }
     };
@@ -302,6 +548,8 @@ export default function UploadRoyalty() {
           rows: parsedData,
           filename: `royalty_${Date.now()}.csv`,
           originalFilename: selectedFile.name,
+          replaceExisting,
+          replaceMode,
         },
       });
 
@@ -348,6 +596,10 @@ export default function UploadRoyalty() {
         insertedCount: data.insertedCount,
         totalErrors: data.totalErrors,
         balanceUpdates: data.balanceUpdates || [],
+        managedArtistsCreated: data.managedArtistsCreated || 0,
+        managedArtistsReused: data.managedArtistsReused || 0,
+        replacedUploads: data.replacedUploads || 0,
+        replacedRows: data.replacedRows || 0,
       });
 
       toast({
@@ -359,6 +611,8 @@ export default function UploadRoyalty() {
       setSelectedFile(null);
       setParsedData([]);
       setParseErrors([]);
+      setReplaceExisting(false);
+      setReplaceMode('filename_period');
       fetchUploadHistory();
 
     } catch (error: any) {
@@ -375,11 +629,38 @@ export default function UploadRoyalty() {
     }
   };
 
+  const handleDeleteUpload = async (uploadId: string, filename: string) => {
+    try {
+      toast({ title: 'Menghapus...', description: `Menghapus upload ${filename} dan rollback saldo...` });
+
+      const { data, error } = await supabase.functions.invoke('delete-royalty-upload', {
+        body: { upload_id: uploadId },
+      });
+
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || 'Unknown error');
+
+      toast({
+        title: 'Upload Dihapus',
+        description: `${data.deletedRecords} record dihapus dan saldo telah di-rollback.`,
+      });
+
+      fetchUploadHistory();
+    } catch (error: any) {
+      console.error('Delete upload error:', error);
+      toast({
+        title: 'Gagal Menghapus',
+        description: error.message || 'Terjadi kesalahan saat menghapus upload',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const downloadSampleCSV = () => {
-    const sampleData = `period,isrc,upc,artist_name,label_name,platform,country,unit_penjualan,pendapatan_label_artis,pendapatan_bersih_soundpub,title,artist
-2024-01,IDABC1234567,123456789012,John Doe,Indie Records,Spotify,ID,1000,70000,30000,My Song,John Doe
-2024-01,IDXYZ7654321,123456789013,Jane Smith,Indie Records,Apple Music,US,500,140000,60000,Another Song,Jane Smith
-2024-02,IDABC1234567,123456789012,John Doe,Indie Records,YouTube Music,ID,2500,175000,75000,My Song,John Doe`;
+    const sampleData = `period,isrc,upc,title,artist,label_name,platform,country,sales_type,sales_unit,net_revenue
+2024-01,IDABC1234567,123456789012,My Song,John Doe,Indie Records,Spotify,ID,streaming,1000,100000
+2024-01,IDXYZ7654321,123456789013,Another Song,Jane Smith,Soundpub Music,Apple Music,US,streaming,500,200000
+2024-02,IDABC1234567,123456789012,My Song,John Doe,Indie Records,YouTube Music,ID,streaming,2500,250000`;
     
     const blob = new Blob([sampleData], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -403,10 +684,10 @@ export default function UploadRoyalty() {
 
   // Calculate preview stats
   const previewStats = parsedData.length > 0 ? {
-    totalRevenue: parsedData.reduce((sum, row) => sum + row.pendapatan_label_artis, 0),
-    totalStreams: parsedData.reduce((sum, row) => sum + row.unit_penjualan, 0),
+    totalRevenue: parsedData.reduce((sum, row) => sum + row.net_revenue, 0),
+    totalStreams: parsedData.reduce((sum, row) => sum + row.sales_unit, 0),
     uniqueLabels: [...new Set(parsedData.map(r => r.label_name))].length,
-    uniqueArtists: [...new Set(parsedData.map(r => r.artist_name))].length,
+    uniqueArtists: [...new Set(parsedData.map(r => r.artist))].length,
   } : null;
 
   if (!isAdmin) {
@@ -466,6 +747,17 @@ export default function UploadRoyalty() {
                       {lastUploadResult.balanceUpdates.filter(b => b.success).length} label
                     </p>
                   </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 text-sm">
+                <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-3">
+                  <p className="text-muted-foreground">Managed Artist Dibuat</p>
+                  <p className="text-lg font-semibold">{lastUploadResult.managedArtistsCreated || 0}</p>
+                </div>
+                <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
+                  <p className="text-muted-foreground">Data Lama Direplace</p>
+                  <p className="text-lg font-semibold">{lastUploadResult.replacedRows || 0} baris</p>
                 </div>
               </div>
 
@@ -582,34 +874,221 @@ export default function UploadRoyalty() {
                   </div>
                 )}
 
-                {/* Data count and warnings */}
-                <div className="flex items-center gap-4">
+                {/* Data count and validation summary */}
+                <div className="flex flex-wrap items-center gap-4">
                   {parsedData.length > 0 && (
                     <div className="flex items-center gap-2 text-green-400">
                       <CheckCircle2 className="h-5 w-5" />
                       <span>{parsedData.length} baris data valid</span>
                     </div>
                   )}
-                  {parseErrors.length > 0 && (
+                  {parseErrors.filter(e => e.severity === 'error').length > 0 && (
+                    <div className="flex items-center gap-2 text-red-400">
+                      <XCircle className="h-5 w-5" />
+                      <span>{parseErrors.filter(e => e.severity === 'error').length} error</span>
+                    </div>
+                  )}
+                  {parseErrors.filter(e => e.severity === 'warning').length > 0 && (
                     <div className="flex items-center gap-2 text-yellow-400">
                       <AlertCircle className="h-5 w-5" />
-                      <span>{parseErrors.length} peringatan</span>
+                      <span>{parseErrors.filter(e => e.severity === 'warning').length} peringatan</span>
                     </div>
                   )}
                 </div>
 
-                {/* Errors */}
+                {/* Validation Errors */}
                 {parseErrors.length > 0 && (
-                  <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
-                    <p className="font-medium text-yellow-400 mb-2">Peringatan:</p>
-                    <ul className="text-sm text-yellow-300 space-y-1">
-                      {parseErrors.slice(0, 5).map((error, index) => (
-                        <li key={index}>• {error}</li>
+                  <div className="space-y-3">
+                    {/* Critical Errors */}
+                    {parseErrors.filter(e => e.severity === 'error').length > 0 && (
+                      <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30">
+                        <p className="font-medium text-red-400 mb-2 flex items-center gap-2">
+                          <XCircle className="h-4 w-4" />
+                          Error ({parseErrors.filter(e => e.severity === 'error').length}):
+                        </p>
+                        <ul className="text-sm text-red-300 space-y-1">
+                          {parseErrors.filter(e => e.severity === 'error').slice(0, 5).map((error, index) => (
+                            <li key={index} className="flex items-start gap-2">
+                              <span className="text-red-400 font-mono text-xs bg-red-500/20 px-1.5 py-0.5 rounded">
+                                Baris {error.row}
+                              </span>
+                              <span>
+                                <strong className="text-red-400">{error.field}:</strong> {error.message}
+                              </span>
+                            </li>
+                          ))}
+                          {parseErrors.filter(e => e.severity === 'error').length > 5 && (
+                            <li className="text-red-400/70">
+                              ...dan {parseErrors.filter(e => e.severity === 'error').length - 5} error lainnya
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                    
+                    {/* Warnings */}
+                    {parseErrors.filter(e => e.severity === 'warning').length > 0 && (
+                      <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                        <p className="font-medium text-yellow-400 mb-2 flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4" />
+                          Peringatan ({parseErrors.filter(e => e.severity === 'warning').length}):
+                        </p>
+                        <ul className="text-sm text-yellow-300 space-y-1">
+                          {parseErrors.filter(e => e.severity === 'warning').slice(0, 3).map((error, index) => (
+                            <li key={index} className="flex items-start gap-2">
+                              <span className="text-yellow-400 font-mono text-xs bg-yellow-500/20 px-1.5 py-0.5 rounded">
+                                Baris {error.row}
+                              </span>
+                              <span>
+                                <strong className="text-yellow-400">{error.field}:</strong> {error.message}
+                              </span>
+                            </li>
+                          ))}
+                          {parseErrors.filter(e => e.severity === 'warning').length > 3 && (
+                            <li className="text-yellow-400/70">
+                              ...dan {parseErrors.filter(e => e.severity === 'warning').length - 3} peringatan lainnya
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ISRC Matching Results */}
+                {(isrcMatchResults.length > 0 || isCheckingISRC) && (
+                  <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
+                    <p className="font-medium mb-3 flex items-center gap-2">
+                      <FileSpreadsheet className="h-4 w-4" />
+                      Perbandingan ISRC dengan Database Tracks
+                    </p>
+                    
+                    {isCheckingISRC ? (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Memeriksa ISRC di database...</span>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Summary */}
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30">
+                            <div className="flex items-center gap-2 mb-1">
+                              <CheckCircle2 className="h-4 w-4 text-green-400" />
+                              <span className="text-sm font-medium text-green-400">ISRC Ditemukan</span>
+                            </div>
+                            <p className="text-2xl font-bold text-green-400">
+                              {isrcMatchResults.filter(r => r.existsInTracks).length}
+                            </p>
+                            <p className="text-xs text-muted-foreground">dari {isrcMatchResults.length} ISRC unik</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/30">
+                            <div className="flex items-center gap-2 mb-1">
+                              <AlertCircle className="h-4 w-4 text-orange-400" />
+                              <span className="text-sm font-medium text-orange-400">ISRC Tidak Ditemukan</span>
+                            </div>
+                            <p className="text-2xl font-bold text-orange-400">
+                              {isrcMatchResults.filter(r => !r.existsInTracks).length}
+                            </p>
+                            <p className="text-xs text-muted-foreground">tidak ada di database tracks</p>
+                          </div>
+                        </div>
+
+                        {/* Details - Matched ISRCs */}
+                        {isrcMatchResults.filter(r => r.existsInTracks).length > 0 && (
+                          <div className="mb-3">
+                            <p className="text-sm font-medium text-green-400 mb-2">
+                              ✓ ISRC yang cocok dengan database:
+                            </p>
+                            <div className="max-h-32 overflow-y-auto space-y-1">
+                              {isrcMatchResults.filter(r => r.existsInTracks).slice(0, 10).map((result, idx) => (
+                                <div key={idx} className="flex items-center gap-2 text-sm bg-green-500/5 p-2 rounded">
+                                  <code className="font-mono text-xs bg-green-500/20 px-1.5 py-0.5 rounded text-green-400">
+                                    {result.isrc}
+                                  </code>
+                                  <span className="text-muted-foreground">→</span>
+                                  <span className="truncate">
+                                    {result.trackTitle} - {result.trackArtist}
+                                  </span>
+                                </div>
+                              ))}
+                              {isrcMatchResults.filter(r => r.existsInTracks).length > 10 && (
+                                <p className="text-xs text-muted-foreground pl-2">
+                                  ...dan {isrcMatchResults.filter(r => r.existsInTracks).length - 10} ISRC lainnya
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Details - Unmatched ISRCs */}
+                        {isrcMatchResults.filter(r => !r.existsInTracks).length > 0 && (
+                          <div>
+                            <p className="text-sm font-medium text-orange-400 mb-2">
+                              ⚠ ISRC yang tidak ditemukan di database:
+                            </p>
+                            <div className="max-h-32 overflow-y-auto">
+                              <div className="flex flex-wrap gap-1">
+                                {isrcMatchResults.filter(r => !r.existsInTracks).slice(0, 20).map((result, idx) => (
+                                  <code key={idx} className="font-mono text-xs bg-orange-500/20 px-1.5 py-0.5 rounded text-orange-400">
+                                    {result.isrc}
+                                  </code>
+                                ))}
+                                {isrcMatchResults.filter(r => !r.existsInTracks).length > 20 && (
+                                  <span className="text-xs text-muted-foreground">
+                                    +{isrcMatchResults.filter(r => !r.existsInTracks).length - 20} lainnya
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              ISRC ini akan tetap diupload, namun tidak terhubung dengan track yang ada.
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Revenue Split Preview */}
+                {revenueSplitPreview.length > 0 && (
+                  <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+                    <p className="font-medium mb-3 flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-primary" />
+                      Preview Pembagian Revenue
+                    </p>
+                    <div className="space-y-3">
+                      {revenueSplitPreview.map((split, index) => (
+                        <div key={index} className="p-3 rounded-lg bg-muted/30 border border-border/50">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{split.label}</span>
+                            </div>
+                            <span className="font-mono text-sm text-muted-foreground">
+                              Total: Rp {split.totalRevenue.toLocaleString('id-ID')}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 text-sm">
+                            <div className="p-2 rounded bg-red-500/10 border border-red-500/20">
+                              <p className="text-xs text-muted-foreground">Admin ({split.adminPercentage}%)</p>
+                              <p className="font-mono text-red-400">Rp {split.adminShare.toLocaleString('id-ID')}</p>
+                            </div>
+                            <div className="p-2 rounded bg-blue-500/10 border border-blue-500/20">
+                              <p className="text-xs text-muted-foreground">Label ({split.labelPercentage}%)</p>
+                              <p className="font-mono text-blue-400">Rp {split.labelShare.toLocaleString('id-ID')}</p>
+                            </div>
+                            <div className="p-2 rounded bg-green-500/10 border border-green-500/20">
+                              <p className="text-xs text-muted-foreground">Artist ({split.artistPercentage}%)</p>
+                              <p className="font-mono text-green-400">Rp {split.artistShare.toLocaleString('id-ID')}</p>
+                            </div>
+                          </div>
+                        </div>
                       ))}
-                      {parseErrors.length > 5 && (
-                        <li>• ...dan {parseErrors.length - 5} peringatan lainnya</li>
-                      )}
-                    </ul>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-3">
+                      * Semua label: 70% Artist, 21% Label, 9% Admin
+                    </p>
                   </div>
                 )}
 
@@ -635,14 +1114,14 @@ export default function UploadRoyalty() {
                             <TableRow key={index}>
                               <TableCell className="font-mono text-xs">{row.period}</TableCell>
                               <TableCell className="font-mono text-xs">{row.isrc}</TableCell>
-                              <TableCell>{row.artist_name}</TableCell>
+                              <TableCell>{row.artist}</TableCell>
                               <TableCell>{row.label_name}</TableCell>
                               <TableCell>{row.platform}</TableCell>
                               <TableCell className="text-right">
-                                {row.unit_penjualan.toLocaleString('id-ID')}
+                                {row.sales_unit.toLocaleString('id-ID')}
                               </TableCell>
                               <TableCell className="text-right text-green-400">
-                                Rp {row.pendapatan_label_artis.toLocaleString('id-ID')}
+                                Rp {row.net_revenue.toLocaleString('id-ID')}
                               </TableCell>
                             </TableRow>
                           ))}
@@ -656,6 +1135,53 @@ export default function UploadRoyalty() {
                     )}
                   </div>
                 )}
+
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 space-y-2">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4 rounded border-border"
+                      checked={replaceExisting}
+                      onChange={(event) => setReplaceExisting(event.target.checked)}
+                    />
+                    <span>
+                      <span className="block font-medium">Replace upload lama dengan nama file yang sama</span>
+                      <span className="block text-sm text-muted-foreground">
+                        Aktifkan jika ini adalah upload ulang/koreksi. Default hanya mengganti data dengan nama file dan periode yang sama.
+                      </span>
+                    </span>
+                  </label>
+                  {replaceExisting && (
+                    <div className="ml-7 mt-3 space-y-2 text-sm">
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="replaceMode"
+                          className="mt-1"
+                          checked={replaceMode === 'filename_period'}
+                          onChange={() => setReplaceMode('filename_period')}
+                        />
+                        <span>
+                          <span className="block font-medium">Default: original filename + period</span>
+                          <span className="block text-muted-foreground">Hanya mengganti upload lama dengan nama file sama dan periode yang ada di file baru.</span>
+                        </span>
+                      </label>
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="replaceMode"
+                          className="mt-1"
+                          checked={replaceMode === 'period'}
+                          onChange={() => setReplaceMode('period')}
+                        />
+                        <span>
+                          <span className="block font-medium text-amber-700 dark:text-amber-300">Manual: replace semua data pada period ini</span>
+                          <span className="block text-muted-foreground">Gunakan untuk revisi file berbeda nama. Semua royalty lama pada periode di file ini akan diganti.</span>
+                        </span>
+                      </label>
+                    </div>
+                  )}
+                </div>
 
                 {/* Upload Progress */}
                 {isUploading && (
@@ -680,7 +1206,7 @@ export default function UploadRoyalty() {
                       disabled={isUploading}
                     >
                       <Upload className="h-4 w-4 mr-2" />
-                      Import {parsedData.length} Data
+                      {replaceExisting ? 'Replace & Import' : 'Import'} {parsedData.length} Data
                     </Button>
                     <Button
                       variant="outline"
@@ -688,6 +1214,7 @@ export default function UploadRoyalty() {
                         setSelectedFile(null);
                         setParsedData([]);
                         setParseErrors([]);
+                        setRevenueSplitPreview([]);
                       }}
                     >
                       <XCircle className="h-4 w-4 mr-2" />
@@ -726,6 +1253,7 @@ export default function UploadRoyalty() {
                       <TableHead className="text-right">Total</TableHead>
                       <TableHead className="text-right">Berhasil</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Aksi</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -745,12 +1273,42 @@ export default function UploadRoyalty() {
                           {upload.total_records.toLocaleString('id-ID')}
                         </TableCell>
                         <TableCell className="text-right">
-                          {upload.inserted_records.toLocaleString('id-ID')}
+                          {(upload.inserted_records || upload.total_records).toLocaleString('id-ID')}
                         </TableCell>
                         <TableCell>
                           <Badge className={`capitalize ${getStatusBadge(upload.status)}`}>
                             {upload.status}
                           </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Hapus Upload Royalti?</AlertDialogTitle>
+                                <AlertDialogDescription asChild>
+                                  <div className="space-y-2 text-sm text-muted-foreground">
+                                    <div>Anda akan menghapus upload <strong>{upload.original_filename}</strong> ({(upload.inserted_records || upload.total_records).toLocaleString('id-ID')} record).</div>
+                                    <div className="text-destructive font-medium">⚠️ Saldo akan dihitung ulang dari data royalti yang tersisa.</div>
+                                    <div>Tindakan ini tidak dapat dibatalkan.</div>
+                                  </div>
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Batal</AlertDialogCancel>
+                                <AlertDialogAction
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  onClick={() => handleDeleteUpload(upload.id, upload.original_filename)}
+                                >
+                                  Hapus & Rollback Saldo
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </TableCell>
                       </TableRow>
                     ))}

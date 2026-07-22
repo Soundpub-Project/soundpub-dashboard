@@ -159,6 +159,43 @@ export default function AdminPayouts() {
 
       if (error) throw error;
 
+      // Send notification to the user
+      const statusLabel = actionType === 'approve' ? 'Disetujui' : actionType === 'reject' ? 'Ditolak' : 'Dibayarkan';
+      const notifType = actionType === 'reject' ? 'error' : 'success';
+      const notifMsg = actionType === 'approve'
+        ? `Pengajuan payout Rp ${Number(selectedPayout.amount).toLocaleString('id-ID')} telah disetujui. Dana akan segera ditransfer.`
+        : actionType === 'reject'
+        ? `Pengajuan payout Rp ${Number(selectedPayout.amount).toLocaleString('id-ID')} ditolak.${actionNotes ? ' Alasan: ' + actionNotes : ''}`
+        : `Dana sebesar Rp ${Number(selectedPayout.amount).toLocaleString('id-ID')} telah ditransfer ke rekening ${selectedPayout.bank_name} Anda.`;
+
+      await supabase.from('notifications').insert({
+        user_id: selectedPayout.user_id,
+        type: notifType,
+        title: `Payout ${statusLabel}`,
+        message: notifMsg,
+        metadata: { payout_id: selectedPayout.id, amount: selectedPayout.amount },
+      });
+
+      // Email notifikasi ke user terkait (opt-in)
+      const tplMap = {
+        approve: 'payout-approved',
+        reject: 'payout-rejected',
+        pay: 'payout-paid',
+      } as const;
+      supabase.functions.invoke('send-app-email', {
+        body: {
+          templateName: tplMap[actionType],
+          recipientUserId: selectedPayout.user_id,
+          templateData: {
+            amount: selectedPayout.amount,
+            notes: actionNotes || null,
+            bankName: selectedPayout.bank_name,
+            accountNumber: selectedPayout.account_number,
+          },
+          idempotencyKey: `payout-${selectedPayout.id}-${newStatus}`,
+        },
+      }).catch((e) => console.error('payout email failed', e));
+
       const actionLabel = actionType === 'approve' ? 'disetujui' : actionType === 'reject' ? 'ditolak' : 'dibayarkan';
       toast.success(`Payout berhasil ${actionLabel}`);
       

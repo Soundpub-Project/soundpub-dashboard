@@ -3,28 +3,25 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { StorageSettings } from './StorageSettings';
+import { PricingSettings } from './PricingSettings';
 import { 
   Loader2, 
   Upload, 
   Image as ImageIcon, 
-  BarChart3, 
-  Cloud,
   Check,
-  X,
   Trash2,
   Sun,
-  Moon
+  Moon,
+  Settings
 } from 'lucide-react';
 
 interface AppSettings {
   dashboard_logo_light: string | null;
   dashboard_logo_dark: string | null;
   favicon: string | null;
-  ga4_enabled: string;
-  gcs_enabled: string;
 }
 
 export function SuperAdminSettings() {
@@ -37,8 +34,6 @@ export function SuperAdminSettings() {
     dashboard_logo_light: null,
     dashboard_logo_dark: null,
     favicon: null,
-    ga4_enabled: 'false',
-    gcs_enabled: 'false',
   });
   const logoLightInputRef = useRef<HTMLInputElement>(null);
   const logoDarkInputRef = useRef<HTMLInputElement>(null);
@@ -65,8 +60,6 @@ export function SuperAdminSettings() {
         dashboard_logo_light: settingsMap.dashboard_logo_light || settingsMap.dashboard_logo || null,
         dashboard_logo_dark: settingsMap.dashboard_logo_dark || null,
         favicon: settingsMap.favicon || null,
-        ga4_enabled: settingsMap.ga4_enabled || 'false',
-        gcs_enabled: settingsMap.gcs_enabled || 'false',
       });
 
       // Apply favicon if exists
@@ -138,43 +131,20 @@ export function SuperAdminSettings() {
 
     setUploading(true);
     try {
-      // Check if GCS is enabled
-      if (settings.gcs_enabled === 'true') {
-        // Upload to GCS
-        const reader = new FileReader();
-        reader.onload = async () => {
-          const base64 = (reader.result as string).split(',')[1];
-          
-          const { data, error } = await supabase.functions.invoke('gcs-upload', {
-            body: {
-              file_name: `logo-${type}-${Date.now()}.${file.name.split('.').pop()}`,
-              file_type: file.type,
-              file_data: base64,
-              folder: 'logos',
-            },
-          });
+      // Upload to Supabase Storage (label-logos bucket)
+      const fileName = `dashboard-logo-${type}-${Date.now()}.${file.name.split('.').pop()}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('label-logos')
+        .upload(fileName, file, { upsert: true });
 
-          if (error) throw error;
+      if (uploadError) throw uploadError;
 
-          await updateSettings(settingsKey, data.url);
-        };
-        reader.readAsDataURL(file);
-      } else {
-        // Upload to Supabase Storage
-        const fileName = `dashboard-logo-${type}-${Date.now()}.${file.name.split('.').pop()}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('release-covers')
-          .upload(fileName, file, { upsert: true });
+      const { data: urlData } = supabase.storage
+        .from('label-logos')
+        .getPublicUrl(fileName);
 
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage
-          .from('release-covers')
-          .getPublicUrl(fileName);
-
-        await updateSettings(settingsKey, urlData.publicUrl);
-      }
+      await updateSettings(settingsKey, urlData.publicUrl);
     } catch (error: any) {
       console.error('Error uploading logo:', error);
       toast({
@@ -232,42 +202,21 @@ export function SuperAdminSettings() {
 
     setUploadingFavicon(true);
     try {
-      if (settings.gcs_enabled === 'true') {
-        const reader = new FileReader();
-        reader.onload = async () => {
-          const base64 = (reader.result as string).split(',')[1];
-          
-          const { data, error } = await supabase.functions.invoke('gcs-upload', {
-            body: {
-              file_name: `favicon-${Date.now()}.${file.name.split('.').pop()}`,
-              file_type: file.type,
-              file_data: base64,
-              folder: 'favicons',
-            },
-          });
+      // Upload to Supabase Storage (label-logos bucket)
+      const fileName = `favicon-${Date.now()}.${file.name.split('.').pop()}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('label-logos')
+        .upload(fileName, file, { upsert: true });
 
-          if (error) throw error;
+      if (uploadError) throw uploadError;
 
-          await updateSettings('favicon', data.url);
-          updateFaviconLink(data.url);
-        };
-        reader.readAsDataURL(file);
-      } else {
-        const fileName = `favicon-${Date.now()}.${file.name.split('.').pop()}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('release-covers')
-          .upload(fileName, file, { upsert: true });
+      const { data: urlData } = supabase.storage
+        .from('label-logos')
+        .getPublicUrl(fileName);
 
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage
-          .from('release-covers')
-          .getPublicUrl(fileName);
-
-        await updateSettings('favicon', urlData.publicUrl);
-        updateFaviconLink(urlData.publicUrl);
-      }
+      await updateSettings('favicon', urlData.publicUrl);
+      updateFaviconLink(urlData.publicUrl);
     } catch (error: any) {
       console.error('Error uploading favicon:', error);
       toast({
@@ -488,109 +437,21 @@ export function SuperAdminSettings() {
         </CardContent>
       </Card>
 
-      {/* Google Analytics 4 Settings */}
+      {/* Pricing moved to /dashboard/payment-settings */}
+
+      {/* Storage & Analytics Settings - using separate component */}
       <Card className="bg-card/50 border-border/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5" />
-            Google Analytics 4
+            <Settings className="h-5 w-5" />
+            Storage & Analytics
           </CardTitle>
           <CardDescription>
-            Aktifkan tracking analitik dengan Google Analytics 4
+            Konfigurasi penyimpanan file dan tracking analitik
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Status GA4</Label>
-              <p className="text-sm text-muted-foreground">
-                {settings.ga4_enabled === 'true' 
-                  ? 'GA4 tracking aktif'
-                  : 'GA4 tracking tidak aktif'}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge 
-                variant={settings.ga4_enabled === 'true' ? 'default' : 'secondary'}
-              >
-                {settings.ga4_enabled === 'true' ? (
-                  <><Check className="h-3 w-3 mr-1" /> Aktif</>
-                ) : (
-                  <><X className="h-3 w-3 mr-1" /> Nonaktif</>
-                )}
-              </Badge>
-              <Switch
-                checked={settings.ga4_enabled === 'true'}
-                onCheckedChange={(checked) => 
-                  updateSettings('ga4_enabled', checked ? 'true' : 'false')
-                }
-                disabled={loading}
-              />
-            </div>
-          </div>
-          
-          {settings.ga4_enabled === 'true' && (
-            <div className="p-3 rounded-lg bg-muted/50 text-sm">
-              <p className="font-medium text-chart-3">✓ GA4 Tracking Aktif</p>
-              <p className="text-muted-foreground mt-1">
-                Measurement ID sudah dikonfigurasi melalui secrets.
-                Data analitik akan dikirim ke Google Analytics.
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Google Cloud Storage Settings */}
-      <Card className="bg-card/50 border-border/50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Cloud className="h-5 w-5" />
-            Google Cloud Storage
-          </CardTitle>
-          <CardDescription>
-            Gunakan Google Cloud Storage sebagai primary storage
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Status GCS</Label>
-              <p className="text-sm text-muted-foreground">
-                {settings.gcs_enabled === 'true' 
-                  ? 'File akan disimpan ke Google Cloud Storage'
-                  : 'File disimpan ke Lovable Cloud Storage'}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge 
-                variant={settings.gcs_enabled === 'true' ? 'default' : 'secondary'}
-              >
-                {settings.gcs_enabled === 'true' ? (
-                  <><Check className="h-3 w-3 mr-1" /> Aktif</>
-                ) : (
-                  <><X className="h-3 w-3 mr-1" /> Nonaktif</>
-                )}
-              </Badge>
-              <Switch
-                checked={settings.gcs_enabled === 'true'}
-                onCheckedChange={(checked) => 
-                  updateSettings('gcs_enabled', checked ? 'true' : 'false')
-                }
-                disabled={loading}
-              />
-            </div>
-          </div>
-
-          {settings.gcs_enabled === 'true' && (
-            <div className="p-3 rounded-lg bg-muted/50 text-sm">
-              <p className="font-medium text-chart-4">✓ Google Cloud Storage Aktif</p>
-              <p className="text-muted-foreground mt-1">
-                Bucket dan credentials sudah dikonfigurasi melalui secrets.
-                Semua file baru akan disimpan ke GCS.
-              </p>
-            </div>
-          )}
+        <CardContent>
+          <StorageSettings />
         </CardContent>
       </Card>
     </div>

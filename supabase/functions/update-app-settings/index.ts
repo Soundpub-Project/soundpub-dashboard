@@ -1,5 +1,15 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+
+const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
+  const existingDb = options.db || {}
+  return createClient(supabaseUrl, supabaseKey, {
+    ...options,
+    db: { ...existingDb, schema: getDatabaseSchema() },
+  })
+}
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,7 +28,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createSoundpubClient(supabaseUrl, supabaseServiceKey);
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -46,8 +56,21 @@ serve(async (req) => {
     const body: UpdateSettingsRequest = await req.json();
     const { settings } = body;
 
-    if (!settings || !Array.isArray(settings)) {
-      throw new Error('Settings array is required');
+    if (!settings || !Array.isArray(settings) || settings.length === 0 || settings.length > 50) {
+      throw new Error('Settings array must contain 1-50 items');
+    }
+
+    // Whitelist allowed setting keys
+    const ALLOWED_KEYS = ['dashboard_logo', 'dashboard_logo_light', 'dashboard_logo_dark', 'favicon', 'ga4_enabled', 'gcs_enabled', 'ga4_measurement_id', 'gcs_bucket_name', 'gcs_project_id', 'storage_provider', 'release_pricing_mode', 'release_price_per_track', 'release_price_single', 'release_price_ep', 'release_price_album', 'min_payout_amount', 'iccn_service_desc', 'iccn_service_photos'];
+
+    for (const setting of settings) {
+      if (!setting.key || !ALLOWED_KEYS.includes(setting.key)) {
+        throw new Error(`Invalid setting key: ${setting.key}`);
+      }
+      const maxValueLength = setting.key === 'iccn_service_photos' ? 20000 : 5000;
+      if (setting.value && setting.value.length > maxValueLength) {
+        throw new Error(`Value too long for key: ${setting.key}`);
+      }
     }
 
     // Update each setting
@@ -83,10 +106,14 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Update App Settings Error:', error);
+    const SAFE_MESSAGES = ['No authorization', 'Unauthorized', 'Only superadmins', 'Settings array', 'Invalid setting key', 'Value too long']
+    let safeMessage = 'Failed to update settings'
+    if (error instanceof Error && SAFE_MESSAGES.some(m => error.message.startsWith(m) || error.message.includes(m))) {
+      safeMessage = error.message
+    }
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: safeMessage }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

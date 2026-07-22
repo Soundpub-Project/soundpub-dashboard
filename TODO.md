@@ -1,180 +1,53 @@
-# TODO - SoundPub Distribution Dashboard
+# TODO — Tahap 2 (setelah Gmail + Backup Drive selesai)
 
-## ✅ Sudah Dikerjakan
+## Selesai ✅
+- [x] Migrasi notifikasi email Resend → Gmail connector (`publishersoundpub@gmail.com`)
+- [x] Backup harian Supabase Storage → Google Drive (`SoundPub-Backup/YYYY-MM-DD/{bucket}/...`)
+  - Tabel: `storage_backup_log`, `storage_backup_runs`
+  - Edge function: `backup-storage-to-drive` (incremental, max 40 file/run, max 200MB/file)
+  - Cron: `daily-storage-backup` jam 19:00 UTC (02:00 WIB)
 
-### Authentication & Authorization
-- [x] Login/Signup system
-- [x] Role-based access control (superadmin, admin, label, artist, user)
-- [x] Profile management (view & edit)
-- [x] Protected routes berdasarkan role
-- [x] Fix logout stuck bug di halaman admin (Users page)
-- [x] **Password visibility toggle di login & signup form**
-- [x] **Self-password change di Settings (semua role)**
+## Pending (Tahap 2 — Refactor Penamaan File)
 
-### Dashboard & Layout
-- [x] Dashboard layout dengan sidebar navigation
-- [x] Responsive design
-- [x] Real-time dashboard statistics
+### Helper baru
+- [ ] `src/lib/storageNaming.ts`
+  - `slugify(text: string): string` — lowercase, non-alnum → `-`, max 60 char, trim
+  - `shortStamp(): string` — base36 dari `Date.now()`
+  - `buildCoverPath(labelId, releaseTitle, ext)` → `{labelId}/{slug}-{stamp}.{ext}`
+  - `buildAudioPath(labelId, releaseTitle, trackTitle, ext)` → `{labelId}/{releaseSlug}/{trackSlug}-full-{stamp}.{ext}`
+  - `buildClipPath(labelId, releaseTitle, trackTitle, ext)` → `{labelId}/{releaseSlug}/{trackSlug}-clip-{stamp}.{ext}`
+  - `buildLogoPath(labelId, type, ext)` → `{labelId}/logo-{type}-{stamp}.{ext}`
+  - `buildAvatarPath(userId, ext)` → `{userId}/avatar-{stamp}.{ext}`
 
-### Release Management
-- [x] Daftar releases dengan filter & search
-- [x] Add new release (form dialog)
-- [x] Edit release
-- [x] Release detail page
-- [x] Track management dalam release
-- [x] Delete releases
-- [x] Archive/restore releases
-- [x] Bulk actions (select multiple, bulk archive, bulk delete)
-- [x] **Label info di release detail page** (menampilkan nama label pemilik release)
-- [x] **Audio Player di release detail** (play/pause, progress bar, volume control, skip next/prev)
-- [x] **Dropdown artist di form tambah release untuk Label** (pilih dari artist yang terdaftar di label)
+### Caller yang harus diubah
+- [ ] `src/components/releases/ReleaseFormDialog.tsx:502` — cover upload
+- [ ] `src/components/releases/MediaUploadSection.tsx:113` — full audio + clip upload
+- [ ] `src/components/releases/MediaUploadSection.tsx:523` — clip cutter blob
+- [ ] `src/components/settings/LabelLogoSettings.tsx:59` — label logo
+- [ ] (opsional) avatar upload di profile
 
-### Release Metadata
-- [x] Multiple artists (Main/Featured) per track
-- [x] Complete genre list (25+ genres termasuk Indonesian genres)
-- [x] Explicit lyrics flag per track
-- [x] Composer & lyricist fields per track
-- [x] Lyrics text area per track
-- [x] Additional contributors (Composer, Lyricist, Producer, Arranger, dll)
+### Storage RLS
+- [ ] Audit RLS `storage.objects` untuk bucket privat (`track-audio`, `release-covers`) — pastikan path baru `{labelId}/...` tetap masuk policy upload/read sesuai role.
 
-### Media Upload
-- [x] Full audio upload (WAV/FLAC, up to 500MB)
-- [x] Music video upload (MP4, up to 2GB)
-- [x] Audio clip upload (30-60s preview, up to 20MB)
-- [x] Storage buckets dengan RLS policies
+### Catatan
+- File **lama tetap** dengan nama lama (URL di DB sudah point ke path lama; tidak di-rename).
+- Hanya **upload baru** yang pakai pattern baru.
 
-### User Management
-- [x] Daftar users (admin view)
-- [x] Add user (admin/label)
-- [x] Edit user
-- [x] Delete user
-- [x] Change user role (admin only)
-- [x] My Artists page (label view)
-- [x] Fix RLS policy untuk label update status artist
-- [x] **Delete user (Admin/Superadmin only)**
-- [x] **Change user status (active/inactive/suspended)**
-- [x] **Label dapat menghapus artist dari labelnya**
-- [x] **Fix RLS policy untuk label menghapus artist (parent_label_id = null)**
-- [x] **Admin change password untuk user lain**
-- [x] **Filter users by role** (dropdown filter)
-- [x] **Filter users by status** (dropdown filter)
-- [x] **Search users by name/email**
+## Catatan Operasional
 
-### Royalty Management
-- [x] Royalty Overview dengan charts
-  - [x] Revenue trend chart
-  - [x] Platform distribution chart
-  - [x] Country distribution chart
-- [x] Upload Royalty CSV dengan validasi
-- [x] Balance update otomatis setelah upload
+### Email (Gmail Connector)
+- Pengirim: `publishersoundpub@gmail.com` (akun Gmail terhubung di connector)
+- Quota: ~500 email/hari (Gmail) atau 2.000/hari (Workspace). Cukup untuk notifikasi internal.
+- Untuk blast besar ke semua user, butuh provider lain (Resend/SendGrid).
 
-### Payout System
-- [x] Daftar payout requests
-- [x] Request payout form
-- [x] Payout history dengan status badges
-- [x] Admin Approve/Reject Payout
-  - [x] Halaman khusus admin untuk melihat semua payout requests
-  - [x] Tombol approve/reject dengan konfirmasi
-  - [x] Mark as Paid functionality
-  - [x] Update balance setelah payout approved (via trigger)
-  - [x] Statistik payout (pending, approved, paid, rejected)
-  - [x] Search & filter by status
+### Backup Google Drive
+- Akun Drive: terhubung lewat connector (kapasitas 2TB)
+- Frekuensi: tiap hari jam 02:00 WIB
+- Incremental: file yang `updated_at`-nya tidak berubah akan di-skip
+- Max 40 file/run, max 200MB/file (untuk hindari timeout edge function)
+- File >200MB akan di-skip (tercatat di error log)
+- Trigger manual: POST ke `/functions/v1/backup-storage-to-drive` (admin only via UI nanti)
+- Lihat status: query tabel `storage_backup_runs` (UI admin belum dibuat — pending)
 
-### Analytics
-- [x] Halaman analytics dedicated
-- [x] Custom date ranges
-- [x] Perbandingan periode (MoM, YoY)
-- [x] Growth metrics & KPIs
-- [x] Performance indicators (growth %)
-- [x] Top performing releases/tracks/platforms/countries
-
-### Export Functionality
-- [x] CSV exports (sudah ada di royalties/reports)
-- [x] PDF reports (browser print available)
-
-### Artist Simplified Release Form
-- [x] Form sederhana khusus untuk role Artist (BETA)
-- [x] Upload cover art langsung
-- [x] UPC/ISRC dikosongkan (diisi oleh label)
-
-### Audit Logs
-- [x] **Halaman Audit Logs (Admin only)**
-- [x] **Log password_change (admin ubah password user)**
-- [x] **Log self_password_change (user ubah password sendiri)**
-- [x] **Log role_change**
-- [x] **Log status_change**
-- [x] **Log user_created**
-- [x] **Log user_deleted**
-- [x] **Log artist_removed (label hapus artist dari label)**
-- [x] **Search & filter audit logs**
-
-### Edge Functions
-- [x] `create-user` - Membuat user baru (admin/label)
-- [x] `process-royalty-upload` - Proses upload CSV royalty
-- [x] `delete-user` - Hapus user (admin/superadmin)
-- [x] `update-user-status` - Update status user
-- [x] `update-user-password` - Admin ubah password user lain
-- [x] `change-own-password` - User ubah password sendiri
-- [x] `remove-artist-from-label` - Label hapus artist dengan audit log
-
----
-
-## ❌ Belum Dikerjakan
-
-### Low Priority
-- [ ] **Artist Profile Page**
-  - Public profile page untuk artist
-  - Statistik singkat
-  - Daftar releases
-
----
-
-## 🔮 Future Implementation (Deferred)
-
-### Authentication & Security
-- [ ] Forgot Password / Reset Password via email
-- [ ] Email notification saat password diubah
-- [ ] Two-Factor Authentication (2FA)
-
-### Release Management
-- [ ] Metadata versioning (track changes history)
-
-### Export
-- [ ] Excel exports (.xlsx format)
-- [ ] Scheduled reports (email/auto-generate)
-
-### Analytics
-- [ ] Export analytics to PDF
-- [ ] Scheduled analytics reports
-
-### Notifications
-- [ ] Email notification ketika payout diproses
-- [ ] In-app notifications
-
-### User Management
-- [ ] Bulk actions untuk users (bulk delete, bulk status change)
-- [ ] Export data users
-- [x] **Kolom Label untuk Artist** - Menampilkan label parent di tabel users
-- [x] **Pilih Label saat tambah Artist** - Admin/Superadmin bisa pilih label untuk artist baru
-
-### Super Admin Features
-- [x] **Google Cloud Storage Integration** - GCS sebagai primary storage (toggle on/off)
-- [x] **Google Analytics 4 Integration** - GA4 tracking dengan Measurement ID
-- [x] **Dashboard Logo Upload** - Upload logo untuk sidebar/header
-- [x] **Label Logo Upload** - Setiap label bisa upload logo masing-masing
-- [x] **Logo Light/Dark Theme** - Upload logo terpisah untuk tema terang dan gelap
-- [x] **Favicon Upload** - Upload favicon khusus untuk dashboard
-
-### UI/UX Improvements
-- [x] **Settings Page 2-Column Layout** - Layout desktop lebih optimal dengan 2 kolom
-
----
-
-## 📝 Notes
-- Database menggunakan Lovable Cloud (Supabase)
-- RLS policies sudah diimplementasi untuk keamanan data
-- Edge functions untuk operasi yang memerlukan service role
-- Storage buckets: release-covers, track-audio, track-video, audio-clips
-- Beberapa fitur metadata (composer, lyricist, lyrics) sudah ada di level track
-- Audit logs mencatat semua aktivitas penting admin dan label
-- Audio player mendukung: play/pause individual track, volume control, progress seek, next/prev navigation
+### Pending UI
+- [ ] Halaman Settings admin: tampilkan riwayat `storage_backup_runs` + tombol "Backup Sekarang"

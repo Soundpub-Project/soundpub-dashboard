@@ -1,19 +1,23 @@
-import { ReactNode, useEffect } from 'react';
+﻿import { ReactNode, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
-import { Loader2, Bell } from 'lucide-react';
+import { Loader2, Megaphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { AnnouncementDialog } from '@/components/notifications/AnnouncementDialog';
 
 interface DashboardLayoutProps {
   children: ReactNode;
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { user, loading, profile } = useAuth();
+  const { user, loading, profile, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const [announcementOpen, setAnnouncementOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -38,40 +42,80 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
         
-        <div className="flex-1 flex flex-col">
+        <div className="min-w-0 flex-1 flex flex-col">
           {/* Top Header */}
-          <header className="h-14 border-b border-border bg-card sticky top-0 z-10">
-            <div className="h-full flex items-center justify-between px-4">
-              <div className="flex items-center gap-4">
-                <SidebarTrigger />
+          <header className="sticky top-0 z-20 h-14 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+            <div className="h-full flex items-center justify-between gap-3 px-3 sm:px-4">
+              <div className="flex min-w-0 items-center gap-2">
+                <SidebarTrigger className="h-10 w-10" />
+                <div className="min-w-0 sm:hidden">
+                  <p className="truncate text-sm font-semibold text-foreground">SoundPub</p>
+                  {profile && (
+                  <>
+                    <p className="truncate text-xs text-muted-foreground">{profile.full_name}</p>
+                  </>
+                  )}
+                </div>
               </div>
               
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-1 sm:gap-2">
                 <ThemeToggle />
+
+                {isAdmin && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setAnnouncementOpen(true)}
+                    title="Kirim Pengumuman"
+                  >
+                    <Megaphone className="h-5 w-5" />
+                  </Button>
+                )}
                 
-                <Button variant="ghost" size="icon" className="relative">
-                  <Bell className="h-5 w-5" />
-                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-primary" />
-                </Button>
+                <NotificationBell />
                 
                 {profile && (
-                  <div className="hidden sm:block text-right">
-                    <p className="text-sm font-medium text-foreground">{profile.full_name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Balance: Rp {profile.balance.toLocaleString('id-ID')}
-                    </p>
+                  <>
+                  <div className="hidden sm:flex items-center gap-3">
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-foreground">{profile.full_name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Balance: Rp {profile.balance.toLocaleString('id-ID')}
+                      </p>
+                    </div>
+                    <Avatar className="h-9 w-9">
+                      {profile.avatar_url ? (
+                        <AvatarImage src={profile.avatar_url} alt={profile.full_name} />
+                      ) : null}
+                      <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                        {profile.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
                   </div>
+                  <Avatar className="h-9 w-9 sm:hidden">
+                    {profile.avatar_url ? (
+                      <AvatarImage src={profile.avatar_url} alt={profile.full_name} />
+                    ) : null}
+                    <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                      {profile.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  </>
                 )}
               </div>
             </div>
           </header>
 
           {/* Main Content */}
-          <main className="flex-1 p-4 md:p-6 overflow-auto">
-            {children}
+          <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-3 sm:p-4 lg:p-6 xl:p-8">
+            <div className="mx-auto w-full max-w-[1600px] min-w-0">
+              {children}
+            </div>
           </main>
         </div>
       </div>
+
+      <AnnouncementDialog open={announcementOpen} onOpenChange={setAnnouncementOpen} />
     </SidebarProvider>
   );
 }

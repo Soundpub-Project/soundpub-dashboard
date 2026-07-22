@@ -1,5 +1,15 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+
+const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
+  const existingDb = options.db || {}
+  return createClient(supabaseUrl, supabaseKey, {
+    ...options,
+    db: { ...existingDb, schema: getDatabaseSchema() },
+  })
+}
+
 
 interface DeleteUserRequest {
   user_id: string
@@ -19,7 +29,7 @@ Deno.serve(async (req) => {
     }
 
     // Create a client with the user's token to check their permissions
-    const supabaseClient = createClient(
+    const supabaseClient = createSoundpubClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       {
@@ -62,7 +72,7 @@ Deno.serve(async (req) => {
     }
 
     // Create admin client
-    const supabaseAdmin = createClient(
+    const supabaseAdmin = createSoundpubClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       {
@@ -141,11 +151,15 @@ Deno.serve(async (req) => {
     )
   } catch (error: unknown) {
     console.error('Error deleting user:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Failed to delete user'
+    const SAFE_MESSAGES = ['Unauthorized', 'Only admins', 'Only superadmins', 'Missing required', 'Cannot delete your own']
+    let safeMessage = 'Failed to delete user'
+    if (error instanceof Error && SAFE_MESSAGES.some(m => error.message.startsWith(m) || error.message.includes(m))) {
+      safeMessage = error.message
+    }
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: errorMessage
+        error: safeMessage
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

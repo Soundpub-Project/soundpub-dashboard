@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,9 +20,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Shield, Music, Building2, User, UserPlus } from 'lucide-react';
+import { Loader2, Shield, Music, Building2, User, UserPlus, Crown, ShieldCheck } from 'lucide-react';
 
-type AppRole = 'admin' | 'label' | 'artist' | 'user';
+type AppRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user' | 'copyright' | 'whitelabel';
 
 interface LabelOption {
   id: string;
@@ -35,6 +35,7 @@ interface AddUserDialogProps {
   onSuccess: () => void;
   allowedRoles?: AppRole[];
   defaultParentLabelId?: string;
+  isWhitelabelMode?: boolean;
 }
 
 interface RoleOption {
@@ -64,6 +65,18 @@ const ALL_ROLE_OPTIONS: RoleOption[] = [
     description: 'Dapat manage releases dan artis'
   },
   { 
+    value: 'whitelabel', 
+    label: 'White Label', 
+    icon: <Crown className="h-4 w-4 text-yellow-500" />,
+    description: 'Label dengan branding sendiri, artis tidak bisa login'
+  },
+  { 
+    value: 'copyright', 
+    label: 'Copyright (Hak Cipta)', 
+    icon: <ShieldCheck className="h-4 w-4 text-blue-500" />,
+    description: 'Pemilik hak cipta lagu, menerima royalty composer'
+  },
+  { 
     value: 'admin', 
     label: 'Admin', 
     icon: <Shield className="h-4 w-4" />,
@@ -77,8 +90,9 @@ export function AddUserDialog({
   onSuccess,
   allowedRoles,
   defaultParentLabelId,
+  isWhitelabelMode = false,
 }: AddUserDialogProps) {
-  const { user: currentUser, isAdmin, isLabel } = useAuth();
+  const { user: currentUser, isAdmin, isLabel, isWhitelabel } = useAuth();
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
@@ -99,11 +113,11 @@ export function AddUserDialog({
   const fetchLabels = async () => {
     setLoadingLabels(true);
     try {
-      // Fetch all users with label role
+      // Fetch all users with label or whitelabel role
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
-        .select('user_id')
-        .eq('role', 'label');
+        .select('user_id, role')
+        .in('role', ['label', 'whitelabel']);
 
       if (rolesError) throw rolesError;
 
@@ -118,7 +132,18 @@ export function AddUserDialog({
 
         if (profilesError) throw profilesError;
 
-        setLabels(profiles || []);
+        // Add role info to distinguish labels from whitelabels
+        const profilesWithRole = (profiles || []).map(profile => {
+          const roleInfo = roles?.find(r => r.user_id === profile.id);
+          return {
+            ...profile,
+            full_name: roleInfo?.role === 'whitelabel' 
+              ? `${profile.full_name} (Whitelabel)` 
+              : profile.full_name
+          };
+        });
+
+        setLabels(profilesWithRole);
       } else {
         setLabels([]);
       }
@@ -138,20 +163,27 @@ export function AddUserDialog({
     if (isAdmin) {
       return true;
     }
-    // Label can only add artists
-    if (isLabel) {
+    // Label or Whitelabel can only add artists
+    if (isLabel || isWhitelabel) {
       return role.value === 'artist';
     }
     return false;
   });
 
   const handleSave = async () => {
-    if (!email || !fullName || !password) {
-      toast.error('Semua field harus diisi');
+    // For whitelabel mode, password is not required
+    if (!email || !fullName) {
+      toast.error('Email dan nama lengkap harus diisi');
       return;
     }
 
-    if (password.length < 6) {
+    // Password only required if not in whitelabel mode
+    if (!isWhitelabelMode && !password) {
+      toast.error('Password harus diisi');
+      return;
+    }
+
+    if (!isWhitelabelMode && password.length < 6) {
       toast.error('Password minimal 6 karakter');
       return;
     }
@@ -173,34 +205,89 @@ export function AddUserDialog({
       // Determine parent_label_id
       let parentLabelId = defaultParentLabelId || null;
       if (selectedRole === 'artist') {
-        if (isLabel && currentUser) {
+        if ((isLabel || isWhitelabel) && currentUser) {
           parentLabelId = currentUser.id;
         } else if (isAdmin && selectedLabelId) {
           parentLabelId = selectedLabelId;
         }
       }
 
-      // Call edge function to create user without logging in as them
-      const response = await supabase.functions.invoke('create-user', {
-        body: {
-          email,
-          password,
-          full_name: fullName,
-          phone: phone || null,
-          role: selectedRole,
-          parent_label_id: parentLabelId,
-        },
-      });
+      // Use different edge function for whitelabel mode
+      if (isWhitelabelMode) {
+        const response = await supabase.functions.invoke('create-whitelabel-artist', {
+          body: {
+            email,
+            full_name: fullName,
+            phone: phone || null,
+            parent_label_id: parentLabelId,
+          },
+        });        if (response.error) {
+          const errorMsg = response.error.message || 'Gagal membuat artist';
+          if (errorMsg.includes('503') || errorMsg.includes('FunctionsRelayError') || errorMsg.includes('FunctionsFetchError')) {
+            throw new Error(
+              'Edge Function tidak tersedia (Error 503). Silakan hubungi administrator untuk deploy edge functions. Lihat file DEPLOY_EDGE_FUNCTIONS.md untuk panduan.'
+            );
+          }
+          throw new Error(errorMsg);
+        }
 
-      if (response.error) {
-        throw new Error(response.error.message || 'Gagal membuat user');
+        if (!response.data.success) {
+          throw new Error(response.data.error || 'Gagal membuat artist');
+        }
+      } else {
+        // Call edge function to create user without logging in as them
+        const response = await supabase.functions.invoke('create-user', {
+          body: {
+            email,
+            password,
+            full_name: fullName,
+            phone: phone || '',
+            role: selectedRole,
+            parent_label_id: parentLabelId,
+          },
+        });
+
+        if (response.error) {
+          const errorMsg = response.error.message || 'Gagal membuat user';
+          if (errorMsg.includes('503') || errorMsg.includes('FunctionsRelayError') || errorMsg.includes('FunctionsFetchError')) {
+            throw new Error(
+              'Edge Function tidak tersedia (Error 503). Silakan hubungi administrator untuk deploy edge functions. Lihat file DEPLOY_EDGE_FUNCTIONS.md untuk panduan.'
+            );
+          }
+          throw new Error(errorMsg);
+        }
+
+        if (!response.data.success) {
+          throw new Error(response.data.error || 'Gagal membuat user');
+        }
+
+        // CRITICAL: For Label users adding artists, also sync to artists table
+        // Edge function handles this for admin, but Labels call this directly
+        if (selectedRole === 'artist' && (isLabel || isWhitelabel) && currentUser) {
+          // Check if artist already exists in artists table
+          const { data: existingArtist } = await supabase
+            .from('artists')
+            .select('id')
+            .eq('name', fullName)
+            .eq('label_id', currentUser.id)
+            .maybeSingle();
+
+          if (!existingArtist) {
+            const { error: artistError } = await supabase
+              .from('artists')
+              .insert({
+                name: fullName,
+                label_id: currentUser.id,
+              });
+
+            if (artistError) {
+              console.error('Error syncing to artists table:', artistError);
+            }
+          }
+        }
       }
 
-      if (!response.data.success) {
-        throw new Error(response.data.error || 'Gagal membuat user');
-      }
-
-      toast.success(`User ${fullName} berhasil ditambahkan sebagai ${selectedRole}`);
+      toast.success(`${isWhitelabelMode ? 'Artist' : 'User'} ${fullName} berhasil ditambahkan${isWhitelabelMode ? '' : ` sebagai ${selectedRole}`}`);
       
       // Reset form
       setEmail('');
@@ -382,3 +469,5 @@ export function AddUserDialog({
     </Dialog>
   );
 }
+
+

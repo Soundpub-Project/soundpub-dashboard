@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/hooks/useAuth';
+import { useSsoAuth } from '@/context/SsoAuthContext';
 import { useTheme } from '@/hooks/useTheme';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -32,6 +33,14 @@ import {
   Music2,
   BarChart3,
   ScrollText,
+  FolderArchive,
+  PieChart,
+  Shield,
+  HardDrive,
+  ListMusic,
+  FileText,
+  Bell,
+  ClipboardList, History,
 } from 'lucide-react';
 
 interface NavItem {
@@ -41,87 +50,193 @@ interface NavItem {
   roles?: string[];
 }
 
-const mainNavItems: NavItem[] = [
+// === DASBOR MUSIC ===
+const musicDashboardItems: NavItem[] = [
   { 
-    title: 'Dashboard', 
+    title: 'Dasbor', 
     url: '/dashboard', 
-    icon: LayoutDashboard 
+    icon: LayoutDashboard,
+    roles: ['superadmin', 'admin', 'label', 'artist', 'user', 'whitelabel'],
   },
   { 
-    title: 'Releases', 
+    title: 'Rilis', 
     url: '/dashboard/releases', 
-    icon: Disc3 
+    icon: Disc3,
+    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel'],
   },
   { 
-    title: 'Tracks', 
+    title: 'Lagu', 
     url: '/dashboard/tracks', 
-    icon: Music 
+    icon: Music,
+    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel'],
   },
   { 
-    title: 'Royalties', 
+    title: 'Royalti', 
     url: '/dashboard/royalties', 
-    icon: DollarSign 
+    icon: DollarSign,
+    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel'],
   },
   { 
-    title: 'Analytics', 
+    title: 'Analitik', 
     url: '/dashboard/analytics', 
-    icon: BarChart3 
+    icon: BarChart3,
+    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel'],
+  },
+  { 
+    title: 'Ringkasan Royalti', 
+    url: '/dashboard/royalty-summary', 
+    icon: PieChart,
+    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel'],
   },
 ];
 
-const adminNavItems: NavItem[] = [
+// === DASBOR HAK CIPTA ===
+const copyrightDashboardItems: NavItem[] = [
   { 
-    title: 'Users', 
+    title: 'Registrasi Hak Cipta', 
+    url: '/dashboard/copyright-registration', 
+    icon: FileText,
+    roles: ['superadmin', 'admin', 'copyright', 'user', 'label', 'artist', 'whitelabel'],
+  },
+  { 
+    title: 'Dasbor', 
+    url: '/dashboard/copyright', 
+    icon: Shield,
+    roles: ['copyright'],
+  },
+  { 
+    title: 'Analitik (Hak Cipta)', 
+    url: '/dashboard/copyright-analytics', 
+    icon: BarChart3,
+    roles: ['superadmin', 'admin', 'copyright'],
+  },
+  { 
+    title: 'Ringkasan Royalti (Hak Cipta)', 
+    url: '/dashboard/copyright-royalty-summary', 
+    icon: PieChart,
+    roles: ['superadmin', 'admin', 'copyright'],
+  },
+];
+
+// === ADMINISTRASI ===
+const administrationItems: NavItem[] = [
+  { 
+    title: 'Semua Royalti', 
+    url: '/dashboard/all-royalties', 
+    icon: ListMusic,
+    roles: ['superadmin', 'admin'],
+  },
+  { 
+    title: 'Pengguna', 
     url: '/dashboard/users', 
     icon: Users,
     roles: ['superadmin', 'admin'],
   },
   { 
-    title: 'Upload Royalty', 
+    title: 'Upload Royalti', 
     url: '/dashboard/upload', 
     icon: Upload,
     roles: ['superadmin', 'admin'],
   },
   { 
-    title: 'Manage Payouts', 
+    title: 'Royalti Komposer', 
+    url: '/dashboard/composer-royalties', 
+    icon: Music2,
+    roles: ['superadmin', 'admin'],
+  },
+  { 
+    title: 'Kelola Pembayaran', 
     url: '/dashboard/admin-payouts', 
     icon: CreditCard,
     roles: ['superadmin', 'admin'],
   },
   { 
-    title: 'Audit Logs', 
+    title: 'Invoice', 
+    url: '/dashboard/invoices', 
+    icon: FileText,
+    roles: ['superadmin', 'admin'],
+  },
+  { 
+    title: 'Kelola Notifikasi', 
+    url: '/dashboard/notifications', 
+    icon: Bell,
+    roles: ['superadmin', 'admin'],
+  },
+  { 
+    title: 'Pengaturan Pembayaran', 
+    url: '/dashboard/payment-settings', 
+    icon: Settings,
+    roles: ['superadmin', 'admin'],
+  },
+  {
+    title: 'Review Hak Cipta',
+    url: '/dashboard/copyright-registration/review',
+    icon: ClipboardList,
+    roles: ['superadmin', 'admin'],
+  },
+  { 
+    title: 'Log Aktivitas', 
     url: '/dashboard/audit-logs', 
     icon: ScrollText,
+    roles: ['superadmin'], // HANYA SUPERADMIN
+  },
+  { 
+    title: 'Ekspor Data', 
+    url: '/dashboard/export', 
+    icon: FolderArchive,
+    roles: ['superadmin'], // HANYA SUPERADMIN
+  },
+  { 
+    title: 'Media Library', 
+    url: '/dashboard/media-library', 
+    icon: HardDrive,
     roles: ['superadmin', 'admin'],
   },
 ];
 
-const labelNavItems: NavItem[] = [
+// === MANAJEMEN LABEL & WHITELABEL ===
+const labelManagementItems: NavItem[] = [
   { 
-    title: 'My Artists', 
+    title: 'Profil Artis', 
+    url: '/dashboard/artist-profile', 
+    icon: Music2,
+    roles: ['artist'],
+  },
+  { 
+    title: 'Artis Saya', 
     url: '/dashboard/my-artists', 
     icon: Users,
     roles: ['label'],
   },
+  { 
+    title: 'Artis Saya',
+    url: '/dashboard/my-artists',
+    icon: Users,
+    roles: ['whitelabel'],
+  },
 ];
 
-const accountNavItems: NavItem[] = [
+// === AKUN PENGGUNA ===
+const accountItems: NavItem[] = [
   { 
-    title: 'Payouts', 
+    title: 'Pembayaran', 
     url: '/dashboard/payouts', 
-    icon: CreditCard 
+    icon: CreditCard,
+    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel', 'copyright', 'user'],
   },
   { 
-    title: 'Settings', 
+    title: 'Pengaturan', 
     url: '/dashboard/settings', 
-    icon: Settings 
+    icon: Settings,
+    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel', 'copyright', 'user'],
   },
 ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const location = useLocation();
-  const { profile, role, signOut, isAdmin, isLabel, isArtist } = useAuth();
+  const { profile, role, signOut, isAdmin, isLabel, isArtist, isCopyright, isWhitelabel, isSsoUser } = useAuth();
+  const { triggerSsoLogout } = useSsoAuth();
   const { resolvedTheme } = useTheme();
   const collapsed = state === 'collapsed';
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -135,7 +250,7 @@ export function AppSidebar() {
             .from('profiles')
             .select('logo_url_light, logo_url_dark, logo_url')
             .eq('id', profile.parent_label_id)
-            .single();
+            .maybeSingle();
 
           if (!labelError && labelProfile) {
             const themeLogo = resolvedTheme === 'dark' 
@@ -204,8 +319,15 @@ export function AppSidebar() {
       label: 'bg-chart-4/20 text-chart-4',
       artist: 'bg-chart-3/20 text-chart-3',
       user: 'bg-muted text-muted-foreground',
+      copyright: 'bg-blue-500/20 text-blue-600',
+      whitelabel: 'bg-yellow-500/20 text-yellow-600',
     };
     return colors[role || 'user'] || colors.user;
+  };
+
+  // Helper to filter items by role
+  const filterByRole = (items: NavItem[]) => {
+    return items.filter(item => !item.roles || item.roles.includes(role || 'user'));
   };
 
   return (
@@ -228,37 +350,65 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        {/* Main Navigation */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Menu Utama</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {mainNavItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <NavLink 
-                      to={item.url} 
-                      end 
-                      className="flex items-center gap-2"
-                      activeClassName="bg-sidebar-accent text-sidebar-accent-foreground"
-                    >
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {/* Dasbor Music - Only show to non-copyright users */}
+        {!isCopyright && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Dasbor DSP</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {filterByRole(musicDashboardItems).map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                      <NavLink 
+                        to={item.url} 
+                        end 
+                        className="flex items-center gap-2"
+                        activeClassName="bg-sidebar-accent text-sidebar-accent-foreground"
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
-        {/* Admin Navigation */}
+        {/* Dasbor Hak Cipta - Show to copyright users and admin */}
+        {(isCopyright || isAdmin) && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Dasbor Hak Cipta</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {filterByRole(copyrightDashboardItems).map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                      <NavLink 
+                        to={item.url} 
+                        end 
+                        className="flex items-center gap-2"
+                        activeClassName="bg-sidebar-accent text-sidebar-accent-foreground"
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {/* Administrasi - Admin only */}
         {isAdmin && (
           <SidebarGroup>
-            <SidebarGroupLabel>Admin</SidebarGroupLabel>
+            <SidebarGroupLabel>Administrasi</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {adminNavItems.map((item) => (
+                {filterByRole(administrationItems).map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive(item.url)}>
                       <NavLink 
@@ -278,13 +428,13 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* Label Navigation */}
-        {isLabel && (
+        {/* Manajemen Label, Whitelabel & Artist */}
+        {(isLabel || isWhitelabel || isArtist) && (
           <SidebarGroup>
-            <SidebarGroupLabel>Label</SidebarGroupLabel>
+            <SidebarGroupLabel>Manajemen</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {labelNavItems.map((item) => (
+                {filterByRole(labelManagementItems).map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive(item.url)}>
                       <NavLink 
@@ -304,12 +454,12 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* Account Navigation */}
+        {/* Akun Pengguna */}
         <SidebarGroup>
           <SidebarGroupLabel>Akun</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {accountNavItems.map((item) => (
+              {filterByRole(accountItems).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={isActive(item.url)}>
                     <NavLink 
@@ -334,6 +484,9 @@ export function AppSidebar() {
         <div className="p-2">
           <div className="flex items-center gap-3 p-2 rounded-lg bg-sidebar-accent/50">
             <Avatar className="h-9 w-9 shrink-0">
+              {profile?.avatar_url ? (
+                <AvatarImage src={profile.avatar_url} alt={profile.full_name} />
+              ) : null}
               <AvatarFallback className="bg-primary text-primary-foreground text-sm">
                 {profile?.full_name ? getInitials(profile.full_name) : 'U'}
               </AvatarFallback>
@@ -353,7 +506,7 @@ export function AppSidebar() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={signOut}
+            onClick={isSsoUser ? triggerSsoLogout : signOut}
             className="w-full mt-2 justify-start text-muted-foreground hover:text-destructive"
           >
             <LogOut className="h-4 w-4 mr-2" />
@@ -364,3 +517,8 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
+
+
+
+
+

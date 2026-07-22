@@ -7,14 +7,19 @@ import { componentTagger } from "lovable-tagger";
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
-    port: 8080,
+    port: 8181,
     allowedHosts: [
       "all",
       // "dev-dashboard.soundpub.xyz",
       "dashboard.soundpub.xyz",
       "https://dashboard.soundpub.xyz",
+      "dev.soundpub.xyz",
+      "https://dev.soundpub.xyz",
+      "localhost:8181",
       "localhost",
-      "127.0.0.1"
+      "127.0.0.1",
+      "dev-soundpub.maskhar.com",
+      "web.maskhar.com"
     ]
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),

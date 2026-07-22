@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Dialog,
@@ -64,7 +64,13 @@ export function ChangePasswordDialog({
       });
 
       if (response.error) {
-        throw new Error(response.error.message || 'Failed to update password');
+        const errorMsg = response.error.message || 'Failed to update password';
+        if (errorMsg.includes('503') || errorMsg.includes('FunctionsRelayError') || errorMsg.includes('FunctionsFetchError')) {
+          throw new Error(
+            'Edge Function tidak tersedia (Error 503). Silakan hubungi administrator untuk deploy edge functions. Lihat file DEPLOY_EDGE_FUNCTIONS.md untuk panduan.'
+          );
+        }
+        throw new Error(errorMsg);
       }
 
       if (!response.data?.success) {
@@ -174,3 +180,4 @@ export function ChangePasswordDialog({
     </Dialog>
   );
 }
+

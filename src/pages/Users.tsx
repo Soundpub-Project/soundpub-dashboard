@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+﻿import { useEffect, useState } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -15,12 +17,13 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table';
-import { Users as UsersIcon, Search, Loader2, Shield, Music, Building2, User, Edit, UserPlus, KeyRound, MoreHorizontal, UserCog, Trash2, Filter, X } from 'lucide-react';
+import { Users as UsersIcon, Search, Loader2, Shield, Music, Building2, User, Edit, UserPlus, KeyRound, MoreHorizontal, UserCog, Trash2, Filter, X, Hash, UserX } from 'lucide-react';
 import { ChangeRoleDialog } from '@/components/users/ChangeRoleDialog';
 import { AddUserDialog } from '@/components/users/AddUserDialog';
 import { ChangePasswordDialog } from '@/components/users/ChangePasswordDialog';
 import { ChangeStatusDialog } from '@/components/users/ChangeStatusDialog';
 import { DeleteUserDialog } from '@/components/users/DeleteUserDialog';
+import { EditComposerCodeDialog } from '@/components/users/EditComposerCodeDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,8 +39,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-type AppRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user';
+type AppRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user' | 'copyright' | 'whitelabel';
 type UserStatus = 'active' | 'inactive' | 'suspended';
+
+type LoginMethod = 'email' | 'iccn' | 'google';
 
 interface UserProfile {
   id: string;
@@ -50,6 +55,8 @@ interface UserProfile {
   role?: AppRole;
   parent_label_id?: string | null;
   parent_label_name?: string | null;
+  composer_code?: string | null;
+  sso_provider?: string | null;
 }
 
 const ROLE_ICONS: Record<AppRole, React.ReactNode> = {
@@ -58,6 +65,8 @@ const ROLE_ICONS: Record<AppRole, React.ReactNode> = {
   label: <Building2 className="h-3 w-3" />,
   artist: <Music className="h-3 w-3" />,
   user: <User className="h-3 w-3" />,
+  copyright: <Shield className="h-3 w-3" />,
+  whitelabel: <Building2 className="h-3 w-3" />,
 };
 
 const ROLE_COLORS: Record<AppRole, string> = {
@@ -66,25 +75,29 @@ const ROLE_COLORS: Record<AppRole, string> = {
   label: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   artist: 'bg-green-500/20 text-green-400 border-green-500/30',
   user: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+  copyright: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+  whitelabel: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
 };
 
-const ALL_ROLES: AppRole[] = ['superadmin', 'admin', 'label', 'artist', 'user'];
+const ALL_ROLES: AppRole[] = ['superadmin', 'admin', 'label', 'whitelabel', 'artist', 'user', 'copyright'];
 const ALL_STATUSES: UserStatus[] = ['active', 'inactive', 'suspended'];
 
 export default function Users() {
   const { isAdmin, loading: authLoading, user } = useAuth();
+  const navigate = useNavigate();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<AppRole | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<UserStatus | 'all'>('all');
+  const [loginMethodFilter, setLoginMethodFilter] = useState<LoginMethod | 'all'>('all');
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-
+  const [composerCodeDialogOpen, setComposerCodeDialogOpen] = useState(false);
 
   useEffect(() => {
     // Only fetch users if user is logged in AND is admin
@@ -120,6 +133,7 @@ export default function Users() {
         ...profile,
         role: rolesMap.get(profile.id) || 'user' as AppRole,
         parent_label_name: profile.parent_label_id ? profilesMap.get(profile.parent_label_id) || null : null,
+        composer_code: profile.composer_code || null,
       }));
 
       setUsers(usersWithRoles);
@@ -159,13 +173,37 @@ export default function Users() {
     setDeleteDialogOpen(true);
   };
 
+  const handleEditComposerCode = (user: UserProfile) => {
+    setSelectedUser(user);
+    setComposerCodeDialogOpen(true);
+  };
+
   const clearFilters = () => {
     setSearchTerm('');
     setRoleFilter('all');
     setStatusFilter('all');
+    setLoginMethodFilter('all');
   };
 
-  const hasActiveFilters = searchTerm || roleFilter !== 'all' || statusFilter !== 'all';
+  const hasActiveFilters = searchTerm || roleFilter !== 'all' || statusFilter !== 'all' || loginMethodFilter !== 'all';
+
+  const getLoginMethod = (ssoProvider: string | null | undefined): LoginMethod => {
+    if (ssoProvider === 'iccn') return 'iccn';
+    if (ssoProvider === 'google') return 'google';
+    return 'email';
+  };
+
+  const getLoginMethodBadge = (ssoProvider: string | null | undefined) => {
+    const method = getLoginMethod(ssoProvider);
+    switch (method) {
+      case 'iccn':
+        return <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 text-xs">SSO ICCN</Badge>;
+      case 'google':
+        return <Badge variant="outline" className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 text-xs">Google</Badge>;
+      default:
+        return <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-xs">Email</Badge>;
+    }
+  };
 
   const filteredUsers = users.filter((user) => {
     const matchesSearch = 
@@ -174,8 +212,9 @@ export default function Users() {
     
     const matchesRole = roleFilter === 'all' || user.role === roleFilter;
     const matchesStatus = statusFilter === 'all' || user.status === statusFilter;
+    const matchesLoginMethod = loginMethodFilter === 'all' || getLoginMethod(user.sso_provider) === loginMethodFilter;
     
-    return matchesSearch && matchesRole && matchesStatus;
+    return matchesSearch && matchesRole && matchesStatus && matchesLoginMethod;
   });
 
   if (authLoading) {
@@ -193,7 +232,7 @@ export default function Users() {
     return <Navigate to="/auth" replace />;
   }
 
-  // Logged in but not admin → kick to dashboard
+  // Logged in but not admin â†’ kick to dashboard
   if (!isAdmin) {
     return <Navigate to="/dashboard" replace />;
   }
@@ -206,7 +245,14 @@ export default function Users() {
           <p className="text-muted-foreground">Kelola pengguna platform</p>
         </div>
 
-        <Card className="bg-card/50 border-border/50">
+        <Tabs defaultValue="users" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
+            <TabsTrigger value="users">Daftar User</TabsTrigger>
+            <TabsTrigger value="requests">Permintaan Hapus Artis</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="users">
+            <Card className="bg-card/50 border-border/50">
           <CardHeader>
             <div className="flex flex-col gap-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -217,10 +263,16 @@ export default function Users() {
                     {hasActiveFilters && ' (filtered)'}
                   </CardDescription>
                 </div>
-                <Button onClick={() => setAddUserDialogOpen(true)} className="gradient-primary">
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  Tambah User
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" onClick={() => navigate('/dashboard/users/orphan-audit')}>
+                    <UserX className="h-4 w-4 mr-2" />
+                    Audit Orphan User
+                  </Button>
+                  <Button onClick={() => setAddUserDialogOpen(true)} className="gradient-primary">
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Tambah User
+                  </Button>
+                </div>
               </div>
               
               {/* Filter Section */}
@@ -265,6 +317,17 @@ export default function Users() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <Select value={loginMethodFilter} onValueChange={(v) => setLoginMethodFilter(v as LoginMethod | 'all')}>
+                    <SelectTrigger className="w-full sm:w-40">
+                      <SelectValue placeholder="Semua Login" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Semua Login</SelectItem>
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="iccn">SSO ICCN</SelectItem>
+                      <SelectItem value="google">Google</SelectItem>
+                    </SelectContent>
+                  </Select>
                   {hasActiveFilters && (
                     <Button variant="ghost" size="icon" onClick={clearFilters} title="Clear filters">
                       <X className="h-4 w-4" />
@@ -292,7 +355,8 @@ export default function Users() {
                       <TableHead>Nama</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Role</TableHead>
-                      <TableHead>Label</TableHead>
+                      <TableHead>Login</TableHead>
+                      <TableHead>Label / Kode</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Balance</TableHead>
                       <TableHead>Bergabung</TableHead>
@@ -311,13 +375,19 @@ export default function Users() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {user.role === 'artist' && user.parent_label_name ? (
+                          {getLoginMethodBadge(user.sso_provider)}
+                        </TableCell>
+                        <TableCell>
+                          {user.role === 'copyright' && user.composer_code ? (
+                            <div className="flex items-center gap-1.5">
+                              <Hash className="h-3 w-3 text-cyan-500" />
+                              <span className="text-sm font-mono">{user.composer_code}</span>
+                            </div>
+                          ) : user.role === 'artist' && user.parent_label_name ? (
                             <div className="flex items-center gap-1.5">
                               <Building2 className="h-3 w-3 text-muted-foreground" />
                               <span className="text-sm">{user.parent_label_name}</span>
                             </div>
-                          ) : user.role === 'artist' ? (
-                            <span className="text-xs text-muted-foreground">-</span>
                           ) : (
                             <span className="text-xs text-muted-foreground">-</span>
                           )}
@@ -362,6 +432,18 @@ export default function Users() {
                                 <UserCog className="mr-2 h-4 w-4" />
                                 Ubah Status
                               </DropdownMenuItem>
+                              {user.role === 'artist' && (
+                                <DropdownMenuItem onClick={() => navigate(`/dashboard/artist-profile/${user.id}`)}>
+                                  <Music className="mr-2 h-4 w-4" />
+                                  Lihat Profil Artis
+                                </DropdownMenuItem>
+                              )}
+                              {user.role === 'copyright' && (
+                                <DropdownMenuItem onClick={() => handleEditComposerCode(user)}>
+                                  <Hash className="mr-2 h-4 w-4" />
+                                  Edit Composer Code
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem 
                                 onClick={() => handleDeleteUser(user)}
@@ -382,6 +464,12 @@ export default function Users() {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="requests">
+            <DeletionRequestsTable />
+          </TabsContent>
+        </Tabs>
       </div>
 
       <ChangeRoleDialog
@@ -418,6 +506,189 @@ export default function Users() {
         user={selectedUser}
         onSuccess={fetchUsers}
       />
+
+      <EditComposerCodeDialog
+        open={composerCodeDialogOpen}
+        onOpenChange={setComposerCodeDialogOpen}
+        user={selectedUser}
+        onSuccess={fetchUsers}
+      />
     </DashboardLayout>
   );
 }
+
+function DeletionRequestsTable() {
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchRequests();
+  }, []);
+
+  const fetchRequests = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('artist_deletion_requests')
+        .select(`
+          id,
+          artist_id,
+          label_id,
+          reason,
+          status,
+          created_at,
+          artist:profiles!artist_id(full_name, email),
+          label:profiles!label_id(full_name)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setRequests(data || []);
+    } catch (error) {
+      console.error('Error fetching deletion requests:', error);
+      toast.error('Gagal memuat permintaan penghapusan');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApprove = async (reqId: string, artistId: string, artistName: string) => {
+    setProcessingId(reqId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await supabase.functions.invoke('delete-user', {
+        body: { user_id: artistId },
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+      });
+
+      if (response.error || !response.data?.success) {
+        const errorMsg = response.data?.error || response.error?.message || 'Gagal menghapus user';
+        if (errorMsg.includes('503') || errorMsg.includes('FunctionsRelayError') || errorMsg.includes('FunctionsFetchError')) {
+          throw new Error(
+            'Edge Function tidak tersedia (Error 503). Silakan hubungi administrator untuk deploy edge functions. Lihat file DEPLOY_EDGE_FUNCTIONS.md untuk panduan.'
+          );
+        }
+        throw new Error(errorMsg);
+      }
+
+      toast.success(`Profil artis ${artistName} berhasil dihapus permanen`);
+      fetchRequests();
+    } catch (error: any) {
+      console.error('Error approving deletion:', error);
+      toast.error(error.message || 'Gagal menyetujui permintaan');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleReject = async (reqId: string) => {
+    setProcessingId(reqId);
+    try {
+      const { error } = await supabase
+        .from('artist_deletion_requests')
+        .update({ status: 'rejected' })
+        .eq('id', reqId);
+
+      if (error) throw error;
+
+      toast.success('Permintaan penghapusan ditolak');
+      fetchRequests();
+    } catch (error: any) {
+      console.error('Error rejecting deletion:', error);
+      toast.error(error.message || 'Gagal menolak permintaan');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  return (
+    <Card className="bg-card/50 border-border/50">
+      <CardHeader>
+        <CardTitle>Daftar Pengajuan Penghapusan Artis</CardTitle>
+        <CardDescription>Meninjau pengajuan penghapusan profil artis oleh Label</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : requests.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <Trash2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>Belum ada pengajuan penghapusan</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nama Artis</TableHead>
+                  <TableHead>Diajukan Oleh (Label)</TableHead>
+                  <TableHead>Alasan</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Tanggal Pengajuan</TableHead>
+                  <TableHead className="text-right">Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {requests.map((req) => (
+                  <TableRow key={req.id}>
+                    <TableCell className="font-medium">
+                      {req.artist?.full_name || 'Artis Terhapus'}
+                      <div className="text-xs text-muted-foreground">{req.artist?.email}</div>
+                    </TableCell>
+                    <TableCell>{req.label?.full_name || '-'}</TableCell>
+                    <TableCell className="max-w-xs truncate" title={req.reason}>
+                      {req.reason}
+                    </TableCell>
+                    <TableCell>
+                      <Badge 
+                        variant={
+                          req.status === 'pending' ? 'secondary' :
+                          req.status === 'approved' ? 'default' : 'destructive'
+                        }
+                        className="capitalize"
+                      >
+                        {req.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(req.created_at).toLocaleDateString('id-ID')}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {req.status === 'pending' && (
+                        <div className="flex justify-end gap-2">
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => handleReject(req.id)}
+                            disabled={processingId !== null}
+                          >
+                            Tolak
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                            onClick={() => handleApprove(req.id, req.artist_id, req.artist?.full_name)}
+                            disabled={processingId !== null}
+                          >
+                            Setujui Hapus
+                          </Button>
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+

@@ -1,5 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllRoyalties } from '@/lib/fetchAllRoyalties';
+import { useRoyaltyStats, useRoyaltyMonthlySummary, useRoyaltyPlatformSummary, useRoyaltyCountrySummary } from '@/hooks/useRoyaltyData';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -40,12 +42,13 @@ interface Royalty {
   period: string;
   isrc: string;
   title: string | null;
-  artist_name: string;
+  artist: string;
+  label_name: string;
   platform: string;
   country: string;
-  unit_penjualan: number;
-  pendapatan_label_artis: number;
-  pendapatan_bersih_soundpub: number;
+  sales_type: string | null;
+  sales_unit: number;
+  net_revenue: number;
   created_at: string;
 }
 
@@ -97,28 +100,25 @@ export default function Royalties() {
   const [royalties, setRoyalties] = useState<Royalty[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [totalRevenue, setTotalRevenue] = useState(0);
-  const [totalStreams, setTotalStreams] = useState(0);
+
+  const { data: statsData, isLoading: statsLoading } = useRoyaltyStats();
+  const { data: monthlyDataRpc, isLoading: monthlyLoading } = useRoyaltyMonthlySummary();
+  const { data: platformDataRpc } = useRoyaltyPlatformSummary(10);
+  const { data: countryDataRpc } = useRoyaltyCountrySummary(10);
+
+  const chartsLoading = statsLoading || monthlyLoading;
+  const totalRevenue = statsData?.totalRevenue || 0;
+  const totalStreams = statsData?.totalStreams || 0;
 
   useEffect(() => {
-    fetchRoyalties();
+    fetchDetailData();
   }, []);
 
-  const fetchRoyalties = async () => {
+  // Detail data for the table (still uses batch fetch but only when viewing details)
+  const fetchDetailData = async () => {
     try {
-      const { data, error } = await supabase
-        .from('royalties')
-        .select('*')
-        .order('period', { ascending: true });
-
-      if (error) throw error;
-      
-      setRoyalties(data || []);
-      
-      const total = data?.reduce((sum, r) => sum + Number(r.pendapatan_label_artis || 0), 0) || 0;
-      const streams = data?.reduce((sum, r) => sum + Number(r.unit_penjualan || 0), 0) || 0;
-      setTotalRevenue(total);
-      setTotalStreams(streams);
+      const data = await fetchAllRoyalties();
+      setRoyalties(data as unknown as Royalty[]);
     } catch (error) {
       console.error('Error fetching royalties:', error);
     } finally {
@@ -126,78 +126,14 @@ export default function Royalties() {
     }
   };
 
-  // Process data for monthly trend chart
-  const monthlyData = useMemo((): MonthlyData[] => {
-    const monthMap = new Map<string, { revenue: number; streams: number }>();
-    
-    royalties.forEach((r) => {
-      const period = r.period; // Format: YYYY-MM or similar
-      const existing = monthMap.get(period) || { revenue: 0, streams: 0 };
-      monthMap.set(period, {
-        revenue: existing.revenue + Number(r.pendapatan_label_artis || 0),
-        streams: existing.streams + Number(r.unit_penjualan || 0),
-      });
-    });
-
-    return Array.from(monthMap.entries())
-      .map(([month, data]) => ({
-        month,
-        revenue: data.revenue,
-        streams: data.streams,
-      }))
-      .sort((a, b) => a.month.localeCompare(b.month));
-  }, [royalties]);
-
-  // Process data for platform breakdown
-  const platformData = useMemo((): PlatformData[] => {
-    const platformMap = new Map<string, { revenue: number; streams: number }>();
-    
-    royalties.forEach((r) => {
-      const existing = platformMap.get(r.platform) || { revenue: 0, streams: 0 };
-      platformMap.set(r.platform, {
-        revenue: existing.revenue + Number(r.pendapatan_label_artis || 0),
-        streams: existing.streams + Number(r.unit_penjualan || 0),
-      });
-    });
-
-    return Array.from(platformMap.entries())
-      .map(([name, data], index) => ({
-        name,
-        revenue: data.revenue,
-        streams: data.streams,
-        fill: CHART_COLORS[index % CHART_COLORS.length],
-      }))
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 10); // Top 10 platforms
-  }, [royalties]);
-
-  // Process data for country breakdown
-  const countryData = useMemo((): CountryData[] => {
-    const countryMap = new Map<string, { revenue: number; streams: number }>();
-    
-    royalties.forEach((r) => {
-      const existing = countryMap.get(r.country) || { revenue: 0, streams: 0 };
-      countryMap.set(r.country, {
-        revenue: existing.revenue + Number(r.pendapatan_label_artis || 0),
-        streams: existing.streams + Number(r.unit_penjualan || 0),
-      });
-    });
-
-    return Array.from(countryMap.entries())
-      .map(([name, data], index) => ({
-        name,
-        revenue: data.revenue,
-        streams: data.streams,
-        fill: CHART_COLORS[index % CHART_COLORS.length],
-      }))
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 10); // Top 10 countries
-  }, [royalties]);
+  const monthlyData = monthlyDataRpc || [];
+  const platformData = platformDataRpc || [];
+  const countryData = countryDataRpc || [];
 
   const filteredRoyalties = royalties.filter(
     (royalty) =>
       (royalty.title?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-      royalty.artist_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      royalty.artist.toLowerCase().includes(searchTerm.toLowerCase()) ||
       royalty.platform.toLowerCase().includes(searchTerm.toLowerCase()) ||
       royalty.isrc.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -237,7 +173,7 @@ export default function Royalties() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <Card className="gradient-primary text-white">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -295,11 +231,11 @@ export default function Royalties() {
           </Card>
         </div>
 
-        {loading ? (
+        {chartsLoading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
-        ) : royalties.length === 0 ? (
+        ) : (totalRevenue === 0 && totalStreams === 0) ? (
           <Card className="bg-card/50 border-border/50">
             <CardContent className="py-12">
               <div className="text-center text-muted-foreground">
@@ -577,14 +513,14 @@ export default function Royalties() {
                             <TableRow key={royalty.id}>
                               <TableCell className="font-mono text-xs">{royalty.period}</TableCell>
                               <TableCell className="font-medium max-w-[150px] truncate">{royalty.title || '-'}</TableCell>
-                              <TableCell>{royalty.artist_name}</TableCell>
+                              <TableCell>{royalty.artist}</TableCell>
                               <TableCell>{royalty.platform}</TableCell>
                               <TableCell>{royalty.country}</TableCell>
                               <TableCell className="text-right">
-                                {royalty.unit_penjualan.toLocaleString('id-ID')}
+                                {Number(royalty.sales_unit || 0).toLocaleString('id-ID')}
                               </TableCell>
                               <TableCell className="text-right font-medium text-green-500">
-                                Rp {Number(royalty.pendapatan_label_artis).toLocaleString('id-ID')}
+                                Rp {Number(royalty.net_revenue || 0).toLocaleString('id-ID')}
                               </TableCell>
                             </TableRow>
                           ))}

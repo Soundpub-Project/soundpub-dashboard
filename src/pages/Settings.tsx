@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -8,18 +8,26 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, Eye, EyeOff, KeyRound } from 'lucide-react';
+import { Loader2, Save, Eye, EyeOff, KeyRound, Camera, Trash2 } from 'lucide-react';
 import { SuperAdminSettings } from '@/components/settings/SuperAdminSettings';
 import { LabelLogoSettings } from '@/components/settings/LabelLogoSettings';
+import { IccnIntegrationSettings } from '@/components/settings/IccnIntegrationSettings';
+import { EmailNotificationSettings } from '@/components/settings/EmailNotificationSettings';
 
 export default function Settings() {
-  const { profile, user, role, isLabel } = useAuth();
+  const { profile, user, role, isLabel, isWhitelabel, isSsoUser, refreshProfile } = useAuth();
+  const isGoogleUser = profile?.sso_provider === 'google';
+  const isIccnUser = profile?.sso_provider === 'iccn';
+  const hasPasswordSet = profile?.password_set === true;
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [avatarLoading, setAvatarLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     full_name: profile?.full_name || '',
     phone: profile?.phone || '',
@@ -98,10 +106,13 @@ export default function Settings() {
 
       toast({
         title: 'Berhasil',
-        description: 'Password berhasil diubah',
+        description: isGoogleUser && !hasPasswordSet 
+          ? 'Password berhasil diatur. Anda sekarang bisa login dengan email & password.' 
+          : 'Password berhasil diubah',
       });
       
       setPasswordData({ newPassword: '', confirmPassword: '' });
+      await refreshProfile();
     } catch (error: any) {
       console.error('Error changing password:', error);
       toast({
@@ -111,6 +122,69 @@ export default function Settings() {
       });
     } finally {
       setPasswordLoading(false);
+    }
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({ title: 'Error', description: 'File harus berupa gambar', variant: 'destructive' });
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: 'Error', description: 'Ukuran maksimal 2MB', variant: 'destructive' });
+      return;
+    }
+
+    setAvatarLoading(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const filePath = `${user.id}/avatar.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, { upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      const avatarUrl = `${publicUrl}?t=${Date.now()}`;
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: avatarUrl })
+        .eq('id', user.id);
+      if (updateError) throw updateError;
+
+      await refreshProfile();
+      toast({ title: 'Berhasil', description: 'Foto profil berhasil diupload' });
+    } catch (error: any) {
+      console.error('Error uploading avatar:', error);
+      toast({ title: 'Error', description: error.message || 'Gagal mengupload foto profil', variant: 'destructive' });
+    } finally {
+      setAvatarLoading(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!user) return;
+    setAvatarLoading(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ avatar_url: null })
+        .eq('id', user.id);
+      if (error) throw error;
+      await refreshProfile();
+      toast({ title: 'Berhasil', description: 'Foto profil berhasil dihapus' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'Gagal menghapus foto profil', variant: 'destructive' });
+    } finally {
+      setAvatarLoading(false);
     }
   };
 
@@ -132,16 +206,78 @@ export default function Settings() {
               <SuperAdminSettings />
             </div>
             <Separator className="my-6" />
+            <div>
+              <h2 className="text-xl font-semibold mb-4">Integrasi ICCN</h2>
+              <IccnIntegrationSettings />
+            </div>
+            <Separator className="my-6" />
           </>
         )}
 
-        {/* Label Logo Settings */}
-        {isLabel && (
+        {/* Label/Whitelabel Logo Settings */}
+        {(isLabel || isWhitelabel) && (
           <>
             <LabelLogoSettings />
             <Separator className="my-6" />
           </>
         )}
+
+        {/* Avatar Section */}
+        <Card className="bg-card/50 border-border/50">
+          <CardHeader>
+            <CardTitle>Foto Profil</CardTitle>
+            <CardDescription>Upload foto profil Anda</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-6">
+              <Avatar className="h-20 w-20">
+                {profile?.avatar_url ? (
+                  <AvatarImage src={profile.avatar_url} alt={profile.full_name} />
+                ) : null}
+                <AvatarFallback className="bg-primary text-primary-foreground text-xl">
+                  {profile?.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => avatarInputRef.current?.click()}
+                    disabled={avatarLoading}
+                  >
+                    {avatarLoading ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Camera className="h-4 w-4 mr-2" />
+                    )}
+                    {profile?.avatar_url ? 'Ganti Foto' : 'Upload Foto'}
+                  </Button>
+                  {profile?.avatar_url && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRemoveAvatar}
+                      disabled={avatarLoading}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Hapus
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">JPG, PNG, WebP. Maks 2MB.</p>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarUpload}
+                  className="hidden"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Two Column Layout for Desktop */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -220,87 +356,123 @@ export default function Settings() {
 
           {/* Right Column */}
           <div className="space-y-6">
-            <Card className="bg-card/50 border-border/50">
-              <CardHeader>
-                <CardTitle>Ubah Password</CardTitle>
-                <CardDescription>Ubah password akun Anda</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handlePasswordChange} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="new_password">Password Baru</Label>
-                    <div className="relative">
-                      <Input
-                        id="new_password"
-                        type={showPassword ? 'text' : 'password'}
-                        value={passwordData.newPassword}
-                        onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                        placeholder="Masukkan password baru"
-                        className="pr-10"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <Eye className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </Button>
+            {/* Password change - show for non-SSO users OR Google users */}
+            {(!isSsoUser || isGoogleUser) && (
+              <Card className="bg-card/50 border-border/50">
+                <CardHeader>
+                  <CardTitle>
+                    {isGoogleUser && !hasPasswordSet ? 'Atur Password' : 'Ubah Password'}
+                  </CardTitle>
+                  <CardDescription>
+                    {isGoogleUser && !hasPasswordSet 
+                      ? 'Atur password agar bisa login dengan email & password selain Google'
+                      : 'Ubah password akun Anda'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isGoogleUser && !hasPasswordSet && (
+                    <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 mb-4">
+                      <p className="text-sm text-foreground">
+                        🔑 Akun Anda terhubung via <strong>Google</strong>. Atur password di bawah agar Anda juga bisa login menggunakan email & password.
+                      </p>
                     </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm_password">Konfirmasi Password</Label>
-                    <div className="relative">
-                      <Input
-                        id="confirm_password"
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        value={passwordData.confirmPassword}
-                        onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                        placeholder="Konfirmasi password baru"
-                        className="pr-10"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      >
-                        {showConfirmPassword ? (
-                          <EyeOff className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <Eye className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </Button>
+                  )}
+                  <form onSubmit={handlePasswordChange} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="new_password">
+                        {isGoogleUser && !hasPasswordSet ? 'Password' : 'Password Baru'}
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          id="new_password"
+                          type={showPassword ? 'text' : 'password'}
+                          value={passwordData.newPassword}
+                          onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                          placeholder={isGoogleUser && !hasPasswordSet ? 'Buat password Anda' : 'Masukkan password baru'}
+                          className="pr-10"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? (
+                            <EyeOff className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
 
-                  <Button 
-                    type="submit" 
-                    variant="outline" 
-                    disabled={passwordLoading || !passwordData.newPassword || !passwordData.confirmPassword}
-                  >
-                    {passwordLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Menyimpan...
-                      </>
-                    ) : (
-                      <>
-                        <KeyRound className="mr-2 h-4 w-4" />
-                        Ubah Password
-                      </>
-                    )}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirm_password">Konfirmasi Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="confirm_password"
+                          type={showConfirmPassword ? 'text' : 'password'}
+                          value={passwordData.confirmPassword}
+                          onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                          placeholder="Konfirmasi password"
+                          className="pr-10"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        >
+                          {showConfirmPassword ? (
+                            <EyeOff className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <Button 
+                      type="submit" 
+                      variant={isGoogleUser && !hasPasswordSet ? 'default' : 'outline'}
+                      className={isGoogleUser && !hasPasswordSet ? 'gradient-primary' : ''}
+                      disabled={passwordLoading || !passwordData.newPassword || !passwordData.confirmPassword}
+                    >
+                      {passwordLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Menyimpan...
+                        </>
+                      ) : (
+                        <>
+                          <KeyRound className="mr-2 h-4 w-4" />
+                          {isGoogleUser && !hasPasswordSet ? 'Atur Password' : 'Ubah Password'}
+                        </>
+                      )}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* SSO info for ICCN SSO users only */}
+            {isIccnUser && (
+              <Card className="bg-card/50 border-border/50">
+                <CardHeader>
+                  <CardTitle>Login SSO</CardTitle>
+                  <CardDescription>Akun Anda terhubung via ICCN SSO</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="p-3 rounded-lg bg-muted/30">
+                    <p className="text-sm text-muted-foreground">
+                      Password dikelola oleh sistem SSO ICCN. Untuk mengubah password, silakan gunakan portal ICCN.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <Card className="bg-card/50 border-border/50">
               <CardHeader>
@@ -340,6 +512,8 @@ export default function Settings() {
                 </div>
               </CardContent>
             </Card>
+
+            <EmailNotificationSettings />
           </div>
         </div>
       </div>

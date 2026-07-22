@@ -33,7 +33,8 @@ import {
   Volume2,
   VolumeX,
   SkipBack,
-  SkipForward
+  SkipForward,
+  Download
 } from 'lucide-react';
 import { ReleaseFormDialog } from '@/components/releases/ReleaseFormDialog';
 import { format } from 'date-fns';
@@ -50,6 +51,7 @@ interface Release {
   upc: string;
   title: string;
   artist_name: string;
+  artist_user_id: string | null;
   release_date: string | null;
   cover_url: string | null;
   genre: string | null;
@@ -64,18 +66,20 @@ interface Track {
   isrc: string;
   title: string;
   artist_name: string;
+  artist_user_id: string | null;
   composer: string | null;
   lyricist: string | null;
   genre: string | null;
   lyrics: string | null;
   created_at: string;
   audio_url: string | null;
+  clip_url: string | null;
 }
 
 export default function ReleaseDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAdmin, isLabel } = useAuth();
+  const { isAdmin, isLabel, isWhitelabel, isArtist, user } = useAuth();
   const [release, setRelease] = useState<Release | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [labelInfo, setLabelInfo] = useState<LabelInfo | null>(null);
@@ -91,7 +95,22 @@ export default function ReleaseDetail() {
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
 
-  const canManageReleases = isAdmin || isLabel;
+  const canManageReleases = isAdmin || isLabel || isWhitelabel;
+  
+  // Determine edit capability based on status
+  // - Admin: can always fully edit
+  // - Label/Whitelabel: 
+  //   - pending/draft status: can fully edit
+  //   - active status: can only edit lyrics
+  // - Artist: can edit their own pending/draft releases
+  const isPendingOrDraft = release?.status === 'pending' || release?.status === 'draft';
+  const isOwnRelease = isArtist && release && (
+    release.artist_user_id === user?.id || 
+    (!release.artist_user_id && release.artist_name === user?.user_metadata?.full_name)
+  );
+  const isLocked = release?.status === 'pending_paid' || release?.status === 'active';
+  const canFullyEdit = isAdmin || ((isLabel || isWhitelabel) && isPendingOrDraft) || (isOwnRelease && isPendingOrDraft);
+  const canEditLyricsOnly = (isLabel || isWhitelabel) && release?.status === 'active';
   
   // Get tracks with audio
   const tracksWithAudio = tracks.filter(t => t.audio_url);
@@ -151,7 +170,8 @@ export default function ReleaseDetail() {
 
       setRelease(releaseData);
 
-      // Fetch label info
+      // Fetch label info - use royalties table to get label name if artist can't see profiles
+      // First try to fetch from profiles
       const { data: labelData, error: labelError } = await supabase
         .from('profiles')
         .select('id, full_name, email')
@@ -160,6 +180,42 @@ export default function ReleaseDetail() {
 
       if (!labelError && labelData) {
         setLabelInfo(labelData);
+      } else {
+        // For artists who can't see label profiles due to RLS,
+        // try to get label name from royalties table
+        const { data: royaltyData } = await supabase
+          .from('royalties')
+          .select('label_name')
+          .limit(1);
+        
+        if (royaltyData && royaltyData.length > 0) {
+          // Use the label_name from royalties as a fallback
+          setLabelInfo({
+            id: releaseData.label_id,
+            full_name: royaltyData[0].label_name,
+            email: ''
+          });
+        } else {
+          // Last resort: check if current user has parent_label_id
+          const { data: currentUserProfile } = await supabase
+            .from('profiles')
+            .select('parent_label_id')
+            .eq('id', releaseData.label_id)
+            .maybeSingle();
+          
+          // If still no data, try to get parent label info
+          if (currentUserProfile?.parent_label_id) {
+            const { data: parentLabel } = await supabase
+              .from('profiles')
+              .select('id, full_name, email')
+              .eq('id', currentUserProfile.parent_label_id)
+              .maybeSingle();
+            
+            if (parentLabel) {
+              setLabelInfo(parentLabel);
+            }
+          }
+        }
       }
 
       // Fetch tracks
@@ -319,10 +375,10 @@ export default function ReleaseDetail() {
               <p className="text-muted-foreground">oleh {release.artist_name}</p>
             </div>
           </div>
-          {canManageReleases && (
+          {(canManageReleases || isArtist) && (canFullyEdit || canEditLyricsOnly) && (
             <Button className="gradient-primary" onClick={() => setFormOpen(true)}>
               <Pencil className="h-4 w-4 mr-2" />
-              Edit Release
+              {canEditLyricsOnly ? 'Edit Lyrics' : 'Edit Release'}
             </Button>
           )}
         </div>
@@ -431,6 +487,8 @@ export default function ReleaseDetail() {
                           <TableHead>Composer</TableHead>
                           <TableHead>Genre</TableHead>
                           <TableHead className="w-16">Audio</TableHead>
+                          {isAdmin && <TableHead className="w-16">Full Audio</TableHead>}
+                          {isAdmin && <TableHead className="w-16">Clip</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -479,6 +537,52 @@ export default function ReleaseDetail() {
                                   <span className="text-xs text-muted-foreground">-</span>
                                 )}
                               </TableCell>
+                              {isAdmin && (
+                                <TableCell>
+                                  {track.audio_url ? (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => {
+                                        const link = document.createElement('a');
+                                        link.href = track.audio_url!;
+                                        link.download = `${track.title} - ${track.artist_name}.mp3`;
+                                        link.target = '_blank';
+                                        link.click();
+                                      }}
+                                      title="Download full audio"
+                                    >
+                                      <Download className="h-4 w-4" />
+                                    </Button>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">-</span>
+                                  )}
+                                </TableCell>
+                              )}
+                              {isAdmin && (
+                                <TableCell>
+                                  {track.clip_url ? (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => {
+                                        const link = document.createElement('a');
+                                        link.href = track.clip_url!;
+                                        link.download = `${track.title} - ${track.artist_name} (clip).mp3`;
+                                        link.target = '_blank';
+                                        link.click();
+                                      }}
+                                      title="Download audio clip"
+                                    >
+                                      <Download className="h-4 w-4 text-muted-foreground" />
+                                    </Button>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">-</span>
+                                  )}
+                                </TableCell>
+                              )}
                             </TableRow>
                           );
                         })}
@@ -610,6 +714,7 @@ export default function ReleaseDetail() {
         onOpenChange={setFormOpen}
         release={release}
         onSuccess={fetchReleaseData}
+        lyricsOnlyMode={canEditLyricsOnly}
       />
     </DashboardLayout>
   );

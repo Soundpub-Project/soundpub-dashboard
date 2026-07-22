@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.gitignore
+.lovable
+bun.lock
+bun.lockb
+README.md
+Dockerfile
+docker-compose.yml
+.env
+.env.local
+.env.production
+.env.development

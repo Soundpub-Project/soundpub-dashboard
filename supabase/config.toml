@@ -29,3 +29,36 @@ verify_jwt = false
 
 [functions.get-ga4-config]
 verify_jwt = false
+
+[functions.send-royalty-notification]
+verify_jwt = false
+
+[functions.test-gcs]
+verify_jwt = false
+
+[functions.create-whitelabel-artist]
+verify_jwt = false
+
+[functions.set-artist-password]
+verify_jwt = false
+
+[functions.gcs-manage]
+verify_jwt = false
+
+[functions.get-catalog-tracks]
+verify_jwt = false
+
+[functions.sso-login]
+verify_jwt = false
+
+[functions.create-xendit-invoice]
+verify_jwt = false
+
+[functions.xendit-webhook]
+verify_jwt = false
+
+[functions.info-soundpub]
+verify_jwt = false
+
+[functions.backup-storage-to-drive]
+verify_jwt = false

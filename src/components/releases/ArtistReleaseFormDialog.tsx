@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -42,7 +43,9 @@ import {
   Music, 
   ImageIcon,
   AlertTriangle,
-  Beaker
+  Beaker,
+  Lock,
+  UserCog
 } from 'lucide-react';
 
 // Genre list
@@ -114,19 +117,40 @@ export function ArtistReleaseFormDialog({
   onSuccess,
 }: ArtistReleaseFormDialogProps) {
   const { user, profile } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [paymentLoading, setPaymentLoading] = useState(false);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [artistProfile, setArtistProfile] = useState<{ artist_name: string } | null>(null);
+  const [profileChecked, setProfileChecked] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isEditMode = !!release;
+
+  // Fetch artist_profiles when opening
+  useEffect(() => {
+    if (!open || !user) return;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from('artist_profiles')
+        .select('artist_name')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      setArtistProfile(data || null);
+      setProfileChecked(true);
+    })();
+  }, [open, user]);
+
+  const stageName = artistProfile?.artist_name || '';
+  const profileIncomplete = profileChecked && !stageName;
 
   const form = useForm<ReleaseFormValues>({
     resolver: zodResolver(releaseFormSchema),
     defaultValues: {
       title: '',
-      artist_name: profile?.full_name || '',
+      artist_name: '',
       release_type: 'single',
       genre: '',
       release_date: '',
@@ -151,10 +175,10 @@ export function ArtistReleaseFormDialog({
   useEffect(() => {
     if (open && release) {
       loadReleaseData();
-    } else if (open && !release) {
+    } else if (open && !release && stageName) {
       form.reset({
         title: '',
-        artist_name: profile?.full_name || '',
+        artist_name: stageName,
         release_type: 'single',
         genre: '',
         release_date: '',
@@ -172,7 +196,7 @@ export function ArtistReleaseFormDialog({
       setCoverFile(null);
       setCoverPreview(null);
     }
-  }, [open, release, profile]);
+  }, [open, release, stageName]);
 
   const loadReleaseData = async () => {
     if (!release) return;
@@ -246,9 +270,14 @@ export function ArtistReleaseFormDialog({
 
     setUploadingCover(true);
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session?.access_token) {
+        throw new Error('Anda harus login terlebih dahulu');
+      }
+      const userId = sessionData.session.user.id;
       const fileExt = coverFile.name.split('.').pop();
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
-      const filePath = `covers/${fileName}`;
+      const filePath = `${userId}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from('release-covers')
@@ -339,12 +368,13 @@ export function ArtistReleaseFormDialog({
 
         toast.success('Release berhasil diperbarui');
       } else {
-        // Create new release
+        // Create new release with artist_user_id for ID-based matching
         const { data: newRelease, error: releaseError } = await supabase
           .from('releases')
           .insert({
             title: values.title,
             artist_name: values.artist_name,
+            artist_user_id: user.id, // NEW: Include artist's user ID for reliable matching
             release_type: values.release_type,
             genre: values.genre || null,
             release_date: values.release_date || null,
@@ -358,12 +388,13 @@ export function ArtistReleaseFormDialog({
 
         if (releaseError) throw releaseError;
 
-        // Insert tracks
+        // Insert tracks with artist_user_id
         for (const track of values.tracks) {
           await supabase.from('tracks').insert({
             release_id: newRelease.id,
             title: track.title,
             artist_name: values.artist_name,
+            artist_user_id: user.id, // NEW: Include artist's user ID
             composer: track.composer || null,
             lyricist: track.lyricist || null,
             genre: track.genre || null,
@@ -382,6 +413,185 @@ export function ArtistReleaseFormDialog({
       toast.error(error.message || 'Gagal menyimpan release');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    const values = form.getValues();
+    if (!values.title || !values.artist_name || !values.release_type) {
+      toast.error('Judul, artist, dan tipe release wajib diisi');
+      return;
+    }
+    if (!user || !profile?.parent_label_id) {
+      toast.error('Profile tidak lengkap');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const coverUrl = await uploadCover();
+
+      const { data: newRelease, error: releaseError } = await supabase
+        .from('releases')
+        .insert({
+          title: values.title,
+          artist_name: values.artist_name,
+          artist_user_id: user.id,
+          release_type: values.release_type,
+          genre: values.genre || null,
+          release_date: values.release_date || null,
+          cover_url: coverUrl,
+          label_id: profile.parent_label_id,
+          created_by: user.id,
+          status: 'draft',
+        })
+        .select('id')
+        .single();
+
+      if (releaseError) throw releaseError;
+
+      for (const track of values.tracks) {
+        await supabase.from('tracks').insert({
+          release_id: newRelease.id,
+          title: track.title,
+          artist_name: values.artist_name,
+          artist_user_id: user.id,
+          composer: track.composer || null,
+          lyricist: track.lyricist || null,
+          genre: track.genre || null,
+          lyrics: track.lyrics || null,
+          explicit_lyrics: track.explicit_lyrics,
+        });
+      }
+
+      toast.success('Release disimpan sebagai draft');
+      onSuccess();
+      onOpenChange(false);
+    } catch (error: any) {
+      toast.error(error.message || 'Gagal menyimpan draft');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePayment = async () => {
+    const isValid = await form.trigger();
+    if (!isValid) {
+      toast.error('Mohon lengkapi semua field yang wajib diisi');
+      return;
+    }
+
+    const values = form.getValues();
+    if (!user || !profile?.parent_label_id) return;
+
+    setPaymentLoading(true);
+    try {
+      const coverUrl = await uploadCover();
+      let releaseId: string;
+
+      if (isEditMode && release) {
+        // Update existing draft release to pending
+        const { error: releaseError } = await supabase
+          .from('releases')
+          .update({
+            title: values.title,
+            artist_name: values.artist_name,
+            release_type: values.release_type,
+            genre: values.genre || null,
+            release_date: values.release_date || null,
+            cover_url: coverUrl,
+            status: 'pending',
+          })
+          .eq('id', release.id);
+
+        if (releaseError) throw releaseError;
+        releaseId = release.id;
+
+        // Update tracks
+        const existingTrackIds = values.tracks.filter(t => t.id).map(t => t.id);
+        if (existingTrackIds.length > 0) {
+          await supabase.from('tracks').delete().eq('release_id', release.id).not('id', 'in', `(${existingTrackIds.join(',')})`);
+        }
+        for (const track of values.tracks) {
+          if (track.id) {
+            await supabase.from('tracks').update({
+              title: track.title,
+              artist_name: values.artist_name,
+              composer: track.composer || null,
+              lyricist: track.lyricist || null,
+              genre: track.genre || null,
+              lyrics: track.lyrics || null,
+              explicit_lyrics: track.explicit_lyrics,
+            }).eq('id', track.id);
+          } else {
+            await supabase.from('tracks').insert({
+              release_id: release.id,
+              title: track.title,
+              artist_name: values.artist_name,
+              artist_user_id: user.id,
+              composer: track.composer || null,
+              lyricist: track.lyricist || null,
+              genre: track.genre || null,
+              lyrics: track.lyrics || null,
+              explicit_lyrics: track.explicit_lyrics,
+            });
+          }
+        }
+      } else {
+        // Create new release
+        const { data: newRelease, error: releaseError } = await supabase
+          .from('releases')
+          .insert({
+            title: values.title,
+            artist_name: values.artist_name,
+            artist_user_id: user.id,
+            release_type: values.release_type,
+            genre: values.genre || null,
+            release_date: values.release_date || null,
+            cover_url: coverUrl,
+            label_id: profile.parent_label_id,
+            created_by: user.id,
+            status: 'pending',
+          })
+          .select('id')
+          .single();
+
+        if (releaseError) throw releaseError;
+        releaseId = newRelease.id;
+
+        for (const track of values.tracks) {
+          await supabase.from('tracks').insert({
+            release_id: newRelease.id,
+            title: track.title,
+            artist_name: values.artist_name,
+            artist_user_id: user.id,
+            composer: track.composer || null,
+            lyricist: track.lyricist || null,
+            genre: track.genre || null,
+            lyrics: track.lyrics || null,
+            explicit_lyrics: track.explicit_lyrics,
+          });
+        }
+      }
+
+      // Create invoice
+      const { data: invoiceData, error: invoiceError } = await supabase.functions.invoke('create-xendit-invoice', {
+        body: { release_id: releaseId },
+      });
+
+      if (invoiceError) throw new Error(invoiceError.message || 'Gagal membuat invoice');
+
+      if (invoiceData?.invoice_url) {
+        toast.success('Mengarahkan ke halaman pembayaran...');
+        window.location.href = invoiceData.invoice_url;
+      } else {
+        throw new Error('Invoice URL tidak ditemukan');
+      }
+    } catch (error: any) {
+      console.error('Payment error:', error);
+      toast.error(error.message || 'Gagal memproses pembayaran');
+    } finally {
+      setPaymentLoading(false);
     }
   };
 
@@ -414,6 +624,30 @@ export function ArtistReleaseFormDialog({
           </Alert>
         </div>
 
+        {profileIncomplete && !isEditMode ? (
+          <div className="px-6 pb-6">
+            <Alert className="border-destructive/40 bg-destructive/5">
+              <UserCog className="h-4 w-4 text-destructive" />
+              <AlertDescription className="space-y-3">
+                <p className="text-foreground">
+                  <strong>Profile Artis belum lengkap.</strong> Anda harus mengisi nama artis (stage name)
+                  di Profile Artis terlebih dahulu sebelum membuat release.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    onOpenChange(false);
+                    navigate('/artist-profile');
+                  }}
+                >
+                  <UserCog className="h-4 w-4 mr-2" />
+                  Lengkapi Profile Artis
+                </Button>
+              </AlertDescription>
+            </Alert>
+          </div>
+        ) : (
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <ScrollArea className="max-h-[60vh] px-6">
@@ -479,10 +713,21 @@ export function ArtistReleaseFormDialog({
                     name="artist_name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Nama Artist *</FormLabel>
+                        <FormLabel className="flex items-center gap-1">
+                          Nama Artist (Main) *
+                          <Lock className="h-3 w-3 text-muted-foreground" />
+                        </FormLabel>
                         <FormControl>
-                          <Input placeholder="Nama artist" {...field} />
+                          <Input
+                            placeholder="Nama artist"
+                            {...field}
+                            disabled
+                            className="bg-muted/40"
+                          />
                         </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          Diambil dari Profile Artis. Featured artist bisa ditambahkan di bagian artist tambahan.
+                        </p>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -720,23 +965,63 @@ export function ArtistReleaseFormDialog({
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
-                disabled={loading}
+                disabled={loading || paymentLoading}
               >
                 Batal
               </Button>
-              <Button
-                type="submit"
-                disabled={loading || uploadingCover}
-                className="gradient-primary"
-              >
-                {(loading || uploadingCover) && (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                )}
-                {isEditMode ? 'Simpan Perubahan' : 'Buat Release'}
-              </Button>
+              {isEditMode && release?.status !== 'draft' ? (
+                <Button
+                  type="submit"
+                  disabled={loading || uploadingCover || release?.status === 'pending_paid'}
+                  className="gradient-primary"
+                >
+                  {(loading || uploadingCover) && (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  )}
+                  {release?.status === 'pending_paid' ? 'Terkunci (Sudah Dibayar)' : 'Simpan Perubahan'}
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={isEditMode ? () => form.handleSubmit(onSubmit)() : handleSaveDraft}
+                    disabled={loading || paymentLoading || uploadingCover}
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Menyimpan...
+                      </>
+                    ) : (
+                      isEditMode ? 'Simpan Perubahan' : 'Simpan Draft'
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (confirm('Pastikan data release sudah benar. Setelah pembayaran, release tidak dapat diedit lagi. Lanjutkan?')) {
+                        handlePayment();
+                      }
+                    }}
+                    disabled={loading || paymentLoading || uploadingCover}
+                    className="gradient-primary"
+                  >
+                    {paymentLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Memproses...
+                      </>
+                    ) : (
+                      'Lanjutkan Pembayaran'
+                    )}
+                  </Button>
+                </>
+              )}
             </div>
           </form>
         </Form>
+        )}
       </DialogContent>
     </Dialog>
   );

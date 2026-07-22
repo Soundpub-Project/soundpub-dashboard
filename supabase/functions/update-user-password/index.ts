@@ -1,5 +1,20 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { corsHeaders } from '../_shared/cors.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+
+const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
+  const existingDb = options.db || {}
+  return createClient(supabaseUrl, supabaseKey, {
+    ...options,
+    db: { ...existingDb, schema: getDatabaseSchema() },
+  })
+}
+
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+}
 
 interface UpdatePasswordRequest {
   user_id: string
@@ -20,7 +35,7 @@ Deno.serve(async (req) => {
     }
 
     // Create a client with the user's token to check their permissions
-    const supabaseClient = createClient(
+    const supabaseClient = createSoundpubClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       {
@@ -58,8 +73,8 @@ Deno.serve(async (req) => {
       throw new Error('Missing required fields: user_id and new_password')
     }
 
-    if (new_password.length < 6) {
-      throw new Error('Password must be at least 6 characters')
+    if (new_password.length < 6 || new_password.length > 128) {
+      throw new Error('Password must be 6-128 characters')
     }
 
     // If label, verify the target user is their artist
@@ -93,7 +108,7 @@ Deno.serve(async (req) => {
     }
 
     // Create admin client for password update
-    const supabaseAdmin = createClient(
+    const supabaseAdmin = createSoundpubClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       {
@@ -164,11 +179,17 @@ Deno.serve(async (req) => {
     )
   } catch (error: unknown) {
     console.error('Error updating password:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Failed to update password'
+    const SAFE_MESSAGES = ['Unauthorized', 'Password must be', 'Missing required', 'Only admins', 'Only superadmins', 'User not found', 'You can only update']
+    let safeMessage = 'Failed to update password'
+    if (error instanceof Error) {
+      if (SAFE_MESSAGES.some(m => error.message.startsWith(m) || error.message.includes(m))) {
+        safeMessage = error.message
+      }
+    }
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: errorMessage
+        error: safeMessage
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

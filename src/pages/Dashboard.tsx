@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { useRoyaltyStats, useRoyaltyMonthlySummary, useRoyaltyPlatformSummary } from '@/hooks/useRoyaltyData';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +20,7 @@ import {
   Clock,
   CheckCircle
 } from 'lucide-react';
+import { ArtistOnboardingDialog } from '@/components/onboarding/ArtistOnboardingDialog';
 import { 
   AreaChart, 
   Area, 
@@ -66,7 +68,8 @@ interface TopPlatform {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { profile, isAdmin, isLabel, isArtist } = useAuth();
+  const { profile, isAdmin, isLabel, isArtist, isWhitelabel, isSsoUser, isArtistProfileCompleted, refreshProfile } = useAuth();
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [stats, setStats] = useState<DashboardStats>({
     totalReleases: 0,
     totalTracks: 0,
@@ -78,127 +81,123 @@ export default function Dashboard() {
     pendingReleases: 0,
   });
   const [recentReleases, setRecentReleases] = useState<RecentRelease[]>([]);
-  const [monthlyRevenue, setMonthlyRevenue] = useState<MonthlyRevenue[]>([]);
-  const [topPlatforms, setTopPlatforms] = useState<TopPlatform[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const { data: royaltyStats, isLoading: royaltyLoading } = useRoyaltyStats();
+  const { data: monthlyData } = useRoyaltyMonthlySummary();
+  const { data: platformData } = useRoyaltyPlatformSummary(5);
+
+  const monthlyRevenue = (monthlyData || []).slice(-6).map(d => ({ month: d.month, revenue: d.revenue, streams: d.streams }));
+  const topPlatforms = (platformData || []).map(d => ({ platform: d.platform, revenue: d.revenue, streams: d.streams }));
+
+  useEffect(() => {
+    if (royaltyStats && isAdmin) {
+      setStats(prev => ({
+        ...prev,
+        totalRevenue: royaltyStats.totalRevenue,
+        totalStreams: royaltyStats.totalStreams,
+      }));
+    }
+  }, [royaltyStats, isAdmin]);
 
   useEffect(() => {
     if (profile) {
-      fetchDashboardData();
+      fetchBasicStats();
     }
   }, [profile]);
 
-  const fetchDashboardData = async () => {
+  // Auto-show onboarding dialog for SSO users who haven't completed profile
+  useEffect(() => {
+    if (isSsoUser && !isArtistProfileCompleted && profile) {
+      setOnboardingOpen(true);
+    }
+  }, [isSsoUser, isArtistProfileCompleted, profile]);
+
+  const fetchBasicStats = async () => {
     try {
-      // Fetch releases count
-      const { count: releasesCount } = await supabase
+      let releasesQuery = supabase.from('releases').select('*', { count: 'exact', head: true });
+      let pendingQuery = supabase.from('releases').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+      let recentQuery = supabase
         .from('releases')
-        .select('*', { count: 'exact', head: true });
+        .select('id, title, artist_name, cover_url, status, release_date, release_type')
+        .order('created_at', { ascending: false })
+        .limit(5);
 
-      // Fetch pending releases count
-      const { count: pendingReleasesCount } = await supabase
-        .from('releases')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending');
-
-      // Fetch tracks count
-      const { count: tracksCount } = await supabase
-        .from('tracks')
-        .select('*', { count: 'exact', head: true });
-
-      // Fetch royalties data
-      const { data: royaltiesData } = await supabase
-        .from('royalties')
-        .select('pendapatan_label_artis, unit_penjualan, period, platform');
-
-      const totalRevenue = royaltiesData?.reduce(
-        (sum, r) => sum + Number(r.pendapatan_label_artis || 0),
-        0
-      ) || 0;
-
-      const totalStreams = royaltiesData?.reduce(
-        (sum, r) => sum + Number(r.unit_penjualan || 0),
-        0
-      ) || 0;
-
-      // Calculate monthly revenue
-      const monthlyData: Record<string, { revenue: number; streams: number }> = {};
-      royaltiesData?.forEach((r) => {
-        const period = r.period || 'Unknown';
-        if (!monthlyData[period]) {
-          monthlyData[period] = { revenue: 0, streams: 0 };
+      if (!isAdmin && profile?.id) {
+        if (isArtist) {
+          releasesQuery = releasesQuery.eq('artist_user_id', profile.id);
+          pendingQuery = pendingQuery.eq('artist_user_id', profile.id);
+          recentQuery = recentQuery.eq('artist_user_id', profile.id);
         }
-        monthlyData[period].revenue += Number(r.pendapatan_label_artis || 0);
-        monthlyData[period].streams += Number(r.unit_penjualan || 0);
-      });
-
-      const sortedMonthly = Object.entries(monthlyData)
-        .map(([month, data]) => ({ month, ...data }))
-        .sort((a, b) => a.month.localeCompare(b.month))
-        .slice(-6); // Last 6 months
-
-      setMonthlyRevenue(sortedMonthly);
-
-      // Calculate top platforms
-      const platformData: Record<string, { revenue: number; streams: number }> = {};
-      royaltiesData?.forEach((r) => {
-        const platform = r.platform || 'Unknown';
-        if (!platformData[platform]) {
-          platformData[platform] = { revenue: 0, streams: 0 };
+        if (isLabel || isWhitelabel) {
+          releasesQuery = releasesQuery.eq('label_id', profile.id);
+          pendingQuery = pendingQuery.eq('label_id', profile.id);
+          recentQuery = recentQuery.eq('label_id', profile.id);
         }
-        platformData[platform].revenue += Number(r.pendapatan_label_artis || 0);
-        platformData[platform].streams += Number(r.unit_penjualan || 0);
-      });
+      }
 
-      const sortedPlatforms = Object.entries(platformData)
-        .map(([platform, data]) => ({ platform, ...data }))
-        .sort((a, b) => b.revenue - a.revenue)
-        .slice(0, 5); // Top 5 platforms
-
-      setTopPlatforms(sortedPlatforms);
+      // Fetch counts in parallel - these are fast queries
+      const [releasesRes, pendingRes, tracksRes, recentReleasesRes] = await Promise.all([
+        releasesQuery,
+        pendingQuery,
+        supabase.from('tracks').select('*', { count: 'exact', head: true }),
+        recentQuery,
+      ]);
 
       // Admin-only stats
       let usersCount = 0;
       let pendingPayoutsCount = 0;
 
       if (isAdmin) {
-        const { count: userCount } = await supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true });
-        usersCount = userCount || 0;
-
-        const { count: payoutCount } = await supabase
-          .from('payout_requests')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'pending');
-        pendingPayoutsCount = payoutCount || 0;
+        const [userRes, payoutRes] = await Promise.all([
+          supabase.from('profiles').select('*', { count: 'exact', head: true }),
+          supabase.from('payout_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        ]);
+        usersCount = userRes.count || 0;
+        pendingPayoutsCount = payoutRes.count || 0;
       }
 
-      setStats({
-        totalReleases: releasesCount || 0,
-        totalTracks: tracksCount || 0,
-        totalRevenue,
-        balance: profile?.balance || 0,
+      let roleRevenue = isAdmin ? (royaltyStats?.totalRevenue || 0) : 0;
+      let roleStreams = isAdmin ? (royaltyStats?.totalStreams || 0) : 0;
+      let roleTrackCount = tracksRes.count || 0;
+      let roleBalance = Number(profile?.balance || 0);
+
+      if (profile?.id) {
+        const { data: dashboardStats, error: dashboardStatsError } = await supabase
+          .rpc('get_dashboard_role_stats' as any)
+          .single();
+
+        if (!dashboardStatsError && dashboardStats) {
+          roleRevenue = Number((dashboardStats as any).total_revenue || 0);
+          roleStreams = Number((dashboardStats as any).total_streams || 0);
+          roleTrackCount = Number((dashboardStats as any).unique_tracks || roleTrackCount);
+          roleBalance = Number((dashboardStats as any).available_balance || 0);
+        } else if (dashboardStatsError) {
+          console.warn('Dashboard role stats RPC failed, falling back to profile balance:', dashboardStatsError);
+        }
+      }
+
+      setStats(prev => ({
+        ...prev,
+        totalReleases: releasesRes.count || 0,
+        totalTracks: roleTrackCount,
+        totalRevenue: roleRevenue,
+        totalStreams: roleStreams,
+        balance: roleBalance,
         totalUsers: usersCount,
         pendingPayouts: pendingPayoutsCount,
-        totalStreams,
-        pendingReleases: pendingReleasesCount || 0,
-      });
+        pendingReleases: pendingRes.count || 0,
+      }));
 
-      // Fetch recent releases
-      const { data: releases } = await supabase
-        .from('releases')
-        .select('id, title, artist_name, cover_url, status, release_date, release_type')
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      setRecentReleases(releases || []);
+      setRecentReleases(recentReleasesRes.data || []);
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+      console.error('Error fetching basic stats:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  // Royalty data now comes from React Query hooks above
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -258,8 +257,26 @@ export default function Dashboard() {
           )}
         </div>
 
+        {/* SSO Artist Profile Reminder Banner */}
+        {isSsoUser && !isArtistProfileCompleted && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 flex items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <Clock className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-amber-600 dark:text-amber-400">Lengkapi Profil Artis Anda</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Anda perlu melengkapi informasi profil artis sebelum dapat menambahkan release baru.
+                </p>
+              </div>
+            </div>
+            <Button size="sm" variant="outline" className="shrink-0 border-amber-500/50 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10" onClick={() => setOnboardingOpen(true)}>
+              Lengkapi Sekarang
+            </Button>
+          </div>
+        )}
+
         {/* Main Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
           <Card className="bg-card/50 border-border/50 hover:border-primary/30 transition-colors">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -319,7 +336,7 @@ export default function Dashboard() {
               </div>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {royaltyLoading ? (
                 <Loader2 className="h-6 w-6 animate-spin" />
               ) : (
                 <>
@@ -424,7 +441,7 @@ export default function Dashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {royaltyLoading ? (
                 <div className="flex justify-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
@@ -487,7 +504,7 @@ export default function Dashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {royaltyLoading ? (
                 <div className="flex justify-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
@@ -606,6 +623,16 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <ArtistOnboardingDialog
+        open={onboardingOpen}
+        onOpenChange={setOnboardingOpen}
+        allowSkip={true}
+        onComplete={() => {
+          refreshProfile();
+          setOnboardingOpen(false);
+        }}
+      />
     </DashboardLayout>
   );
 }

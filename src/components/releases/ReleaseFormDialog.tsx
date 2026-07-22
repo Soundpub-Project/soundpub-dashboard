@@ -59,6 +59,8 @@ import { Badge } from '@/components/ui/badge';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MediaUploadSection } from './MediaUploadSection';
+import { ArtistSelector } from './ArtistSelector';
+import { ContributorSelector } from './ContributorSelector';
 
 // Genre list
 const GENRE_LIST = [
@@ -100,8 +102,8 @@ const trackSchema = z.object({
   explicit_lyrics: z.boolean().default(false),
   contributors: z.array(contributorSchema).optional().default([]),
   audio_url: z.string().optional().nullable(),
-  video_url: z.string().optional().nullable(),
   clip_url: z.string().optional().nullable(),
+  duration: z.number().optional().nullable(),
 });
 
 const releaseFormSchema = z.object({
@@ -128,6 +130,7 @@ interface Artist {
   id: string;
   name: string;
   label_id: string;
+  user_id?: string; // NEW: Link to profiles.id for artist users
 }
 
 interface Release {
@@ -135,6 +138,7 @@ interface Release {
   upc: string;
   title: string;
   artist_name: string;
+  artist_user_id?: string | null;
   release_date: string | null;
   cover_url: string | null;
   genre: string | null;
@@ -157,8 +161,8 @@ interface Track {
   explicit_lyrics?: boolean;
   contributors?: { name: string; type: string; role: string }[];
   audio_url?: string | null;
-  video_url?: string | null;
   clip_url?: string | null;
+  duration?: number | null;
 }
 
 interface ReleaseFormDialogProps {
@@ -166,6 +170,7 @@ interface ReleaseFormDialogProps {
   onOpenChange: (open: boolean) => void;
   release?: Release | null;
   onSuccess: () => void;
+  lyricsOnlyMode?: boolean;
 }
 
 export function ReleaseFormDialog({
@@ -173,9 +178,11 @@ export function ReleaseFormDialog({
   onOpenChange,
   release,
   onSuccess,
+  lyricsOnlyMode = false,
 }: ReleaseFormDialogProps) {
-  const { user, isAdmin, isLabel } = useAuth();
+  const { user, isAdmin, isLabel, isWhitelabel, isArtist, profile } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [paymentLoading, setPaymentLoading] = useState(false);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
@@ -183,6 +190,7 @@ export function ReleaseFormDialog({
   const [loadingLabels, setLoadingLabels] = useState(false);
   const [labelArtists, setLabelArtists] = useState<Artist[]>([]);
   const [loadingArtists, setLoadingArtists] = useState(false);
+  const [artistStageName, setArtistStageName] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isEditMode = !!release;
@@ -210,8 +218,8 @@ export function ReleaseFormDialog({
           explicit_lyrics: false,
           contributors: [],
           audio_url: null,
-          video_url: null,
           clip_url: null,
+          duration: null,
         },
       ],
     },
@@ -229,12 +237,31 @@ export function ReleaseFormDialog({
     }
   }, [open, isAdmin]);
 
-  // Fetch artists for label
+  // Fetch artists for label, whitelabel, or artist (using parent_label_id)
   useEffect(() => {
-    if (open && isLabel && user) {
+    if (open && (isLabel || isWhitelabel) && user) {
       fetchLabelArtists(user.id);
+    } else if (open && isArtist && profile?.parent_label_id) {
+      fetchLabelArtists(profile.parent_label_id);
     }
-  }, [open, isLabel, user]);
+  }, [open, isLabel, isWhitelabel, isArtist, user, profile?.parent_label_id]);
+
+  // Fetch artist stage name from artist_profiles for artist role
+  useEffect(() => {
+    if (!open || !isArtist || !user) return;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from('artist_profiles')
+        .select('artist_name')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      const name = data?.artist_name || profile?.full_name || '';
+      setArtistStageName(name);
+      if (name && !isEditMode) {
+        form.setValue('artist_name', name);
+      }
+    })();
+  }, [open, isArtist, user, profile?.full_name, isEditMode]);
 
   // Fetch artists when label is selected by admin
   const selectedLabelId = form.watch('label_id');
@@ -247,10 +274,11 @@ export function ReleaseFormDialog({
   const fetchLabels = async () => {
     setLoadingLabels(true);
     try {
+      // Fetch both label and whitelabel roles
       const { data: labelRoles, error: rolesError } = await supabase
         .from('user_roles')
-        .select('user_id')
-        .eq('role', 'label');
+        .select('user_id, role')
+        .in('role', ['label', 'whitelabel']);
 
       if (rolesError) throw rolesError;
 
@@ -262,7 +290,19 @@ export function ReleaseFormDialog({
           .in('id', labelIds);
 
         if (profilesError) throw profilesError;
-        setLabels(profiles || []);
+        
+        // Map role info to profiles for display
+        const profilesWithRole = (profiles || []).map(profile => {
+          const roleInfo = labelRoles.find(r => r.user_id === profile.id);
+          return {
+            ...profile,
+            full_name: roleInfo?.role === 'whitelabel' 
+              ? `${profile.full_name} (Whitelabel)` 
+              : profile.full_name
+          };
+        });
+        
+        setLabels(profilesWithRole);
       }
     } catch (error) {
       console.error('Error fetching labels:', error);
@@ -274,14 +314,37 @@ export function ReleaseFormDialog({
   const fetchLabelArtists = async (labelId: string) => {
     setLoadingArtists(true);
     try {
-      const { data, error } = await supabase
-        .from('artists')
-        .select('id, name, label_id')
-        .eq('label_id', labelId)
-        .order('name');
+      // Fetch only valid artist user accounts under this label/whitelabel.
+      const { data: roleRows, error: roleError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'artist');
 
-      if (error) throw error;
-      setLabelArtists(data || []);
+      if (roleError) throw roleError;
+
+      const artistUserIds = (roleRows || []).map((row) => row.user_id);
+      const { data: artistProfiles, error: profilesError } = artistUserIds.length > 0
+        ? await supabase
+            .from('profiles')
+            .select('id, full_name, parent_label_id, status')
+            .eq('parent_label_id', labelId)
+            .in('id', artistUserIds)
+            .order('full_name')
+        : { data: [], error: null };
+
+      if (profilesError) throw profilesError;
+
+      const profileArtists = (artistProfiles || [])
+        .filter((profile) => !['suspended', 'deleted'].includes(String(profile.status || '').toLowerCase()))
+        .map((profile) => ({
+          id: profile.id,
+          name: profile.full_name,
+          label_id: labelId,
+          user_id: profile.id,
+        }));
+
+      // For release creation we only want active artist profiles that belong to the selected label.
+      setLabelArtists(profileArtists);
     } catch (error) {
       console.error('Error fetching artists:', error);
       setLabelArtists([]);
@@ -290,40 +353,62 @@ export function ReleaseFormDialog({
     }
   };
 
+  const findArtistUserIdByName = (artistName: string) => {
+    const normalizedName = artistName.toLowerCase().trim();
+    return labelArtists.find((artist) => artist.name.toLowerCase().trim() === normalizedName)?.user_id || null;
+  };
+  // Reset all state when dialog opens or release prop changes
   useEffect(() => {
-    if (open && release) {
-      loadReleaseData();
-    } else if (open && !release) {
-      form.reset({
-        upc: '',
-        title: '',
-        artist_name: '',
-        release_type: 'single',
-        genre: '',
-        release_date: '',
-        status: 'pending',
-        label_id: isLabel && user ? user.id : '',
-        tracks: [
-        {
-          isrc: '',
-          title: '',
-          artists: [{ name: '', type: 'Main Artist' }],
-          composer: '',
-          lyricist: '',
-          genre: '',
-          lyrics: '',
-          explicit_lyrics: false,
-          contributors: [],
-          audio_url: null,
-          video_url: null,
-          clip_url: null,
-        },
-        ],
-      });
+    if (open) {
+      // Always reset cover state first when dialog opens
       setCoverFile(null);
       setCoverPreview(null);
+      
+      if (release) {
+        loadReleaseData();
+      } else {
+        // Determine default label_id and artist_name for different roles
+        const defaultLabelId = isArtist && profile?.parent_label_id
+          ? profile.parent_label_id
+          : (isLabel || isWhitelabel) && user ? user.id : '';
+        const defaultArtistName = isArtist
+          ? (artistStageName || profile?.full_name || '')
+          : '';
+
+        form.reset({
+          upc: '',
+          title: '',
+          artist_name: defaultArtistName,
+          release_type: 'single',
+          genre: '',
+          release_date: '',
+          status: 'pending',
+          label_id: defaultLabelId,
+          tracks: [
+            {
+              isrc: '',
+              title: '',
+              artists: [{ name: '', type: 'Main Artist' }],
+              composer: '',
+              lyricist: '',
+              genre: '',
+              lyrics: '',
+              explicit_lyrics: false,
+              contributors: [],
+              audio_url: null,
+              clip_url: null,
+              duration: null,
+            },
+          ],
+        });
+      }
+    } else {
+      // Reset everything when dialog closes
+      setCoverFile(null);
+      setCoverPreview(null);
+      setLabelArtists([]);
     }
-  }, [open, release]);
+  }, [open, release?.id]);
 
   const loadReleaseData = async () => {
     if (!release) return;
@@ -337,6 +422,7 @@ export function ReleaseFormDialog({
 
       if (error) throw error;
 
+      // Reset form with release data - ensure label_id is properly set
       form.reset({
         upc: release.upc || '',
         title: release.title,
@@ -344,8 +430,8 @@ export function ReleaseFormDialog({
         release_type: release.release_type || 'single',
         genre: release.genre || '',
         release_date: release.release_date || '',
-        status: release.status,
-        label_id: release.label_id,
+        status: release.status || 'pending',
+        label_id: release.label_id || '',
         tracks: tracks && tracks.length > 0
           ? tracks.map((t: any) => ({
               id: t.id,
@@ -361,8 +447,8 @@ export function ReleaseFormDialog({
               explicit_lyrics: t.explicit_lyrics || false,
               contributors: t.contributors && Array.isArray(t.contributors) ? t.contributors : [],
               audio_url: t.audio_url || null,
-              video_url: t.video_url || null,
               clip_url: t.clip_url || null,
+              duration: t.duration || null,
             }))
           : [
               {
@@ -376,12 +462,13 @@ export function ReleaseFormDialog({
                 explicit_lyrics: false,
                 contributors: [],
                 audio_url: null,
-                video_url: null,
                 clip_url: null,
+                duration: null,
               },
             ],
       });
 
+      // Set cover preview from release data (after reset to avoid stale state)
       if (release.cover_url) {
         setCoverPreview(release.cover_url);
       }
@@ -409,29 +496,69 @@ export function ReleaseFormDialog({
     setCoverPreview(URL.createObjectURL(file));
   };
 
+  // Upload cover to Supabase Storage
   const uploadCover = async (): Promise<string | null> => {
     if (!coverFile) return release?.cover_url || null;
 
     setUploadingCover(true);
     try {
-      const fileExt = coverFile.name.split('.').pop();
-      const fileName = `${crypto.randomUUID()}.${fileExt}`;
-      const filePath = `covers/${fileName}`;
+      const fileExt = coverFile.name.split('.').pop()?.toLowerCase();
+      const bucket = 'release-covers';
 
-      const { error: uploadError } = await supabase.storage
-        .from('release-covers')
-        .upload(filePath, coverFile);
+      // Get the session from Supabase
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session?.access_token) {
+        throw new Error('Anda harus login terlebih dahulu');
+      }
+      const userId = sessionData.session.user.id;
+      const fileName = `${userId}/cover-${Date.now()}.${fileExt}`;
 
-      if (uploadError) throw uploadError;
+      console.log(`Uploading cover to Supabase Storage bucket: ${bucket}, file: ${fileName}`);
 
-      const { data: urlData } = supabase.storage
-        .from('release-covers')
-        .getPublicUrl(filePath);
+      // Upload file to Supabase Storage
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .upload(fileName, coverFile, {
+          cacheControl: '3600',
+          upsert: false,
+        });
 
-      return urlData.publicUrl;
-    } catch (error) {
+      if (error) {
+        console.error('Supabase Storage upload error:', error);
+        
+        // Handle specific error codes
+        if (error.message?.includes('row-level security')) {
+          throw new Error('Anda tidak memiliki izin untuk upload. Hubungi admin.');
+        }
+        if (error.message?.includes('duplicate')) {
+          throw new Error('File dengan nama yang sama sudah ada.');
+        }
+        if (error.message?.includes('Payload too large')) {
+          throw new Error('Ukuran file terlalu besar. Maksimal 5MB.');
+        }
+        throw new Error(error.message || 'Gagal mengupload cover');
+      }
+
+      console.log('Cover upload successful:', data.path);
+
+      // For private bucket (release-covers), create a signed URL with long expiry
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(data.path, 60 * 60 * 24 * 365); // 1 year expiry
+
+      if (signedUrlError) {
+        console.error('Error creating signed URL:', signedUrlError);
+        // Fallback to public URL format
+        const { data: urlData } = supabase.storage
+          .from(bucket)
+          .getPublicUrl(data.path);
+        return urlData.publicUrl;
+      }
+
+      return signedUrlData.signedUrl;
+    } catch (error: any) {
       console.error('Error uploading cover:', error);
-      toast.error('Gagal mengupload cover');
+      toast.error(error.message || 'Gagal mengupload cover');
       return null;
     } finally {
       setUploadingCover(false);
@@ -446,20 +573,53 @@ export function ReleaseFormDialog({
 
     setLoading(true);
     try {
+      // In lyricsOnlyMode, only update lyrics for existing tracks
+      if (lyricsOnlyMode && isEditMode && release) {
+        for (const track of values.tracks) {
+          if (track.id) {
+            const { error } = await supabase
+              .from('tracks')
+              .update({
+                lyrics: track.lyrics || null,
+              })
+              .eq('id', track.id);
+
+            if (error) throw error;
+          }
+        }
+
+        toast.success('Lyrics berhasil diupdate');
+        onSuccess();
+        onOpenChange(false);
+        return;
+      }
+
       const coverUrl = await uploadCover();
 
       if (isEditMode && release) {
+        // Determine label_id for update - admin can change it, others keep the original
+        const updateLabelId = isAdmin && values.label_id ? values.label_id : release.label_id;
+        
+        // Find artist_user_id from selected artist name
+        const selectedArtist = labelArtists.find(
+          a => a.name.toLowerCase().trim() === values.artist_name.toLowerCase().trim()
+        );
+        const artistUserId = selectedArtist?.user_id || release.artist_user_id || null;
+        
         const { error: releaseError } = await supabase
           .from('releases')
           .update({
             upc: values.upc || null,
             title: values.title,
             artist_name: values.artist_name,
+            artist_user_id: artistUserId,
             release_type: values.release_type,
             genre: values.genre || null,
             release_date: values.release_date || null,
-            status: values.status,
-            cover_url: coverUrl,
+            // Only admins can change status; for others preserve existing release.status
+            ...(isAdmin && values.status ? { status: values.status } : {}),
+            ...(coverUrl !== null ? { cover_url: coverUrl } : {}),
+            label_id: updateLabelId,
           })
           .eq('id', release.id);
 
@@ -492,6 +652,7 @@ export function ReleaseFormDialog({
                 isrc: track.isrc || null,
                 title: track.title,
                 artist_name: primaryArtist,
+                artist_user_id: findArtistUserIdByName(primaryArtist) || artistUserId || null,
                 artists: track.artists,
                 composer: track.composer || null,
                 lyricist: track.lyricist || null,
@@ -500,8 +661,8 @@ export function ReleaseFormDialog({
                 explicit_lyrics: track.explicit_lyrics,
                 contributors: track.contributors || [],
                 audio_url: track.audio_url || null,
-                video_url: track.video_url || null,
                 clip_url: track.clip_url || null,
+                duration: track.duration || null,
               })
               .eq('id', track.id);
 
@@ -512,7 +673,8 @@ export function ReleaseFormDialog({
               isrc: track.isrc || null,
               title: track.title,
               artist_name: primaryArtist,
-              artists: track.artists,
+            artist_user_id: findArtistUserIdByName(primaryArtist) || artistUserId || null,
+            artists: track.artists,
               composer: track.composer || null,
               lyricist: track.lyricist || null,
               genre: track.genre || null,
@@ -520,9 +682,10 @@ export function ReleaseFormDialog({
               explicit_lyrics: track.explicit_lyrics,
               contributors: track.contributors || [],
               audio_url: track.audio_url || null,
-              video_url: track.video_url || null,
               clip_url: track.clip_url || null,
+              duration: track.duration || null,
             });
+
 
             if (error) throw error;
           }
@@ -530,7 +693,7 @@ export function ReleaseFormDialog({
 
         toast.success('Release berhasil diupdate');
       } else {
-        const labelId = isAdmin ? values.label_id : user.id;
+        const labelId = isAdmin ? values.label_id : isArtist && profile?.parent_label_id ? profile.parent_label_id : user.id;
         
         if (!labelId) {
           toast.error('Label wajib dipilih');
@@ -538,16 +701,20 @@ export function ReleaseFormDialog({
           return;
         }
 
+        // Find artist_user_id: for artist role use own ID, otherwise match from label artists
+        const artistUserId = isArtist ? user.id : (findArtistUserIdByName(values.artist_name));
+
         const { data: newRelease, error: releaseError } = await supabase
           .from('releases')
           .insert({
             upc: values.upc || null,
             title: values.title,
             artist_name: values.artist_name,
+            artist_user_id: artistUserId,
             release_type: values.release_type,
             genre: values.genre || null,
             release_date: values.release_date || null,
-            status: values.status,
+            status: values.status || 'pending',
             cover_url: coverUrl,
             label_id: labelId,
             created_by: user.id,
@@ -564,6 +731,7 @@ export function ReleaseFormDialog({
             isrc: track.isrc || null,
             title: track.title,
             artist_name: primaryArtist,
+            artist_user_id: findArtistUserIdByName(primaryArtist) || artistUserId || null,
             artists: track.artists,
             composer: track.composer || null,
             lyricist: track.lyricist || null,
@@ -572,8 +740,8 @@ export function ReleaseFormDialog({
             explicit_lyrics: track.explicit_lyrics,
             contributors: track.contributors || [],
             audio_url: track.audio_url || null,
-            video_url: track.video_url || null,
             clip_url: track.clip_url || null,
+            duration: track.duration || null,
           };
         });
 
@@ -596,6 +764,127 @@ export function ReleaseFormDialog({
     }
   };
 
+  const handleSaveDraft = async () => {
+    const values = form.getValues();
+    // Validate minimum fields
+    if (!values.title || !values.artist_name || !values.release_type) {
+      toast.error('Judul, artist, dan tipe release wajib diisi');
+      return;
+    }
+    form.setValue('status', 'draft');
+    await onSubmit({ ...values, status: 'draft' });
+  };
+
+  const handlePayment = async () => {
+    // First validate and save the release
+    const isValid = await form.trigger();
+    if (!isValid) {
+      toast.error('Mohon lengkapi semua field yang wajib diisi');
+      return;
+    }
+    
+    const values = form.getValues();
+    if (!user) return;
+
+    setPaymentLoading(true);
+    try {
+      // Save release first
+      const coverUrl = await uploadCover();
+
+      const labelId = isAdmin ? values.label_id : isArtist && profile?.parent_label_id ? profile.parent_label_id : user.id;
+      if (!labelId) {
+        toast.error('Label wajib dipilih');
+        setPaymentLoading(false);
+        return;
+      }
+
+      const artistUserId = isArtist ? user.id : (findArtistUserIdByName(values.artist_name));
+
+      let releaseId: string;
+
+      if (isEditMode && release) {
+        // Update existing release
+        await supabase.from('releases').update({
+          upc: values.upc || null,
+          title: values.title,
+          artist_name: values.artist_name,
+          release_type: values.release_type,
+          genre: values.genre || null,
+          release_date: values.release_date || null,
+          status: 'pending',
+          ...(coverUrl ? { cover_url: coverUrl } : {}),
+        }).eq('id', release.id);
+        releaseId = release.id;
+      } else {
+        // Create new release
+        const { data: newRelease, error: releaseError } = await supabase
+          .from('releases')
+          .insert({
+            upc: values.upc || null,
+            title: values.title,
+            artist_name: values.artist_name,
+            artist_user_id: artistUserId,
+            release_type: values.release_type,
+            genre: values.genre || null,
+            release_date: values.release_date || null,
+            status: 'pending',
+            cover_url: coverUrl,
+            label_id: labelId,
+            created_by: user.id,
+          })
+          .select()
+          .single();
+
+        if (releaseError) throw releaseError;
+        releaseId = newRelease.id;
+
+        // Insert tracks
+        const tracksToInsert = values.tracks.map((track) => {
+          const primaryArtist = track.artists.find(a => a.type === 'Main Artist')?.name || track.artists[0]?.name || '';
+          return {
+            release_id: releaseId,
+            isrc: track.isrc || null,
+            title: track.title,
+            artist_name: primaryArtist,
+            artist_user_id: findArtistUserIdByName(primaryArtist) || artistUserId || null,
+            artists: track.artists,
+            composer: track.composer || null,
+            lyricist: track.lyricist || null,
+            genre: track.genre || null,
+            lyrics: track.lyrics || null,
+            explicit_lyrics: track.explicit_lyrics,
+            contributors: track.contributors || [],
+            audio_url: track.audio_url || null,
+            clip_url: track.clip_url || null,
+            duration: track.duration || null,
+          };
+        });
+
+        await supabase.from('tracks').insert(tracksToInsert);
+      }
+
+      // Call create-xendit-invoice
+      const { data: invoiceData, error: invoiceError } = await supabase.functions.invoke('create-xendit-invoice', {
+        body: { release_id: releaseId },
+      });
+
+      if (invoiceError) throw new Error(invoiceError.message || 'Gagal membuat invoice pembayaran');
+      
+      if (invoiceData?.invoice_url) {
+        toast.success(`Mengarahkan ke halaman pembayaran...`);
+        window.location.href = invoiceData.invoice_url;
+      } else {
+        throw new Error('Invoice URL tidak ditemukan');
+      }
+
+    } catch (error: any) {
+      console.error('Payment error:', error);
+      toast.error(error.message || 'Gagal memproses pembayaran');
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
   const addTrack = () => {
     appendTrack({
       isrc: '',
@@ -608,178 +897,16 @@ export function ReleaseFormDialog({
       explicit_lyrics: false,
       contributors: [],
       audio_url: null,
-      video_url: null,
       clip_url: null,
+      duration: null,
     });
   };
 
-  // Component for artist selector with dropdown for label
-  const ArtistSelector = ({ 
-    trackIndex, 
-    artistIndex,
-    onRemove,
-    canRemove
-  }: { 
-    trackIndex: number; 
-    artistIndex: number;
-    onRemove: () => void;
-    canRemove: boolean;
-  }) => {
-    const [artistOpen, setArtistOpen] = useState(false);
-    const artistName = form.watch(`tracks.${trackIndex}.artists.${artistIndex}.name`);
-    const artistType = form.watch(`tracks.${trackIndex}.artists.${artistIndex}.type`);
+  // NOTE: ArtistSelector component is now imported from ./ArtistSelector.tsx
+  // to prevent focus loss issues caused by inline component re-creation on every render
 
-    return (
-      <div className="flex items-center gap-2 p-2 rounded-lg border bg-background">
-        <div className="flex-1 grid grid-cols-2 gap-2">
-          {/* Artist Name - Dropdown for Label, Input for Admin */}
-          {isLabel && labelArtists.length > 0 ? (
-            <Popover open={artistOpen} onOpenChange={setArtistOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={artistOpen}
-                  className="justify-between h-9 text-sm"
-                >
-                  {artistName || "Pilih artist..."}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[200px] p-0 z-50" align="start">
-                <Command>
-                  <CommandInput placeholder="Cari artist..." />
-                  <CommandList>
-                    <CommandEmpty>Tidak ada artist.</CommandEmpty>
-                    <CommandGroup>
-                      {labelArtists.map((artist) => (
-                        <CommandItem
-                          key={artist.id}
-                          value={artist.name}
-                          onSelect={() => {
-                            form.setValue(`tracks.${trackIndex}.artists.${artistIndex}.name`, artist.name);
-                            setArtistOpen(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              artistName === artist.name ? "opacity-100" : "opacity-0"
-                            )}
-                          />
-                          {artist.name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          ) : (
-            <Input
-              placeholder="Nama artist"
-              value={artistName}
-              onChange={(e) => form.setValue(`tracks.${trackIndex}.artists.${artistIndex}.name`, e.target.value)}
-              className="h-9"
-            />
-          )}
-
-          {/* Artist Type */}
-          <Select
-            value={artistType}
-            onValueChange={(value) => form.setValue(`tracks.${trackIndex}.artists.${artistIndex}.type`, value as 'Main Artist' | 'Featured Artist')}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="Tipe" />
-            </SelectTrigger>
-            <SelectContent className="z-50">
-              {ARTIST_TYPES.map((type) => (
-                <SelectItem key={type} value={type}>{type}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        {canRemove && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 text-destructive hover:text-destructive"
-            onClick={onRemove}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
-    );
-  };
-
-  // Component for contributor selector
-  const ContributorSelector = ({ 
-    trackIndex, 
-    contributorIndex,
-    onRemove
-  }: { 
-    trackIndex: number; 
-    contributorIndex: number;
-    onRemove: () => void;
-  }) => {
-    const contributorName = form.watch(`tracks.${trackIndex}.contributors.${contributorIndex}.name`);
-    const contributorType = form.watch(`tracks.${trackIndex}.contributors.${contributorIndex}.type`);
-    const contributorRole = form.watch(`tracks.${trackIndex}.contributors.${contributorIndex}.role`);
-
-    return (
-      <div className="flex items-center gap-2 p-2 rounded-lg border bg-background">
-        <div className="flex-1 grid grid-cols-3 gap-2">
-          <Input
-            placeholder="Nama"
-            value={contributorName || ''}
-            onChange={(e) => form.setValue(`tracks.${trackIndex}.contributors.${contributorIndex}.name`, e.target.value)}
-            className="h-9"
-          />
-
-          <Select
-            value={contributorType || ''}
-            onValueChange={(value) => form.setValue(`tracks.${trackIndex}.contributors.${contributorIndex}.type`, value)}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="Tipe" />
-            </SelectTrigger>
-            <SelectContent className="z-50">
-              {CONTRIBUTOR_TYPES.map((type) => (
-                <SelectItem key={type} value={type}>{type}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={contributorRole || ''}
-            onValueChange={(value) => form.setValue(`tracks.${trackIndex}.contributors.${contributorIndex}.role`, value)}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="Peran" />
-            </SelectTrigger>
-            <SelectContent className="z-50">
-              {CONTRIBUTOR_ROLES.map((role) => (
-                <SelectItem key={role} value={role}>{role}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-9 w-9 text-destructive hover:text-destructive"
-          onClick={onRemove}
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
-    );
-  };
+  // ContributorSelector is now imported from ./ContributorSelector.tsx
+  // to prevent focus loss issues caused by inline component re-creation on every render
 
   // Genre Combobox Component - with internal open state
   const GenreCombobox = ({ value, onChange }: { value: string; onChange: (value: string) => void }) => {
@@ -861,285 +988,222 @@ export function ReleaseFormDialog({
     );
   };
 
+  // Determine if fields should be disabled based on lyricsOnlyMode
+  const isFieldDisabled = lyricsOnlyMode && isEditMode;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] p-0">
         <DialogHeader className="p-6 pb-0">
           <DialogTitle>
-            {isEditMode ? 'Edit Release' : 'Tambah Release Baru'}
+            {lyricsOnlyMode ? 'Edit Lyrics' : isEditMode ? 'Edit Release' : 'Tambah Release Baru'}
           </DialogTitle>
           <DialogDescription>
-            {isEditMode
-              ? 'Edit informasi release dan tracks'
-              : 'Masukkan informasi release dan tracks'}
+            {lyricsOnlyMode
+              ? 'Release sudah aktif. Anda hanya dapat mengedit lirik track.'
+              : isEditMode
+                ? 'Edit informasi release dan tracks'
+                : 'Masukkan informasi release dan tracks'}
           </DialogDescription>
         </DialogHeader>
 
         <ScrollArea className="max-h-[calc(90vh-120px)]">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="p-6 space-y-6">
-              {/* Cover Upload */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Cover Art</label>
-                <div className="flex items-start gap-4">
-                  <div
-                    className="w-32 h-32 rounded-lg border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-muted/50 cursor-pointer hover:border-primary/50 transition-colors"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    {coverPreview ? (
-                      <img
-                        src={coverPreview}
-                        alt="Cover preview"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="text-center p-2">
-                        <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground mb-1" />
-                        <p className="text-xs text-muted-foreground">
-                          Upload Cover
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleCoverChange}
-                    className="hidden"
-                  />
-                  <div className="flex-1 space-y-2">
-                    <p className="text-sm text-muted-foreground">
-                      Upload cover art untuk release Anda. Format yang didukung:
-                      JPG, PNG, WebP. Maksimal 5MB.
-                    </p>
-                    {coverPreview && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setCoverFile(null);
-                          setCoverPreview(null);
-                        }}
-                      >
-                        <X className="h-4 w-4 mr-1" />
-                        Hapus Cover
-                      </Button>
-                    )}
+              {/* Cover Upload - Hidden in lyricsOnlyMode */}
+              {!lyricsOnlyMode && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Cover Art</label>
+                  <div className="flex items-start gap-4">
+                    <div
+                      className="w-32 h-32 rounded-lg border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-muted/50 cursor-pointer hover:border-primary/50 transition-colors"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      {coverPreview ? (
+                        <img
+                          src={coverPreview}
+                          alt="Cover preview"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="text-center p-2">
+                          <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground mb-1" />
+                          <p className="text-xs text-muted-foreground">
+                            Upload Cover
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleCoverChange}
+                      className="hidden"
+                    />
+                    <div className="flex-1 space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        Upload cover art untuk release Anda. Format yang didukung:
+                        JPG, PNG, WebP. Maksimal 5MB.
+                      </p>
+                      {coverPreview && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setCoverFile(null);
+                            setCoverPreview(null);
+                          }}
+                        >
+                          <X className="h-4 w-4 mr-1" />
+                          Hapus Cover
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <Separator />
+              {!lyricsOnlyMode && <Separator />}
 
-              {/* Release Info */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* UPC - Only visible/editable for Admin */}
-                {isAdmin && (
-                  <FormField
-                    control={form.control}
-                    name="upc"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>UPC (Opsional)</FormLabel>
-                        <FormControl>
-                          <Input placeholder="123456789012" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
-
-                <FormField
-                  control={form.control}
-                  name="title"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Judul Release *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Album/Single Title" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="artist_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nama Artist Utama *</FormLabel>
-                      {isLabel || (isAdmin && selectedLabelId) ? (
-                        loadingArtists ? (
-                          <div className="flex items-center gap-2 h-10 px-3 border rounded-md">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            <span className="text-sm text-muted-foreground">Loading artists...</span>
-                          </div>
-                        ) : labelArtists.length > 0 ? (
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <FormControl>
-                                <Button
-                                  variant="outline"
-                                  role="combobox"
-                                  className="w-full justify-between"
-                                >
-                                  {field.value || "Pilih artist..."}
-                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                </Button>
-                              </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-full p-0 z-50" align="start">
-                              <Command>
-                                <CommandInput placeholder="Cari artist..." />
-                                <CommandList>
-                                  <CommandEmpty>Tidak ada artist ditemukan.</CommandEmpty>
-                                  <CommandGroup>
-                                    {labelArtists.map((artist) => (
-                                      <CommandItem
-                                        key={artist.id}
-                                        value={artist.name}
-                                        onSelect={() => field.onChange(artist.name)}
-                                      >
-                                        <Check
-                                          className={cn(
-                                            "mr-2 h-4 w-4",
-                                            field.value === artist.name ? "opacity-100" : "opacity-0"
-                                          )}
-                                        />
-                                        {artist.name}
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
-                                </CommandList>
-                              </Command>
-                            </PopoverContent>
-                          </Popover>
-                        ) : (
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 p-3 rounded-md border border-dashed border-amber-500/50 bg-amber-500/10">
-                              <UserPlus className="h-4 w-4 text-amber-500" />
-                              <p className="text-sm text-amber-600 dark:text-amber-400">
-                                Belum ada artist. Tambahkan artist terlebih dahulu di halaman{' '}
-                                <a 
-                                  href="/dashboard/my-artists" 
-                                  className="underline font-medium hover:text-amber-700 dark:hover:text-amber-300"
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  My Artists
-                                </a>
-                              </p>
-                            </div>
-                            <FormControl>
-                              <Input placeholder="Atau ketik nama artist baru" {...field} />
-                            </FormControl>
-                          </div>
-                        )
-                      ) : (
-                        <FormControl>
-                          <Input placeholder="Artist Name" {...field} />
-                        </FormControl>
-                      )}
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="release_type"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tipe Release *</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Pilih tipe" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="z-50">
-                          <SelectItem value="single">Single</SelectItem>
-                          <SelectItem value="ep">EP</SelectItem>
-                          <SelectItem value="album">Album</SelectItem>
-                          <SelectItem value="compilation">Compilation</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="genre"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Genre</FormLabel>
-                      <GenreCombobox value={field.value || ''} onChange={field.onChange} />
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="release_date"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tanggal Release</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {isAdmin && (
-                  <FormField
-                    control={form.control}
-                    name="label_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Label *</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                        >
+              {/* Release Info - Hidden in lyricsOnlyMode */}
+              {!lyricsOnlyMode && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* UPC - Only visible/editable for Admin */}
+                  {isAdmin && (
+                    <FormField
+                      control={form.control}
+                      name="upc"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>UPC (Opsional)</FormLabel>
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder={loadingLabels ? "Loading..." : "Pilih label"} />
-                            </SelectTrigger>
+                            <Input placeholder="123456789012" {...field} />
                           </FormControl>
-                          <SelectContent className="z-50">
-                            {labels.map((label) => (
-                              <SelectItem key={label.id} value={label.id}>
-                                {label.full_name} ({label.email})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  <FormField
+                    control={form.control}
+                    name="title"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Judul Release *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Album/Single Title" {...field} />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                )}
 
-                {isAdmin && (
                   <FormField
                     control={form.control}
-                    name="status"
+                    name="artist_name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Status</FormLabel>
+                        <FormLabel>Nama Artist Utama *</FormLabel>
+                  {isArtist ? (
+                          <FormControl>
+                            <Input value={artistStageName} disabled className="bg-muted" />
+                          </FormControl>
+                        ) : isLabel || isWhitelabel || (isAdmin && selectedLabelId) ? (
+                          loadingArtists ? (
+                            <div className="flex items-center gap-2 h-10 px-3 border rounded-md">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <span className="text-sm text-muted-foreground">Loading artists...</span>
+                            </div>
+                          ) : labelArtists.length > 0 ? (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <FormControl>
+                                  <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    className="w-full justify-between"
+                                  >
+                                    {field.value || "Pilih artist..."}
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                  </Button>
+                                </FormControl>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-full p-0 z-50" align="start">
+                                <Command>
+                                  <CommandInput placeholder="Cari artist..." />
+                                  <CommandList>
+                                    <CommandEmpty>Tidak ada artist ditemukan.</CommandEmpty>
+                                    <CommandGroup>
+                                      {labelArtists.map((artist) => (
+                                        <CommandItem
+                                          key={artist.id}
+                                          value={artist.name}
+                                          onSelect={() => {
+                                            field.onChange(artist.name);
+                                            form.setValue('artist_user_id' as any, artist.user_id || null);
+                                          }}
+                                        >
+                                          <Check
+                                            className={cn(
+                                              "mr-2 h-4 w-4",
+                                              field.value === artist.name ? "opacity-100" : "opacity-0"
+                                            )}
+                                          />
+                                          {artist.name}
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                          ) : (
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2 p-3 rounded-md border border-dashed border-amber-500/50 bg-amber-500/10">
+                                <UserPlus className="h-4 w-4 text-amber-500" />
+                                <p className="text-sm text-amber-600 dark:text-amber-400">
+                                  Belum ada artist. Tambahkan artist terlebih dahulu di halaman{' '}
+                                  <a 
+                                    href="/dashboard/my-artists" 
+                                    className="underline font-medium hover:text-amber-700 dark:hover:text-amber-300"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    My Artists
+                                  </a>
+                                </p>
+                              </div>
+                              <FormControl>
+                                <Input
+                                  placeholder="Atau ketik nama artist baru"
+                                  {...field}
+                                  onChange={(event) => {
+                                    field.onChange(event.target.value);
+                                    form.setValue('artist_user_id' as any, null);
+                                  }}
+                                />
+                              </FormControl>
+                            </div>
+                          )
+                        ) : (
+                          <FormControl>
+                            <Input placeholder="Artist Name" {...field} />
+                          </FormControl>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="release_type"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tipe Release *</FormLabel>
                         <Select
                           onValueChange={field.onChange}
                           defaultValue={field.value}
@@ -1147,38 +1211,128 @@ export function ReleaseFormDialog({
                         >
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Pilih status" />
+                              <SelectValue placeholder="Pilih tipe" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent className="z-50">
-                            <SelectItem value="pending">Pending</SelectItem>
-                            <SelectItem value="active">Active</SelectItem>
-                            <SelectItem value="rejected">Rejected</SelectItem>
-                            <SelectItem value="inactive">Inactive</SelectItem>
+                            <SelectItem value="single">Single</SelectItem>
+                            <SelectItem value="ep">EP</SelectItem>
+                            <SelectItem value="album">Album</SelectItem>
+                            <SelectItem value="compilation">Compilation</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                )}
-              </div>
 
-              <Separator />
+                  <FormField
+                    control={form.control}
+                    name="genre"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Genre</FormLabel>
+                        <GenreCombobox value={field.value || ''} onChange={field.onChange} />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="release_date"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tanggal Release</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {isAdmin && (
+                    <FormField
+                      control={form.control}
+                      name="label_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Label *</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder={loadingLabels ? "Loading..." : "Pilih label"} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="z-50">
+                              {labels.map((label) => (
+                                <SelectItem key={label.id} value={label.id}>
+                                  {label.full_name} ({label.email})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  {isAdmin && (
+                    <FormField
+                      control={form.control}
+                      name="status"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Status</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Pilih status" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="z-50">
+                              <SelectItem value="pending">Pending</SelectItem>
+                              <SelectItem value="active">Active</SelectItem>
+                              <SelectItem value="rejected">Rejected</SelectItem>
+                              <SelectItem value="inactive">Inactive</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
+              )}
+
+              {!lyricsOnlyMode && <Separator />}
 
               {/* Tracks Section */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-semibold">Tracks</h3>
+                    <h3 className="font-semibold">{lyricsOnlyMode ? 'Edit Lyrics' : 'Tracks'}</h3>
                     <p className="text-sm text-muted-foreground">
-                      Tambahkan track untuk release ini
+                      {lyricsOnlyMode 
+                        ? 'Edit lirik untuk setiap track' 
+                        : 'Tambahkan track untuk release ini'}
                     </p>
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={addTrack}>
-                    <Plus className="h-4 w-4 mr-1" />
-                    Tambah Track
-                  </Button>
+                  {!lyricsOnlyMode && (
+                    <Button type="button" variant="outline" size="sm" onClick={addTrack}>
+                      <Plus className="h-4 w-4 mr-1" />
+                      Tambah Track
+                    </Button>
+                  )}
                 </div>
 
                 {form.formState.errors.tracks?.root && (
@@ -1191,6 +1345,7 @@ export function ReleaseFormDialog({
                   {trackFields.map((field, trackIndex) => {
                     const trackArtists = form.watch(`tracks.${trackIndex}.artists`) || [];
                     const trackContributors = form.watch(`tracks.${trackIndex}.contributors`) || [];
+                    const trackTitle = form.watch(`tracks.${trackIndex}.title`);
 
                     return (
                       <div
@@ -1200,9 +1355,11 @@ export function ReleaseFormDialog({
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <Music className="h-4 w-4 text-primary" />
-                            <span className="font-medium">Track {trackIndex + 1}</span>
+                            <span className="font-medium">
+                              {lyricsOnlyMode ? trackTitle || `Track ${trackIndex + 1}` : `Track ${trackIndex + 1}`}
+                            </span>
                           </div>
-                          {trackFields.length > 1 && (
+                          {!lyricsOnlyMode && trackFields.length > 1 && (
                             <Button
                               type="button"
                               variant="ghost"
@@ -1215,189 +1372,208 @@ export function ReleaseFormDialog({
                           )}
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* ISRC - Only visible/editable for Admin */}
-                          {isAdmin && (
+                        {/* Track Details - Hidden in lyricsOnlyMode */}
+                        {!lyricsOnlyMode && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* ISRC - Only visible/editable for Admin */}
+                            {isAdmin && (
+                              <FormField
+                                control={form.control}
+                                name={`tracks.${trackIndex}.isrc`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>ISRC (Opsional)</FormLabel>
+                                    <FormControl>
+                                      <Input placeholder="ISRC Code" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            )}
+
                             <FormField
                               control={form.control}
-                              name={`tracks.${trackIndex}.isrc`}
+                              name={`tracks.${trackIndex}.title`}
                               render={({ field }) => (
                                 <FormItem>
-                                  <FormLabel>ISRC (Opsional)</FormLabel>
+                                  <FormLabel>Judul Track *</FormLabel>
                                   <FormControl>
-                                    <Input placeholder="ISRC Code" {...field} />
+                                    <Input placeholder="Track Title" {...field} />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
                               )}
                             />
-                          )}
 
-                          <FormField
-                            control={form.control}
-                            name={`tracks.${trackIndex}.title`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Judul Track *</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="Track Title" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+                            <FormField
+                              control={form.control}
+                              name={`tracks.${trackIndex}.genre`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Genre</FormLabel>
+                                  <GenreCombobox value={field.value || ''} onChange={field.onChange} />
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
 
-                          <FormField
-                            control={form.control}
-                            name={`tracks.${trackIndex}.genre`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Genre</FormLabel>
-                                <GenreCombobox value={field.value || ''} onChange={field.onChange} />
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+                            <FormField
+                              control={form.control}
+                              name={`tracks.${trackIndex}.composer`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Composer</FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="Composer" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
 
-                          <FormField
-                            control={form.control}
-                            name={`tracks.${trackIndex}.composer`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Composer</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="Composer" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+                            <FormField
+                              control={form.control}
+                              name={`tracks.${trackIndex}.lyricist`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Lyricist</FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="Lyricist" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
 
-                          <FormField
-                            control={form.control}
-                            name={`tracks.${trackIndex}.lyricist`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Lyricist</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="Lyricist" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          {/* Explicit Lyrics */}
-                          <FormField
-                            control={form.control}
-                            name={`tracks.${trackIndex}.explicit_lyrics`}
-                            render={({ field }) => (
-                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                                <div className="space-y-0.5">
-                                  <FormLabel>Lirik Eksplisit</FormLabel>
-                                  <p className="text-xs text-muted-foreground">
-                                    Apakah lagu mengandung lirik eksplisit?
-                                  </p>
-                                </div>
-                                <FormControl>
-                                  <Switch
-                                    checked={field.value}
-                                    onCheckedChange={field.onChange}
-                                  />
-                                </FormControl>
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-
-                        {/* Artists Section */}
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <FormLabel>Artists *</FormLabel>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                const currentArtists = form.getValues(`tracks.${trackIndex}.artists`) || [];
-                                form.setValue(`tracks.${trackIndex}.artists`, [
-                                  ...currentArtists,
-                                  { name: '', type: 'Featured Artist' }
-                                ]);
-                              }}
-                            >
-                              <UserPlus className="h-4 w-4 mr-1" />
-                              Tambah Artist
-                            </Button>
+                            {/* Explicit Lyrics */}
+                            <FormField
+                              control={form.control}
+                              name={`tracks.${trackIndex}.explicit_lyrics`}
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                                  <div className="space-y-0.5">
+                                    <FormLabel>Lirik Eksplisit</FormLabel>
+                                    <p className="text-xs text-muted-foreground">
+                                      Apakah lagu mengandung lirik eksplisit?
+                                    </p>
+                                  </div>
+                                  <FormControl>
+                                    <Switch
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
                           </div>
-                          
+                        )}
+
+                        {/* Artists Section - Hidden in lyricsOnlyMode */}
+                        {!lyricsOnlyMode && (
                           <div className="space-y-2">
-                            {trackArtists.map((_, artistIndex) => (
-                              <ArtistSelector
-                                key={artistIndex}
-                                trackIndex={trackIndex}
-                                artistIndex={artistIndex}
-                                canRemove={trackArtists.length > 1}
-                                onRemove={() => {
-                                  const currentArtists = form.getValues(`tracks.${trackIndex}.artists`);
-                                  form.setValue(
-                                    `tracks.${trackIndex}.artists`,
-                                    currentArtists.filter((_, i) => i !== artistIndex)
-                                  );
+                            <div className="flex items-center justify-between">
+                              <FormLabel>Artists *</FormLabel>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const currentArtists = form.getValues(`tracks.${trackIndex}.artists`) || [];
+                                  form.setValue(`tracks.${trackIndex}.artists`, [
+                                    ...currentArtists,
+                                    { name: '', type: 'Featured Artist' }
+                                  ]);
                                 }}
-                              />
-                            ))}
-                          </div>
-                          {form.formState.errors.tracks?.[trackIndex]?.artists && (
-                            <p className="text-sm text-destructive">
-                              {form.formState.errors.tracks[trackIndex]?.artists?.message || 
-                               form.formState.errors.tracks[trackIndex]?.artists?.root?.message}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Contributors Section */}
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <FormLabel>Additional Contributors</FormLabel>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                const currentContributors = form.getValues(`tracks.${trackIndex}.contributors`) || [];
-                                form.setValue(`tracks.${trackIndex}.contributors`, [
-                                  ...currentContributors,
-                                  { name: '', type: '', role: '' }
-                                ]);
-                              }}
-                            >
-                              <Plus className="h-4 w-4 mr-1" />
-                              Tambah Contributor
-                            </Button>
-                          </div>
-                          
-                          {trackContributors.length > 0 && (
+                              >
+                                <UserPlus className="h-4 w-4 mr-1" />
+                                Tambah Artist
+                              </Button>
+                            </div>
+                            
                             <div className="space-y-2">
-                              {trackContributors.map((_, contributorIndex) => (
-                                <ContributorSelector
-                                  key={contributorIndex}
-                                  trackIndex={trackIndex}
-                                  contributorIndex={contributorIndex}
+                              {trackArtists.map((artist, artistIndex) => (
+                                <ArtistSelector
+                                  key={`${trackIndex}-${artistIndex}`}
+                                  artistName={artist.name || ''}
+                                  artistType={artist.type as 'Main Artist' | 'Featured Artist' || 'Main Artist'}
+                                  onNameChange={(name) => {
+                                    form.setValue(`tracks.${trackIndex}.artists.${artistIndex}.name`, name);
+                                  }}
+                                  onTypeChange={(type) => {
+                                    form.setValue(`tracks.${trackIndex}.artists.${artistIndex}.type`, type);
+                                  }}
+                                  canRemove={trackArtists.length > 1}
                                   onRemove={() => {
-                                    const currentContributors = form.getValues(`tracks.${trackIndex}.contributors`) || [];
+                                    const currentArtists = form.getValues(`tracks.${trackIndex}.artists`);
                                     form.setValue(
-                                      `tracks.${trackIndex}.contributors`,
-                                      currentContributors.filter((_, i) => i !== contributorIndex)
+                                      `tracks.${trackIndex}.artists`,
+                                      currentArtists.filter((_, i) => i !== artistIndex)
                                     );
                                   }}
+                                  isLabelMode={isLabel || isWhitelabel}
+                                  labelArtists={labelArtists}
                                 />
                               ))}
                             </div>
-                          )}
-                        </div>
+                            {form.formState.errors.tracks?.[trackIndex]?.artists && (
+                              <p className="text-sm text-destructive">
+                                {form.formState.errors.tracks[trackIndex]?.artists?.message || 
+                                 form.formState.errors.tracks[trackIndex]?.artists?.root?.message}
+                              </p>
+                            )}
+                          </div>
+                        )}
 
-                        {/* Lyrics */}
+                        {/* Contributors Section - Hidden in lyricsOnlyMode */}
+                        {!lyricsOnlyMode && (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <FormLabel>Additional Contributors</FormLabel>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const currentContributors = form.getValues(`tracks.${trackIndex}.contributors`) || [];
+                                  form.setValue(`tracks.${trackIndex}.contributors`, [
+                                    ...currentContributors,
+                                    { name: '', type: '', role: '' }
+                                  ]);
+                                }}
+                              >
+                                <Plus className="h-4 w-4 mr-1" />
+                                Tambah Contributor
+                              </Button>
+                            </div>
+                            
+                            {trackContributors.length > 0 && (
+                              <div className="space-y-2">
+                                {trackContributors.map((contributor, contributorIndex) => (
+                                  <ContributorSelector
+                                    key={contributorIndex}
+                                    name={contributor?.name || ''}
+                                    type={contributor?.type || ''}
+                                    role={contributor?.role || ''}
+                                    onNameChange={(value) => form.setValue(`tracks.${trackIndex}.contributors.${contributorIndex}.name`, value)}
+                                    onTypeChange={(value) => form.setValue(`tracks.${trackIndex}.contributors.${contributorIndex}.type`, value)}
+                                    onRoleChange={(value) => form.setValue(`tracks.${trackIndex}.contributors.${contributorIndex}.role`, value)}
+                                    onRemove={() => {
+                                      const currentContributors = form.getValues(`tracks.${trackIndex}.contributors`) || [];
+                                      form.setValue(
+                                        `tracks.${trackIndex}.contributors`,
+                                        currentContributors.filter((_, i) => i !== contributorIndex)
+                                      );
+                                    }}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Lyrics - Always visible */}
                         <FormField
                           control={form.control}
                           name={`tracks.${trackIndex}.lyrics`}
@@ -1407,7 +1583,7 @@ export function ReleaseFormDialog({
                               <FormControl>
                                 <Textarea
                                   placeholder="Masukkan lirik lagu..."
-                                  className="min-h-[80px]"
+                                  className={lyricsOnlyMode ? "min-h-[200px]" : "min-h-[80px]"}
                                   {...field}
                                 />
                               </FormControl>
@@ -1416,17 +1592,19 @@ export function ReleaseFormDialog({
                           )}
                         />
 
-                        {/* Media Upload Section */}
-                        <MediaUploadSection
-                          trackIndex={trackIndex}
-                          audioUrl={form.watch(`tracks.${trackIndex}.audio_url`) || undefined}
-                          videoUrl={form.watch(`tracks.${trackIndex}.video_url`) || undefined}
-                          clipUrl={form.watch(`tracks.${trackIndex}.clip_url`) || undefined}
-                          onAudioChange={(url) => form.setValue(`tracks.${trackIndex}.audio_url`, url)}
-                          onVideoChange={(url) => form.setValue(`tracks.${trackIndex}.video_url`, url)}
-                          onClipChange={(url) => form.setValue(`tracks.${trackIndex}.clip_url`, url)}
-                          disabled={loading}
-                        />
+                        {/* Media Upload Section - Hidden in lyricsOnlyMode */}
+                        {!lyricsOnlyMode && (
+                          <MediaUploadSection
+                            trackIndex={trackIndex}
+                            audioUrl={form.watch(`tracks.${trackIndex}.audio_url`) || undefined}
+                            clipUrl={form.watch(`tracks.${trackIndex}.clip_url`) || undefined}
+                            duration={form.watch(`tracks.${trackIndex}.duration`) || undefined}
+                            onAudioChange={(url) => form.setValue(`tracks.${trackIndex}.audio_url`, url)}
+                            onClipChange={(url) => form.setValue(`tracks.${trackIndex}.clip_url`, url)}
+                            onDurationChange={(duration) => form.setValue(`tracks.${trackIndex}.duration`, duration)}
+                            disabled={loading}
+                          />
+                        )}
                       </div>
                     );
                   })}
@@ -1441,26 +1619,65 @@ export function ReleaseFormDialog({
                   type="button"
                   variant="outline"
                   onClick={() => onOpenChange(false)}
-                  disabled={loading}
+                  disabled={loading || paymentLoading}
                 >
                   Batal
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={loading || uploadingCover}
-                  className="gradient-primary"
-                >
-                  {loading || uploadingCover ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Menyimpan...
-                    </>
-                  ) : isEditMode ? (
-                    'Update Release'
-                  ) : (
-                    'Simpan Release'
-                  )}
-                </Button>
+                {isEditMode ? (
+                  <Button
+                    type="submit"
+                    disabled={loading || uploadingCover || (release?.status === 'pending_paid' && !lyricsOnlyMode)}
+                    className="gradient-primary"
+                  >
+                    {loading || uploadingCover ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Menyimpan...
+                      </>
+                    ) : release?.status === 'pending_paid' ? (
+                      'Terkunci (Sudah Dibayar)'
+                    ) : (
+                      'Update Release'
+                    )}
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={handleSaveDraft}
+                      disabled={loading || paymentLoading || uploadingCover}
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Menyimpan...
+                        </>
+                      ) : (
+                        'Simpan Draft'
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        if (confirm('Pastikan data release sudah benar. Setelah pembayaran, release tidak dapat diedit lagi. Lanjutkan?')) {
+                          handlePayment();
+                        }
+                      }}
+                      disabled={loading || paymentLoading || uploadingCover}
+                      className="gradient-primary"
+                    >
+                      {paymentLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Memproses...
+                        </>
+                      ) : (
+                        'Lanjutkan Pembayaran'
+                      )}
+                    </Button>
+                  </>
+                )}
               </div>
             </form>
           </Form>
@@ -1469,3 +1686,9 @@ export function ReleaseFormDialog({
     </Dialog>
   );
 }
+
+
+
+
+
+

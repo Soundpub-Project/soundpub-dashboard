@@ -1,9 +1,20 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+
+const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
+  const existingDb = options.db || {}
+  return createClient(supabaseUrl, supabaseKey, {
+    ...options,
+    db: { ...existingDb, schema: getDatabaseSchema() },
+  })
+}
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+  'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+}
 
 interface ChangePasswordRequest {
   new_password: string;
@@ -25,7 +36,7 @@ Deno.serve(async (req) => {
     }
 
     // Create Supabase client with user's token
-    const supabase = createClient(
+    const supabase = createSoundpubClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } }
@@ -50,15 +61,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (new_password.length < 6) {
+    if (new_password.length < 6 || new_password.length > 128) {
       return new Response(
-        JSON.stringify({ error: 'Password must be at least 6 characters' }),
+        JSON.stringify({ error: 'Password must be 6-128 characters' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // Create admin client for password update
-    const supabaseAdmin = createClient(
+    const supabaseAdmin = createSoundpubClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
@@ -72,10 +83,16 @@ Deno.serve(async (req) => {
     if (updateError) {
       console.error('Error updating password:', updateError);
       return new Response(
-        JSON.stringify({ error: updateError.message }),
+        JSON.stringify({ error: 'Failed to update password' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // Mark password as set in profile (for Google OAuth users who set password for first time)
+    await supabaseAdmin
+      .from('profiles')
+      .update({ password_set: true })
+      .eq('id', user.id);
 
     // Get user info for audit log
     const { data: profileData } = await supabase
@@ -114,9 +131,13 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Error in change-own-password:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
+    const SAFE_MESSAGES = ['Missing authorization', 'Unauthorized', 'new_password is required', 'Password must be']
+    let safeMessage = 'An error occurred'
+    if (error instanceof Error && SAFE_MESSAGES.some(m => error.message.startsWith(m) || error.message.includes(m))) {
+      safeMessage = error.message
+    }
     return new Response(
-      JSON.stringify({ error: message }),
+      JSON.stringify({ error: safeMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

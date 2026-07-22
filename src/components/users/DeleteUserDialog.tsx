@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   AlertDialog,
@@ -48,7 +48,13 @@ export function DeleteUserDialog({
       });
 
       if (response.error) {
-        throw new Error(response.error.message || 'Failed to delete user');
+        const errorMsg = response.error.message || 'Failed to delete user';
+        if (errorMsg.includes('503') || errorMsg.includes('FunctionsRelayError') || errorMsg.includes('FunctionsFetchError')) {
+          throw new Error(
+            'Edge Function tidak tersedia (Error 503). Silakan hubungi administrator untuk deploy edge functions. Lihat file DEPLOY_EDGE_FUNCTIONS.md untuk panduan.'
+          );
+        }
+        throw new Error(errorMsg);
       }
 
       if (!response.data?.success) {
@@ -74,22 +80,24 @@ export function DeleteUserDialog({
             <AlertTriangle className="h-5 w-5" />
             Hapus User
           </AlertDialogTitle>
-          <AlertDialogDescription className="space-y-3">
-            <p>
-              Apakah Anda yakin ingin menghapus user berikut? Tindakan ini tidak dapat dibatalkan.
-            </p>
-            {user && (
-              <div className="bg-muted/50 rounded-lg p-3 border">
-                <p className="font-medium text-foreground">{user.full_name}</p>
-                <p className="text-sm">{user.email}</p>
-                {user.role && (
-                  <p className="text-xs mt-1 capitalize">Role: {user.role}</p>
-                )}
-              </div>
-            )}
-            <p className="text-destructive font-medium">
-              Semua data terkait user ini akan dihapus permanen!
-            </p>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <p>
+                Apakah Anda yakin ingin menghapus user berikut? Tindakan ini tidak dapat dibatalkan.
+              </p>
+              {user && (
+                <div className="bg-muted/50 rounded-lg p-3 border">
+                  <p className="font-medium text-foreground">{user.full_name}</p>
+                  <p className="text-sm">{user.email}</p>
+                  {user.role && (
+                    <p className="text-xs mt-1 capitalize">Role: {user.role}</p>
+                  )}
+                </div>
+              )}
+              <p className="text-destructive font-medium">
+                Semua data terkait user ini akan dihapus permanen!
+              </p>
+            </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -107,3 +115,4 @@ export function DeleteUserDialog({
     </AlertDialog>
   );
 }
+

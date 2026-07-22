@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Dialog,
@@ -82,7 +82,13 @@ export function ChangeStatusDialog({
       });
 
       if (response.error) {
-        throw new Error(response.error.message || 'Failed to update status');
+        const errorMsg = response.error.message || 'Failed to update status';
+        if (errorMsg.includes('503') || errorMsg.includes('FunctionsRelayError') || errorMsg.includes('FunctionsFetchError')) {
+          throw new Error(
+            'Edge Function tidak tersedia (Error 503). Silakan hubungi administrator untuk deploy edge functions. Lihat file DEPLOY_EDGE_FUNCTIONS.md untuk panduan.'
+          );
+        }
+        throw new Error(errorMsg);
       }
 
       if (!response.data?.success) {
@@ -156,7 +162,7 @@ export function ChangeStatusDialog({
 
             {selectedStatus === 'suspended' && (
               <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3">
-                <p className="text-sm text-destructive font-medium">⚠️ Peringatan</p>
+                <p className="text-sm text-destructive font-medium">âš ï¸ Peringatan</p>
                 <p className="text-xs text-destructive/80 mt-1">
                   User yang di-suspend tidak akan bisa login ke aplikasi sampai statusnya diubah kembali.
                 </p>
@@ -182,3 +188,4 @@ export function ChangeStatusDialog({
     </Dialog>
   );
 }
+
