@@ -1,14 +1,62 @@
+# Dependencies
 node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build output
 dist
+dist-ssr
+build
+
+# Environment variables
+.env
+.env.*
+*.env
+
+# Development files
 .git
 .gitignore
+README.md
+*.md
+
+# Editor and IDE
+.vscode
+.idea
+.DS_Store
+
+# Lovable specific
 .lovable
+
+# Lock files
 bun.lock
 bun.lockb
-README.md
+package-lock.json
+pnpm-lock.yaml
+
+# Docker files
 Dockerfile
 docker-compose.yml
-.env
-.env.local
-.env.production
-.env.development
+
+# Temporary and cache
+temp-supabase
+.sixth
+.agents
+mem
+patches
+migrations-complete
+*.tmp
+*.log
+
+# Documentation
+docs/
+
+# Configuration files that should not be in container
+tsconfig.json
+tsconfig.*.json
+vite.config.ts
+tailwind.config.ts
+postcss.config.js
+eslint.config.js
+components.json
