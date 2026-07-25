@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -524,7 +524,7 @@ export type Database = {
           release_type: string | null
           status: string
           title: string
-          upc: string | null
+          upc: string | null  rejection_reason: string | null
           updated_at: string | null
         }
         Insert: {
@@ -541,7 +541,7 @@ export type Database = {
           release_type?: string | null
           status?: string
           title: string
-          upc?: string | null
+          upc?: string | null  rejection_reason?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -558,7 +558,7 @@ export type Database = {
           release_type?: string | null
           status?: string
           title?: string
-          upc?: string | null
+          upc?: string | null  rejection_reason?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -1580,7 +1580,7 @@ public: {
           release_type: string | null
           status: string
           title: string
-          upc: string | null
+          upc: string | null  rejection_reason: string | null
           updated_at: string | null
         }
         Insert: {
@@ -1597,7 +1597,7 @@ public: {
           release_type?: string | null
           status?: string
           title: string
-          upc?: string | null
+          upc?: string | null  rejection_reason?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -1614,7 +1614,7 @@ public: {
           release_type?: string | null
           status?: string
           title?: string
-          upc?: string | null
+          upc?: string | null  rejection_reason?: string | null
           updated_at?: string | null
         }
         Relationships: [
