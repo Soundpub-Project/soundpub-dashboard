@@ -1,8 +1,9 @@
-import { useEffect, useState, useRef } from 'react';
+﻿import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { ReleaseFormDialog } from '@/components/releases/ReleaseFormDialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -34,9 +35,9 @@ import {
   VolumeX,
   SkipBack,
   SkipForward,
-  Download
+  Download,
+  AlertCircle
 } from 'lucide-react';
-import { ReleaseFormDialog } from '@/components/releases/ReleaseFormDialog';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 
@@ -59,6 +60,7 @@ interface Release {
   status: string;
   created_at: string;
   label_id: string;
+  rejection_reason: string | null;
 }
 
 interface Track {
@@ -313,6 +315,8 @@ export default function ReleaseDetail() {
     const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
       active: 'default',
       pending: 'secondary',
+      pending_paid: 'default',
+      processing: 'secondary',
       rejected: 'destructive',
       draft: 'outline',
       inactive: 'outline',
@@ -409,6 +413,16 @@ export default function ReleaseDetail() {
                     {release.release_type}
                   </Badge>
                 </div>
+
+                {/* Display rejection reason if status is rejected */}
+                {release.status === 'rejected' && release.rejection_reason && (
+                  <div className="mt-4 p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+                    <div className="flex items-start gap-2">
+                      <Badge variant="destructive" className="mt-0.5">Alasan Penolakan</Badge>
+                    </div>
+                    <p className="mt-2 text-sm text-muted-foreground">{release.rejection_reason}</p>
+                  </div>
+                )}
 
                 <Separator />
 
@@ -719,3 +733,5 @@ export default function ReleaseDetail() {
     </DashboardLayout>
   );
 }
+
+

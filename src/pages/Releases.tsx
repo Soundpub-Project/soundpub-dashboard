@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+﻿import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -41,6 +41,8 @@ import {
 } from '@/components/ui/pagination';
 import { Disc3, Search, Plus, Loader2, Pencil, Eye, MoreHorizontal, Trash2, Archive, ArchiveRestore, CheckSquare, Beaker, Filter, X, CheckCircle, DollarSign } from 'lucide-react';
 import { ReleaseFormDialog } from '@/components/releases/ReleaseFormDialog';
+import { ActivateReleaseModal } from '@/components/releases/ActivateReleaseModal';
+import { RejectReleaseModal } from '@/components/releases/RejectReleaseModal';
 
 import { DeleteReleaseDialog } from '@/components/releases/DeleteReleaseDialog';
 import { ArchiveReleaseDialog } from '@/components/releases/ArchiveReleaseDialog';
@@ -60,6 +62,7 @@ interface Release {
   created_at: string;
   label_id: string;
   archived_at: string | null;
+  rejection_reason: string | null;
 }
 
 interface LabelInfo {
@@ -87,6 +90,8 @@ export default function Releases() {
   
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [activateDialogOpen, setActivateDialogOpen] = useState(false);
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -164,8 +169,9 @@ export default function Releases() {
       active: 'default',
       pending: 'secondary',
       pending_paid: 'default',
+      processing: 'secondary',
       rejected: 'destructive',
-      draft: 'outline',
+      draft: 'secondary',
       inactive: 'outline',
     };
     return variants[status] || 'secondary';
@@ -176,6 +182,7 @@ export default function Releases() {
       active: 'Active',
       pending: 'Menunggu Pembayaran',
       pending_paid: 'Sudah Dibayar',
+      processing: 'Proses',
       draft: 'Draft',
       rejected: 'Rejected',
       inactive: 'Inactive',
@@ -184,17 +191,30 @@ export default function Releases() {
   };
 
   const handleConfirmRelease = async (release: Release) => {
+    if (!isAdmin) return;
+    
     try {
       const { error } = await supabase
         .from('releases')
-        .update({ status: 'active' })
+        .update({ status: 'processing', updated_at: new Date().toISOString() })
         .eq('id', release.id);
+
       if (error) throw error;
-      toast.success(`Release "${release.title}" berhasil diaktifkan`);
+      toast.success(`Release "${release.title}" berhasil dikonfirmasi`);
       fetchReleases();
     } catch (error: any) {
-      toast.error(error.message || 'Gagal mengaktifkan release');
+      toast.error(error.message || 'Gagal mengkonfirmasi release');
     }
+  };
+
+  const handleOpenActivateDialog = (release: Release) => {
+    setSelectedRelease(release);
+    setActivateDialogOpen(true);
+  };
+
+  const handleOpenRejectDialog = (release: Release) => {
+    setSelectedRelease(release);
+    setRejectDialogOpen(true);
   };
 
   // Get unique values for filters
@@ -802,7 +822,20 @@ export default function Releases() {
                                       <>
                                         <DropdownMenuItem onClick={() => handleConfirmRelease(release)}>
                                           <CheckCircle className="h-4 w-4 mr-2" />
-                                          Konfirmasi & Aktifkan
+                                          Konfirmasi
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                      </>
+                                    )}
+                                    {release.status === 'processing' && isAdmin && (
+                                      <>
+                                        <DropdownMenuItem onClick={() => handleOpenActivateDialog(release)}>
+                                          <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
+                                          Aktifkan
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleOpenRejectDialog(release)} className="text-destructive">
+                                          <Trash2 className="h-4 w-4 mr-2" />
+                                          Reject
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator />
                                       </>
@@ -939,6 +972,20 @@ export default function Releases() {
           onSuccess={handleFormSuccess}
         />
 
+        <ActivateReleaseModal
+          open={activateDialogOpen}
+          onOpenChange={setActivateDialogOpen}
+          release={selectedRelease}
+          onSuccess={handleFormSuccess}
+        />
+
+        <RejectReleaseModal
+          open={rejectDialogOpen}
+          onOpenChange={setRejectDialogOpen}
+          release={selectedRelease}
+          onSuccess={handleFormSuccess}
+        />
+
         <ArtistOnboardingDialog
           open={onboardingOpen}
           onOpenChange={setOnboardingOpen}
@@ -952,3 +999,5 @@ export default function Releases() {
     </DashboardLayout>
   );
 }
+
+
