@@ -89,41 +89,66 @@ export default function MediaLibrary() {
     loadFiles(activeBucket);
   }, [activeBucket]);
 
+  // Recursively list every file in a bucket (walks folders).
+  // Storage.list() returns folder entries as items with `id === null` and no metadata —
+  // treating those as files was the root of the orphan-scan bug (folders re-appeared
+  // after "delete" because remove() on a folder path silently no-ops).
+  const listAllFiles = async (
+    bucket: BucketType,
+    prefix = '',
+  ): Promise<Array<{ path: string; item: any }>> => {
+    const results: Array<{ path: string; item: any }> = [];
+    let offset = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .list(prefix, { limit: pageSize, offset });
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      for (const item of data) {
+        if (!item.name) continue;
+        const fullPath = prefix ? `${prefix}/${item.name}` : item.name;
+        // Folder entries have id === null and no metadata — recurse into them.
+        if (item.id === null || !item.metadata) {
+          const nested = await listAllFiles(bucket, fullPath);
+          results.push(...nested);
+        } else {
+          results.push({ path: fullPath, item });
+        }
+      }
+      if (data.length < pageSize) break;
+      offset += pageSize;
+    }
+    return results;
+  };
+
   const loadFiles = async (bucket: BucketType) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.storage
-        .from(bucket)
-        .list('', { limit: 500, sortBy: { column: 'created_at', order: 'desc' } });
-
-      if (error) throw error;
-
       const bucketConfig = BUCKET_CONFIG[bucket];
-      
-      // Transform to our file format
+      const entries = await listAllFiles(bucket);
+
       const filesList: StorageFile[] = await Promise.all(
-        (data || []).filter(item => item.name).map(async (item) => {
+        entries.map(async ({ path, item }) => {
           let publicUrl = '';
-          
           if (bucketConfig.isPublic) {
-            const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(item.name);
+            const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
             publicUrl = urlData.publicUrl;
           } else {
-            // Generate signed URL for private buckets
             const { data: signedData } = await supabase.storage
               .from(bucket)
-              .createSignedUrl(item.name, 3600); // 1 hour validity
+              .createSignedUrl(path, 3600);
             publicUrl = signedData?.signedUrl || '';
           }
-          
           return {
-            name: item.name,
+            name: path,
             size: item.metadata?.size || 0,
             contentType: item.metadata?.mimetype,
             created: item.created_at || '',
             updated: item.updated_at || item.created_at || '',
             publicUrl,
-            folder: null,
+            folder: path.includes('/') ? path.split('/').slice(0, -1).join('/') : null,
             bucket,
           };
         })
@@ -153,42 +178,23 @@ export default function MediaLibrary() {
   const scanOrphanFiles = async () => {
     setScanningOrphans(true);
     try {
-      // Load all files from all buckets
-      const allFilesPromises = BUCKETS.map(async (bucket) => {
-        const { data } = await supabase.storage.from(bucket).list('', { limit: 1000 });
-        
-        const bucketConfig = BUCKET_CONFIG[bucket];
-        
-        return Promise.all(
-          (data || []).filter(item => item.name).map(async (item) => {
-            let publicUrl = '';
-            
-            if (bucketConfig.isPublic) {
-              const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(item.name);
-              publicUrl = urlData.publicUrl;
-            } else {
-              const { data: signedData } = await supabase.storage
-                .from(bucket)
-                .createSignedUrl(item.name, 3600);
-              publicUrl = signedData?.signedUrl || '';
-            }
-            
-            return {
-              name: item.name,
-              size: item.metadata?.size || 0,
-              contentType: item.metadata?.mimetype,
-              created: item.created_at || '',
-              updated: item.updated_at || item.created_at || '',
-              publicUrl,
-              folder: null,
-              bucket,
-            } as StorageFile;
-          })
-        );
-      });
-
-      const results = await Promise.all(allFilesPromises);
-      const allFiles = results.flat();
+      // Recursively list every real file in every bucket.
+      const allFiles: StorageFile[] = [];
+      for (const bucket of BUCKETS) {
+        const entries = await listAllFiles(bucket);
+        for (const { path, item } of entries) {
+          allFiles.push({
+            name: path,
+            size: item.metadata?.size || 0,
+            contentType: item.metadata?.mimetype,
+            created: item.created_at || '',
+            updated: item.updated_at || item.created_at || '',
+            publicUrl: '',
+            folder: path.includes('/') ? path.split('/').slice(0, -1).join('/') : null,
+            bucket,
+          });
+        }
+      }
 
       // Get all referenced URLs from database
       const [releasesResult, tracksResult] = await Promise.all([
@@ -196,35 +202,50 @@ export default function MediaLibrary() {
         supabase.from('tracks').select('audio_url, clip_url'),
       ]);
 
-      const referencedUrls = new Set<string>();
-      
-      // Extract file names from URLs for comparison
-      const extractFileName = (url: string | null) => {
+      // Extract the storage path for a given bucket from any URL variant
+      // (public URL, signed URL, or a raw path). Handles the `/object/{public|sign}/{bucket}/{path}`
+      // pattern used by Supabase Storage, and strips query strings (signed URL tokens).
+      const extractStoragePath = (url: string | null, bucket: string): string | null => {
         if (!url) return null;
-        try {
-          const urlObj = new URL(url);
-          const pathParts = urlObj.pathname.split('/');
-          return pathParts[pathParts.length - 1];
-        } catch {
-          return url.split('/').pop() || null;
+        let cleaned = url.split('?')[0];
+        const markers = [
+          `/storage/v1/object/public/${bucket}/`,
+          `/storage/v1/object/sign/${bucket}/`,
+          `/storage/v1/object/${bucket}/`,
+          `/${bucket}/`,
+        ];
+        for (const m of markers) {
+          const idx = cleaned.indexOf(m);
+          if (idx !== -1) return decodeURIComponent(cleaned.slice(idx + m.length));
         }
+        // Fallback: assume it's already a storage path
+        return decodeURIComponent(cleaned);
       };
-      
+
+      // Build per-bucket sets of referenced full paths.
+      const referencedByBucket: Record<string, Set<string>> = {
+        'release-covers': new Set(),
+        'track-audio': new Set(),
+        'audio-clips': new Set(),
+      };
+
       releasesResult.data?.forEach(r => {
-        const fileName = extractFileName(r.cover_url);
-        if (fileName) referencedUrls.add(fileName);
+        const p = extractStoragePath(r.cover_url, 'release-covers');
+        if (p) referencedByBucket['release-covers'].add(p);
       });
-      
       tracksResult.data?.forEach(t => {
-        const audioName = extractFileName(t.audio_url);
-        const clipName = extractFileName(t.clip_url);
-        if (audioName) referencedUrls.add(audioName);
-        if (clipName) referencedUrls.add(clipName);
+        const audioPath = extractStoragePath(t.audio_url, 'track-audio');
+        if (audioPath) referencedByBucket['track-audio'].add(audioPath);
+        // Clips may live in either 'audio-clips' or 'track-audio' historically
+        const clipInClips = extractStoragePath(t.clip_url, 'audio-clips');
+        if (clipInClips) referencedByBucket['audio-clips'].add(clipInClips);
+        const clipInAudio = extractStoragePath(t.clip_url, 'track-audio');
+        if (clipInAudio) referencedByBucket['track-audio'].add(clipInAudio);
       });
 
-      // Find orphan files
+      // A file is orphan if its full path is not in the referenced set for its bucket.
       const orphans: OrphanFile[] = allFiles
-        .filter(file => !referencedUrls.has(file.name))
+        .filter(file => !referencedByBucket[file.bucket]?.has(file.name))
         .map(file => ({
           ...file,
           reason: 'Tidak ada referensi di database',
