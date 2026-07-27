@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useSsoAuth } from '@/context/SsoAuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { lovable } from '@/integrations/lovable/index';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -151,108 +150,113 @@ export default function Auth() {
     setIsLoading(false);
 
     if (error) {
-      if (error.message.includes('already registered')) {
-        toast({
-          title: 'Registrasi Gagal',
-          description: 'Email sudah terdaftar. Silakan login.',
-          variant: 'destructive',
-        });
-      } else {
-        toast({
-          title: 'Registrasi Gagal',
-          description: error.message,
-          variant: 'destructive',
-        });
-      }
+      toast({
+        title: 'Registrasi Gagal',
+        description: error.message,
+        variant: 'destructive',
+      });
     } else {
       toast({
         title: 'Registrasi Berhasil',
-        description: 'Akun berhasil dibuat!',
+        description: 'Silakan cek email Anda untuk verifikasi akun.',
       });
-      navigate('/dashboard');
     }
   };
 
-  if (authLoading) {
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,
+        },
+      });
+      
+      if (error) {
+        toast({
+          title: 'Login Gagal',
+          description: error.message || 'Login dengan Google gagal',
+          variant: 'destructive',
+        });
+        setGoogleLoading(false);
+      }
+      // Don't set loading false here, will redirect to Google
+    } catch (error) {
+      toast({
+        title: 'Login Gagal',
+        description: 'Terjadi kesalahan saat login dengan Google',
+        variant: 'destructive',
+      });
+      setGoogleLoading(false);
+    }
+  };
+
+  if (authLoading || ssoChecking) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/5">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Memuat...</p>
+        </div>
       </div>
     );
   }
 
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4 relative">
-      {/* Theme Toggle */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-        className="absolute top-4 right-4"
-      >
-        {resolvedTheme === 'dark' ? (
-          <Sun className="h-5 w-5" />
-        ) : (
-          <Moon className="h-5 w-5" />
-        )}
-      </Button>
-
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center mb-2">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/5 p-4">
+      <div className="w-full max-w-md space-y-6">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="flex items-center space-x-3">
             {logoUrl ? (
-              <img 
-                src={logoUrl} 
-                alt="Logo" 
-                className="h-16 w-auto max-w-[200px] object-contain"
+              <img
+                src={logoUrl}
+                alt="Logo"
+                className="h-12 w-auto object-contain"
+                onError={(e) => {
+                  console.error('Logo failed to load');
+                  e.currentTarget.style.display = 'none';
+                }}
               />
             ) : (
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl gradient-primary">
-                  <Music2 className="h-8 w-8 text-primary-foreground" />
-                </div>
-                <h1 className="text-3xl font-bold text-gradient">SoundPub</h1>
-              </div>
+              <Music2 className="h-12 w-12 text-primary" />
             )}
           </div>
-          {!logoUrl && (
-            <p className="text-muted-foreground">Music Distribution Platform</p>
-          )}
+          <div className="text-center">
+            <h1 className="text-3xl font-bold tracking-tight">SoundPub Dashboard</h1>
+            <p className="text-muted-foreground mt-2">Kelola konten musik Anda dengan mudah</p>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+            className="absolute top-4 right-4"
+          >
+            {resolvedTheme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </Button>
         </div>
 
-        <Card className="border-border bg-card">
+        <Card>
           <Tabs defaultValue="login" className="w-full">
-            <CardHeader className="pb-4">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="login">Login</TabsTrigger>
-                <TabsTrigger value="signup">Daftar</TabsTrigger>
-              </TabsList>
-            </CardHeader>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="login">Login</TabsTrigger>
+              <TabsTrigger value="signup">Daftar</TabsTrigger>
+            </TabsList>
 
-            <CardContent>
-              {/* Login Tab */}
-              <TabsContent value="login" className="mt-0">
-                <CardTitle className="text-center text-xl mb-3">Selamat Datang</CardTitle>
-                <CardDescription className="text-center mb-6">
-                  Masuk ke akun SoundPub Anda
-                </CardDescription>
-
+            <CardContent className="pt-6">
+              <TabsContent value="login" className="space-y-4 mt-0">
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="login-email">Email</Label>
                     <Input
                       id="login-email"
                       type="email"
-                      placeholder="email@example.com"
+                      placeholder="nama@contoh.com"
                       value={loginData.email}
                       onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
                       className={errors.email ? 'border-destructive' : ''}
                     />
-                    {errors.email && (
-                      <p className="text-xs text-destructive">{errors.email}</p>
-                    )}
+                    {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -280,9 +284,7 @@ export default function Auth() {
                         )}
                       </Button>
                     </div>
-                    {errors.password && (
-                      <p className="text-xs text-destructive">{errors.password}</p>
-                    )}
+                    {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
                   </div>
 
                   <Button type="submit" className="w-full gradient-primary" disabled={isLoading}>
@@ -292,56 +294,24 @@ export default function Auth() {
                         Memproses...
                       </>
                     ) : (
-                      'Masuk'
+                      'Login'
                     )}
                   </Button>
-
-                  {/* <div className="relative my-2">
-                    <div className="absolute inset-0 flex items-center">
-                      <Separator className="w-full" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-card px-2 text-muted-foreground">atau</span>
-                    </div>
-                  </div> */}
 
                   <div className="relative my-2">
                     <div className="absolute inset-0 flex items-center">
                       <Separator className="w-full" />
                     </div>
                     <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-card px-2 text-muted-foreground">Google Login Maintenance</span>
+                      <span className="bg-card px-2 text-muted-foreground">atau</span>
                     </div>
                   </div>
 
-                  {/* <Button
+                  <Button
                     type="button"
                     variant="outline"
                     className="w-full"
-                    onClick={async () => {
-                      setGoogleLoading(true);
-                      try {
-                        const result = await lovable.auth.signInWithOAuth("google", {
-                          redirect_uri: window.location.origin,
-                        });
-                        if (result.error) {
-                          toast({
-                            title: 'Login Gagal',
-                            description: result.error instanceof Error ? result.error.message : 'Login Google gagal',
-                            variant: 'destructive',
-                          });
-                        }
-                        if (result.redirected) return;
-                      } catch {
-                        toast({
-                          title: 'Login Gagal',
-                          description: 'Terjadi kesalahan saat login dengan Google',
-                          variant: 'destructive',
-                        });
-                      } finally {
-                        setGoogleLoading(false);
-                      }
-                    }}
+                    onClick={handleGoogleSignIn}
                     disabled={googleLoading}
                   >
                     {googleLoading ? (
@@ -355,54 +325,59 @@ export default function Auth() {
                       </svg>
                     )}
                     Login dengan Google
-                  </Button> */}
+                  </Button>
 
-                   {/* <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    onClick={triggerSsoLogin}
-                    disabled={ssoLoading || ssoChecking}
-                  >
-                    {(ssoLoading || ssoChecking) ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Shield className="mr-2 h-4 w-4" />
-                    )}
-                    {ssoChecking
-                      ? 'Memeriksa sesi ICCN...'
-                      : ssoLoading
-                        ? 'Menghubungkan ke SSO...'
-                        : 'Login via SSO'}
-                  </Button> */}
-
-                  {ssoError && (
-                    <p className="text-xs text-destructive text-center">{ssoError}</p>
-                  )}
                 </form>
+
+                {ssoError && (
+                  <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+                    <p className="text-sm text-destructive">{ssoError}</p>
+                  </div>
+                )}
+
+                <div className="relative my-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <Separator className="w-full" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-card px-2 text-muted-foreground">atau login dengan</span>
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={triggerSsoLogin}
+                  disabled={ssoLoading}
+                >
+                  {ssoLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Memproses SSO...
+                    </>
+                  ) : (
+                    <>
+                      <Shield className="mr-2 h-4 w-4" />
+                      SSO ICCN
+                    </>
+                  )}
+                </Button>
               </TabsContent>
 
-              {/* Signup Tab */}
-              <TabsContent value="signup" className="mt-0">
-                <CardTitle className="text-xl mb-1">Buat Akun</CardTitle>
-                <CardDescription className="mb-6">
-                  Daftar untuk menggunakan SoundPub
-                </CardDescription>
-
+              <TabsContent value="signup" className="space-y-4 mt-0">
                 <form onSubmit={handleSignup} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="signup-name">Nama Lengkap</Label>
                     <Input
                       id="signup-name"
                       type="text"
-                      placeholder="Nama Anda"
+                      placeholder="John Doe"
                       value={signupData.fullName}
                       onChange={(e) => setSignupData({ ...signupData, fullName: e.target.value })}
                       className={errors.fullName ? 'border-destructive' : ''}
                     />
-                    {errors.fullName && (
-                      <p className="text-xs text-destructive">{errors.fullName}</p>
-                    )}
+                    {errors.fullName && <p className="text-xs text-destructive">{errors.fullName}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -410,14 +385,12 @@ export default function Auth() {
                     <Input
                       id="signup-email"
                       type="email"
-                      placeholder="email@example.com"
+                      placeholder="nama@contoh.com"
                       value={signupData.email}
                       onChange={(e) => setSignupData({ ...signupData, email: e.target.value })}
                       className={errors.email ? 'border-destructive' : ''}
                     />
-                    {errors.email && (
-                      <p className="text-xs text-destructive">{errors.email}</p>
-                    )}
+                    {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -445,9 +418,7 @@ export default function Auth() {
                         )}
                       </Button>
                     </div>
-                    {errors.password && (
-                      <p className="text-xs text-destructive">{errors.password}</p>
-                    )}
+                    {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -491,43 +462,20 @@ export default function Auth() {
                     )}
                   </Button>
 
-                  {/* <div className="relative my-2">
+                  <div className="relative my-2">
                     <div className="absolute inset-0 flex items-center">
                       <Separator className="w-full" />
                     </div>
                     <div className="relative flex justify-center text-xs uppercase">
                       <span className="bg-card px-2 text-muted-foreground">atau</span>
                     </div>
-                  </div> */}
+                  </div>
 
-                  {/* <Button
+                  <Button
                     type="button"
                     variant="outline"
                     className="w-full"
-                    onClick={async () => {
-                      setGoogleLoading(true);
-                      try {
-                        const result = await lovable.auth.signInWithOAuth("google", {
-                          redirect_uri: window.location.origin,
-                        });
-                        if (result.error) {
-                          toast({
-                            title: 'Registrasi Gagal',
-                            description: result.error instanceof Error ? result.error.message : 'Daftar dengan Google gagal',
-                            variant: 'destructive',
-                          });
-                        }
-                        if (result.redirected) return;
-                      } catch {
-                        toast({
-                          title: 'Registrasi Gagal',
-                          description: 'Terjadi kesalahan saat daftar dengan Google',
-                          variant: 'destructive',
-                        });
-                      } finally {
-                        setGoogleLoading(false);
-                      }
-                    }}
+                    onClick={handleGoogleSignIn}
                     disabled={googleLoading}
                   >
                     {googleLoading ? (
@@ -541,7 +489,7 @@ export default function Auth() {
                       </svg>
                     )}
                     Daftar dengan Google
-                  </Button> */}
+                  </Button>
 
                 </form>
               </TabsContent>

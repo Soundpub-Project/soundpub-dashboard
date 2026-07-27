@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+﻿import { useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import {
   useRoyaltyPeriods,
@@ -38,6 +38,8 @@ import {
   BarChart3,
   PieChart as PieChartIcon,
   Download,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -70,6 +72,7 @@ const CHART_COLORS = [
 export default function RoyaltySummary() {
   const { isArtist } = useAuth();
   const [selectedPeriod, setSelectedPeriod] = useState<string>('all');
+  const [showRealData, setShowRealData] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   // RPC hooks
@@ -143,6 +146,21 @@ export default function RoyaltySummary() {
     if (value >= 1000000) return `${(value / 1000000).toFixed(2)}M`;
     if (value >= 1000) return `${(value / 1000).toFixed(2)}K`;
     return value.toLocaleString('id-ID');
+  };
+
+  // Helper functions for masking sensitive data
+  const maskCurrency = (value: number) => {
+    if (!showRealData) {
+      return 'Rp ******';
+    }
+    return formatCurrency(value);
+  };
+
+  const maskNumber = (value: number) => {
+    if (!showRealData) {
+      return '***';
+    }
+    return formatNumber(value);
   };
 
   const exportTrackBreakdownCSV = () => {
@@ -234,6 +252,24 @@ export default function RoyaltySummary() {
           </div>
           
           <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowRealData(!showRealData)}
+              className="gap-2"
+            >
+              {showRealData ? (
+                <>
+                  <EyeOff className="h-4 w-4" />
+                  Sembunyikan
+                </>
+              ) : (
+                <>
+                  <Eye className="h-4 w-4" />
+                  Tampilkan
+                </>
+              )}
+            </Button>
             <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Pilih Periode" />
@@ -269,7 +305,7 @@ export default function RoyaltySummary() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-xl font-bold text-green-500">{formatCurrency(totalStats.totalRevenue)}</p>
+                  <p className="text-xl font-bold text-green-500">{maskCurrency(totalStats.totalRevenue)}</p>
                 </CardContent>
               </Card>
               <Card className="bg-card/50 border-border/50">
@@ -280,7 +316,7 @@ export default function RoyaltySummary() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-xl font-bold">{formatNumber(totalStats.totalStreams)}</p>
+                  <p className="text-xl font-bold">{maskNumber(totalStats.totalStreams)}</p>
                 </CardContent>
               </Card>
               <Card className="bg-card/50 border-border/50">
@@ -658,11 +694,11 @@ export default function RoyaltySummary() {
                                       <Badge variant="outline" className="text-xs">{track.label}</Badge>
                                     </div>
                                   </TableCell>
-                                  <TableCell className="text-right text-green-500 font-medium">{formatCurrency(track.revenue)}</TableCell>
-                                  <TableCell className="text-right">{formatNumber(track.streams)}</TableCell>
-                                  <TableCell className="text-right text-blue-400">{formatCurrency(track.artistRevenue)}</TableCell>
-                                  <TableCell className="text-right text-purple-400">{formatCurrency(track.labelRevenue)}</TableCell>
-                                  <TableCell className="text-right text-orange-400">{track.adminRevenue > 0 ? formatCurrency(track.adminRevenue) : '-'}</TableCell>
+                                  <TableCell className="text-right text-green-500 font-medium">{maskCurrency(track.revenue)}</TableCell>
+                                  <TableCell className="text-right">{maskNumber(track.streams)}</TableCell>
+                                  <TableCell className="text-right text-blue-400">{maskCurrency(track.artistRevenue)}</TableCell>
+                                  <TableCell className="text-right text-purple-400">{maskCurrency(track.labelRevenue)}</TableCell>
+                                  <TableCell className="text-right text-orange-400">{track.adminRevenue > 0 ? maskCurrency(track.adminRevenue) : '-'}</TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>
@@ -686,3 +722,14 @@ export default function RoyaltySummary() {
     </DashboardLayout>
   );
 }
+
+
+
+
+
+
+
+
+
+
+

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -94,15 +94,25 @@ const buildStorageFile = async (bucket: BucketType, item: StorageListItem, folde
     const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(objectPath);
     publicUrl = urlData.publicUrl;
   } else {
-    const { data: signedData, error } = await supabase.storage
-      .from(bucket)
-      .createSignedUrl(objectPath, 3600);
+    try {
+      const { data: signedData, error } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(objectPath, 3600);
 
-    if (error || !signedData?.signedUrl) {
+      if (error) {
+        console.error(`Error creating signed URL for ${bucket}/${objectPath}:`, error);
+        urlStatus = 'unavailable';
+        urlError = error.message || 'Signed URL tidak tersedia';
+      } else if (signedData?.signedUrl) {
+        publicUrl = signedData.signedUrl;
+      } else {
+        urlStatus = 'unavailable';
+        urlError = 'Signed URL tidak tersedia';
+      }
+    } catch (err: any) {
+      console.error(`Exception creating signed URL for ${bucket}/${objectPath}:`, err);
       urlStatus = 'unavailable';
-      urlError = error?.message || 'Signed URL tidak tersedia';
-    } else {
-      publicUrl = signedData.signedUrl;
+      urlError = err.message || 'Error saat membuat signed URL';
     }
   }
 
@@ -199,18 +209,8 @@ export default function MediaLibrary() {
   const loadFiles = async (bucket: BucketType) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.storage
-        .from(bucket)
-        .list('', { limit: 500, sortBy: { column: 'created_at', order: 'desc' } });
-
-      if (error) throw error;
-
-      
-      // Transform to our file format. Supabase list() can return folder prefixes;
-      // skip those so private bucket signed URL calls do not fail with 400.
-      const filesList = (await Promise.all(
-        (data || []).map(item => buildStorageFile(bucket, item))
-      )).filter((file): file is StorageFile => Boolean(file));
+      // Use recursive listing to get all files including subdirectories
+      const filesList = await listStorageFilesRecursive(bucket);
       
       setFiles(filesList);
 
@@ -238,28 +238,43 @@ export default function MediaLibrary() {
     try {
       // Load all files from all buckets
       const allFilesPromises = BUCKETS.map(async (bucket) => {
-        return listStorageFilesRecursive(bucket);
+        try {
+          return await listStorageFilesRecursive(bucket);
+        } catch (err) {
+          console.error(`Error listing files in bucket ${bucket}:`, err);
+          return [];
+        }
       });
 
       const results = await Promise.all(allFilesPromises);
       const allFiles = results.flat();
 
+      console.log(`Total files found: ${allFiles.length}`);
+
       // Get all referenced URLs from database
       const [releasesResult, tracksResult] = await Promise.all([
-        supabase.from('releases').select('cover_url'),
-        supabase.from('tracks').select('audio_url, clip_url'),
+        supabase.from('releases').select('cover_url').throwOnError(),
+        supabase.from('tracks').select('audio_url, clip_url').throwOnError(),
       ]);
 
       const referencedUrls = new Set<string>();
       
       releasesResult.data?.forEach(r => {
-        getStorageReferenceKeys(r.cover_url, 'release-covers').forEach(key => referencedUrls.add(key));
+        if (r.cover_url) {
+          getStorageReferenceKeys(r.cover_url, 'release-covers').forEach(key => referencedUrls.add(key));
+        }
       });
       
       tracksResult.data?.forEach(t => {
-        getStorageReferenceKeys(t.audio_url, 'track-audio').forEach(key => referencedUrls.add(key));
-        getStorageReferenceKeys(t.clip_url, 'audio-clips').forEach(key => referencedUrls.add(key));
+        if (t.audio_url) {
+          getStorageReferenceKeys(t.audio_url, 'track-audio').forEach(key => referencedUrls.add(key));
+        }
+        if (t.clip_url) {
+          getStorageReferenceKeys(t.clip_url, 'audio-clips').forEach(key => referencedUrls.add(key));
+        }
       });
+
+      console.log(`Referenced URLs: ${referencedUrls.size}`);
 
       // Find orphan files
       const orphans: OrphanFile[] = allFiles
@@ -710,3 +725,12 @@ export default function MediaLibrary() {
     </DashboardLayout>
   );
 }
+
+
+
+
+
+
+
+
+
