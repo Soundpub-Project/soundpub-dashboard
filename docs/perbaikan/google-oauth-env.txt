@@ -1,0 +1,7 @@
+﻿# Tambahkan konfigurasi Google OAuth ke .env Supabase Self-Hosted
+
+# Google OAuth Configuration
+GOTRUE_EXTERNAL_GOOGLE_ENABLED=true
+GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com
+GOTRUE_EXTERNAL_GOOGLE_SECRET=YOUR_GOOGLE_CLIENT_SECRET
+GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=https://supabase.carubra.com/auth/v1/callback
