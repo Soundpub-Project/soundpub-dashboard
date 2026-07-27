@@ -1,0 +1,329 @@
+﻿
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                                                                               ║
+║                     📋 PENJELASAN LENGKAP & FIX ERROR 📋                      ║
+║                                                                               ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+
+🔍 APA YANG DITEMUKAN DARI ANALISIS?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. ❌ MASALAH GOOGLE OAUTH
+   ────────────────────────────────────────────────────────────────────────────
+   Error:        "Unable to exchange external code"
+   
+   Root Cause:   Server Supabase Anda tidak punya konfigurasi Google OAuth.
+                 File .env tidak ada variabel:
+                 • GOTRUE_EXTERNAL_GOOGLE_ENABLED
+                 • GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID
+                 • GOTRUE_EXTERNAL_GOOGLE_SECRET
+                 • GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI
+   
+   Dampak:       User tidak bisa login pakai Google account
+   
+   Solusi:       Tambahkan env vars ke .env file (dijelaskan di dokumentasi)
+
+
+2. ❌ MASALAH AUTO ROLE ASSIGNMENT
+   ────────────────────────────────────────────────────────────────────────────
+   Problem:      User baru yang daftar manual → dapat role 'user'
+                 Seharusnya → dapat role 'artist'
+   
+   Root Cause:   Trigger function soundpub.handle_new_user() tidak lengkap:
+                 • Hanya assign role 'user' ❌
+                 • Tidak set parent_label_id ❌
+                 • Tidak create entry di soundpub.artists ❌
+   
+   Comparison:   SSO (ICCN) login → sudah benar (role artist + label ICCN)
+                 Manual signup → salah (role user + no label)
+   
+   Dampak:       Artist baru tidak bisa akses fitur artist
+                 Artist tidak keliatan di dashboard label
+                 Inconsistency antar auth methods
+   
+   Solusi:       Update trigger function via SQL migration
+
+
+📊 PERBANDINGAN: BEFORE vs AFTER FIX
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BEFORE (Sekarang):
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Manual Signup (Email/Password):                                              │
+│   • User role:          'user' ❌ (SALAH!)                                   │
+│   • parent_label_id:    NULL ❌ (SALAH!)                                     │
+│   • soundpub.artists:   (no entry) ❌ (SALAH!)                               │
+│   • Akses fitur:        Terbatas, bukan artist ❌                            │
+│                                                                              │
+│ Google OAuth:                                                                │
+│   • Status:             ERROR ❌                                             │
+│   • Error message:      "Unable to exchange external code" ❌                │
+│   • User:               Cannot login ❌                                      │
+│                                                                              │
+│ SSO (ICCN):                                                                  │
+│   • User role:          'artist' ✅ (BENAR)                                  │
+│   • parent_label_id:    ICCN Media ✅ (BENAR)                                │
+│   • soundpub.artists:   Created ✅ (BENAR)                                   │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+AFTER FIX:
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Manual Signup (Email/Password):                                              │
+│   • User role:          'artist' ✅ (FIXED!)                                 │
+│   • parent_label_id:    Soundpub Music ✅ (FIXED!)                           │
+│   • soundpub.artists:   Created ✅ (FIXED!)                                  │
+│   • Akses fitur:        Full artist features ✅                              │
+│                                                                              │
+│ Google OAuth:                                                                │
+│   • Status:             WORKS ✅ (FIXED!)                                    │
+│   • User role:          'artist' ✅                                          │
+│   • parent_label_id:    Soundpub Music ✅                                    │
+│   • soundpub.artists:   Created ✅                                           │
+│                                                                              │
+│ SSO (ICCN):                                                                  │
+│   • User role:          'artist' ✅ (Tetap benar)                            │
+│   • parent_label_id:    ICCN Media ✅ (Tetap ICCN, bukan Soundpub)          │
+│   • soundpub.artists:   Created ✅ (Tetap benar)                             │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+RESULT: Semua auth methods sekarang KONSISTEN! 🎉
+
+
+🔧 APA YANG DIRUBAH OLEH SQL?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Change #1: CREATE SOUNDPUB MUSIC LABEL
+────────────────────────────────────────────────────────────────────────────────
+SQL membuat label default 'Soundpub Music' jika belum ada:
+  • Email:           label@soundpub.id
+  • Name:            Soundpub Music
+  • Role:            label
+  • Status:          active
+  • parent_label_id: NULL (top-level label)
+
+Kenapa perlu?
+  → Semua artist manual signup perlu masuk ke label default ini
+
+
+Change #2: UPDATE TRIGGER FUNCTION
+────────────────────────────────────────────────────────────────────────────────
+Function: soundpub.handle_new_user()
+Trigger:  Jalan otomatis setiap ada user baru di auth.users
+
+BEFORE (Code Lama):
+───────────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION soundpub.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- 1. Create profile
+  INSERT INTO soundpub.profiles (id, email, full_name)
+  VALUES (NEW.id, NEW.email, COALESCE(...));
+  
+  -- 2. Assign role 'user' ❌ SALAH!
+  INSERT INTO soundpub.user_roles (user_id, role)
+  VALUES (NEW.id, 'user'::soundpub.app_role);
+  
+  -- 3. parent_label_id? ❌ TIDAK ADA!
+  -- 4. artist entry? ❌ TIDAK ADA!
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+───────────────────────────────────────────────────────────────────────────────
+
+AFTER (Code Baru):
+───────────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION soundpub.handle_new_user()
+RETURNS TRIGGER AS $$
+DECLARE
+  soundpub_label_id UUID;
+  new_artist_id UUID;
+BEGIN
+  -- 0. Cari Soundpub Music label ID
+  SELECT id INTO soundpub_label_id
+  FROM soundpub.profiles
+  WHERE email = 'label@soundpub.id'
+  LIMIT 1;
+
+  -- 1. Create profile WITH parent_label_id ✅
+  INSERT INTO soundpub.profiles (
+    id, email, full_name, 
+    parent_label_id,  -- ✅ DITAMBAHKAN!
+    status, password_set, artist_profile_completed
+  ) VALUES (
+    NEW.id, NEW.email, COALESCE(...),
+    soundpub_label_id,  -- ✅ Assign ke Soundpub Music
+    'active', true, false
+  );
+  
+  -- 2. Assign role 'artist' ✅ DIUBAH!
+  INSERT INTO soundpub.user_roles (user_id, role)
+  VALUES (NEW.id, 'artist'::soundpub.app_role);  -- ✅ 'artist' bukan 'user'
+  
+  -- 3. Create artist entry ✅ DITAMBAHKAN!
+  INSERT INTO soundpub.artists (
+    id, user_id, label_id, artist_name, status
+  ) VALUES (
+    gen_random_uuid(), NEW.id, soundpub_label_id, 
+    COALESCE(...), 'active'
+  );
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+───────────────────────────────────────────────────────────────────────────────
+
+Yang Berubah:
+  ✅ Role: 'user' → 'artist'
+  ✅ parent_label_id: NULL → Soundpub Music ID
+  ✅ Artist entry: Tidak ada → Dibuat otomatis
+
+
+❌ ERROR YANG ANDA ALAMI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Error Message:
+───────────────────────────────────────────────────────────────────────────────
+ERROR: 23505: duplicate key value violates unique constraint "profiles_pkey"
+DETAIL: Key (id)=(9a6d2ceb-d706-4016-8775-9950c9f82078) already exists.
+───────────────────────────────────────────────────────────────────────────────
+
+Artinya:
+  Label 'Soundpub Music' SUDAH ADA di database Anda!
+  ID: 9a6d2ceb-d706-4016-8775-9950c9f82078
+
+Kenapa Error?
+  SQL versi pertama mencoba INSERT label baru tanpa cek apakah sudah ada.
+  Karena ID sudah exists → ERROR duplicate key.
+
+
+✅ SOLUSI: SQL yang Sudah Diperbaiki
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+File baru sudah dibuat:
+  → supabase/migrations/20260727094500_fix_auto_artist_role_assignment_v2.sql
+
+Yang Diperbaiki:
+  ✅ Cek dulu apakah label sudah ada
+  ✅ Jika sudah ada → skip create, pakai yang existing
+  ✅ Jika belum ada → baru create
+  ✅ Pakai ON CONFLICT DO NOTHING untuk safety
+
+
+🚀 CARA PAKAI SQL YANG SUDAH DIPERBAIKI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 1: Buka file yang baru
+───────────────────────────────────────────────────────────────────────────────
+File: supabase/migrations/20260727094500_fix_auto_artist_role_assignment_v2.sql
+(File ini sudah handle duplicate key error)
+
+
+STEP 2: Copy isi file
+───────────────────────────────────────────────────────────────────────────────
+Buka file, copy SEMUA isinya (Ctrl+A, Ctrl+C)
+
+
+STEP 3: Paste di Supabase SQL Editor
+───────────────────────────────────────────────────────────────────────────────
+1. Buka Supabase Dashboard: https://supabase.carubra.com
+2. Klik 'SQL Editor' di sidebar kiri
+3. Klik 'New Query'
+4. Paste SQL yang sudah di-copy
+5. Klik 'Run' (atau F5)
+
+
+STEP 4: Cek Hasilnya
+───────────────────────────────────────────────────────────────────────────────
+Setelah run SQL, cek di bagian bawah:
+
+Expected Output:
+  ✅ NOTICE: Soundpub Music label already exists with ID: 9a6d2ceb-...
+  ✅ CREATE FUNCTION (trigger function updated)
+  ✅ DROP TRIGGER
+  ✅ CREATE TRIGGER
+  ✅ COMMENT
+
+Jika muncul output di atas → SUCCESS! ✅
+
+
+STEP 5: Verify dengan Query
+───────────────────────────────────────────────────────────────────────────────
+Run query ini untuk verify:
+
+-- Check Soundpub Music label
+SELECT id, email, full_name, parent_label_id, status
+FROM soundpub.profiles
+WHERE email = 'label@soundpub.id';
+
+-- Check trigger function updated (should contain 'artist')
+SELECT prosrc FROM pg_proc WHERE proname = 'handle_new_user';
+
+Expected:
+  ✅ 1 row dengan email = label@soundpub.id
+  ✅ Function code contains 'artist'::soundpub.app_role
+
+
+🧪 TESTING SETELAH SQL DIJALANKAN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Test #1: Manual Signup
+───────────────────────────────────────────────────────────────────────────────
+1. Buka: https://web.maskhar.com
+2. Tab 'Daftar'
+3. Register dengan email baru: test-1658938508@test.com
+4. Submit form
+
+Verify di database:
+-- Check user role
+SELECT au.email, ur.role, p.parent_label_id, a.artist_name
+FROM auth.users au
+JOIN soundpub.user_roles ur ON ur.user_id = au.id
+JOIN soundpub.profiles p ON p.id = au.id
+LEFT JOIN soundpub.artists a ON a.user_id = au.id
+WHERE au.email LIKE 'test-%'
+ORDER BY au.created_at DESC
+LIMIT 1;
+
+Expected:
+  ✅ role = 'artist'
+  ✅ parent_label_id = 9a6d2ceb-d706-4016-8775-9950c9f82078 (Soundpub Music)
+  ✅ artist_name exists
+
+
+📋 RINGKASAN PERUBAHAN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Database Changes:
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 1. Soundpub Music label → Verified exists (tidak create baru)               │
+│ 2. Trigger function → Updated dengan artist logic                           │
+│ 3. Trigger → Re-created untuk pakai function baru                           │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Behavior Changes:
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Manual Signup:                                                               │
+│   BEFORE: role='user', no label, no artist entry                            │
+│   AFTER:  role='artist', label=Soundpub, artist entry created ✅            │
+│                                                                              │
+│ Google OAuth:                                                                │
+│   BEFORE: ERROR (exchange code)                                             │
+│   AFTER:  Works + same as manual signup (need .env config) ✅               │
+│                                                                              │
+│ SSO (ICCN):                                                                  │
+│   BEFORE: role='artist', label=ICCN ✅                                       │
+│   AFTER:  Unchanged (tetap sama) ✅                                          │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                                                                               ║
+║  ✅ SQL FIXED VERSION READY!                                                  ║
+║                                                                               ║
+║  File: supabase/migrations/20260727094500_..._v2.sql                          ║
+║  Run di Supabase SQL Editor sekarang!                                        ║
+║                                                                               ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
