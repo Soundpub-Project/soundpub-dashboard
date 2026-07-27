@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
 
     const { data: upload, error: uploadError } = await supabaseAdmin
       .from('royalty_uploads')
-      .insert({ user_id: user.id, original_filename: originalFilename || filename, total_records: validRows.length, status: 'processing' })
+      .insert({ user_id: user.id, filename: filename, original_filename: originalFilename || filename, total_records: validRows.length, status: 'processing' })
       .select()
       .single()
     if (uploadError || !upload) throw new Error(`Failed to create upload record: ${uploadError?.message}`)
