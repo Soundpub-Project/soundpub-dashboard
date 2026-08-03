@@ -32,7 +32,7 @@ export const MagicLinkEmail = ({
           Tekan tombol di bawah untuk masuk ke {siteName}. Tautan ini akan segera kedaluwarsa.
         </Text>
         <Button style={button} href={confirmationUrl}>
-          Log In
+          Masuk
         </Button>
         <Text style={footer}>
           Jika Anda tidak meminta tautan ini, abaikan saja email ini.
