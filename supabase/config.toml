@@ -62,3 +62,6 @@ verify_jwt = false
 
 [functions.backup-storage-to-drive]
 verify_jwt = false
+
+[functions.process-email-queue]
+verify_jwt = true
