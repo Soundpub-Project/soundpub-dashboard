@@ -24,20 +24,18 @@ export const RecoveryEmail = ({
 }: RecoveryEmailProps) => (
   <Html lang="en" dir="ltr">
     <Head />
-    <Preview>Reset your password for {siteName}</Preview>
+    <Preview>Atur ulang kata sandi {siteName}</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Heading style={h1}>Reset your password</Heading>
+        <Heading style={h1}>Atur ulang kata sandi</Heading>
         <Text style={text}>
-          We received a request to reset your password for {siteName}. Click
-          the button below to choose a new password.
+          Kami menerima permintaan untuk mengatur ulang kata sandi akun {siteName} Anda. Tekan tombol di bawah untuk membuat kata sandi baru.
         </Text>
         <Button style={button} href={confirmationUrl}>
-          Reset Password
+          Atur Ulang Kata Sandi
         </Button>
         <Text style={footer}>
-          If you didn't request a password reset, you can safely ignore this
-          email. Your password will not be changed.
+          Jika Anda tidak meminta ini, abaikan email ini. Kata sandi Anda tidak akan berubah.
         </Text>
       </Container>
     </Body>

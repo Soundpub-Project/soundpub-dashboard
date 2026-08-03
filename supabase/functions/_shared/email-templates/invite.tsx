@@ -27,24 +27,22 @@ export const InviteEmail = ({
 }: InviteEmailProps) => (
   <Html lang="en" dir="ltr">
     <Head />
-    <Preview>You've been invited to join {siteName}</Preview>
+    <Preview>Anda diundang bergabung ke {siteName}</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Heading style={h1}>You've been invited</Heading>
+        <Heading style={h1}>Anda diundang</Heading>
         <Text style={text}>
-          You've been invited to join{' '}
+          Anda diundang untuk bergabung ke{' '}
           <Link href={siteUrl} style={link}>
             <strong>{siteName}</strong>
           </Link>
-          . Click the button below to accept the invitation and create your
-          account.
+          . Tekan tombol di bawah untuk menerima undangan dan membuat akun Anda.
         </Text>
         <Button style={button} href={confirmationUrl}>
-          Accept Invitation
+          Terima Undangan
         </Button>
         <Text style={footer}>
-          If you weren't expecting this invitation, you can safely ignore this
-          email.
+          Jika Anda tidak mengharapkan undangan ini, abaikan saja email ini.
         </Text>
       </Container>
     </Body>

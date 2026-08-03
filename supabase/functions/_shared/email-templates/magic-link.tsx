@@ -24,19 +24,18 @@ export const MagicLinkEmail = ({
 }: MagicLinkEmailProps) => (
   <Html lang="en" dir="ltr">
     <Head />
-    <Preview>Your login link for {siteName}</Preview>
+    <Preview>Tautan masuk Anda untuk {siteName}</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Heading style={h1}>Your login link</Heading>
+        <Heading style={h1}>Tautan masuk Anda</Heading>
         <Text style={text}>
-          Click the button below to log in to {siteName}. This link will expire
-          shortly.
+          Tekan tombol di bawah untuk masuk ke {siteName}. Tautan ini akan segera kedaluwarsa.
         </Text>
         <Button style={button} href={confirmationUrl}>
           Log In
         </Button>
         <Text style={footer}>
-          If you didn't request this link, you can safely ignore this email.
+          Jika Anda tidak meminta tautan ini, abaikan saja email ini.
         </Text>
       </Container>
     </Body>
