@@ -1,0 +1,2 @@
+ALTER TABLE public.releases DROP CONSTRAINT IF EXISTS releases_release_type_check;
+ALTER TABLE public.releases ADD CONSTRAINT releases_release_type_check CHECK (release_type IS NULL OR release_type = ANY (ARRAY['single','album','ep','compilation']));
