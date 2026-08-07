@@ -128,7 +128,8 @@ SELECT grantee, privilege_type, table_name
 Kalau kamu punya akses ke DB Lovable Cloud (via `SUPABASE_DB_URL`):
 
 ```bash
-# Dump data saja (schema sudah dideploy di Fase 2)
+# Sumber (Lovable Cloud) masih memakai schema `public`.
+# Dump data saja — struktur sudah dideploy di Fase 2.
 pg_dump "$SOURCE_DB_URL" \
   --data-only \
   --exclude-schema=auth \
@@ -136,12 +137,21 @@ pg_dump "$SOURCE_DB_URL" \
   --exclude-schema=realtime \
   --exclude-schema=supabase_functions \
   --exclude-schema=vault \
-  --schema='soundpub-dashboard' \
+  --schema=public \
   --file=soundpub-data.sql
 
-# Restore ke target
-psql "$TARGET_DB_URL" -f soundpub-data.sql
+# Rewrite referensi schema public -> soundpub-dashboard sebelum restore
+sed -i 's/\bpublic\./"soundpub-dashboard"./g; s/SET search_path = public/SET search_path = "soundpub-dashboard"/g' \
+  soundpub-data.sql
+
+# Restore ke target (matikan trigger dulu supaya urutan FK aman)
+psql "$TARGET_DB_URL" -c 'SET session_replication_role = replica;' \
+                      -f soundpub-data.sql
 ```
+
+> Alternatif lebih aman: restore dump apa adanya ke schema `public`
+> sementara, lalu pindahkan dengan
+> `ALTER TABLE public.<t> SET SCHEMA "soundpub-dashboard";` per tabel.
 
 `auth.users` di-migrasi terpisah pakai Auth Admin API (lihat Opsi B) —
 jangan copy langsung, hash password tidak portable dan trigger
