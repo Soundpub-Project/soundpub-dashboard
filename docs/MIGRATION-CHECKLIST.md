@@ -29,6 +29,15 @@ Update terakhir: Agustus 2026 (schema `soundpub-dashboard`).
 ## 3. Schema Database (Fase 2)
 
 - [ ] Deploy `docs/full-schema-v2.sql` (termasuk APPENDIX Juli 2026)
+- [ ] Schema `"soundpub-dashboard"` ter-create (menggantikan `public`)
+- [ ] `GRANT USAGE ON SCHEMA "soundpub-dashboard"` ke `anon`,
+      `authenticated`, `service_role`
+- [ ] `GRANT` tabel: SELECT/INSERT/UPDATE/DELETE → `authenticated`,
+      ALL → `service_role`, SELECT `app_settings` → `anon`
+- [ ] `PGRST_DB_SCHEMAS="soundpub-dashboard,storage,graphql_public"`
+      di `supabase/docker/.env`, container `rest` + `kong` restart
+- [ ] Frontend & edge function pakai
+      `createClient(..., { db: { schema: 'soundpub-dashboard' } })`
 - [ ] Enum `app_role`: `superadmin, admin, label, whitelabel, artist, copyright`
 - [ ] 17 tabel di schema `soundpub-dashboard`:
       `app_settings`, `artist_profiles`, `artists`, `audit_logs`,
