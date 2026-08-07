@@ -4,7 +4,7 @@ Checklist end-to-end untuk migrasi/setup ulang ke **Supabase
 self-hosted** di VPS. Pair dengan [`MIGRATION-GUIDE.md`](./MIGRATION-GUIDE.md)
 dan [`VPS-SETUP-GUIDE.md`](./VPS-SETUP-GUIDE.md).
 
-Update terakhir: Juli 2026.
+Update terakhir: Agustus 2026 (schema `soundpub-dashboard`).
 
 ---
 
@@ -30,7 +30,7 @@ Update terakhir: Juli 2026.
 
 - [ ] Deploy `docs/full-schema-v2.sql` (termasuk APPENDIX Juli 2026)
 - [ ] Enum `app_role`: `superadmin, admin, label, whitelabel, artist, copyright`
-- [ ] 17 tabel `public.*`:
+- [ ] 17 tabel di schema `soundpub-dashboard`:
       `app_settings`, `artist_profiles`, `artists`, `audit_logs`,
       `composer_royalties`, `email_send_log`, `notifications`,
       `payout_requests`, `profiles`, `release_payments`, `releases`,

@@ -3,7 +3,7 @@
 Panduan lengkap migrasi data + aplikasi dari **Lovable Cloud** ke
 **Supabase self-hosted** (Docker) di VPS sendiri.
 
-Update: Juli 2026.
+Update: Agustus 2026 (schema `soundpub-dashboard`).
 
 > Untuk setup infrastruktur VPS (Docker, Nginx, SSL) baca dulu
 > [`VPS-SETUP-GUIDE.md`](./VPS-SETUP-GUIDE.md). Guide ini fokus ke
@@ -56,7 +56,7 @@ psql "$SUPABASE_DB_URL" -f docs/full-schema-v2.sql
 
 Apa yang harus ada setelah ini:
 
-- 17 tabel di `public`:
+- 17 tabel di `soundpub-dashboard`:
   `app_settings`, `artist_profiles`, `artists`, `audit_logs`,
   `composer_royalties`, `email_send_log`, `notifications`,
   `payout_requests`, `profiles`, `release_payments`, `releases`,
@@ -73,9 +73,9 @@ Apa yang harus ada setelah ini:
 Verifikasi cepat:
 
 ```sql
-\dt public.*
-\df public.*
-SELECT tablename, count(*) FROM pg_policies WHERE schemaname='public' GROUP BY tablename;
+\dt "soundpub-dashboard".*
+\df "soundpub-dashboard".*
+SELECT tablename, count(*) FROM pg_policies WHERE schemaname='soundpub-dashboard' GROUP BY tablename;
 SELECT id, public FROM storage.buckets ORDER BY id;
 ```
 
@@ -96,7 +96,7 @@ pg_dump "$SOURCE_DB_URL" \
   --exclude-schema=realtime \
   --exclude-schema=supabase_functions \
   --exclude-schema=vault \
-  --schema=public \
+  --schema='soundpub-dashboard' \
   --file=soundpub-data.sql
 
 # Restore ke target
@@ -140,14 +140,14 @@ ID mapping user (source→target) disimpan di `exported-data/id-mapping.json`.
 ```sql
 WITH unique_labels AS (
   SELECT lower(trim(p.full_name)) AS name_key, MIN(p.id::text)::uuid AS only_id
-  FROM public.profiles p
-  JOIN public.user_roles ur ON ur.user_id = p.id
+  FROM "soundpub-dashboard".profiles p
+  JOIN "soundpub-dashboard".user_roles ur ON ur.user_id = p.id
   WHERE ur.role IN ('label','whitelabel')
     AND p.full_name IS NOT NULL AND trim(p.full_name) <> ''
   GROUP BY 1
   HAVING COUNT(*) = 1
 )
-UPDATE public.royalties r
+UPDATE "soundpub-dashboard".royalties r
    SET label_user_id = ul.only_id
   FROM unique_labels ul
  WHERE r.label_user_id IS NULL
