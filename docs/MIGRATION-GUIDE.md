@@ -45,6 +45,12 @@ CREATE EXTENSION IF NOT EXISTS pg_net;
 
 ## Fase 2 — Deploy Skema Database
 
+> **Perubahan v2.5 — schema `soundpub-dashboard`.** Semua objek yang
+> sebelumnya berada di `public` kini dibuat di schema
+> `"soundpub-dashboard"`. Karena nama schema mengandung tanda hubung,
+> setiap referensi WAJIB pakai tanda kutip ganda:
+> `"soundpub-dashboard".profiles`.
+
 ```bash
 # 1) Base schema
 psql "$SUPABASE_DB_URL" -f docs/full-schema-v2.sql
@@ -54,8 +60,34 @@ psql "$SUPABASE_DB_URL" -f docs/full-schema-v2.sql
 #    pisah, jalankan file appendix-nya juga.
 ```
 
+### 2.1 Expose schema ke PostgREST & frontend
+
+PostgREST hanya melayani schema yang di-whitelist. Tanpa langkah ini
+semua query dari frontend akan 404.
+
+```bash
+# supabase/docker/.env
+PGRST_DB_SCHEMAS="soundpub-dashboard,storage,graphql_public"
+PGRST_DB_EXTRA_SEARCH_PATH="public,extensions"
+
+docker compose up -d rest kong
+```
+
+Frontend (`src/integrations/supabase/client.ts`) dan semua edge function
+harus membuat client dengan schema eksplisit:
+
+```ts
+createClient(SUPABASE_URL, SUPABASE_KEY, {
+  db: { schema: 'soundpub-dashboard' },
+});
+```
+
+RPC (`get_royalty_*`) otomatis ikut schema tersebut.
+
 Apa yang harus ada setelah ini:
 
+- Schema `soundpub-dashboard` + `GRANT USAGE` ke `anon`,
+  `authenticated`, `service_role`.
 - 17 tabel di `soundpub-dashboard`:
   `app_settings`, `artist_profiles`, `artists`, `audit_logs`,
   `composer_royalties`, `email_send_log`, `notifications`,
@@ -69,6 +101,10 @@ Apa yang harus ada setelah ini:
 - Kolom `profiles.email_notif_*` (payout/release/payment/announcement).
 - Kolom `royalties.label_user_id` (FK → `profiles.id`).
 - 8 storage bucket (lihat Fase 4).
+- `GRANT SELECT/INSERT/UPDATE/DELETE ... TO authenticated` dan
+  `GRANT ALL ... TO service_role` untuk semua tabel (blok terakhir file
+  SQL). Tanpa GRANT, RLS saja tidak cukup — PostgREST balas permission
+  denied.
 
 Verifikasi cepat:
 
@@ -77,6 +113,10 @@ Verifikasi cepat:
 \df "soundpub-dashboard".*
 SELECT tablename, count(*) FROM pg_policies WHERE schemaname='soundpub-dashboard' GROUP BY tablename;
 SELECT id, public FROM storage.buckets ORDER BY id;
+-- cek grant
+SELECT grantee, privilege_type, table_name
+  FROM information_schema.role_table_grants
+ WHERE table_schema = 'soundpub-dashboard' LIMIT 20;
 ```
 
 ---
