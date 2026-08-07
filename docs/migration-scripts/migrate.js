@@ -13,6 +13,7 @@
 
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
+const DB_SCHEMA = process.env.TARGET_DB_SCHEMA || 'soundpub-dashboard';
 
 // =====================================================
 // Configuration

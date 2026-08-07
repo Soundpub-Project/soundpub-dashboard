@@ -25,6 +25,7 @@ const path = require('path');
 const TARGET_URL = process.env.TARGET_SUPABASE_URL;
 const TARGET_SERVICE_KEY = process.env.TARGET_SUPABASE_SERVICE_KEY;
 const CSV_DIR = process.env.CSV_IMPORT_DIR || './exported-data';
+const DB_SCHEMA = process.env.TARGET_DB_SCHEMA || 'soundpub-dashboard';
 
 if (!TARGET_URL || !TARGET_SERVICE_KEY) {
   console.error('❌ Missing TARGET_SUPABASE_URL or TARGET_SUPABASE_SERVICE_KEY in .env');
@@ -38,7 +39,8 @@ if (!fs.existsSync(CSV_DIR)) {
 }
 
 const targetClient = createClient(TARGET_URL, TARGET_SERVICE_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false }
+  auth: { autoRefreshToken: false, persistSession: false },
+  db: { schema: DB_SCHEMA }
 });
 
 // User ID mapping (old CSV id -> new target id)
