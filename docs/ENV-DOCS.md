@@ -29,11 +29,17 @@ Update: Juli 2026.
 | `VITE_SUPABASE_URL`             | ✅    | URL project. Cloud: `https://<ref>.supabase.co`. Self-host: `https://api.yourdomain.com` |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | ✅    | Anon/publishable key                         |
 | `VITE_SUPABASE_PROJECT_ID`      | ✅    | Slug/ref project                             |
+| `VITE_SUPABASE_DB_SCHEMA`       | ⬜    | Self-host: `soundpub-dashboard`. Lovable Cloud: kosong (`public`) |
 
 > Lovable Cloud men-generate ketiganya otomatis. **Jangan** edit manual.
 > Di self-host, isi sendiri di `.env` sebelum build dan pastikan file ini
 > ada saat CI/CD build; kalau kosong, aplikasi ter-build tapi request
 > Supabase akan gagal.
+>
+> Mulai schema v2.5, database self-host memakai schema
+> **`soundpub-dashboard`** (bukan `public`). Client harus dibuat dengan
+> `db: { schema: 'soundpub-dashboard' }` dan PostgREST di-set
+> `PGRST_DB_SCHEMAS="soundpub-dashboard,storage,graphql_public"`.
 
 ### 1.2 SSO ICCN (keycloak-js)
 
