@@ -9,7 +9,8 @@ Script untuk import data dari CSV (hasil export Lovable Cloud) ke Supabase targe
 ## Prerequisites
 
 1. Node.js v18+
-2. Schema sudah di-deploy ke Supabase target (`full-schema-v2.sql`)
+2. Schema sudah di-deploy ke Supabase target (`full-schema-v2.sql`, schema `soundpub-dashboard`)
+3. PostgREST sudah expose schema tersebut (`PGRST_DB_SCHEMAS`)
 3. Service role key untuk Supabase target
 
 ## Setup
@@ -35,7 +36,13 @@ Script untuk import data dari CSV (hasil export Lovable Cloud) ke Supabase targe
    TARGET_SUPABASE_URL=https://your-server.supabase.co
    TARGET_SUPABASE_SERVICE_KEY=your-service-role-key
    CSV_IMPORT_DIR=./exported-data/
+   TARGET_DB_SCHEMA=soundpub-dashboard
+   SOURCE_DB_SCHEMA=public
    ```
+
+   > Sejak schema v2.5 semua tabel berada di schema
+   > `soundpub-dashboard` (bukan `public`). Script otomatis memakai
+   > `db: { schema: TARGET_DB_SCHEMA }` saat insert.
 
 ## Usage
 
@@ -73,7 +80,7 @@ Users yang di-import perlu reset password karena password hash tidak bisa di-cop
 Storage files harus di-upload manual:
 1. Download dari Lovable Cloud → Storage
 2. Upload ke Supabase target
-3. Buckets: `release-covers`, `track-audio`, `track-video`, `audio-clips`, `label-logos`
+3. Buckets: `release-covers`, `track-audio`, `track-video`, `audio-clips`, `label-logos`, `avatars`, `iccn-gallery`, `klikus-biolink`
 
 ## Post-Import
 

@@ -13,6 +13,7 @@
 
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
+const DB_SCHEMA = process.env.TARGET_DB_SCHEMA || 'soundpub-dashboard';
 
 // =====================================================
 // Configuration
@@ -29,11 +30,13 @@ if (!SOURCE_URL || !SOURCE_SERVICE_KEY || !TARGET_URL || !TARGET_SERVICE_KEY) {
 }
 
 const sourceClient = createClient(SOURCE_URL, SOURCE_SERVICE_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false }
+  auth: { autoRefreshToken: false, persistSession: false },
+  db: { schema: process.env.SOURCE_DB_SCHEMA || 'public' }
 });
 
 const targetClient = createClient(TARGET_URL, TARGET_SERVICE_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false }
+  auth: { autoRefreshToken: false, persistSession: false },
+  db: { schema: DB_SCHEMA }
 });
 
 // User ID mapping (old -> new)

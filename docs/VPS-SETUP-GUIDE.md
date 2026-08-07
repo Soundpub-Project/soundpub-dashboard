@@ -3,7 +3,7 @@
 Panduan lengkap deploy **Supabase self-hosted** + **SoundPub Dashboard**
 di VPS pribadi.
 
-Update: Juli 2026.
+Update: Agustus 2026 (schema `soundpub-dashboard`).
 
 > Setelah infra siap, ikuti [`MIGRATION-GUIDE.md`](./MIGRATION-GUIDE.md)
 > untuk migrasi data + [`MIGRATION-CHECKLIST.md`](./MIGRATION-CHECKLIST.md)
@@ -174,12 +174,23 @@ scp docs/full-schema-v2.sql user@vps:/tmp/
 docker exec -i supabase-db psql -U postgres -d postgres < /tmp/full-schema-v2.sql
 ```
 
+File SQL ini membuat schema **`soundpub-dashboard`** (bukan `public`)
+lengkap dengan GRANT-nya. Agar PostgREST melayani schema tersebut,
+set di `supabase/docker/.env` lalu restart:
+
+```bash
+PGRST_DB_SCHEMAS="soundpub-dashboard,storage,graphql_public"
+PGRST_DB_EXTRA_SEARCH_PATH="public,extensions"
+
+docker compose up -d rest kong
+```
+
 ### Cek
 
 ```sql
-\dt public.*
-\df public.*
-SELECT COUNT(*) FROM pg_policies WHERE schemaname='public';
+\dt "soundpub-dashboard".*
+\df "soundpub-dashboard".*
+SELECT COUNT(*) FROM pg_policies WHERE schemaname='soundpub-dashboard';
 SELECT id, public FROM storage.buckets ORDER BY id;
 ```
 
@@ -198,7 +209,7 @@ Setelah user dibuat (trigger `handle_new_user` otomatis insert `profiles`
 + `user_roles` role `artist`):
 
 ```sql
-UPDATE public.user_roles
+UPDATE "soundpub-dashboard".user_roles
    SET role = 'superadmin'
  WHERE user_id = (SELECT id FROM auth.users WHERE email='admin@yourdomain.com');
 ```

@@ -3,7 +3,7 @@
 Panduan lengkap migrasi data + aplikasi dari **Lovable Cloud** ke
 **Supabase self-hosted** (Docker) di VPS sendiri.
 
-Update: Juli 2026.
+Update: Agustus 2026 (schema `soundpub-dashboard`).
 
 > Untuk setup infrastruktur VPS (Docker, Nginx, SSL) baca dulu
 > [`VPS-SETUP-GUIDE.md`](./VPS-SETUP-GUIDE.md). Guide ini fokus ke
@@ -45,6 +45,12 @@ CREATE EXTENSION IF NOT EXISTS pg_net;
 
 ## Fase 2 — Deploy Skema Database
 
+> **Perubahan v2.5 — schema `soundpub-dashboard`.** Semua objek yang
+> sebelumnya berada di `public` kini dibuat di schema
+> `"soundpub-dashboard"`. Karena nama schema mengandung tanda hubung,
+> setiap referensi WAJIB pakai tanda kutip ganda:
+> `"soundpub-dashboard".profiles`.
+
 ```bash
 # 1) Base schema
 psql "$SUPABASE_DB_URL" -f docs/full-schema-v2.sql
@@ -54,9 +60,35 @@ psql "$SUPABASE_DB_URL" -f docs/full-schema-v2.sql
 #    pisah, jalankan file appendix-nya juga.
 ```
 
+### 2.1 Expose schema ke PostgREST & frontend
+
+PostgREST hanya melayani schema yang di-whitelist. Tanpa langkah ini
+semua query dari frontend akan 404.
+
+```bash
+# supabase/docker/.env
+PGRST_DB_SCHEMAS="soundpub-dashboard,storage,graphql_public"
+PGRST_DB_EXTRA_SEARCH_PATH="public,extensions"
+
+docker compose up -d rest kong
+```
+
+Frontend (`src/integrations/supabase/client.ts`) dan semua edge function
+harus membuat client dengan schema eksplisit:
+
+```ts
+createClient(SUPABASE_URL, SUPABASE_KEY, {
+  db: { schema: 'soundpub-dashboard' },
+});
+```
+
+RPC (`get_royalty_*`) otomatis ikut schema tersebut.
+
 Apa yang harus ada setelah ini:
 
-- 17 tabel di `public`:
+- Schema `soundpub-dashboard` + `GRANT USAGE` ke `anon`,
+  `authenticated`, `service_role`.
+- 17 tabel di `soundpub-dashboard`:
   `app_settings`, `artist_profiles`, `artists`, `audit_logs`,
   `composer_royalties`, `email_send_log`, `notifications`,
   `payout_requests`, `profiles`, `release_payments`, `releases`,
@@ -69,14 +101,22 @@ Apa yang harus ada setelah ini:
 - Kolom `profiles.email_notif_*` (payout/release/payment/announcement).
 - Kolom `royalties.label_user_id` (FK → `profiles.id`).
 - 8 storage bucket (lihat Fase 4).
+- `GRANT SELECT/INSERT/UPDATE/DELETE ... TO authenticated` dan
+  `GRANT ALL ... TO service_role` untuk semua tabel (blok terakhir file
+  SQL). Tanpa GRANT, RLS saja tidak cukup — PostgREST balas permission
+  denied.
 
 Verifikasi cepat:
 
 ```sql
-\dt public.*
-\df public.*
-SELECT tablename, count(*) FROM pg_policies WHERE schemaname='public' GROUP BY tablename;
+\dt "soundpub-dashboard".*
+\df "soundpub-dashboard".*
+SELECT tablename, count(*) FROM pg_policies WHERE schemaname='soundpub-dashboard' GROUP BY tablename;
 SELECT id, public FROM storage.buckets ORDER BY id;
+-- cek grant
+SELECT grantee, privilege_type, table_name
+  FROM information_schema.role_table_grants
+ WHERE table_schema = 'soundpub-dashboard' LIMIT 20;
 ```
 
 ---
@@ -88,7 +128,8 @@ SELECT id, public FROM storage.buckets ORDER BY id;
 Kalau kamu punya akses ke DB Lovable Cloud (via `SUPABASE_DB_URL`):
 
 ```bash
-# Dump data saja (schema sudah dideploy di Fase 2)
+# Sumber (Lovable Cloud) masih memakai schema `public`.
+# Dump data saja — struktur sudah dideploy di Fase 2.
 pg_dump "$SOURCE_DB_URL" \
   --data-only \
   --exclude-schema=auth \
@@ -99,9 +140,18 @@ pg_dump "$SOURCE_DB_URL" \
   --schema=public \
   --file=soundpub-data.sql
 
-# Restore ke target
-psql "$TARGET_DB_URL" -f soundpub-data.sql
+# Rewrite referensi schema public -> soundpub-dashboard sebelum restore
+sed -i 's/\bpublic\./"soundpub-dashboard"./g; s/SET search_path = public/SET search_path = "soundpub-dashboard"/g' \
+  soundpub-data.sql
+
+# Restore ke target (matikan trigger dulu supaya urutan FK aman)
+psql "$TARGET_DB_URL" -c 'SET session_replication_role = replica;' \
+                      -f soundpub-data.sql
 ```
+
+> Alternatif lebih aman: restore dump apa adanya ke schema `public`
+> sementara, lalu pindahkan dengan
+> `ALTER TABLE public.<t> SET SCHEMA "soundpub-dashboard";` per tabel.
 
 `auth.users` di-migrasi terpisah pakai Auth Admin API (lihat Opsi B) —
 jangan copy langsung, hash password tidak portable dan trigger
@@ -140,14 +190,14 @@ ID mapping user (source→target) disimpan di `exported-data/id-mapping.json`.
 ```sql
 WITH unique_labels AS (
   SELECT lower(trim(p.full_name)) AS name_key, MIN(p.id::text)::uuid AS only_id
-  FROM public.profiles p
-  JOIN public.user_roles ur ON ur.user_id = p.id
+  FROM "soundpub-dashboard".profiles p
+  JOIN "soundpub-dashboard".user_roles ur ON ur.user_id = p.id
   WHERE ur.role IN ('label','whitelabel')
     AND p.full_name IS NOT NULL AND trim(p.full_name) <> ''
   GROUP BY 1
   HAVING COUNT(*) = 1
 )
-UPDATE public.royalties r
+UPDATE "soundpub-dashboard".royalties r
    SET label_user_id = ul.only_id
   FROM unique_labels ul
  WHERE r.label_user_id IS NULL
