@@ -1,8 +1,41 @@
 -- =====================================================
--- SoundPub Dashboard - Full Database Schema Export v2.2
--- Updated: April 2026
+-- SoundPub Dashboard - Full Database Schema Export v2.5
+-- Updated: Agustus 2026
+-- SCHEMA TARGET: "soundpub-dashboard" (menggantikan "public")
 -- Untuk migrasi ke Supabase Self-Hosted di VPS
 -- =====================================================
+-- PENTING:
+--   1) Nama schema mengandung tanda hubung, jadi WAJIB pakai tanda kutip
+--      ganda di setiap referensi: "soundpub-dashboard".nama_tabel
+--   2) Setelah deploy, tambahkan schema ini ke PostgREST:
+--        PGRST_DB_SCHEMAS="soundpub-dashboard,storage,graphql_public"
+--      (di supabase/docker/.env -> PGRST_DB_SCHEMAS)
+--      lalu restart container `rest` dan `kong`.
+--   3) Frontend harus memakai:
+--        createClient(url, key, { db: { schema: 'soundpub-dashboard' } })
+-- =====================================================
+
+-- =====================================================
+-- BAGIAN 0: CREATE SCHEMA + GRANT DASAR
+-- =====================================================
+CREATE SCHEMA IF NOT EXISTS "soundpub-dashboard";
+
+GRANT USAGE ON SCHEMA "soundpub-dashboard" TO anon, authenticated, service_role;
+GRANT ALL   ON SCHEMA "soundpub-dashboard" TO postgres, service_role;
+
+-- Default privileges untuk objek yang dibuat berikutnya
+ALTER DEFAULT PRIVILEGES IN SCHEMA "soundpub-dashboard"
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA "soundpub-dashboard"
+  GRANT ALL ON TABLES TO service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA "soundpub-dashboard"
+  GRANT USAGE, SELECT ON SEQUENCES TO authenticated, service_role;
+
+-- Search path default agar helper SECURITY DEFINER tetap resolve
+ALTER ROLE authenticated SET search_path = "soundpub-dashboard", public, extensions;
+ALTER ROLE anon          SET search_path = "soundpub-dashboard", public, extensions;
+ALTER ROLE service_role  SET search_path = "soundpub-dashboard", public, extensions;
+
 
 -- =====================================================
 -- BAGIAN 1: CLEANUP (Opsional - untuk fresh install)
@@ -20,7 +53,7 @@
 
 -- Role enum dengan semua roles
 DO $$ BEGIN
-  CREATE TYPE public.app_role AS ENUM (
+  CREATE TYPE "soundpub-dashboard".app_role AS ENUM (
     'superadmin', 
     'admin', 
     'label', 
@@ -32,8 +65,8 @@ DO $$ BEGIN
 EXCEPTION
   WHEN duplicate_object THEN 
     -- Jika type sudah ada, alter untuk tambah values baru
-    ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'whitelabel';
-    ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'copyright';
+    ALTER TYPE "soundpub-dashboard".app_role ADD VALUE IF NOT EXISTS 'whitelabel';
+    ALTER TYPE "soundpub-dashboard".app_role ADD VALUE IF NOT EXISTS 'copyright';
 END $$;
 
 -- =====================================================
@@ -41,7 +74,7 @@ END $$;
 -- =====================================================
 
 -- Profiles table (linked to auth.users)
-CREATE TABLE IF NOT EXISTS public.profiles (
+CREATE TABLE IF NOT EXISTS "soundpub-dashboard".profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
   full_name TEXT NOT NULL,
@@ -58,35 +91,35 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   composer_code TEXT,
   subscription_status TEXT DEFAULT 'none',
   subscription_upgraded_at TIMESTAMP WITH TIME ZONE,
-  parent_label_id UUID REFERENCES public.profiles(id),
+  parent_label_id UUID REFERENCES "soundpub-dashboard".profiles(id),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
 -- User roles table
-CREATE TABLE IF NOT EXISTS public.user_roles (
+CREATE TABLE IF NOT EXISTS "soundpub-dashboard".user_roles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  role public.app_role NOT NULL DEFAULT 'user',
+  role "soundpub-dashboard".app_role NOT NULL DEFAULT 'user',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   UNIQUE(user_id)
 );
 
 -- Artists table
-CREATE TABLE IF NOT EXISTS public.artists (
+CREATE TABLE IF NOT EXISTS "soundpub-dashboard".artists (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  label_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  label_id UUID NOT NULL REFERENCES "soundpub-dashboard".profiles(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
 -- Releases table
-CREATE TABLE IF NOT EXISTS public.releases (
+CREATE TABLE IF NOT EXISTS "soundpub-dashboard".releases (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  label_id UUID NOT NULL REFERENCES public.profiles(id),
-  created_by UUID REFERENCES public.profiles(id),
-  artist_user_id UUID REFERENCES public.profiles(id),
+  label_id UUID NOT NULL REFERENCES "soundpub-dashboard".profiles(id),
+  created_by UUID REFERENCES "soundpub-dashboard".profiles(id),
+  artist_user_id UUID REFERENCES "soundpub-dashboard".profiles(id),
   upc TEXT,
   title TEXT NOT NULL,
   artist_name TEXT NOT NULL,
@@ -101,10 +134,10 @@ CREATE TABLE IF NOT EXISTS public.releases (
 );
 
 -- Tracks table
-CREATE TABLE IF NOT EXISTS public.tracks (
+CREATE TABLE IF NOT EXISTS "soundpub-dashboard".tracks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  release_id UUID NOT NULL REFERENCES public.releases(id) ON DELETE CASCADE,
-  artist_user_id UUID REFERENCES public.profiles(id),
+  release_id UUID NOT NULL REFERENCES "soundpub-dashboard".releases(id) ON DELETE CASCADE,
+  artist_user_id UUID REFERENCES "soundpub-dashboard".profiles(id),
   title TEXT NOT NULL,
   artist_name TEXT NOT NULL,
   artists JSONB DEFAULT '[]'::jsonb,
@@ -124,9 +157,9 @@ CREATE TABLE IF NOT EXISTS public.tracks (
 );
 
 -- Royalty uploads table
-CREATE TABLE IF NOT EXISTS public.royalty_uploads (
+CREATE TABLE IF NOT EXISTS "soundpub-dashboard".royalty_uploads (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES public.profiles(id),
+  user_id UUID NOT NULL REFERENCES "soundpub-dashboard".profiles(id),
   filename TEXT NOT NULL,
   original_filename TEXT NOT NULL,
   status TEXT NOT NULL,
@@ -139,9 +172,9 @@ CREATE TABLE IF NOT EXISTS public.royalty_uploads (
 );
 
 -- Royalties table
-CREATE TABLE IF NOT EXISTS public.royalties (
+CREATE TABLE IF NOT EXISTS "soundpub-dashboard".royalties (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  upload_id UUID NOT NULL REFERENCES public.royalty_uploads(id) ON DELETE CASCADE,
+  upload_id UUID NOT NULL REFERENCES "soundpub-dashboard".royalty_uploads(id) ON DELETE CASCADE,
   artist_user_id UUID,
   period TEXT NOT NULL,
   platform TEXT NOT NULL,
@@ -158,7 +191,7 @@ CREATE TABLE IF NOT EXISTS public.royalties (
 );
 
 -- Composer royalties table
-CREATE TABLE IF NOT EXISTS public.composer_royalties (
+CREATE TABLE IF NOT EXISTS "soundpub-dashboard".composer_royalties (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   composer_id TEXT NOT NULL,
   composer_name TEXT NOT NULL,
@@ -170,23 +203,23 @@ CREATE TABLE IF NOT EXISTS public.composer_royalties (
 );
 
 -- Payout requests table
-CREATE TABLE IF NOT EXISTS public.payout_requests (
+CREATE TABLE IF NOT EXISTS "soundpub-dashboard".payout_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES public.profiles(id),
+  user_id UUID NOT NULL REFERENCES "soundpub-dashboard".profiles(id),
   amount NUMERIC NOT NULL,
   bank_name TEXT NOT NULL,
   account_number TEXT NOT NULL,
   account_holder_name TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
   notes TEXT,
-  processed_by UUID REFERENCES public.profiles(id),
+  processed_by UUID REFERENCES "soundpub-dashboard".profiles(id),
   processed_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
 -- Audit logs table
-CREATE TABLE IF NOT EXISTS public.audit_logs (
+CREATE TABLE IF NOT EXISTS "soundpub-dashboard".audit_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   actor_id UUID NOT NULL,
   action TEXT NOT NULL,
@@ -198,7 +231,7 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
 );
 
 -- App settings table
-CREATE TABLE IF NOT EXISTS public.app_settings (
+CREATE TABLE IF NOT EXISTS "soundpub-dashboard".app_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   key TEXT NOT NULL UNIQUE,
   value TEXT,
@@ -210,140 +243,140 @@ CREATE TABLE IF NOT EXISTS public.app_settings (
 -- BAGIAN 4: INDEXES
 -- =====================================================
 
-CREATE INDEX IF NOT EXISTS idx_profiles_parent_label ON public.profiles(parent_label_id);
-CREATE INDEX IF NOT EXISTS idx_profiles_status ON public.profiles(status);
-CREATE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles(email);
-CREATE INDEX IF NOT EXISTS idx_profiles_composer_code ON public.profiles(composer_code);
-CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON public.user_roles(user_id);
-CREATE INDEX IF NOT EXISTS idx_user_roles_role ON public.user_roles(role);
-CREATE INDEX IF NOT EXISTS idx_artists_label_id ON public.artists(label_id);
-CREATE INDEX IF NOT EXISTS idx_artists_name ON public.artists(name);
-CREATE INDEX IF NOT EXISTS idx_releases_label_id ON public.releases(label_id);
-CREATE INDEX IF NOT EXISTS idx_releases_status ON public.releases(status);
-CREATE INDEX IF NOT EXISTS idx_releases_artist_name ON public.releases(artist_name);
-CREATE INDEX IF NOT EXISTS idx_releases_artist_user_id ON public.releases(artist_user_id);
-CREATE INDEX IF NOT EXISTS idx_releases_upc ON public.releases(upc);
-CREATE INDEX IF NOT EXISTS idx_tracks_release_id ON public.tracks(release_id);
-CREATE INDEX IF NOT EXISTS idx_tracks_isrc ON public.tracks(isrc);
-CREATE INDEX IF NOT EXISTS idx_tracks_artist_user_id ON public.tracks(artist_user_id);
-CREATE INDEX IF NOT EXISTS idx_royalty_uploads_user_id ON public.royalty_uploads(user_id);
-CREATE INDEX IF NOT EXISTS idx_royalties_upload_id ON public.royalties(upload_id);
-CREATE INDEX IF NOT EXISTS idx_royalties_period ON public.royalties(period);
-CREATE INDEX IF NOT EXISTS idx_royalties_label_name ON public.royalties(label_name);
-CREATE INDEX IF NOT EXISTS idx_royalties_isrc ON public.royalties(isrc);
-CREATE INDEX IF NOT EXISTS idx_royalties_artist ON public.royalties(artist);
-CREATE INDEX IF NOT EXISTS idx_royalties_artist_user_id ON public.royalties(artist_user_id);
-CREATE INDEX IF NOT EXISTS idx_composer_royalties_composer_id ON public.composer_royalties(composer_id);
-CREATE INDEX IF NOT EXISTS idx_composer_royalties_period ON public.composer_royalties(period);
-CREATE INDEX IF NOT EXISTS idx_payout_requests_user_id ON public.payout_requests(user_id);
-CREATE INDEX IF NOT EXISTS idx_payout_requests_status ON public.payout_requests(status);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_id ON public.audit_logs(actor_id);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON public.audit_logs(created_at);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON public.audit_logs(action);
+CREATE INDEX IF NOT EXISTS idx_profiles_parent_label ON "soundpub-dashboard".profiles(parent_label_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_status ON "soundpub-dashboard".profiles(status);
+CREATE INDEX IF NOT EXISTS idx_profiles_email ON "soundpub-dashboard".profiles(email);
+CREATE INDEX IF NOT EXISTS idx_profiles_composer_code ON "soundpub-dashboard".profiles(composer_code);
+CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON "soundpub-dashboard".user_roles(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_roles_role ON "soundpub-dashboard".user_roles(role);
+CREATE INDEX IF NOT EXISTS idx_artists_label_id ON "soundpub-dashboard".artists(label_id);
+CREATE INDEX IF NOT EXISTS idx_artists_name ON "soundpub-dashboard".artists(name);
+CREATE INDEX IF NOT EXISTS idx_releases_label_id ON "soundpub-dashboard".releases(label_id);
+CREATE INDEX IF NOT EXISTS idx_releases_status ON "soundpub-dashboard".releases(status);
+CREATE INDEX IF NOT EXISTS idx_releases_artist_name ON "soundpub-dashboard".releases(artist_name);
+CREATE INDEX IF NOT EXISTS idx_releases_artist_user_id ON "soundpub-dashboard".releases(artist_user_id);
+CREATE INDEX IF NOT EXISTS idx_releases_upc ON "soundpub-dashboard".releases(upc);
+CREATE INDEX IF NOT EXISTS idx_tracks_release_id ON "soundpub-dashboard".tracks(release_id);
+CREATE INDEX IF NOT EXISTS idx_tracks_isrc ON "soundpub-dashboard".tracks(isrc);
+CREATE INDEX IF NOT EXISTS idx_tracks_artist_user_id ON "soundpub-dashboard".tracks(artist_user_id);
+CREATE INDEX IF NOT EXISTS idx_royalty_uploads_user_id ON "soundpub-dashboard".royalty_uploads(user_id);
+CREATE INDEX IF NOT EXISTS idx_royalties_upload_id ON "soundpub-dashboard".royalties(upload_id);
+CREATE INDEX IF NOT EXISTS idx_royalties_period ON "soundpub-dashboard".royalties(period);
+CREATE INDEX IF NOT EXISTS idx_royalties_label_name ON "soundpub-dashboard".royalties(label_name);
+CREATE INDEX IF NOT EXISTS idx_royalties_isrc ON "soundpub-dashboard".royalties(isrc);
+CREATE INDEX IF NOT EXISTS idx_royalties_artist ON "soundpub-dashboard".royalties(artist);
+CREATE INDEX IF NOT EXISTS idx_royalties_artist_user_id ON "soundpub-dashboard".royalties(artist_user_id);
+CREATE INDEX IF NOT EXISTS idx_composer_royalties_composer_id ON "soundpub-dashboard".composer_royalties(composer_id);
+CREATE INDEX IF NOT EXISTS idx_composer_royalties_period ON "soundpub-dashboard".composer_royalties(period);
+CREATE INDEX IF NOT EXISTS idx_payout_requests_user_id ON "soundpub-dashboard".payout_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_payout_requests_status ON "soundpub-dashboard".payout_requests(status);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_id ON "soundpub-dashboard".audit_logs(actor_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON "soundpub-dashboard".audit_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON "soundpub-dashboard".audit_logs(action);
 
 -- =====================================================
 -- BAGIAN 5: SECURITY DEFINER FUNCTIONS (Core)
 -- =====================================================
 
 -- Check if user has specific role
-CREATE OR REPLACE FUNCTION public.has_role(_user_id UUID, _role app_role)
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".has_role(_user_id UUID, _role app_role)
 RETURNS BOOLEAN
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
   SELECT EXISTS (
-    SELECT 1 FROM public.user_roles
+    SELECT 1 FROM "soundpub-dashboard".user_roles
     WHERE user_id = _user_id AND role = _role
   )
 $$;
 
 -- Check if user is admin (superadmin or admin)
-CREATE OR REPLACE FUNCTION public.is_admin(_user_id UUID)
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".is_admin(_user_id UUID)
 RETURNS BOOLEAN
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
   SELECT EXISTS (
-    SELECT 1 FROM public.user_roles
+    SELECT 1 FROM "soundpub-dashboard".user_roles
     WHERE user_id = _user_id AND role IN ('superadmin', 'admin')
   )
 $$;
 
 -- Check if user is whitelabel
-CREATE OR REPLACE FUNCTION public.is_whitelabel(_user_id UUID)
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".is_whitelabel(_user_id UUID)
 RETURNS BOOLEAN
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
   SELECT EXISTS (
-    SELECT 1 FROM public.user_roles
+    SELECT 1 FROM "soundpub-dashboard".user_roles
     WHERE user_id = _user_id AND role = 'whitelabel'
   )
 $$;
 
 -- Get user role
-CREATE OR REPLACE FUNCTION public.get_user_role(_user_id UUID)
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".get_user_role(_user_id UUID)
 RETURNS app_role
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
-  SELECT role FROM public.user_roles
+  SELECT role FROM "soundpub-dashboard".user_roles
   WHERE user_id = _user_id
   LIMIT 1
 $$;
 
 -- Get user full name
-CREATE OR REPLACE FUNCTION public.get_user_full_name(_user_id UUID)
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".get_user_full_name(_user_id UUID)
 RETURNS TEXT
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
-  SELECT full_name FROM public.profiles
+  SELECT full_name FROM "soundpub-dashboard".profiles
   WHERE id = _user_id
 $$;
 
 -- Get user parent label id
-CREATE OR REPLACE FUNCTION public.get_user_parent_label_id(_user_id UUID)
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".get_user_parent_label_id(_user_id UUID)
 RETURNS UUID
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
-  SELECT parent_label_id FROM public.profiles
+  SELECT parent_label_id FROM "soundpub-dashboard".profiles
   WHERE id = _user_id
 $$;
 
 -- Get release label ids for user
-CREATE OR REPLACE FUNCTION public.get_user_release_label_ids(_user_id UUID)
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".get_user_release_label_ids(_user_id UUID)
 RETURNS SETOF UUID
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
-  SELECT DISTINCT label_id FROM public.releases
+  SELECT DISTINCT label_id FROM "soundpub-dashboard".releases
   WHERE label_id = _user_id 
-     OR artist_name = (SELECT full_name FROM public.profiles WHERE id = _user_id)
+     OR artist_name = (SELECT full_name FROM "soundpub-dashboard".profiles WHERE id = _user_id)
 $$;
 
 -- Get artist user_id by name (for matching)
-CREATE OR REPLACE FUNCTION public.get_artist_user_id_by_name(_artist_name TEXT, _label_id UUID DEFAULT NULL)
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".get_artist_user_id_by_name(_artist_name TEXT, _label_id UUID DEFAULT NULL)
 RETURNS UUID
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
   SELECT p.id
   FROM profiles p
@@ -359,12 +392,12 @@ $$;
 -- =====================================================
 
 -- Get royalty stats (totals)
-CREATE OR REPLACE FUNCTION public.get_royalty_stats()
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".get_royalty_stats()
 RETURNS TABLE(total_revenue NUMERIC, total_streams BIGINT, unique_artists BIGINT, unique_labels BIGINT, unique_platforms BIGINT, unique_tracks BIGINT)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
   SELECT
     COALESCE(SUM(net_revenue), 0) AS total_revenue,
@@ -376,22 +409,22 @@ AS $$
   FROM royalties r
   WHERE
     CASE
-      WHEN is_admin(auth.uid()) THEN true
-      WHEN has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') THEN
-        r.label_name = get_user_full_name(auth.uid())
-      WHEN has_role(auth.uid(), 'artist') THEN
-        r.artist_user_id = auth.uid() OR (r.artist_user_id IS NULL AND r.artist = get_user_full_name(auth.uid()))
+      WHEN "soundpub-dashboard".is_admin(auth.uid()) THEN true
+      WHEN "soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel') THEN
+        r.label_name = "soundpub-dashboard".get_user_full_name(auth.uid())
+      WHEN "soundpub-dashboard".has_role(auth.uid(), 'artist') THEN
+        r.artist_user_id = auth.uid() OR (r.artist_user_id IS NULL AND r.artist = "soundpub-dashboard".get_user_full_name(auth.uid()))
       ELSE false
     END;
 $$;
 
 -- Get royalty monthly summary
-CREATE OR REPLACE FUNCTION public.get_royalty_monthly_summary()
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".get_royalty_monthly_summary()
 RETURNS TABLE(period TEXT, revenue NUMERIC, streams BIGINT)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
   SELECT
     r.period,
@@ -400,11 +433,11 @@ AS $$
   FROM royalties r
   WHERE
     CASE
-      WHEN is_admin(auth.uid()) THEN true
-      WHEN has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') THEN
-        r.label_name = get_user_full_name(auth.uid())
-      WHEN has_role(auth.uid(), 'artist') THEN
-        r.artist_user_id = auth.uid() OR (r.artist_user_id IS NULL AND r.artist = get_user_full_name(auth.uid()))
+      WHEN "soundpub-dashboard".is_admin(auth.uid()) THEN true
+      WHEN "soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel') THEN
+        r.label_name = "soundpub-dashboard".get_user_full_name(auth.uid())
+      WHEN "soundpub-dashboard".has_role(auth.uid(), 'artist') THEN
+        r.artist_user_id = auth.uid() OR (r.artist_user_id IS NULL AND r.artist = "soundpub-dashboard".get_user_full_name(auth.uid()))
       ELSE false
     END
   GROUP BY r.period
@@ -412,12 +445,12 @@ AS $$
 $$;
 
 -- Get royalty platform summary
-CREATE OR REPLACE FUNCTION public.get_royalty_platform_summary(_limit INTEGER DEFAULT 10)
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".get_royalty_platform_summary(_limit INTEGER DEFAULT 10)
 RETURNS TABLE(platform TEXT, revenue NUMERIC, streams BIGINT)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
   SELECT
     r.platform,
@@ -426,11 +459,11 @@ AS $$
   FROM royalties r
   WHERE
     CASE
-      WHEN is_admin(auth.uid()) THEN true
-      WHEN has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') THEN
-        r.label_name = get_user_full_name(auth.uid())
-      WHEN has_role(auth.uid(), 'artist') THEN
-        r.artist_user_id = auth.uid() OR (r.artist_user_id IS NULL AND r.artist = get_user_full_name(auth.uid()))
+      WHEN "soundpub-dashboard".is_admin(auth.uid()) THEN true
+      WHEN "soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel') THEN
+        r.label_name = "soundpub-dashboard".get_user_full_name(auth.uid())
+      WHEN "soundpub-dashboard".has_role(auth.uid(), 'artist') THEN
+        r.artist_user_id = auth.uid() OR (r.artist_user_id IS NULL AND r.artist = "soundpub-dashboard".get_user_full_name(auth.uid()))
       ELSE false
     END
   GROUP BY r.platform
@@ -439,12 +472,12 @@ AS $$
 $$;
 
 -- Get royalty country summary
-CREATE OR REPLACE FUNCTION public.get_royalty_country_summary(_limit INTEGER DEFAULT 10)
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".get_royalty_country_summary(_limit INTEGER DEFAULT 10)
 RETURNS TABLE(country TEXT, revenue NUMERIC, streams BIGINT)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
   SELECT
     r.country,
@@ -453,11 +486,11 @@ AS $$
   FROM royalties r
   WHERE
     CASE
-      WHEN is_admin(auth.uid()) THEN true
-      WHEN has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') THEN
-        r.label_name = get_user_full_name(auth.uid())
-      WHEN has_role(auth.uid(), 'artist') THEN
-        r.artist_user_id = auth.uid() OR (r.artist_user_id IS NULL AND r.artist = get_user_full_name(auth.uid()))
+      WHEN "soundpub-dashboard".is_admin(auth.uid()) THEN true
+      WHEN "soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel') THEN
+        r.label_name = "soundpub-dashboard".get_user_full_name(auth.uid())
+      WHEN "soundpub-dashboard".has_role(auth.uid(), 'artist') THEN
+        r.artist_user_id = auth.uid() OR (r.artist_user_id IS NULL AND r.artist = "soundpub-dashboard".get_user_full_name(auth.uid()))
       ELSE false
     END
   GROUP BY r.country
@@ -466,42 +499,42 @@ AS $$
 $$;
 
 -- Get royalty periods
-CREATE OR REPLACE FUNCTION public.get_royalty_periods()
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".get_royalty_periods()
 RETURNS TABLE(period TEXT)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
   SELECT DISTINCT r.period
   FROM royalties r
   WHERE
     CASE
-      WHEN is_admin(auth.uid()) THEN true
-      WHEN has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') THEN
-        r.label_name = get_user_full_name(auth.uid())
-      WHEN has_role(auth.uid(), 'artist') THEN
-        r.artist_user_id = auth.uid() OR (r.artist_user_id IS NULL AND r.artist = get_user_full_name(auth.uid()))
+      WHEN "soundpub-dashboard".is_admin(auth.uid()) THEN true
+      WHEN "soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel') THEN
+        r.label_name = "soundpub-dashboard".get_user_full_name(auth.uid())
+      WHEN "soundpub-dashboard".has_role(auth.uid(), 'artist') THEN
+        r.artist_user_id = auth.uid() OR (r.artist_user_id IS NULL AND r.artist = "soundpub-dashboard".get_user_full_name(auth.uid()))
       ELSE false
     END
   ORDER BY r.period DESC;
 $$;
 
 -- Get royalty period summary (with growth calculation)
-CREATE OR REPLACE FUNCTION public.get_royalty_period_summary()
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".get_royalty_period_summary()
 RETURNS TABLE(period TEXT, revenue NUMERIC, streams BIGINT, unique_tracks BIGINT, unique_artists BIGINT, unique_labels BIGINT, top_platform TEXT, top_country TEXT, growth NUMERIC)
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
 DECLARE
   _uid uuid := auth.uid();
-  _is_admin boolean := is_admin(_uid);
-  _is_label boolean := has_role(_uid, 'label');
-  _is_whitelabel boolean := has_role(_uid, 'whitelabel');
-  _is_artist boolean := has_role(_uid, 'artist');
-  _full_name text := get_user_full_name(_uid);
+  _is_admin boolean := "soundpub-dashboard".is_admin(_uid);
+  _is_label boolean := "soundpub-dashboard".has_role(_uid, 'label');
+  _is_whitelabel boolean := "soundpub-dashboard".has_role(_uid, 'whitelabel');
+  _is_artist boolean := "soundpub-dashboard".has_role(_uid, 'artist');
+  _full_name text := "soundpub-dashboard".get_user_full_name(_uid);
 BEGIN
   RETURN QUERY
   WITH filtered AS (
@@ -578,20 +611,20 @@ END;
 $$;
 
 -- Get royalty comparison between periods
-CREATE OR REPLACE FUNCTION public.get_royalty_comparison(_current_periods TEXT[], _previous_periods TEXT[])
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".get_royalty_comparison(_current_periods TEXT[], _previous_periods TEXT[])
 RETURNS TABLE(data_type TEXT, period TEXT, revenue NUMERIC, streams BIGINT)
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
 DECLARE
   _uid uuid := auth.uid();
-  _is_admin boolean := is_admin(_uid);
-  _is_label boolean := has_role(_uid, 'label');
-  _is_whitelabel boolean := has_role(_uid, 'whitelabel');
-  _is_artist boolean := has_role(_uid, 'artist');
-  _full_name text := get_user_full_name(_uid);
+  _is_admin boolean := "soundpub-dashboard".is_admin(_uid);
+  _is_label boolean := "soundpub-dashboard".has_role(_uid, 'label');
+  _is_whitelabel boolean := "soundpub-dashboard".has_role(_uid, 'whitelabel');
+  _is_artist boolean := "soundpub-dashboard".has_role(_uid, 'artist');
+  _full_name text := "soundpub-dashboard".get_user_full_name(_uid);
 BEGIN
   RETURN QUERY
   SELECT 'current'::text AS data_type, r.period, SUM(r.net_revenue) AS revenue, SUM(r.sales_unit)::bigint AS streams
@@ -620,20 +653,20 @@ END;
 $$;
 
 -- Get top performers with growth
-CREATE OR REPLACE FUNCTION public.get_royalty_top_performers(_current_periods TEXT[], _previous_periods TEXT[], _group_by TEXT DEFAULT 'title', _limit INTEGER DEFAULT 10)
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".get_royalty_top_performers(_current_periods TEXT[], _previous_periods TEXT[], _group_by TEXT DEFAULT 'title', _limit INTEGER DEFAULT 10)
 RETURNS TABLE(name TEXT, revenue NUMERIC, streams BIGINT, growth NUMERIC)
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
 DECLARE
   _uid uuid := auth.uid();
-  _is_admin boolean := is_admin(_uid);
-  _is_label boolean := has_role(_uid, 'label');
-  _is_whitelabel boolean := has_role(_uid, 'whitelabel');
-  _is_artist boolean := has_role(_uid, 'artist');
-  _full_name text := get_user_full_name(_uid);
+  _is_admin boolean := "soundpub-dashboard".is_admin(_uid);
+  _is_label boolean := "soundpub-dashboard".has_role(_uid, 'label');
+  _is_whitelabel boolean := "soundpub-dashboard".has_role(_uid, 'whitelabel');
+  _is_artist boolean := "soundpub-dashboard".has_role(_uid, 'artist');
+  _full_name text := "soundpub-dashboard".get_user_full_name(_uid);
 BEGIN
   RETURN QUERY
   WITH role_filter AS (
@@ -689,20 +722,20 @@ END;
 $$;
 
 -- Get royalty label breakdown
-CREATE OR REPLACE FUNCTION public.get_royalty_label_breakdown(_period TEXT DEFAULT NULL)
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".get_royalty_label_breakdown(_period TEXT DEFAULT NULL)
 RETURNS TABLE(label_name TEXT, revenue NUMERIC, streams BIGINT, artist_share NUMERIC, label_share NUMERIC, admin_share NUMERIC)
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
 DECLARE
   _uid uuid := auth.uid();
-  _is_admin boolean := is_admin(_uid);
-  _is_label boolean := has_role(_uid, 'label');
-  _is_whitelabel boolean := has_role(_uid, 'whitelabel');
-  _is_artist boolean := has_role(_uid, 'artist');
-  _full_name text := get_user_full_name(_uid);
+  _is_admin boolean := "soundpub-dashboard".is_admin(_uid);
+  _is_label boolean := "soundpub-dashboard".has_role(_uid, 'label');
+  _is_whitelabel boolean := "soundpub-dashboard".has_role(_uid, 'whitelabel');
+  _is_artist boolean := "soundpub-dashboard".has_role(_uid, 'artist');
+  _full_name text := "soundpub-dashboard".get_user_full_name(_uid);
 BEGIN
   RETURN QUERY
   SELECT
@@ -727,20 +760,20 @@ END;
 $$;
 
 -- Get royalty artist breakdown
-CREATE OR REPLACE FUNCTION public.get_royalty_artist_breakdown(_period TEXT DEFAULT NULL, _limit INTEGER DEFAULT 20)
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".get_royalty_artist_breakdown(_period TEXT DEFAULT NULL, _limit INTEGER DEFAULT 20)
 RETURNS TABLE(artist_name TEXT, revenue NUMERIC, streams BIGINT, track_count BIGINT, is_soundpub BOOLEAN, artist_share NUMERIC, label_share NUMERIC, admin_share NUMERIC)
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
 DECLARE
   _uid uuid := auth.uid();
-  _is_admin boolean := is_admin(_uid);
-  _is_label boolean := has_role(_uid, 'label');
-  _is_whitelabel boolean := has_role(_uid, 'whitelabel');
-  _is_artist boolean := has_role(_uid, 'artist');
-  _full_name text := get_user_full_name(_uid);
+  _is_admin boolean := "soundpub-dashboard".is_admin(_uid);
+  _is_label boolean := "soundpub-dashboard".has_role(_uid, 'label');
+  _is_whitelabel boolean := "soundpub-dashboard".has_role(_uid, 'whitelabel');
+  _is_artist boolean := "soundpub-dashboard".has_role(_uid, 'artist');
+  _full_name text := "soundpub-dashboard".get_user_full_name(_uid);
 BEGIN
   RETURN QUERY
   SELECT
@@ -769,20 +802,20 @@ END;
 $$;
 
 -- Get royalty track breakdown
-CREATE OR REPLACE FUNCTION public.get_royalty_track_breakdown(_period TEXT DEFAULT NULL)
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".get_royalty_track_breakdown(_period TEXT DEFAULT NULL)
 RETURNS TABLE(isrc TEXT, title TEXT, artist_name TEXT, label TEXT, revenue NUMERIC, streams BIGINT, platform_count BIGINT, country_count BIGINT, is_soundpub BOOLEAN, artist_share NUMERIC, label_share NUMERIC, admin_share NUMERIC)
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
 DECLARE
   _uid uuid := auth.uid();
-  _is_admin boolean := is_admin(_uid);
-  _is_label boolean := has_role(_uid, 'label');
-  _is_whitelabel boolean := has_role(_uid, 'whitelabel');
-  _is_artist boolean := has_role(_uid, 'artist');
-  _full_name text := get_user_full_name(_uid);
+  _is_admin boolean := "soundpub-dashboard".is_admin(_uid);
+  _is_label boolean := "soundpub-dashboard".has_role(_uid, 'label');
+  _is_whitelabel boolean := "soundpub-dashboard".has_role(_uid, 'whitelabel');
+  _is_artist boolean := "soundpub-dashboard".has_role(_uid, 'artist');
+  _full_name text := "soundpub-dashboard".get_user_full_name(_uid);
 BEGIN
   RETURN QUERY
   SELECT
@@ -817,14 +850,14 @@ $$;
 -- =====================================================
 
 -- Handle new user signup (creates profile and default role)
-CREATE OR REPLACE FUNCTION public.handle_new_user()
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name, password_set)
+  INSERT INTO "soundpub-dashboard".profiles (id, email, full_name, password_set)
   VALUES (
     NEW.id, 
     NEW.email, 
@@ -832,7 +865,7 @@ BEGIN
     COALESCE((NEW.raw_user_meta_data ->> 'password_set')::boolean, true)
   );
   
-  INSERT INTO public.user_roles (user_id, role)
+  INSERT INTO "soundpub-dashboard".user_roles (user_id, role)
   VALUES (NEW.id, 'user');
   
   RETURN NEW;
@@ -840,11 +873,11 @@ END;
 $$;
 
 -- Update timestamp function
-CREATE OR REPLACE FUNCTION public.update_timestamp()
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".update_timestamp()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
 BEGIN
     NEW.updated_at = NOW();
@@ -853,17 +886,17 @@ END;
 $$;
 
 -- Update balance on payout status change
-CREATE OR REPLACE FUNCTION public.update_balance_on_payout_status_change()
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".update_balance_on_payout_status_change()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = "soundpub-dashboard"
 AS $$
 DECLARE
   current_balance DECIMAL(18,2);
   caller_is_admin BOOLEAN;
 BEGIN
-    caller_is_admin := public.is_admin(auth.uid());
+    caller_is_admin := "soundpub-dashboard".is_admin(auth.uid());
     
     -- Handle transition TO 'paid' status
     IF NEW.status = 'paid' AND (OLD.status IS NULL OR OLD.status != 'paid') THEN
@@ -876,7 +909,7 @@ BEGIN
         END IF;
         
         SELECT balance INTO current_balance
-        FROM public.profiles
+        FROM "soundpub-dashboard".profiles
         WHERE id = NEW.user_id
         FOR UPDATE;
         
@@ -889,7 +922,7 @@ BEGIN
               current_balance, NEW.amount;
         END IF;
         
-        UPDATE public.profiles
+        UPDATE "soundpub-dashboard".profiles
         SET balance = balance - NEW.amount
         WHERE id = NEW.user_id AND balance >= NEW.amount;
         
@@ -906,7 +939,7 @@ BEGIN
             RAISE EXCEPTION 'Only administrators can revert paid payouts';
         END IF;
         
-        UPDATE public.profiles
+        UPDATE "soundpub-dashboard".profiles
         SET balance = balance + NEW.amount
         WHERE id = NEW.user_id;
         
@@ -938,156 +971,156 @@ $$;
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+  FOR EACH ROW EXECUTE FUNCTION "soundpub-dashboard".handle_new_user();
 
 -- Update timestamp triggers
-DROP TRIGGER IF EXISTS update_profiles_timestamp ON public.profiles;
+DROP TRIGGER IF EXISTS update_profiles_timestamp ON "soundpub-dashboard".profiles;
 CREATE TRIGGER update_profiles_timestamp
-  BEFORE UPDATE ON public.profiles
-  FOR EACH ROW EXECUTE FUNCTION public.update_timestamp();
+  BEFORE UPDATE ON "soundpub-dashboard".profiles
+  FOR EACH ROW EXECUTE FUNCTION "soundpub-dashboard".update_timestamp();
 
-DROP TRIGGER IF EXISTS update_artists_timestamp ON public.artists;
+DROP TRIGGER IF EXISTS update_artists_timestamp ON "soundpub-dashboard".artists;
 CREATE TRIGGER update_artists_timestamp
-  BEFORE UPDATE ON public.artists
-  FOR EACH ROW EXECUTE FUNCTION public.update_timestamp();
+  BEFORE UPDATE ON "soundpub-dashboard".artists
+  FOR EACH ROW EXECUTE FUNCTION "soundpub-dashboard".update_timestamp();
 
-DROP TRIGGER IF EXISTS update_releases_timestamp ON public.releases;
+DROP TRIGGER IF EXISTS update_releases_timestamp ON "soundpub-dashboard".releases;
 CREATE TRIGGER update_releases_timestamp
-  BEFORE UPDATE ON public.releases
-  FOR EACH ROW EXECUTE FUNCTION public.update_timestamp();
+  BEFORE UPDATE ON "soundpub-dashboard".releases
+  FOR EACH ROW EXECUTE FUNCTION "soundpub-dashboard".update_timestamp();
 
-DROP TRIGGER IF EXISTS update_tracks_timestamp ON public.tracks;
+DROP TRIGGER IF EXISTS update_tracks_timestamp ON "soundpub-dashboard".tracks;
 CREATE TRIGGER update_tracks_timestamp
-  BEFORE UPDATE ON public.tracks
-  FOR EACH ROW EXECUTE FUNCTION public.update_timestamp();
+  BEFORE UPDATE ON "soundpub-dashboard".tracks
+  FOR EACH ROW EXECUTE FUNCTION "soundpub-dashboard".update_timestamp();
 
-DROP TRIGGER IF EXISTS update_royalty_uploads_timestamp ON public.royalty_uploads;
+DROP TRIGGER IF EXISTS update_royalty_uploads_timestamp ON "soundpub-dashboard".royalty_uploads;
 CREATE TRIGGER update_royalty_uploads_timestamp
-  BEFORE UPDATE ON public.royalty_uploads
-  FOR EACH ROW EXECUTE FUNCTION public.update_timestamp();
+  BEFORE UPDATE ON "soundpub-dashboard".royalty_uploads
+  FOR EACH ROW EXECUTE FUNCTION "soundpub-dashboard".update_timestamp();
 
-DROP TRIGGER IF EXISTS update_payout_requests_timestamp ON public.payout_requests;
+DROP TRIGGER IF EXISTS update_payout_requests_timestamp ON "soundpub-dashboard".payout_requests;
 CREATE TRIGGER update_payout_requests_timestamp
-  BEFORE UPDATE ON public.payout_requests
-  FOR EACH ROW EXECUTE FUNCTION public.update_timestamp();
+  BEFORE UPDATE ON "soundpub-dashboard".payout_requests
+  FOR EACH ROW EXECUTE FUNCTION "soundpub-dashboard".update_timestamp();
 
-DROP TRIGGER IF EXISTS update_composer_royalties_timestamp ON public.composer_royalties;
+DROP TRIGGER IF EXISTS update_composer_royalties_timestamp ON "soundpub-dashboard".composer_royalties;
 CREATE TRIGGER update_composer_royalties_timestamp
-  BEFORE UPDATE ON public.composer_royalties
-  FOR EACH ROW EXECUTE FUNCTION public.update_timestamp();
+  BEFORE UPDATE ON "soundpub-dashboard".composer_royalties
+  FOR EACH ROW EXECUTE FUNCTION "soundpub-dashboard".update_timestamp();
 
 -- Payout balance update trigger
-DROP TRIGGER IF EXISTS on_payout_status_change ON public.payout_requests;
+DROP TRIGGER IF EXISTS on_payout_status_change ON "soundpub-dashboard".payout_requests;
 CREATE TRIGGER on_payout_status_change
-  BEFORE UPDATE ON public.payout_requests
-  FOR EACH ROW EXECUTE FUNCTION public.update_balance_on_payout_status_change();
+  BEFORE UPDATE ON "soundpub-dashboard".payout_requests
+  FOR EACH ROW EXECUTE FUNCTION "soundpub-dashboard".update_balance_on_payout_status_change();
 
 -- =====================================================
 -- BAGIAN 7: ENABLE ROW LEVEL SECURITY
 -- =====================================================
 
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.artists ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.releases ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.tracks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.royalty_uploads ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.royalties ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.composer_royalties ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.payout_requests ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "soundpub-dashboard".profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "soundpub-dashboard".user_roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "soundpub-dashboard".artists ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "soundpub-dashboard".releases ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "soundpub-dashboard".tracks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "soundpub-dashboard".royalty_uploads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "soundpub-dashboard".royalties ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "soundpub-dashboard".composer_royalties ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "soundpub-dashboard".payout_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "soundpub-dashboard".audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "soundpub-dashboard".app_settings ENABLE ROW LEVEL SECURITY;
 
 -- =====================================================
 -- BAGIAN 8: RLS POLICIES - PROFILES
 -- =====================================================
 
-DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
-CREATE POLICY "Users can view their own profile" ON public.profiles
+DROP POLICY IF EXISTS "Users can view their own profile" ON "soundpub-dashboard".profiles;
+CREATE POLICY "Users can view their own profile" ON "soundpub-dashboard".profiles
   FOR SELECT USING (id = auth.uid());
 
-DROP POLICY IF EXISTS "Admins can view all profiles" ON public.profiles;
-CREATE POLICY "Admins can view all profiles" ON public.profiles
-  FOR SELECT USING (is_admin(auth.uid()));
+DROP POLICY IF EXISTS "Admins can view all profiles" ON "soundpub-dashboard".profiles;
+CREATE POLICY "Admins can view all profiles" ON "soundpub-dashboard".profiles
+  FOR SELECT USING ("soundpub-dashboard".is_admin(auth.uid()));
 
-DROP POLICY IF EXISTS "Admins can manage all profiles" ON public.profiles;
-CREATE POLICY "Admins can manage all profiles" ON public.profiles
-  FOR ALL USING (is_admin(auth.uid()));
+DROP POLICY IF EXISTS "Admins can manage all profiles" ON "soundpub-dashboard".profiles;
+CREATE POLICY "Admins can manage all profiles" ON "soundpub-dashboard".profiles
+  FOR ALL USING ("soundpub-dashboard".is_admin(auth.uid()));
 
-DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
-CREATE POLICY "Users can update their own profile" ON public.profiles
+DROP POLICY IF EXISTS "Users can update their own profile" ON "soundpub-dashboard".profiles;
+CREATE POLICY "Users can update their own profile" ON "soundpub-dashboard".profiles
   FOR UPDATE USING (id = auth.uid());
 
-DROP POLICY IF EXISTS "Labels can view their artists" ON public.profiles;
-CREATE POLICY "Labels can view their artists" ON public.profiles
-  FOR SELECT USING (has_role(auth.uid(), 'label') AND parent_label_id = auth.uid());
+DROP POLICY IF EXISTS "Labels can view their artists" ON "soundpub-dashboard".profiles;
+CREATE POLICY "Labels can view their artists" ON "soundpub-dashboard".profiles
+  FOR SELECT USING ("soundpub-dashboard".has_role(auth.uid(), 'label') AND parent_label_id = auth.uid());
 
-DROP POLICY IF EXISTS "Labels can update their artists" ON public.profiles;
-CREATE POLICY "Labels can update their artists" ON public.profiles
+DROP POLICY IF EXISTS "Labels can update their artists" ON "soundpub-dashboard".profiles;
+CREATE POLICY "Labels can update their artists" ON "soundpub-dashboard".profiles
   FOR UPDATE 
-  USING (has_role(auth.uid(), 'label') AND parent_label_id = auth.uid())
-  WITH CHECK (has_role(auth.uid(), 'label') AND (parent_label_id = auth.uid() OR parent_label_id IS NULL));
+  USING ("soundpub-dashboard".has_role(auth.uid(), 'label') AND parent_label_id = auth.uid())
+  WITH CHECK ("soundpub-dashboard".has_role(auth.uid(), 'label') AND (parent_label_id = auth.uid() OR parent_label_id IS NULL));
 
-DROP POLICY IF EXISTS "Whitelabels can view their artists" ON public.profiles;
-CREATE POLICY "Whitelabels can view their artists" ON public.profiles
-  FOR SELECT USING (has_role(auth.uid(), 'whitelabel') AND parent_label_id = auth.uid());
+DROP POLICY IF EXISTS "Whitelabels can view their artists" ON "soundpub-dashboard".profiles;
+CREATE POLICY "Whitelabels can view their artists" ON "soundpub-dashboard".profiles
+  FOR SELECT USING ("soundpub-dashboard".has_role(auth.uid(), 'whitelabel') AND parent_label_id = auth.uid());
 
-DROP POLICY IF EXISTS "Whitelabels can update their artists" ON public.profiles;
-CREATE POLICY "Whitelabels can update their artists" ON public.profiles
+DROP POLICY IF EXISTS "Whitelabels can update their artists" ON "soundpub-dashboard".profiles;
+CREATE POLICY "Whitelabels can update their artists" ON "soundpub-dashboard".profiles
   FOR UPDATE 
-  USING (has_role(auth.uid(), 'whitelabel') AND parent_label_id = auth.uid())
-  WITH CHECK (has_role(auth.uid(), 'whitelabel') AND (parent_label_id = auth.uid() OR parent_label_id IS NULL));
+  USING ("soundpub-dashboard".has_role(auth.uid(), 'whitelabel') AND parent_label_id = auth.uid())
+  WITH CHECK ("soundpub-dashboard".has_role(auth.uid(), 'whitelabel') AND (parent_label_id = auth.uid() OR parent_label_id IS NULL));
 
-DROP POLICY IF EXISTS "Artists can view their parent label profile" ON public.profiles;
-CREATE POLICY "Artists can view their parent label profile" ON public.profiles
-  FOR SELECT USING (has_role(auth.uid(), 'artist') AND id = get_user_parent_label_id(auth.uid()));
+DROP POLICY IF EXISTS "Artists can view their parent label profile" ON "soundpub-dashboard".profiles;
+CREATE POLICY "Artists can view their parent label profile" ON "soundpub-dashboard".profiles
+  FOR SELECT USING ("soundpub-dashboard".has_role(auth.uid(), 'artist') AND id = "soundpub-dashboard".get_user_parent_label_id(auth.uid()));
 
-DROP POLICY IF EXISTS "Users can view label profiles for their releases" ON public.profiles;
-CREATE POLICY "Users can view label profiles for their releases" ON public.profiles
-  FOR SELECT USING (id IN (SELECT get_user_release_label_ids(auth.uid())));
+DROP POLICY IF EXISTS "Users can view label profiles for their releases" ON "soundpub-dashboard".profiles;
+CREATE POLICY "Users can view label profiles for their releases" ON "soundpub-dashboard".profiles
+  FOR SELECT USING (id IN (SELECT "soundpub-dashboard".get_user_release_label_ids(auth.uid())));
 
 -- =====================================================
 -- BAGIAN 9: RLS POLICIES - USER ROLES
 -- =====================================================
 
-DROP POLICY IF EXISTS "Users can view their own roles" ON public.user_roles;
-CREATE POLICY "Users can view their own roles" ON public.user_roles
+DROP POLICY IF EXISTS "Users can view their own roles" ON "soundpub-dashboard".user_roles;
+CREATE POLICY "Users can view their own roles" ON "soundpub-dashboard".user_roles
   FOR SELECT USING (user_id = auth.uid());
 
-DROP POLICY IF EXISTS "Admins can manage all roles" ON public.user_roles;
-CREATE POLICY "Admins can manage all roles" ON public.user_roles
-  FOR ALL USING (is_admin(auth.uid()));
+DROP POLICY IF EXISTS "Admins can manage all roles" ON "soundpub-dashboard".user_roles;
+CREATE POLICY "Admins can manage all roles" ON "soundpub-dashboard".user_roles
+  FOR ALL USING ("soundpub-dashboard".is_admin(auth.uid()));
 
 -- =====================================================
 -- BAGIAN 10: RLS POLICIES - ARTISTS
 -- =====================================================
 
-DROP POLICY IF EXISTS "Admins can manage all artists" ON public.artists;
-CREATE POLICY "Admins can manage all artists" ON public.artists
-  FOR ALL USING (is_admin(auth.uid()));
+DROP POLICY IF EXISTS "Admins can manage all artists" ON "soundpub-dashboard".artists;
+CREATE POLICY "Admins can manage all artists" ON "soundpub-dashboard".artists
+  FOR ALL USING ("soundpub-dashboard".is_admin(auth.uid()));
 
-DROP POLICY IF EXISTS "Labels can manage their own artists" ON public.artists;
-CREATE POLICY "Labels can manage their own artists" ON public.artists
+DROP POLICY IF EXISTS "Labels can manage their own artists" ON "soundpub-dashboard".artists;
+CREATE POLICY "Labels can manage their own artists" ON "soundpub-dashboard".artists
   FOR ALL 
   USING (label_id = auth.uid())
   WITH CHECK (label_id = auth.uid());
 
-DROP POLICY IF EXISTS "Whitelabels can manage their own artists" ON public.artists;
-CREATE POLICY "Whitelabels can manage their own artists" ON public.artists
+DROP POLICY IF EXISTS "Whitelabels can manage their own artists" ON "soundpub-dashboard".artists;
+CREATE POLICY "Whitelabels can manage their own artists" ON "soundpub-dashboard".artists
   FOR ALL 
-  USING (has_role(auth.uid(), 'whitelabel') AND label_id = auth.uid())
-  WITH CHECK (has_role(auth.uid(), 'whitelabel') AND label_id = auth.uid());
+  USING ("soundpub-dashboard".has_role(auth.uid(), 'whitelabel') AND label_id = auth.uid())
+  WITH CHECK ("soundpub-dashboard".has_role(auth.uid(), 'whitelabel') AND label_id = auth.uid());
 
-DROP POLICY IF EXISTS "Admins, labels and associated artists can view artists" ON public.artists;
-CREATE POLICY "Admins, labels and associated artists can view artists" ON public.artists
+DROP POLICY IF EXISTS "Admins, labels and associated artists can view artists" ON "soundpub-dashboard".artists;
+CREATE POLICY "Admins, labels and associated artists can view artists" ON "soundpub-dashboard".artists
   FOR SELECT USING (
-    is_admin(auth.uid())
+    "soundpub-dashboard".is_admin(auth.uid())
     OR label_id = auth.uid()
     OR EXISTS (
-      SELECT 1 FROM public.profiles p
+      SELECT 1 FROM "soundpub-dashboard".profiles p
       WHERE p.id = auth.uid()
       AND p.parent_label_id = artists.label_id
-      AND has_role(auth.uid(), 'artist')
+      AND "soundpub-dashboard".has_role(auth.uid(), 'artist')
     )
   );
 
@@ -1095,126 +1128,126 @@ CREATE POLICY "Admins, labels and associated artists can view artists" ON public
 -- BAGIAN 11: RLS POLICIES - RELEASES
 -- =====================================================
 
-DROP POLICY IF EXISTS "Admins can manage all releases" ON public.releases;
-CREATE POLICY "Admins can manage all releases" ON public.releases
+DROP POLICY IF EXISTS "Admins can manage all releases" ON "soundpub-dashboard".releases;
+CREATE POLICY "Admins can manage all releases" ON "soundpub-dashboard".releases
   FOR ALL 
-  USING (is_admin(auth.uid()))
-  WITH CHECK (is_admin(auth.uid()));
+  USING ("soundpub-dashboard".is_admin(auth.uid()))
+  WITH CHECK ("soundpub-dashboard".is_admin(auth.uid()));
 
-DROP POLICY IF EXISTS "Labels can manage their releases" ON public.releases;
-CREATE POLICY "Labels can manage their releases" ON public.releases
+DROP POLICY IF EXISTS "Labels can manage their releases" ON "soundpub-dashboard".releases;
+CREATE POLICY "Labels can manage their releases" ON "soundpub-dashboard".releases
   FOR ALL 
-  USING (has_role(auth.uid(), 'label') AND label_id = auth.uid())
-  WITH CHECK (has_role(auth.uid(), 'label') AND label_id = auth.uid());
+  USING ("soundpub-dashboard".has_role(auth.uid(), 'label') AND label_id = auth.uid())
+  WITH CHECK ("soundpub-dashboard".has_role(auth.uid(), 'label') AND label_id = auth.uid());
 
-DROP POLICY IF EXISTS "Whitelabels can manage their releases" ON public.releases;
-CREATE POLICY "Whitelabels can manage their releases" ON public.releases
+DROP POLICY IF EXISTS "Whitelabels can manage their releases" ON "soundpub-dashboard".releases;
+CREATE POLICY "Whitelabels can manage their releases" ON "soundpub-dashboard".releases
   FOR ALL 
-  USING (has_role(auth.uid(), 'whitelabel') AND label_id = auth.uid())
-  WITH CHECK (has_role(auth.uid(), 'whitelabel') AND label_id = auth.uid());
+  USING ("soundpub-dashboard".has_role(auth.uid(), 'whitelabel') AND label_id = auth.uid())
+  WITH CHECK ("soundpub-dashboard".has_role(auth.uid(), 'whitelabel') AND label_id = auth.uid());
 
-DROP POLICY IF EXISTS "Artists can view their releases" ON public.releases;
-CREATE POLICY "Artists can view their releases" ON public.releases
+DROP POLICY IF EXISTS "Artists can view their releases" ON "soundpub-dashboard".releases;
+CREATE POLICY "Artists can view their releases" ON "soundpub-dashboard".releases
   FOR SELECT 
   USING (
-    has_role(auth.uid(), 'artist') AND (
+    "soundpub-dashboard".has_role(auth.uid(), 'artist') AND (
       artist_user_id = auth.uid()
-      OR (artist_user_id IS NULL AND artist_name = get_user_full_name(auth.uid()))
+      OR (artist_user_id IS NULL AND artist_name = "soundpub-dashboard".get_user_full_name(auth.uid()))
     )
   );
 
 -- Artist can INSERT releases (auto-set label_id via parent_label_id)
-DROP POLICY IF EXISTS "Artists can insert their releases" ON public.releases;
-CREATE POLICY "Artists can insert their releases" ON public.releases
+DROP POLICY IF EXISTS "Artists can insert their releases" ON "soundpub-dashboard".releases;
+CREATE POLICY "Artists can insert their releases" ON "soundpub-dashboard".releases
   FOR INSERT 
   WITH CHECK (
-    has_role(auth.uid(), 'artist')
+    "soundpub-dashboard".has_role(auth.uid(), 'artist')
     AND artist_user_id = auth.uid()
-    AND label_id = get_user_parent_label_id(auth.uid())
+    AND label_id = "soundpub-dashboard".get_user_parent_label_id(auth.uid())
   );
 
 -- Artist can UPDATE their own releases
-DROP POLICY IF EXISTS "Artists can update their releases" ON public.releases;
-CREATE POLICY "Artists can update their releases" ON public.releases
+DROP POLICY IF EXISTS "Artists can update their releases" ON "soundpub-dashboard".releases;
+CREATE POLICY "Artists can update their releases" ON "soundpub-dashboard".releases
   FOR UPDATE 
   USING (
-    has_role(auth.uid(), 'artist') AND (
+    "soundpub-dashboard".has_role(auth.uid(), 'artist') AND (
       artist_user_id = auth.uid()
-      OR (artist_user_id IS NULL AND artist_name = get_user_full_name(auth.uid()))
+      OR (artist_user_id IS NULL AND artist_name = "soundpub-dashboard".get_user_full_name(auth.uid()))
     )
   )
   WITH CHECK (
-    has_role(auth.uid(), 'artist')
+    "soundpub-dashboard".has_role(auth.uid(), 'artist')
     AND artist_user_id = auth.uid()
-    AND label_id = get_user_parent_label_id(auth.uid())
+    AND label_id = "soundpub-dashboard".get_user_parent_label_id(auth.uid())
   );
 
 -- =====================================================
 -- BAGIAN 12: RLS POLICIES - TRACKS
 -- =====================================================
 
-DROP POLICY IF EXISTS "Admins can manage all tracks" ON public.tracks;
-CREATE POLICY "Admins can manage all tracks" ON public.tracks
+DROP POLICY IF EXISTS "Admins can manage all tracks" ON "soundpub-dashboard".tracks;
+CREATE POLICY "Admins can manage all tracks" ON "soundpub-dashboard".tracks
   FOR ALL 
-  USING (is_admin(auth.uid()))
-  WITH CHECK (is_admin(auth.uid()));
+  USING ("soundpub-dashboard".is_admin(auth.uid()))
+  WITH CHECK ("soundpub-dashboard".is_admin(auth.uid()));
 
-DROP POLICY IF EXISTS "Labels can manage tracks for their releases" ON public.tracks;
-CREATE POLICY "Labels can manage tracks for their releases" ON public.tracks
+DROP POLICY IF EXISTS "Labels can manage tracks for their releases" ON "soundpub-dashboard".tracks;
+CREATE POLICY "Labels can manage tracks for their releases" ON "soundpub-dashboard".tracks
   FOR ALL 
-  USING (has_role(auth.uid(), 'label') AND release_id IN (SELECT id FROM releases WHERE label_id = auth.uid()))
-  WITH CHECK (has_role(auth.uid(), 'label') AND release_id IN (SELECT id FROM releases WHERE label_id = auth.uid()));
+  USING ("soundpub-dashboard".has_role(auth.uid(), 'label') AND release_id IN (SELECT id FROM releases WHERE label_id = auth.uid()))
+  WITH CHECK ("soundpub-dashboard".has_role(auth.uid(), 'label') AND release_id IN (SELECT id FROM releases WHERE label_id = auth.uid()));
 
-DROP POLICY IF EXISTS "Whitelabels can manage tracks for their releases" ON public.tracks;
-CREATE POLICY "Whitelabels can manage tracks for their releases" ON public.tracks
+DROP POLICY IF EXISTS "Whitelabels can manage tracks for their releases" ON "soundpub-dashboard".tracks;
+CREATE POLICY "Whitelabels can manage tracks for their releases" ON "soundpub-dashboard".tracks
   FOR ALL 
-  USING (has_role(auth.uid(), 'whitelabel') AND release_id IN (SELECT id FROM releases WHERE label_id = auth.uid()))
-  WITH CHECK (has_role(auth.uid(), 'whitelabel') AND release_id IN (SELECT id FROM releases WHERE label_id = auth.uid()));
+  USING ("soundpub-dashboard".has_role(auth.uid(), 'whitelabel') AND release_id IN (SELECT id FROM releases WHERE label_id = auth.uid()))
+  WITH CHECK ("soundpub-dashboard".has_role(auth.uid(), 'whitelabel') AND release_id IN (SELECT id FROM releases WHERE label_id = auth.uid()));
 
-DROP POLICY IF EXISTS "Artists can view their tracks" ON public.tracks;
-CREATE POLICY "Artists can view their tracks" ON public.tracks
+DROP POLICY IF EXISTS "Artists can view their tracks" ON "soundpub-dashboard".tracks;
+CREATE POLICY "Artists can view their tracks" ON "soundpub-dashboard".tracks
   FOR SELECT 
   USING (
-    has_role(auth.uid(), 'artist') AND (
+    "soundpub-dashboard".has_role(auth.uid(), 'artist') AND (
       artist_user_id = auth.uid()
-      OR (artist_user_id IS NULL AND artist_name = get_user_full_name(auth.uid()))
-      OR artists @> jsonb_build_array(jsonb_build_object('name', get_user_full_name(auth.uid())))
+      OR (artist_user_id IS NULL AND artist_name = "soundpub-dashboard".get_user_full_name(auth.uid()))
+      OR artists @> jsonb_build_array(jsonb_build_object('name', "soundpub-dashboard".get_user_full_name(auth.uid())))
       OR EXISTS (
         SELECT 1 FROM releases 
         WHERE releases.id = tracks.release_id 
-        AND (releases.artist_user_id = auth.uid() OR (releases.artist_user_id IS NULL AND releases.artist_name = get_user_full_name(auth.uid())))
+        AND (releases.artist_user_id = auth.uid() OR (releases.artist_user_id IS NULL AND releases.artist_name = "soundpub-dashboard".get_user_full_name(auth.uid())))
       )
     )
   );
 
 -- Artist can INSERT tracks for their releases
-DROP POLICY IF EXISTS "Artists can insert tracks for their releases" ON public.tracks;
-CREATE POLICY "Artists can insert tracks for their releases" ON public.tracks
+DROP POLICY IF EXISTS "Artists can insert tracks for their releases" ON "soundpub-dashboard".tracks;
+CREATE POLICY "Artists can insert tracks for their releases" ON "soundpub-dashboard".tracks
   FOR INSERT 
   WITH CHECK (
-    has_role(auth.uid(), 'artist')
+    "soundpub-dashboard".has_role(auth.uid(), 'artist')
     AND EXISTS (
       SELECT 1 FROM releases 
       WHERE releases.id = tracks.release_id 
       AND releases.artist_user_id = auth.uid()
-      AND releases.label_id = get_user_parent_label_id(auth.uid())
+      AND releases.label_id = "soundpub-dashboard".get_user_parent_label_id(auth.uid())
     )
   );
 
 -- Artist can UPDATE tracks for their releases
-DROP POLICY IF EXISTS "Artists can update tracks for their releases" ON public.tracks;
-CREATE POLICY "Artists can update tracks for their releases" ON public.tracks
+DROP POLICY IF EXISTS "Artists can update tracks for their releases" ON "soundpub-dashboard".tracks;
+CREATE POLICY "Artists can update tracks for their releases" ON "soundpub-dashboard".tracks
   FOR UPDATE 
   USING (
-    has_role(auth.uid(), 'artist')
+    "soundpub-dashboard".has_role(auth.uid(), 'artist')
     AND EXISTS (
       SELECT 1 FROM releases 
       WHERE releases.id = tracks.release_id 
-      AND (releases.artist_user_id = auth.uid() OR (releases.artist_user_id IS NULL AND releases.artist_name = get_user_full_name(auth.uid())))
+      AND (releases.artist_user_id = auth.uid() OR (releases.artist_user_id IS NULL AND releases.artist_name = "soundpub-dashboard".get_user_full_name(auth.uid())))
     )
   )
   WITH CHECK (
-    has_role(auth.uid(), 'artist')
+    "soundpub-dashboard".has_role(auth.uid(), 'artist')
     AND EXISTS (
       SELECT 1 FROM releases 
       WHERE releases.id = tracks.release_id 
@@ -1226,39 +1259,39 @@ CREATE POLICY "Artists can update tracks for their releases" ON public.tracks
 -- BAGIAN 13: RLS POLICIES - ROYALTY UPLOADS
 -- =====================================================
 
-DROP POLICY IF EXISTS "Admins can manage all uploads" ON public.royalty_uploads;
-CREATE POLICY "Admins can manage all uploads" ON public.royalty_uploads
-  FOR ALL USING (is_admin(auth.uid()));
+DROP POLICY IF EXISTS "Admins can manage all uploads" ON "soundpub-dashboard".royalty_uploads;
+CREATE POLICY "Admins can manage all uploads" ON "soundpub-dashboard".royalty_uploads
+  FOR ALL USING ("soundpub-dashboard".is_admin(auth.uid()));
 
-DROP POLICY IF EXISTS "Users can view their own uploads" ON public.royalty_uploads;
-CREATE POLICY "Users can view their own uploads" ON public.royalty_uploads
+DROP POLICY IF EXISTS "Users can view their own uploads" ON "soundpub-dashboard".royalty_uploads;
+CREATE POLICY "Users can view their own uploads" ON "soundpub-dashboard".royalty_uploads
   FOR SELECT USING (user_id = auth.uid());
 
 -- =====================================================
 -- BAGIAN 14: RLS POLICIES - ROYALTIES
 -- =====================================================
 
-DROP POLICY IF EXISTS "Admins can manage all royalties" ON public.royalties;
-CREATE POLICY "Admins can manage all royalties" ON public.royalties
-  FOR ALL USING (is_admin(auth.uid()));
+DROP POLICY IF EXISTS "Admins can manage all royalties" ON "soundpub-dashboard".royalties;
+CREATE POLICY "Admins can manage all royalties" ON "soundpub-dashboard".royalties
+  FOR ALL USING ("soundpub-dashboard".is_admin(auth.uid()));
 
-DROP POLICY IF EXISTS "Labels can view royalties for their artists" ON public.royalties;
-CREATE POLICY "Labels can view royalties for their artists" ON public.royalties
+DROP POLICY IF EXISTS "Labels can view royalties for their artists" ON "soundpub-dashboard".royalties;
+CREATE POLICY "Labels can view royalties for their artists" ON "soundpub-dashboard".royalties
   FOR SELECT 
-  USING (has_role(auth.uid(), 'label') AND label_name = get_user_full_name(auth.uid()));
+  USING ("soundpub-dashboard".has_role(auth.uid(), 'label') AND label_name = "soundpub-dashboard".get_user_full_name(auth.uid()));
 
-DROP POLICY IF EXISTS "Whitelabels can view royalties for their artists" ON public.royalties;
-CREATE POLICY "Whitelabels can view royalties for their artists" ON public.royalties
+DROP POLICY IF EXISTS "Whitelabels can view royalties for their artists" ON "soundpub-dashboard".royalties;
+CREATE POLICY "Whitelabels can view royalties for their artists" ON "soundpub-dashboard".royalties
   FOR SELECT 
-  USING (has_role(auth.uid(), 'whitelabel') AND label_name = get_user_full_name(auth.uid()));
+  USING ("soundpub-dashboard".has_role(auth.uid(), 'whitelabel') AND label_name = "soundpub-dashboard".get_user_full_name(auth.uid()));
 
-DROP POLICY IF EXISTS "Artists can view their royalties" ON public.royalties;
-CREATE POLICY "Artists can view their royalties" ON public.royalties
+DROP POLICY IF EXISTS "Artists can view their royalties" ON "soundpub-dashboard".royalties;
+CREATE POLICY "Artists can view their royalties" ON "soundpub-dashboard".royalties
   FOR SELECT 
   USING (
-    has_role(auth.uid(), 'artist') AND (
+    "soundpub-dashboard".has_role(auth.uid(), 'artist') AND (
       artist_user_id = auth.uid()
-      OR (artist_user_id IS NULL AND artist = get_user_full_name(auth.uid()))
+      OR (artist_user_id IS NULL AND artist = "soundpub-dashboard".get_user_full_name(auth.uid()))
     )
   );
 
@@ -1266,57 +1299,57 @@ CREATE POLICY "Artists can view their royalties" ON public.royalties
 -- BAGIAN 15: RLS POLICIES - COMPOSER ROYALTIES
 -- =====================================================
 
-DROP POLICY IF EXISTS "Admins can manage all composer royalties" ON public.composer_royalties;
-CREATE POLICY "Admins can manage all composer royalties" ON public.composer_royalties
-  FOR ALL USING (is_admin(auth.uid()));
+DROP POLICY IF EXISTS "Admins can manage all composer royalties" ON "soundpub-dashboard".composer_royalties;
+CREATE POLICY "Admins can manage all composer royalties" ON "soundpub-dashboard".composer_royalties
+  FOR ALL USING ("soundpub-dashboard".is_admin(auth.uid()));
 
-DROP POLICY IF EXISTS "Copyright users can view composer royalties" ON public.composer_royalties;
-CREATE POLICY "Copyright users can view composer royalties" ON public.composer_royalties
-  FOR SELECT USING (has_role(auth.uid(), 'copyright'));
+DROP POLICY IF EXISTS "Copyright users can view composer royalties" ON "soundpub-dashboard".composer_royalties;
+CREATE POLICY "Copyright users can view composer royalties" ON "soundpub-dashboard".composer_royalties
+  FOR SELECT USING ("soundpub-dashboard".has_role(auth.uid(), 'copyright'));
 
 -- =====================================================
 -- BAGIAN 16: RLS POLICIES - PAYOUT REQUESTS
 -- =====================================================
 
-DROP POLICY IF EXISTS "Admins can manage all payouts" ON public.payout_requests;
-CREATE POLICY "Admins can manage all payouts" ON public.payout_requests
-  FOR ALL USING (is_admin(auth.uid()));
+DROP POLICY IF EXISTS "Admins can manage all payouts" ON "soundpub-dashboard".payout_requests;
+CREATE POLICY "Admins can manage all payouts" ON "soundpub-dashboard".payout_requests
+  FOR ALL USING ("soundpub-dashboard".is_admin(auth.uid()));
 
-DROP POLICY IF EXISTS "Users can view their own payouts" ON public.payout_requests;
-CREATE POLICY "Users can view their own payouts" ON public.payout_requests
+DROP POLICY IF EXISTS "Users can view their own payouts" ON "soundpub-dashboard".payout_requests;
+CREATE POLICY "Users can view their own payouts" ON "soundpub-dashboard".payout_requests
   FOR SELECT USING (user_id = auth.uid());
 
-DROP POLICY IF EXISTS "Users can create pending payouts" ON public.payout_requests;
-CREATE POLICY "Users can create pending payouts" ON public.payout_requests
+DROP POLICY IF EXISTS "Users can create pending payouts" ON "soundpub-dashboard".payout_requests;
+CREATE POLICY "Users can create pending payouts" ON "soundpub-dashboard".payout_requests
   FOR INSERT WITH CHECK (user_id = auth.uid() AND status = 'pending' AND amount > 0);
 
-DROP POLICY IF EXISTS "Users can cancel pending payouts" ON public.payout_requests;
-CREATE POLICY "Users can cancel pending payouts" ON public.payout_requests
+DROP POLICY IF EXISTS "Users can cancel pending payouts" ON "soundpub-dashboard".payout_requests;
+CREATE POLICY "Users can cancel pending payouts" ON "soundpub-dashboard".payout_requests
   FOR DELETE USING (user_id = auth.uid() AND status = 'pending');
 
 -- =====================================================
 -- BAGIAN 17: RLS POLICIES - AUDIT LOGS
 -- =====================================================
 
-DROP POLICY IF EXISTS "Admins can view all audit logs" ON public.audit_logs;
-CREATE POLICY "Admins can view all audit logs" ON public.audit_logs
-  FOR SELECT USING (is_admin(auth.uid()));
+DROP POLICY IF EXISTS "Admins can view all audit logs" ON "soundpub-dashboard".audit_logs;
+CREATE POLICY "Admins can view all audit logs" ON "soundpub-dashboard".audit_logs
+  FOR SELECT USING ("soundpub-dashboard".is_admin(auth.uid()));
 
-DROP POLICY IF EXISTS "Service role can insert audit logs" ON public.audit_logs;
-CREATE POLICY "Service role can insert audit logs" ON public.audit_logs
+DROP POLICY IF EXISTS "Service role can insert audit logs" ON "soundpub-dashboard".audit_logs;
+CREATE POLICY "Service role can insert audit logs" ON "soundpub-dashboard".audit_logs
   FOR INSERT WITH CHECK (true);
 
 -- =====================================================
 -- BAGIAN 18: RLS POLICIES - APP SETTINGS
 -- =====================================================
 
-DROP POLICY IF EXISTS "Anyone can view app settings" ON public.app_settings;
-CREATE POLICY "Anyone can view app settings" ON public.app_settings
+DROP POLICY IF EXISTS "Anyone can view app settings" ON "soundpub-dashboard".app_settings;
+CREATE POLICY "Anyone can view app settings" ON "soundpub-dashboard".app_settings
   FOR SELECT USING (true);
 
-DROP POLICY IF EXISTS "Superadmins can manage app settings" ON public.app_settings;
-CREATE POLICY "Superadmins can manage app settings" ON public.app_settings
-  FOR ALL USING (has_role(auth.uid(), 'superadmin'));
+DROP POLICY IF EXISTS "Superadmins can manage app settings" ON "soundpub-dashboard".app_settings;
+CREATE POLICY "Superadmins can manage app settings" ON "soundpub-dashboard".app_settings
+  FOR ALL USING ("soundpub-dashboard".has_role(auth.uid(), 'superadmin'));
 
 -- =====================================================
 -- BAGIAN 19: STORAGE BUCKETS
@@ -1354,20 +1387,20 @@ CREATE POLICY "Authenticated users can view release covers" ON storage.objects
 
 CREATE POLICY "Admins can manage release covers" ON storage.objects
   FOR ALL TO authenticated 
-  USING (bucket_id = 'release-covers' AND is_admin(auth.uid()))
-  WITH CHECK (bucket_id = 'release-covers' AND is_admin(auth.uid()));
+  USING (bucket_id = 'release-covers' AND "soundpub-dashboard".is_admin(auth.uid()))
+  WITH CHECK (bucket_id = 'release-covers' AND "soundpub-dashboard".is_admin(auth.uid()));
 
 CREATE POLICY "Labels can upload release covers" ON storage.objects
   FOR INSERT TO authenticated 
-  WITH CHECK (bucket_id = 'release-covers' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR has_role(auth.uid(), 'artist')));
+  WITH CHECK (bucket_id = 'release-covers' AND ("soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel') OR "soundpub-dashboard".has_role(auth.uid(), 'artist')));
 
 CREATE POLICY "Labels can update release covers" ON storage.objects
   FOR UPDATE TO authenticated 
-  USING (bucket_id = 'release-covers' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR has_role(auth.uid(), 'artist')));
+  USING (bucket_id = 'release-covers' AND ("soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel') OR "soundpub-dashboard".has_role(auth.uid(), 'artist')));
 
 CREATE POLICY "Labels can delete release covers" ON storage.objects
   FOR DELETE TO authenticated 
-  USING (bucket_id = 'release-covers' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR is_admin(auth.uid())));
+  USING (bucket_id = 'release-covers' AND ("soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel') OR "soundpub-dashboard".is_admin(auth.uid())));
 
 -- track-audio policies (private bucket)
 CREATE POLICY "Authenticated users can view track audio" ON storage.objects
@@ -1375,20 +1408,20 @@ CREATE POLICY "Authenticated users can view track audio" ON storage.objects
 
 CREATE POLICY "Admins can manage track audio" ON storage.objects
   FOR ALL TO authenticated 
-  USING (bucket_id = 'track-audio' AND is_admin(auth.uid()))
-  WITH CHECK (bucket_id = 'track-audio' AND is_admin(auth.uid()));
+  USING (bucket_id = 'track-audio' AND "soundpub-dashboard".is_admin(auth.uid()))
+  WITH CHECK (bucket_id = 'track-audio' AND "soundpub-dashboard".is_admin(auth.uid()));
 
 CREATE POLICY "Labels can upload track audio" ON storage.objects
   FOR INSERT TO authenticated 
-  WITH CHECK (bucket_id = 'track-audio' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR has_role(auth.uid(), 'artist')));
+  WITH CHECK (bucket_id = 'track-audio' AND ("soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel') OR "soundpub-dashboard".has_role(auth.uid(), 'artist')));
 
 CREATE POLICY "Labels can update track audio" ON storage.objects
   FOR UPDATE TO authenticated 
-  USING (bucket_id = 'track-audio' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR has_role(auth.uid(), 'artist')));
+  USING (bucket_id = 'track-audio' AND ("soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel') OR "soundpub-dashboard".has_role(auth.uid(), 'artist')));
 
 CREATE POLICY "Labels can delete track audio" ON storage.objects
   FOR DELETE TO authenticated 
-  USING (bucket_id = 'track-audio' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR is_admin(auth.uid())));
+  USING (bucket_id = 'track-audio' AND ("soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel') OR "soundpub-dashboard".is_admin(auth.uid())));
 
 -- track-video policies (private bucket)
 CREATE POLICY "Authenticated users can view track video" ON storage.objects
@@ -1396,16 +1429,16 @@ CREATE POLICY "Authenticated users can view track video" ON storage.objects
 
 CREATE POLICY "Admins can manage track video" ON storage.objects
   FOR ALL TO authenticated 
-  USING (bucket_id = 'track-video' AND is_admin(auth.uid()))
-  WITH CHECK (bucket_id = 'track-video' AND is_admin(auth.uid()));
+  USING (bucket_id = 'track-video' AND "soundpub-dashboard".is_admin(auth.uid()))
+  WITH CHECK (bucket_id = 'track-video' AND "soundpub-dashboard".is_admin(auth.uid()));
 
 CREATE POLICY "Labels can upload track video" ON storage.objects
   FOR INSERT TO authenticated 
-  WITH CHECK (bucket_id = 'track-video' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR has_role(auth.uid(), 'artist')));
+  WITH CHECK (bucket_id = 'track-video' AND ("soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel') OR "soundpub-dashboard".has_role(auth.uid(), 'artist')));
 
 CREATE POLICY "Labels can delete track video" ON storage.objects
   FOR DELETE TO authenticated 
-  USING (bucket_id = 'track-video' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR is_admin(auth.uid())));
+  USING (bucket_id = 'track-video' AND ("soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel') OR "soundpub-dashboard".is_admin(auth.uid())));
 
 -- audio-clips policies (public bucket)
 CREATE POLICY "Anyone can view audio clips" ON storage.objects
@@ -1413,16 +1446,16 @@ CREATE POLICY "Anyone can view audio clips" ON storage.objects
 
 CREATE POLICY "Admins can manage audio clips" ON storage.objects
   FOR ALL TO authenticated 
-  USING (bucket_id = 'audio-clips' AND is_admin(auth.uid()))
-  WITH CHECK (bucket_id = 'audio-clips' AND is_admin(auth.uid()));
+  USING (bucket_id = 'audio-clips' AND "soundpub-dashboard".is_admin(auth.uid()))
+  WITH CHECK (bucket_id = 'audio-clips' AND "soundpub-dashboard".is_admin(auth.uid()));
 
 CREATE POLICY "Labels can upload audio clips" ON storage.objects
   FOR INSERT TO authenticated 
-  WITH CHECK (bucket_id = 'audio-clips' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR has_role(auth.uid(), 'artist')));
+  WITH CHECK (bucket_id = 'audio-clips' AND ("soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel') OR "soundpub-dashboard".has_role(auth.uid(), 'artist')));
 
 CREATE POLICY "Labels can delete audio clips" ON storage.objects
   FOR DELETE TO authenticated 
-  USING (bucket_id = 'audio-clips' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR is_admin(auth.uid())));
+  USING (bucket_id = 'audio-clips' AND ("soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel') OR "soundpub-dashboard".is_admin(auth.uid())));
 
 -- label-logos policies (public bucket)
 CREATE POLICY "Anyone can view label logos" ON storage.objects
@@ -1430,26 +1463,26 @@ CREATE POLICY "Anyone can view label logos" ON storage.objects
 
 CREATE POLICY "Admins can manage label logos" ON storage.objects
   FOR ALL TO authenticated 
-  USING (bucket_id = 'label-logos' AND is_admin(auth.uid()))
-  WITH CHECK (bucket_id = 'label-logos' AND is_admin(auth.uid()));
+  USING (bucket_id = 'label-logos' AND "soundpub-dashboard".is_admin(auth.uid()))
+  WITH CHECK (bucket_id = 'label-logos' AND "soundpub-dashboard".is_admin(auth.uid()));
 
 CREATE POLICY "Labels can upload label logos" ON storage.objects
   FOR INSERT TO authenticated 
-  WITH CHECK (bucket_id = 'label-logos' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel')));
+  WITH CHECK (bucket_id = 'label-logos' AND ("soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel')));
 
 CREATE POLICY "Labels can update label logos" ON storage.objects
   FOR UPDATE TO authenticated 
-  USING (bucket_id = 'label-logos' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel')));
+  USING (bucket_id = 'label-logos' AND ("soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel')));
 
 CREATE POLICY "Labels can delete label logos" ON storage.objects
   FOR DELETE TO authenticated 
-  USING (bucket_id = 'label-logos' AND (has_role(auth.uid(), 'label') OR has_role(auth.uid(), 'whitelabel') OR is_admin(auth.uid())));
+  USING (bucket_id = 'label-logos' AND ("soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel') OR "soundpub-dashboard".is_admin(auth.uid())));
 
 -- =====================================================
 -- BAGIAN 21: DEFAULT APP SETTINGS
 -- =====================================================
 
-INSERT INTO public.app_settings (key, value) VALUES 
+INSERT INTO "soundpub-dashboard".app_settings (key, value) VALUES 
   ('ga4_measurement_id', NULL),
   ('app_name', 'SoundPub Dashboard'),
   ('storage_provider', 'supabase')
@@ -1527,9 +1560,9 @@ ON CONFLICT (key) DO NOTHING;
 -- =====================================================
 
 -- Tabel release_payments untuk tracking pembayaran release
-CREATE TABLE IF NOT EXISTS public.release_payments (
+CREATE TABLE IF NOT EXISTS "soundpub-dashboard".release_payments (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-  release_id UUID NOT NULL REFERENCES public.releases(id) ON DELETE CASCADE,
+  release_id UUID NOT NULL REFERENCES "soundpub-dashboard".releases(id) ON DELETE CASCADE,
   user_id UUID NOT NULL,
   amount NUMERIC(18,2) NOT NULL DEFAULT 0,
   currency TEXT NOT NULL DEFAULT 'IDR',
@@ -1543,31 +1576,31 @@ CREATE TABLE IF NOT EXISTS public.release_payments (
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_release_payments_release_id ON public.release_payments(release_id);
-CREATE INDEX IF NOT EXISTS idx_release_payments_user_id ON public.release_payments(user_id);
-CREATE INDEX IF NOT EXISTS idx_release_payments_status ON public.release_payments(status);
-CREATE INDEX IF NOT EXISTS idx_release_payments_xendit_invoice_id ON public.release_payments(xendit_invoice_id);
+CREATE INDEX IF NOT EXISTS idx_release_payments_release_id ON "soundpub-dashboard".release_payments(release_id);
+CREATE INDEX IF NOT EXISTS idx_release_payments_user_id ON "soundpub-dashboard".release_payments(user_id);
+CREATE INDEX IF NOT EXISTS idx_release_payments_status ON "soundpub-dashboard".release_payments(status);
+CREATE INDEX IF NOT EXISTS idx_release_payments_xendit_invoice_id ON "soundpub-dashboard".release_payments(xendit_invoice_id);
 
-ALTER TABLE public.release_payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "soundpub-dashboard".release_payments ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can view their own payments"
-ON public.release_payments FOR SELECT TO authenticated
+ON "soundpub-dashboard".release_payments FOR SELECT TO authenticated
 USING (user_id = auth.uid());
 
 CREATE POLICY "Users can insert their own payments"
-ON public.release_payments FOR INSERT TO authenticated
+ON "soundpub-dashboard".release_payments FOR INSERT TO authenticated
 WITH CHECK (user_id = auth.uid());
 
 CREATE POLICY "Admins can manage all payments"
-ON public.release_payments FOR ALL TO authenticated
-USING (is_admin(auth.uid()));
+ON "soundpub-dashboard".release_payments FOR ALL TO authenticated
+USING ("soundpub-dashboard".is_admin(auth.uid()));
 
 CREATE TRIGGER update_release_payments_timestamp
-  BEFORE UPDATE ON public.release_payments
-  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+  BEFORE UPDATE ON "soundpub-dashboard".release_payments
+  FOR EACH ROW EXECUTE FUNCTION "soundpub-dashboard".update_timestamp();
 
 -- Harga per track (configurable)
-INSERT INTO public.app_settings (key, value) VALUES ('release_price_per_track', '50000')
+INSERT INTO "soundpub-dashboard".app_settings (key, value) VALUES ('release_price_per_track', '50000')
 ON CONFLICT (key) DO NOTHING;
 
 -- =====================================================
@@ -1581,21 +1614,21 @@ ON CONFLICT (key) DO NOTHING;
 -- =====================================================
 
 -- ---- 1) Notifications hardening (2026-06-13) ----
-DROP POLICY IF EXISTS "Users can insert own notifications" ON public.notifications;
+DROP POLICY IF EXISTS "Users can insert own notifications" ON "soundpub-dashboard".notifications;
 CREATE POLICY "Users can insert own notifications"
-  ON public.notifications
+  ON "soundpub-dashboard".notifications
   FOR INSERT
   TO authenticated
   WITH CHECK (
-    public.is_admin(auth.uid())
+    "soundpub-dashboard".is_admin(auth.uid())
     OR (user_id = auth.uid() AND COALESCE(is_global, false) = false)
   );
 
 -- Trigger functions: revoke direct EXECUTE dari anon/PUBLIC
-REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM anon, PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.prevent_profile_privilege_escalation() FROM anon, PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.update_balance_on_payout_status_change() FROM anon, PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.update_timestamp() FROM anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION "soundpub-dashboard".handle_new_user() FROM anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION "soundpub-dashboard".prevent_profile_privilege_escalation() FROM anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION "soundpub-dashboard".update_balance_on_payout_status_change() FROM anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION "soundpub-dashboard".update_timestamp() FROM anon, PUBLIC;
 
 -- ---- 2) Storage: buang policy role-only lama, pakai path-scoped ----
 DROP POLICY IF EXISTS "Labels can delete their own audio files" ON storage.objects;
@@ -1650,8 +1683,8 @@ CREATE POLICY "Users can upload release covers to own folder"
     bucket_id = 'release-covers'
     AND (storage.foldername(name))[1] = auth.uid()::text
     AND (
-      public.has_role(auth.uid(), 'label') OR public.has_role(auth.uid(), 'artist')
-      OR public.has_role(auth.uid(), 'whitelabel') OR public.is_admin(auth.uid())
+      "soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'artist')
+      OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel') OR "soundpub-dashboard".is_admin(auth.uid())
     )
   );
 CREATE POLICY "Users can update release covers in own folder"
@@ -1664,13 +1697,13 @@ CREATE POLICY "Owners and admins can update release-covers"
   ON storage.objects FOR UPDATE TO authenticated
   USING (
     bucket_id = 'release-covers'
-    AND (public.is_admin(auth.uid()) OR (storage.foldername(name))[1] = auth.uid()::text)
+    AND ("soundpub-dashboard".is_admin(auth.uid()) OR (storage.foldername(name))[1] = auth.uid()::text)
   );
 CREATE POLICY "Owners and admins can delete release-covers"
   ON storage.objects FOR DELETE TO authenticated
   USING (
     bucket_id = 'release-covers'
-    AND (public.is_admin(auth.uid()) OR (storage.foldername(name))[1] = auth.uid()::text)
+    AND ("soundpub-dashboard".is_admin(auth.uid()) OR (storage.foldername(name))[1] = auth.uid()::text)
   );
 
 -- release-covers: scoped read (owner folder / admin / parent label)
@@ -1679,10 +1712,10 @@ CREATE POLICY "Scoped read release-covers"
   USING (
     bucket_id = 'release-covers'
     AND (
-      public.is_admin(auth.uid())
+      "soundpub-dashboard".is_admin(auth.uid())
       OR (storage.foldername(name))[1] = auth.uid()::text
       OR EXISTS (
-        SELECT 1 FROM public.profiles p
+        SELECT 1 FROM "soundpub-dashboard".profiles p
         WHERE p.id::text = (storage.foldername(name))[1]
           AND p.parent_label_id = auth.uid()
       )
@@ -1696,8 +1729,8 @@ CREATE POLICY "Users can upload track audio to own folder"
     bucket_id = 'track-audio'
     AND (storage.foldername(name))[1] = auth.uid()::text
     AND (
-      public.has_role(auth.uid(), 'label') OR public.has_role(auth.uid(), 'artist')
-      OR public.has_role(auth.uid(), 'whitelabel') OR public.is_admin(auth.uid())
+      "soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'artist')
+      OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel') OR "soundpub-dashboard".is_admin(auth.uid())
     )
   );
 
@@ -1708,8 +1741,8 @@ CREATE POLICY "Users can upload track video to own folder"
     bucket_id = 'track-video'
     AND (storage.foldername(name))[1] = auth.uid()::text
     AND (
-      public.has_role(auth.uid(), 'label') OR public.has_role(auth.uid(), 'artist')
-      OR public.has_role(auth.uid(), 'whitelabel') OR public.is_admin(auth.uid())
+      "soundpub-dashboard".has_role(auth.uid(), 'label') OR "soundpub-dashboard".has_role(auth.uid(), 'artist')
+      OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel') OR "soundpub-dashboard".is_admin(auth.uid())
     )
   );
 
@@ -1720,30 +1753,30 @@ CREATE POLICY "Users can upload audio clips to own folder"
     bucket_id = 'audio-clips'
     AND (storage.foldername(name))[1] = auth.uid()::text
     AND (
-      public.is_admin(auth.uid())
-      OR public.has_role(auth.uid(), 'label')
-      OR public.has_role(auth.uid(), 'whitelabel')
-      OR public.has_role(auth.uid(), 'artist')
+      "soundpub-dashboard".is_admin(auth.uid())
+      OR "soundpub-dashboard".has_role(auth.uid(), 'label')
+      OR "soundpub-dashboard".has_role(auth.uid(), 'whitelabel')
+      OR "soundpub-dashboard".has_role(auth.uid(), 'artist')
     )
   );
 CREATE POLICY "Owners and admins can update audio-clips"
   ON storage.objects FOR UPDATE TO authenticated
   USING (
     bucket_id = 'audio-clips'
-    AND (public.is_admin(auth.uid()) OR (storage.foldername(name))[1] = auth.uid()::text)
+    AND ("soundpub-dashboard".is_admin(auth.uid()) OR (storage.foldername(name))[1] = auth.uid()::text)
   );
 CREATE POLICY "Owners and admins can delete audio-clips"
   ON storage.objects FOR DELETE TO authenticated
   USING (
     bucket_id = 'audio-clips'
-    AND (public.is_admin(auth.uid()) OR (storage.foldername(name))[1] = auth.uid()::text)
+    AND ("soundpub-dashboard".is_admin(auth.uid()) OR (storage.foldername(name))[1] = auth.uid()::text)
   );
 
 -- ---- 3) Audit logs: buang direct INSERT dari client (edge function only) ----
-DROP POLICY IF EXISTS "Authenticated users can insert own audit logs" ON public.audit_logs;
+DROP POLICY IF EXISTS "Authenticated users can insert own audit logs" ON "soundpub-dashboard".audit_logs;
 
 -- ---- 4) label_profile_update_safe helper ----
-CREATE OR REPLACE FUNCTION public.label_profile_update_safe(
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".label_profile_update_safe(
   _id uuid,
   _balance numeric,
   _label_revenue numeric,
@@ -1758,10 +1791,10 @@ CREATE OR REPLACE FUNCTION public.label_profile_update_safe(
   _sso_user_type text,
   _password_set boolean
 ) RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = "soundpub-dashboard"
 AS $$
   SELECT EXISTS (
-    SELECT 1 FROM public.profiles p
+    SELECT 1 FROM "soundpub-dashboard".profiles p
     WHERE p.id = _id
       AND p.balance IS NOT DISTINCT FROM _balance
       AND p.label_revenue IS NOT DISTINCT FROM _label_revenue
@@ -1777,42 +1810,42 @@ AS $$
       AND p.password_set IS NOT DISTINCT FROM _password_set
   )
 $$;
-REVOKE EXECUTE ON FUNCTION public.label_profile_update_safe(uuid,numeric,numeric,numeric,text,uuid,text,text,text,text,text,text,boolean) FROM anon, PUBLIC;
-GRANT EXECUTE ON FUNCTION public.label_profile_update_safe(uuid,numeric,numeric,numeric,text,uuid,text,text,text,text,text,text,boolean) TO authenticated;
+REVOKE EXECUTE ON FUNCTION "soundpub-dashboard".label_profile_update_safe(uuid,numeric,numeric,numeric,text,uuid,text,text,text,text,text,text,boolean) FROM anon, PUBLIC;
+GRANT EXECUTE ON FUNCTION "soundpub-dashboard".label_profile_update_safe(uuid,numeric,numeric,numeric,text,uuid,text,text,text,text,text,text,boolean) TO authenticated;
 
 -- Profiles: WITH CHECK guard di self-update + label/whitelabel update artist
-DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update their own profile" ON "soundpub-dashboard".profiles;
 CREATE POLICY "Users can update their own profile"
-  ON public.profiles FOR UPDATE TO authenticated
+  ON "soundpub-dashboard".profiles FOR UPDATE TO authenticated
   USING (id = auth.uid())
   WITH CHECK (
     id = auth.uid()
-    AND public.label_profile_update_safe(
+    AND "soundpub-dashboard".label_profile_update_safe(
       id, balance, label_revenue, artist_revenue,
       subscription_status, parent_label_id, composer_code,
       status, email, sso_provider, sso_user_id, sso_user_type, password_set
     )
   );
 
-DROP POLICY IF EXISTS "Labels can update their artists" ON public.profiles;
-DROP POLICY IF EXISTS "Whitelabels can update their artists" ON public.profiles;
+DROP POLICY IF EXISTS "Labels can update their artists" ON "soundpub-dashboard".profiles;
+DROP POLICY IF EXISTS "Whitelabels can update their artists" ON "soundpub-dashboard".profiles;
 CREATE POLICY "Labels can update their artists (safe fields)"
-  ON public.profiles FOR UPDATE TO authenticated
-  USING (public.has_role(auth.uid(), 'label') AND parent_label_id = auth.uid())
+  ON "soundpub-dashboard".profiles FOR UPDATE TO authenticated
+  USING ("soundpub-dashboard".has_role(auth.uid(), 'label') AND parent_label_id = auth.uid())
   WITH CHECK (
-    public.has_role(auth.uid(), 'label') AND parent_label_id = auth.uid()
-    AND public.label_profile_update_safe(
+    "soundpub-dashboard".has_role(auth.uid(), 'label') AND parent_label_id = auth.uid()
+    AND "soundpub-dashboard".label_profile_update_safe(
       id, balance, label_revenue, artist_revenue,
       subscription_status, parent_label_id, composer_code,
       status, email, sso_provider, sso_user_id, sso_user_type, password_set
     )
   );
 CREATE POLICY "Whitelabels can update their artists (safe fields)"
-  ON public.profiles FOR UPDATE TO authenticated
-  USING (public.has_role(auth.uid(), 'whitelabel') AND parent_label_id = auth.uid())
+  ON "soundpub-dashboard".profiles FOR UPDATE TO authenticated
+  USING ("soundpub-dashboard".has_role(auth.uid(), 'whitelabel') AND parent_label_id = auth.uid())
   WITH CHECK (
-    public.has_role(auth.uid(), 'whitelabel') AND parent_label_id = auth.uid()
-    AND public.label_profile_update_safe(
+    "soundpub-dashboard".has_role(auth.uid(), 'whitelabel') AND parent_label_id = auth.uid()
+    AND "soundpub-dashboard".label_profile_update_safe(
       id, balance, label_revenue, artist_revenue,
       subscription_status, parent_label_id, composer_code,
       status, email, sso_provider, sso_user_id, sso_user_type, password_set
@@ -1821,18 +1854,18 @@ CREATE POLICY "Whitelabels can update their artists (safe fields)"
 
 -- payout_requests: restrictive UPDATE hanya admin
 CREATE POLICY "Only admins can update payouts"
-  ON public.payout_requests AS RESTRICTIVE FOR UPDATE TO authenticated
-  USING (public.is_admin(auth.uid()))
-  WITH CHECK (public.is_admin(auth.uid()));
+  ON "soundpub-dashboard".payout_requests AS RESTRICTIVE FOR UPDATE TO authenticated
+  USING ("soundpub-dashboard".is_admin(auth.uid()))
+  WITH CHECK ("soundpub-dashboard".is_admin(auth.uid()));
 
 -- ---- 5) Email notification opt-in + email_send_log (2026-06-24) ----
-ALTER TABLE public.profiles
+ALTER TABLE "soundpub-dashboard".profiles
   ADD COLUMN IF NOT EXISTS email_notif_payout boolean NOT NULL DEFAULT true,
   ADD COLUMN IF NOT EXISTS email_notif_release boolean NOT NULL DEFAULT true,
   ADD COLUMN IF NOT EXISTS email_notif_payment boolean NOT NULL DEFAULT true,
   ADD COLUMN IF NOT EXISTS email_notif_announcement boolean NOT NULL DEFAULT true;
 
-CREATE TABLE IF NOT EXISTS public.email_send_log (
+CREATE TABLE IF NOT EXISTS "soundpub-dashboard".email_send_log (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   template_name text NOT NULL,
   recipient_email text NOT NULL,
@@ -1843,62 +1876,62 @@ CREATE TABLE IF NOT EXISTS public.email_send_log (
   idempotency_key text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
-GRANT SELECT ON public.email_send_log TO authenticated;
-GRANT ALL ON public.email_send_log TO service_role;
-ALTER TABLE public.email_send_log ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Admins can view email send log" ON public.email_send_log;
+GRANT SELECT ON "soundpub-dashboard".email_send_log TO authenticated;
+GRANT ALL ON "soundpub-dashboard".email_send_log TO service_role;
+ALTER TABLE "soundpub-dashboard".email_send_log ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Admins can view email send log" ON "soundpub-dashboard".email_send_log;
 CREATE POLICY "Admins can view email send log"
-  ON public.email_send_log FOR SELECT TO authenticated
-  USING (public.is_admin(auth.uid()));
+  ON "soundpub-dashboard".email_send_log FOR SELECT TO authenticated
+  USING ("soundpub-dashboard".is_admin(auth.uid()));
 CREATE INDEX IF NOT EXISTS idx_email_send_log_created_at
-  ON public.email_send_log (created_at DESC);
+  ON "soundpub-dashboard".email_send_log (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_email_send_log_template
-  ON public.email_send_log (template_name, created_at DESC);
+  ON "soundpub-dashboard".email_send_log (template_name, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_email_send_log_idem
-  ON public.email_send_log (idempotency_key)
+  ON "soundpub-dashboard".email_send_log (idempotency_key)
   WHERE idempotency_key IS NOT NULL;
 
 -- ---- 6) Royalties: label_user_id stable identifier (2026-06-25) ----
-ALTER TABLE public.royalties
-  ADD COLUMN IF NOT EXISTS label_user_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL;
-CREATE INDEX IF NOT EXISTS idx_royalties_label_user_id ON public.royalties(label_user_id);
+ALTER TABLE "soundpub-dashboard".royalties
+  ADD COLUMN IF NOT EXISTS label_user_id uuid REFERENCES "soundpub-dashboard".profiles(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_royalties_label_user_id ON "soundpub-dashboard".royalties(label_user_id);
 
 -- Backfill dari full_name unik
 WITH unique_labels AS (
   SELECT lower(trim(p.full_name)) AS name_key, MIN(p.id::text)::uuid AS only_id
-  FROM public.profiles p
-  JOIN public.user_roles ur ON ur.user_id = p.id
+  FROM "soundpub-dashboard".profiles p
+  JOIN "soundpub-dashboard".user_roles ur ON ur.user_id = p.id
   WHERE ur.role IN ('label','whitelabel')
     AND p.full_name IS NOT NULL AND trim(p.full_name) <> ''
   GROUP BY 1
   HAVING COUNT(*) = 1
 )
-UPDATE public.royalties r
+UPDATE "soundpub-dashboard".royalties r
    SET label_user_id = ul.only_id
   FROM unique_labels ul
  WHERE r.label_user_id IS NULL
    AND lower(trim(r.label_name)) = ul.name_key;
 
-DROP POLICY IF EXISTS "Labels can view royalties for their artists" ON public.royalties;
+DROP POLICY IF EXISTS "Labels can view royalties for their artists" ON "soundpub-dashboard".royalties;
 CREATE POLICY "Labels can view royalties for their artists"
-  ON public.royalties FOR SELECT TO authenticated
-  USING (public.has_role(auth.uid(), 'label') AND label_user_id = auth.uid());
+  ON "soundpub-dashboard".royalties FOR SELECT TO authenticated
+  USING ("soundpub-dashboard".has_role(auth.uid(), 'label') AND label_user_id = auth.uid());
 
-DROP POLICY IF EXISTS "Whitelabels can view royalties for their artists" ON public.royalties;
+DROP POLICY IF EXISTS "Whitelabels can view royalties for their artists" ON "soundpub-dashboard".royalties;
 CREATE POLICY "Whitelabels can view royalties for their artists"
-  ON public.royalties FOR SELECT TO authenticated
-  USING (public.has_role(auth.uid(), 'whitelabel') AND label_user_id = auth.uid());
+  ON "soundpub-dashboard".royalties FOR SELECT TO authenticated
+  USING ("soundpub-dashboard".has_role(auth.uid(), 'whitelabel') AND label_user_id = auth.uid());
 
 -- ---- 7) prevent_profile_privilege_escalation: service role bypass (2026-06-19) ----
-CREATE OR REPLACE FUNCTION public.prevent_profile_privilege_escalation()
+CREATE OR REPLACE FUNCTION "soundpub-dashboard".prevent_profile_privilege_escalation()
 RETURNS trigger
-LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'soundpub-dashboard'
 AS $$
 BEGIN
   IF auth.uid() IS NULL OR current_setting('role', true) = 'service_role' THEN
     RETURN NEW;
   END IF;
-  IF public.is_admin(auth.uid()) THEN
+  IF "soundpub-dashboard".is_admin(auth.uid()) THEN
     RETURN NEW;
   END IF;
   IF NEW.balance IS DISTINCT FROM OLD.balance
@@ -1923,4 +1956,21 @@ $$;
 
 -- =====================================================
 -- END OF APPENDIX v2.4
+-- =====================================================
+
+
+-- =====================================================
+-- BAGIAN AKHIR: GRANT TABEL (WAJIB — PostgREST tidak grant otomatis)
+-- =====================================================
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA "soundpub-dashboard" TO authenticated;
+GRANT ALL ON ALL TABLES IN SCHEMA "soundpub-dashboard" TO service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA "soundpub-dashboard" TO authenticated, service_role;
+
+-- anon HANYA untuk branding login page (app_settings dibatasi oleh RLS)
+GRANT SELECT ON "soundpub-dashboard".app_settings TO anon;
+
+-- Verifikasi
+--   SELECT tablename FROM pg_tables WHERE schemaname = 'soundpub-dashboard';
+--   SELECT tablename, count(*) FROM pg_policies
+--     WHERE schemaname = 'soundpub-dashboard' GROUP BY 1 ORDER BY 1;
 -- =====================================================
