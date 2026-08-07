@@ -174,6 +174,17 @@ scp docs/full-schema-v2.sql user@vps:/tmp/
 docker exec -i supabase-db psql -U postgres -d postgres < /tmp/full-schema-v2.sql
 ```
 
+File SQL ini membuat schema **`soundpub-dashboard`** (bukan `public`)
+lengkap dengan GRANT-nya. Agar PostgREST melayani schema tersebut,
+set di `supabase/docker/.env` lalu restart:
+
+```bash
+PGRST_DB_SCHEMAS="soundpub-dashboard,storage,graphql_public"
+PGRST_DB_EXTRA_SEARCH_PATH="public,extensions"
+
+docker compose up -d rest kong
+```
+
 ### Cek
 
 ```sql
