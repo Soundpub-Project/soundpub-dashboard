@@ -1360,7 +1360,10 @@ INSERT INTO storage.buckets (id, name, public) VALUES
   ('track-audio', 'track-audio', false),
   ('track-video', 'track-video', false),
   ('audio-clips', 'audio-clips', true),
-  ('label-logos', 'label-logos', true)
+  ('label-logos', 'label-logos', true),
+  ('avatars', 'avatars', true),
+  ('iccn-gallery', 'iccn-gallery', true),
+  ('klikus-biolink', 'klikus-biolink', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- =====================================================
