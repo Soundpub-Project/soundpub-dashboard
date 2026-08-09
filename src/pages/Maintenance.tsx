@@ -19,9 +19,9 @@ export default function Maintenance() {
   const targetDate = new Date('2026-08-18T10:00:00+07:00').getTime();
 
   const whatsappContacts = [
-    { number: '+6289517898767', display: '+62 895-1789-8767' },
-    { number: '+6281727089', display: '+62 817-270-898' },
-    { number: '+6281999900900', display: '+62 819-9990-0900' },
+    { number: '+6289517898767', display: 'Whatsapp Admin 1' },
+    { number: '+6281727089', display: 'Whatsapp Admin 2' },
+    { number: '+6281999900900', display: 'Whatsapp Admin 3' },
   ];
 
   useEffect(() => {
