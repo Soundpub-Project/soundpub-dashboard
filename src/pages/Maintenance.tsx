@@ -2,7 +2,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTheme } from '@/hooks/useTheme';
 import { supabase } from '@/integrations/supabase/client';
-import { Moon, Sun, Monitor, Wrench, Clock } from 'lucide-react';
+import { Moon, Sun, Monitor, Wrench, Clock, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function Maintenance() {
@@ -17,6 +17,12 @@ export default function Maintenance() {
 
   // Target date: 18 Agustus 2026, 10:00 WIB (GMT+7)
   const targetDate = new Date('2026-08-18T10:00:00+07:00').getTime();
+
+  const whatsappContacts = [
+    { number: '+6289517898767', display: '+62 895-1789-8767' },
+    { number: '+6281727089', display: '+62 817-270-898' },
+    { number: '+6281999900900', display: '+62 819-9990-0900' },
+  ];
 
   useEffect(() => {
     const fetchLogo = async () => {
@@ -79,6 +85,11 @@ export default function Maintenance() {
     if (theme === 'light') return <Sun className="h-5 w-5" />;
     if (theme === 'dark') return <Moon className="h-5 w-5" />;
     return <Monitor className="h-5 w-5" />;
+  };
+
+  const openWhatsApp = (number: string) => {
+    const message = encodeURIComponent('Halo, saya ingin menanyakan tentang maintenance sistem.');
+    window.open(`https://wa.me/${number}?text=${message}`, '_blank');
   };
 
   return (
@@ -165,13 +176,31 @@ export default function Maintenance() {
               </div>
             </div>
 
-            <div className="text-center space-y-2">
-              <p className="text-sm text-muted-foreground">
-                Mohon maaf atas ketidaknyamanan ini. Kami akan kembali segera!
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Jika ada pertanyaan mendesak, silakan hubungi tim support kami.
-              </p>
+            <div className="space-y-4">
+              <div className="text-center space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Mohon maaf atas ketidaknyamanan ini. Kami akan kembali segera!
+                </p>
+                <p className="text-sm font-medium text-foreground">
+                  Butuh bantuan segera? Hubungi kami via WhatsApp:
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                {whatsappContacts.map((contact, index) => (
+                  <Button
+                    key={index}
+                    variant="outline"
+                    className="w-full justify-start gap-3 h-auto py-3 hover:bg-green-500/10 hover:border-green-500/50 transition-colors"
+                    onClick={() => openWhatsApp(contact.number)}
+                  >
+                    <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0">
+                      <MessageCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                    </div>
+                    <span className="text-sm font-medium">{contact.display}</span>
+                  </Button>
+                ))}
+              </div>
             </div>
           </CardContent>
         </Card>
