@@ -8,7 +8,7 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import { SsoAuthProvider } from "@/context/SsoAuthContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Index from "./pages/Index";
-import Auth from "./pages/Auth";
+import Auth from "./pages/Maintenance";
 import Dashboard from "./pages/Dashboard";
 import Releases from "./pages/Releases";
 import ReleaseDetail from "./pages/ReleaseDetail";
