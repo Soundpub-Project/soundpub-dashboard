@@ -1,6 +1,7 @@
 ﻿import { ReactNode, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
 import { Loader2, Megaphone } from 'lucide-react';
@@ -18,6 +19,38 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { user, loading, profile, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [announcementOpen, setAnnouncementOpen] = useState(false);
+  const [currentBalance, setCurrentBalance] = useState<number>(profile?.balance || 0);
+
+  // Subscribe to real-time balance updates
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    // Set initial balance
+    setCurrentBalance(profile.balance);
+
+    // Subscribe to profile changes
+    const channel = supabase
+      .channel('profile-balance-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'soundpub',
+          table: 'profiles',
+          filter: `id=eq.{profile.id}`,
+        },
+        (payload) => {
+          if (payload.new && 'balance' in payload.new) {
+            setCurrentBalance(Number(payload.new.balance));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.id, profile?.balance]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -80,7 +113,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     <div className="text-right">
                       <p className="text-sm font-medium text-foreground">{profile.full_name}</p>
                       <p className="text-xs text-muted-foreground">
-                        Balance: Rp {profile.balance.toLocaleString('id-ID')}
+                        Balance: Rp {currentBalance.toLocaleString('id-ID')}
                       </p>
                     </div>
                     <Avatar className="h-9 w-9">
