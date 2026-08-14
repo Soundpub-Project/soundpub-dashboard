@@ -15,8 +15,8 @@ export default function Maintenance() {
     seconds: 0,
   });
 
-  // Target date: 18 Agustus 2026, 10:00 WIB (GMT+7)
-  const targetDate = new Date('2026-08-18T10:00:00+07:00').getTime();
+  // Target date: 16 Agustus 2026, 10:00 WIB (GMT+7)
+  const targetDate = new Date('2026-08-16T10:00:00+07:00').getTime();
 
   const whatsappContacts = [
     { number: '+6289517898767', display: 'Whatsapp Admin 1' },
@@ -141,7 +141,7 @@ export default function Maintenance() {
               
               <div className="text-center">
                 <p className="text-lg font-semibold text-foreground">
-                  18 Agustus 2026, 10:00 WIB
+                  16 Agustus 2026, 10:00 WIB
                 </p>
               </div>
 
