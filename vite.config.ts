@@ -19,7 +19,8 @@ export default defineConfig(({ mode }) => ({
       "localhost",
       "127.0.0.1",
       "dev-soundpub.maskhar.com",
-      "web.maskhar.com"
+      "web.maskhar.com",
+      "dev-dashboard.soundpub.xyz"
     ]
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),

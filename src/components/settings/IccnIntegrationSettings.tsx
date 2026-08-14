@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -69,8 +69,8 @@ export function IccnIntegrationSettings() {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    if (photos.length + files.length > 10) {
-      toast({ title: 'Error', description: 'Maksimal 10 foto', variant: 'destructive' });
+    if (photos.length + files.length > 20) {
+      toast({ title: 'Error', description: 'Maksimal 20 foto', variant: 'destructive' });
       return;
     }
 
@@ -129,6 +129,7 @@ export function IccnIntegrationSettings() {
     setTestResult(null);
     try {
       const res = await fetch(endpointUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       setTestResult(JSON.stringify(json, null, 2));
     } catch (e: any) {
@@ -198,7 +199,7 @@ export function IccnIntegrationSettings() {
       <Card className="bg-card/50 border-border/50">
         <CardHeader>
           <CardTitle>Galeri Foto Layanan</CardTitle>
-          <CardDescription>Upload 1-10 foto layanan (JPG, PNG, WebP, maks 5MB per foto). Drag untuk mengurutkan.</CardDescription>
+          <CardDescription>Upload 1-20 foto layanan (JPG, PNG, WebP, maks 5MB per foto). Drag untuk mengurutkan.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
@@ -223,7 +224,7 @@ export function IccnIntegrationSettings() {
             ))}
           </div>
 
-          {photos.length < 10 && (
+          {photos.length < 20 && (
             <div>
               <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
                 {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
@@ -239,7 +240,7 @@ export function IccnIntegrationSettings() {
               />
             </div>
           )}
-          <p className="text-xs text-muted-foreground">{photos.length}/10 foto</p>
+          <p className="text-xs text-muted-foreground">{photos.length}/20 foto</p>
         </CardContent>
       </Card>
     </div>

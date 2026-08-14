@@ -235,7 +235,7 @@ export function SuperAdminSettings() {
   const handleRemoveFavicon = async () => {
     await updateSettings('favicon', null);
     // Reset to default favicon
-    let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+    const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
     if (link) {
       link.href = '/favicon.ico';
     }

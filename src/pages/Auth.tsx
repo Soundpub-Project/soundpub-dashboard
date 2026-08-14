@@ -222,10 +222,10 @@ export default function Auth() {
               <Music2 className="h-12 w-12 text-primary" />
             )}
           </div>
-          <div className="text-center">
+          {/* <div className="text-center">
             <h1 className="text-3xl font-bold tracking-tight">SoundPub Dashboard</h1>
             <p className="text-muted-foreground mt-2">Kelola konten musik Anda dengan mudah</p>
-          </div>
+          </div> */}
           <Button
             variant="ghost"
             size="icon"
@@ -335,16 +335,16 @@ export default function Auth() {
                   </div>
                 )}
 
-                <div className="relative my-4">
+                {/* <div className="relative my-4">
                   <div className="absolute inset-0 flex items-center">
                     <Separator className="w-full" />
                   </div>
                   <div className="relative flex justify-center text-xs uppercase">
                     <span className="bg-card px-2 text-muted-foreground">atau login dengan</span>
                   </div>
-                </div>
+                </div> */}
 
-                <Button
+                {/* <Button
                   type="button"
                   variant="outline"
                   className="w-full"
@@ -362,7 +362,7 @@ export default function Auth() {
                       SSO ICCN
                     </>
                   )}
-                </Button>
+                </Button> */}
               </TabsContent>
 
               <TabsContent value="signup" className="space-y-4 mt-0">

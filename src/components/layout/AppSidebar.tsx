@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/hooks/useAuth';
@@ -40,7 +40,9 @@ import {
   ListMusic,
   FileText,
   Bell,
-  ClipboardList, History,
+  ClipboardList,
+  History,
+  Wallet,
 } from 'lucide-react';
 
 interface NavItem {
@@ -118,24 +120,18 @@ const copyrightDashboardItems: NavItem[] = [
   },
 ];
 
-// === ADMINISTRASI ===
-const administrationItems: NavItem[] = [
-  { 
-    title: 'Semua Royalti', 
-    url: '/dashboard/all-royalties', 
-    icon: ListMusic,
-    roles: ['superadmin', 'admin'],
-  },
-  { 
-    title: 'Pengguna', 
-    url: '/dashboard/users', 
-    icon: Users,
-    roles: ['superadmin', 'admin'],
-  },
+// === MANAJEMEN ROYALTI (Admin) ===
+const royaltyManagementItems: NavItem[] = [
   { 
     title: 'Upload Royalti', 
     url: '/dashboard/upload', 
     icon: Upload,
+    roles: ['superadmin', 'admin'],
+  },
+  { 
+    title: 'Semua Royalti', 
+    url: '/dashboard/all-royalties', 
+    icon: ListMusic,
     roles: ['superadmin', 'admin'],
   },
   { 
@@ -144,10 +140,14 @@ const administrationItems: NavItem[] = [
     icon: Music2,
     roles: ['superadmin', 'admin'],
   },
+];
+
+// === MANAJEMEN PENGGUNA (Admin) ===
+const userManagementItems: NavItem[] = [
   { 
-    title: 'Kelola Pembayaran', 
-    url: '/dashboard/admin-payouts', 
-    icon: CreditCard,
+    title: 'Pengguna', 
+    url: '/dashboard/users', 
+    icon: Users,
     roles: ['superadmin', 'admin'],
   },
   { 
@@ -156,16 +156,16 @@ const administrationItems: NavItem[] = [
     icon: FileText,
     roles: ['superadmin', 'admin'],
   },
-  { 
-    title: 'Kelola Notifikasi', 
-    url: '/dashboard/notifications', 
+  {
+    title: 'Kelola Notifikasi',
+    url: '/dashboard/notifications',
     icon: Bell,
     roles: ['superadmin', 'admin'],
   },
   { 
-    title: 'Pengaturan Pembayaran', 
-    url: '/dashboard/payment-settings', 
-    icon: Settings,
+    title: 'Media Library', 
+    url: '/dashboard/media-library', 
+    icon: HardDrive,
     roles: ['superadmin', 'admin'],
   },
   {
@@ -174,108 +174,123 @@ const administrationItems: NavItem[] = [
     icon: ClipboardList,
     roles: ['superadmin', 'admin'],
   },
+];
+
+// === ADMINISTRASI SISTEM (Superadmin Only) ===
+const systemAdminItems: NavItem[] = [
   { 
     title: 'Log Aktivitas', 
     url: '/dashboard/audit-logs', 
     icon: ScrollText,
-    roles: ['superadmin'], // HANYA SUPERADMIN
+    roles: ['superadmin'],
   },
   { 
     title: 'Ekspor Data', 
     url: '/dashboard/export', 
     icon: FolderArchive,
-    roles: ['superadmin'], // HANYA SUPERADMIN
+    roles: ['superadmin'],
   },
   { 
-    title: 'Media Library', 
-    url: '/dashboard/media-library', 
-    icon: HardDrive,
+    title: 'Kelola Pembayaran', 
+    url: '/dashboard/payment-management', 
+    icon: Wallet,
     roles: ['superadmin', 'admin'],
   },
+  { 
+    title: 'Pengaturan Pembayaran', 
+    url: '/dashboard/payment-settings', 
+    icon: CreditCard,
+    roles: ['superadmin'],
+  },
 ];
 
-// === MANAJEMEN LABEL & WHITELABEL ===
+// === MANAJEMEN LABEL & ARTIST ===
 const labelManagementItems: NavItem[] = [
   { 
-    title: 'Profil Artis', 
-    url: '/dashboard/artist-profile', 
-    icon: Music2,
-    roles: ['artist'],
-  },
-  { 
-    title: 'Artis Saya', 
-    url: '/dashboard/my-artists', 
+    title: 'Artis', 
+    url: '/dashboard/artists', 
     icon: Users,
-    roles: ['label'],
+    roles: ['superadmin', 'admin', 'label', 'whitelabel'],
   },
-  { 
-    title: 'Artis Saya',
-    url: '/dashboard/my-artists',
-    icon: Users,
-    roles: ['whitelabel'],
+  {
+    title: 'Permintaan Hapus Artis',
+    url: '/dashboard/artist-deletion-requests',
+    icon: History,
+    roles: ['label', 'whitelabel'],
   },
 ];
 
-// === AKUN PENGGUNA ===
+// === AKUN ===
 const accountItems: NavItem[] = [
   { 
     title: 'Pembayaran', 
     url: '/dashboard/payouts', 
     icon: CreditCard,
-    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel', 'copyright', 'user'],
+    roles: ['superadmin', 'admin', 'label', 'artist', 'user', 'whitelabel'],
   },
   { 
     title: 'Pengaturan', 
     url: '/dashboard/settings', 
     icon: Settings,
-    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel', 'copyright', 'user'],
+    roles: ['superadmin', 'admin', 'label', 'artist', 'user', 'copyright', 'whitelabel'],
   },
 ];
 
+const getInitials = (name: string) => {
+  return name
+    .split(' ')
+    .map(word => word[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+};
+
+const getRoleLabel = (roleValue: string | null) => {
+  if (!roleValue) return 'User';
+  const roleMap: Record<string, string> = {
+    superadmin: 'Super Admin',
+    admin: 'Admin',
+    label: 'Label',
+    artist: 'Artist',
+    copyright: 'Copyright',
+    whitelabel: 'White Label',
+    user: 'User',
+  };
+  return roleMap[roleValue] || roleValue.charAt(0).toUpperCase() + roleValue.slice(1);
+};
+
+const getRoleBadge = (role: string | null) => {
+  if (!role) return 'bg-gray-500/20 text-gray-400';
+  const roleColors: Record<string, string> = {
+    superadmin: 'bg-red-500/20 text-red-400',
+    admin: 'bg-orange-500/20 text-orange-400',
+    label: 'bg-blue-500/20 text-blue-400',
+    artist: 'bg-green-500/20 text-green-400',
+    user: 'bg-gray-500/20 text-gray-400',
+    copyright: 'bg-cyan-500/20 text-cyan-400',
+    whitelabel: 'bg-yellow-500/20 text-yellow-400',
+  };
+  return roleColors[role] || 'bg-gray-500/20 text-gray-400';
+};
+
 export function AppSidebar() {
-  const { state } = useSidebar();
   const location = useLocation();
-  const { profile, role, signOut, isAdmin, isLabel, isArtist, isCopyright, isWhitelabel, isSsoUser } = useAuth();
-  const { triggerSsoLogout } = useSsoAuth();
+  const { user, role, signOut, isAdmin, isLabel, isWhitelabel, isArtist, isCopyright, isSuperAdmin } = useAuth();
+  const { isSsoUser, triggerSsoLogout } = useSsoAuth();
   const { resolvedTheme } = useTheme();
-  const collapsed = state === 'collapsed';
+  const { state } = useSidebar(); const isCollapsed = state === "collapsed";
+  const [profile, setProfile] = useState<any>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      fetchProfile();
+    }
+  }, [user]);
 
   useEffect(() => {
     const fetchLogo = async () => {
       try {
-        // For artists, get their parent label's logo
-        if (isArtist && profile?.parent_label_id) {
-          const { data: labelProfile, error: labelError } = await supabase
-            .from('profiles')
-            .select('logo_url_light, logo_url_dark, logo_url')
-            .eq('id', profile.parent_label_id)
-            .maybeSingle();
-
-          if (!labelError && labelProfile) {
-            const themeLogo = resolvedTheme === 'dark' 
-              ? (labelProfile as any).logo_url_dark || (labelProfile as any).logo_url_light || labelProfile.logo_url
-              : (labelProfile as any).logo_url_light || labelProfile.logo_url;
-            if (themeLogo) {
-              setLogoUrl(themeLogo);
-              return;
-            }
-          }
-        }
-
-        // For labels, use their own logo
-        if (isLabel && profile) {
-          const themeLogo = resolvedTheme === 'dark' 
-            ? (profile as any).logo_url_dark || (profile as any).logo_url_light || profile.logo_url
-            : (profile as any).logo_url_light || profile.logo_url;
-          if (themeLogo) {
-            setLogoUrl(themeLogo);
-            return;
-          }
-        }
-
-        // Fallback to app-wide dashboard logo
-        const logoKey = resolvedTheme === 'dark' ? 'dashboard_logo_dark' : 'dashboard_logo_light';
         const { data, error } = await supabase
           .from('app_settings')
           .select('key, value')
@@ -294,66 +309,62 @@ export function AppSidebar() {
           setLogoUrl(themeLogo || null);
         }
       } catch (error) {
-        console.error('Error fetching logo:', error);
+        console.error('Error fetching dashboard logo:', error);
       }
     };
 
     fetchLogo();
-  }, [resolvedTheme, isLabel, isArtist, profile]);
+  }, [resolvedTheme]);
 
-  const isActive = (path: string) => location.pathname === path;
+  const fetchProfile = async () => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user?.id)
+      .single();
 
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
+    if (!error && data) {
+      setProfile(data);
+    }
   };
 
-  const getRoleBadge = (role: string | null) => {
-    const colors: Record<string, string> = {
-      superadmin: 'bg-destructive/20 text-destructive',
-      admin: 'bg-primary/20 text-primary',
-      label: 'bg-chart-4/20 text-chart-4',
-      artist: 'bg-chart-3/20 text-chart-3',
-      user: 'bg-muted text-muted-foreground',
-      copyright: 'bg-blue-500/20 text-blue-600',
-      whitelabel: 'bg-yellow-500/20 text-yellow-600',
-    };
-    return colors[role || 'user'] || colors.user;
-  };
-
-  // Helper to filter items by role
   const filterByRole = (items: NavItem[]) => {
-    return items.filter(item => !item.roles || item.roles.includes(role || 'user'));
+    if (!role) return [];
+    return items.filter(item => !item.roles || item.roles.includes(role));
+  };
+
+  const isActive = (path: string) => {
+    if (path === '/dashboard') {
+      return location.pathname === '/dashboard';
+    }
+    return location.pathname.startsWith(path);
   };
 
   return (
-    <Sidebar collapsible="icon">
-      {/* Header */}
-      <SidebarHeader className="border-b border-sidebar-border">
-        <div className="flex items-center justify-center px-2 py-3">
+    <Sidebar>
+      {/* Header with Logo */}
+      <SidebarHeader className="border-b border-sidebar-border p-4">
+        <div className="flex items-center gap-2">
           {logoUrl ? (
             <img 
               src={logoUrl} 
-              alt="Logo" 
-              className={`${collapsed ? 'h-8 w-8' : 'h-10 max-w-[160px]'} rounded-lg object-contain`}
+              alt="Dashboard Logo" 
+              className="h-8 w-auto object-contain"
             />
           ) : (
-            <div className="p-1.5 rounded-lg gradient-primary">
-              <Music2 className="h-5 w-5 text-primary-foreground" />
+            <div className="flex items-center gap-2">
+              <Music2 className="h-6 w-6 text-primary" />
+              {!isCollapsed && <span className="font-semibold text-lg">SoundPub</span>}
             </div>
           )}
         </div>
       </SidebarHeader>
 
-      <SidebarContent>
-        {/* Dasbor Music - Only show to non-copyright users */}
-        {!isCopyright && (
+      <SidebarContent className="px-2">
+        {/* Dasbor Music */}
+        {(isAdmin || isLabel || isWhitelabel || isArtist) && filterByRole(musicDashboardItems).length > 0 && (
           <SidebarGroup>
-            <SidebarGroupLabel>Dasbor DSP</SidebarGroupLabel>
+            <SidebarGroupLabel>Dasbor Music</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {filterByRole(musicDashboardItems).map((item) => (
@@ -376,8 +387,8 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* Dasbor Hak Cipta - Show to copyright users and admin */}
-        {(isCopyright || isAdmin) && (
+        {/* Dasbor Hak Cipta */}
+        {(isAdmin || isCopyright) && filterByRole(copyrightDashboardItems).length > 0 && (
           <SidebarGroup>
             <SidebarGroupLabel>Dasbor Hak Cipta</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -402,13 +413,65 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {/* Administrasi - Admin only */}
-        {isAdmin && (
+        {/* Manajemen Royalti */}
+        {isAdmin && filterByRole(royaltyManagementItems).length > 0 && (
           <SidebarGroup>
-            <SidebarGroupLabel>Administrasi</SidebarGroupLabel>
+            <SidebarGroupLabel>Manajemen Royalti</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {filterByRole(administrationItems).map((item) => (
+                {filterByRole(royaltyManagementItems).map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                      <NavLink 
+                        to={item.url} 
+                        end 
+                        className="flex items-center gap-2"
+                        activeClassName="bg-sidebar-accent text-sidebar-accent-foreground"
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {/* Manajemen Pengguna */}
+        {isAdmin && filterByRole(userManagementItems).length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Manajemen Pengguna</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {filterByRole(userManagementItems).map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                      <NavLink 
+                        to={item.url} 
+                        end 
+                        className="flex items-center gap-2"
+                        activeClassName="bg-sidebar-accent text-sidebar-accent-foreground"
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {/* Administrasi Sistem */}
+        {isSuperAdmin && filterByRole(systemAdminItems).length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Administrasi Sistem</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {filterByRole(systemAdminItems).map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive(item.url)}>
                       <NavLink 
@@ -429,7 +492,7 @@ export function AppSidebar() {
         )}
 
         {/* Manajemen Label, Whitelabel & Artist */}
-        {(isLabel || isWhitelabel || isArtist) && (
+        {(isLabel || isWhitelabel || isArtist) && filterByRole(labelManagementItems).length > 0 && (
           <SidebarGroup>
             <SidebarGroupLabel>Manajemen</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -480,7 +543,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       {/* Footer with User Profile */}
-      <SidebarFooter className="border-t border-sidebar-border">
+      <SidebarFooter className="border-t border-sidebar-border bg-sidebar shrink-0">
         <div className="p-2">
           <div className="flex items-center gap-3 p-2 rounded-lg bg-sidebar-accent/50">
             <Avatar className="h-9 w-9 shrink-0">
@@ -491,13 +554,13 @@ export function AppSidebar() {
                 {profile?.full_name ? getInitials(profile.full_name) : 'U'}
               </AvatarFallback>
             </Avatar>
-            {!collapsed && (
+            {!isCollapsed && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">
                   {profile?.full_name || 'User'}
                 </p>
-                <span className={`text-xs px-1.5 py-0.5 rounded ${getRoleBadge(role)}`}>
-                  {role || 'user'}
+                <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${getRoleBadge(role)}`}>
+                  {getRoleLabel(role)}
                 </span>
               </div>
             )}
@@ -510,15 +573,10 @@ export function AppSidebar() {
             className="w-full mt-2 justify-start text-muted-foreground hover:text-destructive"
           >
             <LogOut className="h-4 w-4 mr-2" />
-            {!collapsed && 'Logout'}
+            {!isCollapsed && 'Logout'}
           </Button>
         </div>
       </SidebarFooter>
     </Sidebar>
   );
 }
-
-
-
-
-

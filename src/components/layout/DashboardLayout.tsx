@@ -16,7 +16,7 @@ interface DashboardLayoutProps {
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { user, loading, profile, isAdmin } = useAuth();
+  const { user, loading, profile, isAdmin, role } = useAuth();
   const navigate = useNavigate();
   const [announcementOpen, setAnnouncementOpen] = useState(false);
   const [currentBalance, setCurrentBalance] = useState<number>(profile?.balance || 0);
@@ -37,7 +37,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           event: 'UPDATE',
           schema: 'soundpub',
           table: 'profiles',
-          filter: `id=eq.{profile.id}`,
+          filter: `id=eq.${profile.id}`,
         },
         (payload) => {
           if (payload.new && 'balance' in payload.new) {
@@ -69,6 +69,21 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   if (!user) {
     return null;
   }
+
+  // Format role untuk ditampilkan
+  const getRoleLabel = (roleValue: string | null) => {
+    if (!roleValue) return 'User';
+    const roleMap: Record<string, string> = {
+      superadmin: 'Super Admin',
+      admin: 'Admin',
+      label: 'Label',
+      artist: 'Artist',
+      copyright: 'Copyright',
+      whitelabel: 'White Label',
+      user: 'User',
+    };
+    return roleMap[roleValue] || roleValue;
+  };
 
   return (
     <SidebarProvider>
@@ -113,7 +128,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     <div className="text-right">
                       <p className="text-sm font-medium text-foreground">{profile.full_name}</p>
                       <p className="text-xs text-muted-foreground">
-                        Balance: Rp {currentBalance.toLocaleString('id-ID')}
+                        {getRoleLabel(role)} • Balance: Rp {currentBalance.toLocaleString('id-ID')}
                       </p>
                     </div>
                     <Avatar className="h-9 w-9">
