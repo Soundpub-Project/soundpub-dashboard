@@ -238,3 +238,15 @@
     background-clip: text;
   }
 }
+
+
+/* Password input styling - better bullet character rendering */
+input[type="password"] {
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.1em;
+}
+
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}

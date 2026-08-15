@@ -88,6 +88,12 @@ export default function Dashboard() {
   const { data: platformData } = useRoyaltyPlatformSummary(5);
 
   const monthlyRevenue = (monthlyData || []).slice(-6).map(d => ({ month: d.month, revenue: d.revenue, streams: d.streams }));
+
+  useEffect(() => {
+    if (isArtist && isArtistProfileCompleted === false) {
+      setOnboardingOpen(true);
+    }
+  }, [isArtist, isArtistProfileCompleted]);
   const topPlatforms = (platformData || []).map(d => ({ platform: d.platform, revenue: d.revenue, streams: d.streams }));
 
   useEffect(() => {
@@ -627,7 +633,7 @@ export default function Dashboard() {
       <ArtistOnboardingDialog
         open={onboardingOpen}
         onOpenChange={setOnboardingOpen}
-        allowSkip={true}
+        allowSkip={!(isArtist && isArtistProfileCompleted === false)}
         onComplete={() => {
           refreshProfile();
           setOnboardingOpen(false);

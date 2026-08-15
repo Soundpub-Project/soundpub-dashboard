@@ -43,6 +43,7 @@ import {
   ClipboardList,
   History,
   Wallet,
+  UserRound,
 } from 'lucide-react';
 
 interface NavItem {
@@ -222,6 +223,12 @@ const labelManagementItems: NavItem[] = [
 
 // === AKUN ===
 const accountItems: NavItem[] = [
+  {
+    title: 'Profil Artis',
+    url: '/dashboard/artist-profile',
+    icon: UserRound,
+    roles: ['artist'],
+  },
   { 
     title: 'Pembayaran', 
     url: '/dashboard/payouts', 

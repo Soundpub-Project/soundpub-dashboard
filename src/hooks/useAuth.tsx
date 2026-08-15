@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+﻿import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -21,6 +21,7 @@ interface Profile {
   subscription_upgraded_at: string | null;
   sso_provider: string | null;
   artist_profile_completed: boolean | null;
+  email_verified: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -32,7 +33,7 @@ interface AuthContextType {
   role: AppRole | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null; user?: User }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   isSuperadmin: boolean;
@@ -133,9 +134,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    const redirectUrl = `${window.location.origin}/`;
+    const redirectUrl = `${window.location.origin}/verify-email`;
     
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -145,7 +146,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
       },
     });
-    return { error: error as Error | null };
+
+
+    return { error: error as Error | null, user: data.user || undefined };
   };
 
   const signOut = async () => {
@@ -207,4 +210,3 @@ export function useAuth() {
   }
   return context;
 }
-

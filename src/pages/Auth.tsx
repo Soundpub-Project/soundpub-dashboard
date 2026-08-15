@@ -1,5 +1,5 @@
-﻿import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useSsoAuth } from '@/context/SsoAuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,11 +9,12 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Music2, Loader2, Moon, Sun, Eye, EyeOff, Shield } from 'lucide-react';
+import { Music2, Loader2, Moon, Sun, Eye, EyeOff, Shield, Mail } from 'lucide-react';
 import { z } from 'zod';
 import { useTheme } from '@/hooks/useTheme';
 import { Separator } from '@/components/ui/separator';
-
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AuthEnvironmentNotice } from '@/components/auth/AuthEnvironmentNotice';
 
 const loginSchema = z.object({
   email: z.string().email('Email tidak valid'),
@@ -51,6 +52,8 @@ export default function Auth() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [signupSuccess, setSignupSuccess] = useState(false);
+  const [signupEmail, setSignupEmail] = useState('');
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -151,14 +154,16 @@ export default function Auth() {
 
     if (error) {
       toast({
-        title: 'Registrasi Gagal',
+        title: 'Pendaftaran Gagal',
         description: error.message,
         variant: 'destructive',
       });
     } else {
+      setSignupSuccess(true);
+      setSignupEmail(signupData.email);
       toast({
-        title: 'Registrasi Berhasil',
-        description: 'Silakan cek email Anda untuk verifikasi akun.',
+        title: 'Pendaftaran Berhasil',
+        description: 'Silakan cek email Anda untuk verifikasi akun',
       });
     }
   };
@@ -166,92 +171,160 @@ export default function Auth() {
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: `${window.location.origin}/dashboard`,
         },
       });
-      
-      if (error) {
-        toast({
-          title: 'Login Gagal',
-          description: error.message || 'Login dengan Google gagal',
-          variant: 'destructive',
-        });
-        setGoogleLoading(false);
-      }
-      // Don't set loading false here, will redirect to Google
-    } catch (error) {
+
+      if (error) throw error;
+    } catch (error: any) {
       toast({
-        title: 'Login Gagal',
-        description: 'Terjadi kesalahan saat login dengan Google',
+        title: 'Gagal Login dengan Google',
+        description: error.message,
         variant: 'destructive',
       });
+    } finally {
       setGoogleLoading(false);
     }
   };
 
+  const handleSsoLogin = async () => {
+    await triggerSsoLogin();
+  };
+
   if (authLoading || ssoChecking) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/5">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-          <p className="text-muted-foreground">Memuat...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (signupSuccess) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-1 text-center">
+            <div className="flex justify-center mb-4">
+              <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
+                <Mail className="w-8 h-8 text-green-600 dark:text-green-400" />
+              </div>
+            </div>
+            <CardTitle className="text-2xl font-bold">Cek Email Anda</CardTitle>
+            <CardDescription className="text-base">
+              Kami telah mengirim link verifikasi ke
+              <br />
+              <span className="font-medium text-foreground">{signupEmail}</span>
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert>
+              <Mail className="h-4 w-4" />
+              <AlertDescription>
+                Silakan cek inbox email Anda dan klik link verifikasi untuk mengaktifkan akun.
+                Link berlaku selama <strong>7 hari</strong>.
+              </AlertDescription>
+            </Alert>
+
+            <div className="bg-muted p-4 rounded-lg space-y-2 text-sm">
+              <p className="font-medium">Langkah selanjutnya:</p>
+              <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                <li>Buka inbox email Anda</li>
+                <li>Cari email dari SoundPub</li>
+                <li>Klik link verifikasi</li>
+                <li>Login dan mulai menggunakan dashboard</li>
+              </ol>
+            </div>
+
+            <div className="text-sm text-muted-foreground text-center">
+              <p>Tidak menerima email? Cek folder spam Anda</p>
+            </div>
+
+            <Button 
+              variant="outline" 
+              className="w-full" 
+              onClick={() => {
+                setSignupSuccess(false);
+                setSignupData({ fullName: '', email: '', password: '', confirmPassword: '' });
+              }}
+            >
+              Kembali ke Login
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/5 p-4">
-      <div className="w-full max-w-md space-y-6">
-        <div className="flex flex-col items-center space-y-4">
-          <div className="flex items-center space-x-3">
-            {logoUrl ? (
-              <img
-                src={logoUrl}
-                alt="Logo"
-                className="h-12 w-auto object-contain"
-                onError={(e) => {
-                  console.error('Logo failed to load');
-                  e.currentTarget.style.display = 'none';
-                }}
-              />
-            ) : (
-              <Music2 className="h-12 w-12 text-primary" />
-            )}
-          </div>
-          {/* <div className="text-center">
-            <h1 className="text-3xl font-bold tracking-tight">SoundPub Dashboard</h1>
-            <p className="text-muted-foreground mt-2">Kelola konten musik Anda dengan mudah</p>
-          </div> */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-            className="absolute top-4 right-4"
-          >
-            {resolvedTheme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-          </Button>
-        </div>
+    <>
+      <AuthEnvironmentNotice />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4 relative">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="absolute top-4 right-4"
+        onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+      >
+        {resolvedTheme === 'dark' ? (
+          <Sun className="h-5 w-5" />
+        ) : (
+          <Moon className="h-5 w-5" />
+        )}
+      </Button>
 
-        <Card>
+      <div className="w-full max-w-md">
+        <Card className="shadow-xl">
+          <CardHeader className="space-y-4 text-center">
+            {logoUrl ? (
+              <div className="flex justify-center">
+                <img 
+                  src={logoUrl} 
+                  alt="Logo" 
+                  className="h-16 w-auto object-contain"
+                />
+              </div>
+            ) : (
+              <div className="flex justify-center">
+                <Music2 className="h-16 w-16 text-primary" />
+              </div>
+            )}
+            {/* <div>
+              <CardTitle className="text-2xl font-bold">Selamat Datang</CardTitle>
+              <CardDescription>SoundPub Dashboard</CardDescription>
+            </div> */}
+
+            {ssoError && (
+              <Alert variant="destructive">
+                <AlertDescription>{ssoError}</AlertDescription>
+              </Alert>
+            )}
+
+            {ssoLoading && (
+              <Alert>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <AlertDescription>Authenticating with SSO...</AlertDescription>
+              </Alert>
+            )}
+          </CardHeader>
+
           <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Login</TabsTrigger>
-              <TabsTrigger value="signup">Daftar</TabsTrigger>
+            <TabsList className="grid grid-cols-2 gap-2 mx-auto" style={{ maxWidth: "280px" }}>
+              <TabsTrigger value="login" className="flex-1">Login</TabsTrigger>
+              <TabsTrigger value="signup" className="flex-1">Daftar</TabsTrigger>
             </TabsList>
 
-            <CardContent className="pt-6">
-              <TabsContent value="login" className="space-y-4 mt-0">
+            <CardContent className="mt-6">
+              <TabsContent value="login" className="space-y-4">
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="login-email">Email</Label>
                     <Input
                       id="login-email"
                       type="email"
-                      placeholder="nama@contoh.com"
+                      placeholder="nama@example.com"
                       value={loginData.email}
                       onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
                       className={errors.email ? 'border-destructive' : ''}
@@ -265,7 +338,7 @@ export default function Auth() {
                       <Input
                         id="login-password"
                         type={showLoginPassword ? 'text' : 'password'}
-                        placeholder="••••••••"
+                        placeholder="********"
                         value={loginData.password}
                         onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
                         className={`pr-10 ${errors.password ? 'border-destructive' : ''}`}
@@ -285,6 +358,15 @@ export default function Auth() {
                       </Button>
                     </div>
                     {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Link 
+                      to="/forgot-password" 
+                      className="text-sm text-primary hover:underline"
+                    >
+                      Lupa Password?
+                    </Link>
                   </div>
 
                   <Button type="submit" className="w-full gradient-primary" disabled={isLoading}>
@@ -327,45 +409,24 @@ export default function Auth() {
                     Login dengan Google
                   </Button>
 
-                </form>
-
-                {ssoError && (
-                  <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
-                    <p className="text-sm text-destructive">{ssoError}</p>
-                  </div>
-                )}
-
-                {/* <div className="relative my-4">
-                  <div className="absolute inset-0 flex items-center">
-                    <Separator className="w-full" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-card px-2 text-muted-foreground">atau login dengan</span>
-                  </div>
-                </div> */}
-
-                {/* <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={triggerSsoLogin}
-                  disabled={ssoLoading}
-                >
-                  {ssoLoading ? (
-                    <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleSsoLogin}
+                    disabled={ssoLoading}
+                  >
+                    {ssoLoading ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Memproses SSO...
-                    </>
-                  ) : (
-                    <>
+                    ) : (
                       <Shield className="mr-2 h-4 w-4" />
-                      SSO ICCN
-                    </>
-                  )}
-                </Button> */}
+                    )}
+                    Login dengan SSO (Label)
+                  </Button>
+                </form>
               </TabsContent>
 
-              <TabsContent value="signup" className="space-y-4 mt-0">
+              <TabsContent value="signup" className="space-y-4">
                 <form onSubmit={handleSignup} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="signup-name">Nama Lengkap</Label>
@@ -385,7 +446,7 @@ export default function Auth() {
                     <Input
                       id="signup-email"
                       type="email"
-                      placeholder="nama@contoh.com"
+                      placeholder="nama@example.com"
                       value={signupData.email}
                       onChange={(e) => setSignupData({ ...signupData, email: e.target.value })}
                       className={errors.email ? 'border-destructive' : ''}
@@ -399,7 +460,7 @@ export default function Auth() {
                       <Input
                         id="signup-password"
                         type={showSignupPassword ? 'text' : 'password'}
-                        placeholder="••••••••"
+                        placeholder="********"
                         value={signupData.password}
                         onChange={(e) => setSignupData({ ...signupData, password: e.target.value })}
                         className={`pr-10 ${errors.password ? 'border-destructive' : ''}`}
@@ -427,7 +488,7 @@ export default function Auth() {
                       <Input
                         id="signup-confirm"
                         type={showConfirmPassword ? 'text' : 'password'}
-                        placeholder="••••••••"
+                        placeholder="********"
                         value={signupData.confirmPassword}
                         onChange={(e) => setSignupData({ ...signupData, confirmPassword: e.target.value })}
                         className={`pr-10 ${errors.confirmPassword ? 'border-destructive' : ''}`}
@@ -497,6 +558,11 @@ export default function Auth() {
           </Tabs>
         </Card>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
+
+
+
+

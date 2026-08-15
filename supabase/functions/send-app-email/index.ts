@@ -54,6 +54,7 @@ async function sendGmail(opts: { to: string; subject: string; html: string }) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ raw }),
+    signal: AbortSignal.timeout(10_000),
   })
   if (!res.ok) throw new Error(`Gmail API ${res.status}: ${await res.text()}`)
   return await res.json()
@@ -85,7 +86,7 @@ function layout(title: string, accent: string, bodyHtml: string, ctaText?: strin
 
 // ---------------- Template registry ----------------
 
-type TemplateOutput = { subject: string; html: string; scope: 'payout' | 'release' | 'payment' | 'announcement' }
+type TemplateOutput = { subject: string; html: string; scope: 'payout' | 'release' | 'payment' | 'announcement' | 'transactional' }
 
 const TEMPLATES: Record<string, (data: any, recipientName: string) => TemplateOutput> = {
   'payout-requested': (d, _name) => ({
@@ -169,6 +170,30 @@ const TEMPLATES: Record<string, (data: any, recipientName: string) => TemplateOu
       <p style="margin-top:14px;">Admin akan segera mengonfirmasi dan mengaktifkan release Anda.</p>`,
       'Lihat Release', `${APP_URL}/releases`),
   }),
+  'password-reset': (d, name) => ({
+    scope: 'transactional',
+    subject: 'Reset password Soundpub',
+    html: layout('Reset Password', 'linear-gradient(135deg,#2563eb 0%,#1d4ed8 100%)',       `<p>Halo ${name},</p>
+      <p>Kami menerima permintaan untuk mengatur ulang password akun Anda.</p>
+      <p>Link ini berlaku selama 24 jam. Jika Anda tidak meminta reset password, abaikan email ini.</p>`,
+      'Reset Password', d.resetUrl),
+  }),
+  'password-reset-confirmation': (d, name) => ({
+    scope: 'transactional',
+    subject: 'Password Soundpub berhasil diubah',
+    html: layout('Password Berhasil Diubah', 'linear-gradient(135deg,#059669 0%,#047857 100%)',       `<p>Halo ${name},</p>
+      <p>Password akun Anda telah berhasil diubah.</p>
+      <p>Jika Anda tidak melakukan perubahan ini, segera amankan akun Anda.</p>`,
+      'Masuk ke Soundpub', d.loginUrl || `${APP_URL}/login`),
+  }),
+  'email-verification': (d, name) => ({
+    scope: 'transactional',
+    subject: 'Verifikasi email Soundpub',
+    html: layout('Verifikasi Email', 'linear-gradient(135deg,#7c3aed 0%,#5b21b6 100%)',       `<p>Halo ${name},</p>
+      <p>Verifikasi alamat email Anda untuk mengaktifkan fitur akun Soundpub.</p>
+      <p>Link ini berlaku selama 7 hari.</p>`,
+      'Verifikasi Email', d.verifyUrl),
+  }),
   'announcement': (d, name) => ({
     scope: 'announcement',
     subject: `ðŸ“¢ ${d.title}`,
@@ -179,7 +204,7 @@ const TEMPLATES: Record<string, (data: any, recipientName: string) => TemplateOu
   }),
 }
 
-const SCOPE_TO_OPTIN: Record<TemplateOutput['scope'], string> = {
+const SCOPE_TO_OPTIN: Record<Exclude<TemplateOutput['scope'], 'transactional'>, string> = {
   payout: 'email_notif_payout',
   release: 'email_notif_release',
   payment: 'email_notif_payment',
@@ -232,7 +257,8 @@ Deno.serve(async (req) => {
     type Recipient = { user_id: string | null; email: string; full_name: string; optin: boolean }
     let recipients: Recipient[] = []
     const scope = tpl({}, '').scope
-    const optinCol = SCOPE_TO_OPTIN[scope]
+    const optinCol = scope === 'transactional' ? null : SCOPE_TO_OPTIN[scope]
+    const profileFields = ['id', 'email', 'full_name', optinCol].filter(Boolean).join(', ')
 
     if (input.broadcastRoles && input.broadcastRoles.length > 0) {
       // Fan out
@@ -246,11 +272,11 @@ Deno.serve(async (req) => {
       }
       const { data: profs } = await supabase
         .from('profiles')
-        .select(`id, email, full_name, ${optinCol}`)
+        .select(profileFields)
         .in('id', userIds)
       recipients = (profs || [])
         .filter((p: any) => !!p.email)
-        .map((p: any) => ({ user_id: p.id, email: p.email, full_name: p.full_name || 'User', optin: p[optinCol] !== false }))
+        .map((p: any) => ({ user_id: p.id, email: p.email, full_name: p.full_name || 'User', optin: !optinCol || p[optinCol] !== false }))
     } else if (input.recipientUserId) {
       const { data: p } = await supabase
         .from('profiles')
@@ -258,20 +284,20 @@ Deno.serve(async (req) => {
         .eq('id', input.recipientUserId)
         .maybeSingle()
       if (p && (p as any).email) {
-        recipients = [{ user_id: (p as any).id, email: (p as any).email, full_name: (p as any).full_name || 'User', optin: (p as any)[optinCol] !== false }]
+        recipients = [{ user_id: (p as any).id, email: (p as any).email, full_name: (p as any).full_name || 'User', optin: !optinCol || (p as any)[optinCol] !== false }]
       }
     } else if (input.recipientEmail) {
       // Direct send (no opt-in check â€” only used for admin notifications by user_id lookup)
       const { data: p } = await supabase
         .from('profiles')
-        .select(`id, full_name, ${optinCol}`)
+        .select(['id', 'full_name', optinCol].filter(Boolean).join(', '))
         .eq('email', input.recipientEmail)
         .maybeSingle()
       recipients = [{
         user_id: p ? (p as any).id : null,
         email: input.recipientEmail,
         full_name: p ? ((p as any).full_name || 'User') : 'User',
-        optin: p ? ((p as any)[optinCol] !== false) : true,
+        optin: !optinCol || !p || (p as any)[optinCol] !== false,
       }]
     }
 

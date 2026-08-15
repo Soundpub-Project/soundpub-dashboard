@@ -1,0 +1,67 @@
+﻿╔════════════════════════════════════════════════════════════════════════════════╗
+║                                                                                ║
+║                    ✅ PRE-MIGRATION CHECKLIST                                  ║
+║                                                                                ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+Sebelum menjalankan migration, pastikan semua item di bawah sudah di-check:
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│ 1. DATABASE ACCESS                                                             │
+├────────────────────────────────────────────────────────────────────────────────┤
+│   [ ] Punya akses ke database server                                          │
+│   [ ] Username & password tersedia                                            │
+│   [ ] Database: soundpub                                                      │
+│   [ ] Schema: soundpub                                                        │
+│   [ ] Koneksi telah di-test dan berhasil                                     │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│ 2. BACKUP                                                                      │
+├────────────────────────────────────────────────────────────────────────────────┤
+│   [ ] Backup directory created: backups/                                      │
+│   [ ] Backup command sudah disiapkan                                          │
+│   [ ] Cukup disk space untuk backup file (~50MB+)                             │
+│   [ ] BACKUP SUDAH DIJALANKAN DAN SELESAI                                     │
+│   [ ] Backup file NOT EMPTY (size > 0)                                        │
+│   [ ] Backup file integrity verified                                          │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│ 3. MIGRATION SCRIPT                                                            │
+├────────────────────────────────────────────────────────────────────────────────┤
+│   [✅] Migration script exists                                                 │
+│   [✅] Script uses 'soundpub' schema                                           │
+│   [✅] Script is idempotent (IF NOT EXISTS)                                    │
+│   [✅] Script uses transactions (BEGIN/COMMIT)                                 │
+│   [ ] Script has been reviewed by team                                        │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│ 4. ENVIRONMENT                                                                 │
+├────────────────────────────────────────────────────────────────────────────────┤
+│   [ ] Running on STAGING environment first (recommended)                      │
+│   [ ] Production maintenance window scheduled (if needed)                     │
+│   [ ] Team notified about migration                                           │
+│   [ ] Rollback plan documented                                                │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│ 5. PERMISSIONS                                                                 │
+├────────────────────────────────────────────────────────────────────────────────┤
+│   [ ] User has CREATE TABLE permission                                        │
+│   [ ] User has ALTER TABLE permission                                         │
+│   [ ] User has CREATE INDEX permission                                        │
+│   [ ] User has CREATE FUNCTION permission                                     │
+│   [ ] User has CREATE POLICY permission                                       │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│ 6. READY TO PROCEED?                                                           │
+├────────────────────────────────────────────────────────────────────────────────┤
+│   [ ] ALL items above are checked                                             │
+│   [ ] Team approval received                                                  │
+│   [ ] BACKUP COMPLETED & VERIFIED                                             │
+│   [ ] Ready to run migration script                                           │
+└────────────────────────────────────────────────────────────────────────────────┘
+

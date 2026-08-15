@@ -29,6 +29,7 @@ export function ArtistOnboardingDialog({
   const [formData, setFormData] = useState({
     artist_name: profile?.full_name || '',
     artist_type: 'solo',
+    phone: profile?.phone || '',
     bio: '',
     genre: '',
     social_links: {
@@ -42,8 +43,17 @@ export function ArtistOnboardingDialog({
     e.preventDefault();
     if (!user) return;
 
-    if (!formData.artist_name.trim()) {
-      toast({ title: 'Error', description: 'Nama artis/band wajib diisi', variant: 'destructive' });
+    const requiredFields = [
+      { value: formData.artist_name, message: 'Nama artis/band wajib diisi' },
+      { value: formData.artist_type, message: 'Tipe artis wajib dipilih' },
+      { value: formData.phone, message: 'Nomor telepon wajib diisi' },
+      { value: formData.genre, message: 'Genre wajib diisi' },
+      { value: formData.bio, message: 'Bio/keterangan artis wajib diisi' },
+    ];
+
+    const missingField = requiredFields.find((field) => !field.value.trim());
+    if (missingField) {
+      toast({ title: 'Error', description: missingField.message, variant: 'destructive' });
       return;
     }
 
@@ -63,10 +73,12 @@ export function ArtistOnboardingDialog({
 
       if (insertError) throw insertError;
 
-      // Update profile flag
       const { error: updateError } = await (supabase as any)
         .from('profiles')
-        .update({ artist_profile_completed: true })
+        .update({
+          phone: formData.phone.trim(),
+          artist_profile_completed: true,
+        })
         .eq('id', user.id);
 
       if (updateError) throw updateError;
@@ -133,23 +145,36 @@ export function ArtistOnboardingDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="genre">Genre</Label>
+            <Label htmlFor="phone">Nomor Telepon *</Label>
+            <Input
+              id="phone"
+              value={formData.phone}
+              onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+              placeholder="Masukkan nomor telepon aktif"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="genre">Genre *</Label>
             <Input
               id="genre"
               value={formData.genre}
               onChange={(e) => setFormData((prev) => ({ ...prev, genre: e.target.value }))}
               placeholder="Pop, Rock, Jazz, dll"
+              required
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="bio">Bio</Label>
+            <Label htmlFor="bio">Bio / Keterangan *</Label>
             <Textarea
               id="bio"
               value={formData.bio}
               onChange={(e) => setFormData((prev) => ({ ...prev, bio: e.target.value }))}
               placeholder="Ceritakan tentang artis/band Anda..."
               rows={3}
+              required
             />
           </div>
 

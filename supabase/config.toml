@@ -62,3 +62,20 @@ verify_jwt = false
 
 [functions.backup-storage-to-drive]
 verify_jwt = false
+
+# Edge Function timeout settings (in seconds)
+# Note: Supabase default timeout is 60 seconds
+# For functions with async email operations, we use fire-and-forget pattern
+# to avoid blocking the main response
+
+[functions.send-app-email]
+verify_jwt = false
+
+[functions.send-password-reset]
+verify_jwt = false
+
+[functions.send-verification-email]
+verify_jwt = false
+
+[functions.reset-password]
+verify_jwt = false

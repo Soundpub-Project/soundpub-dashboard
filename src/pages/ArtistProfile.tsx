@@ -74,7 +74,7 @@ type ArtistSummary = {
   }>;
 };
 
-const REQUIRED_FIELDS: (keyof ArtistProfileData)[] = ['artist_name', 'artist_type', 'genre', 'country'];
+const REQUIRED_FIELDS = ['artist_name', 'artist_type', 'genre', 'country', 'phone'] as const;
 const formatCurrency = (value: number) => `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
 
 export default function ArtistProfile() {
@@ -96,6 +96,7 @@ export default function ArtistProfile() {
     artist_name: '',
     legal_name: '',
     artist_type: 'solo',
+    phone: profile?.phone || '',
     genre: '',
     country: '',
     city: '',
@@ -145,6 +146,7 @@ export default function ArtistProfile() {
     if (data) {
       setOwnerName(data.full_name);
       setArtistUserProfile(data);
+      setFormData((prev) => ({ ...prev, phone: data.phone || '' }));
     }
   };
 
@@ -165,6 +167,7 @@ export default function ArtistProfile() {
           artist_name: data.artist_name || '',
           legal_name: data.legal_name || '',
           artist_type: data.artist_type || 'solo',
+          phone: isViewingOther ? (artistUserProfile?.phone || '') : (profile?.phone || ''),
           genre: data.genre || '',
           country: data.country || '',
           city: data.city || '',
@@ -340,6 +343,10 @@ export default function ArtistProfile() {
       toast.error('Nama artis wajib diisi');
       return;
     }
+    if (!formData.phone.trim()) {
+      toast.error('Nomor telepon wajib diisi');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -380,14 +387,17 @@ export default function ArtistProfile() {
       if (error) throw error;
 
       // Mark complete only if all required fields are filled
-      const isComplete = REQUIRED_FIELDS.every((f) => {
-        const v = (profileData as any)[f];
-        return v && String(v).trim() !== '';
+      const isComplete = REQUIRED_FIELDS.every((field) => {
+        const value = field === 'phone' ? formData.phone : profileData[field];
+        return value && String(value).trim() !== '';
       });
 
       await supabase
         .from('profiles')
-        .update({ artist_profile_completed: isComplete })
+        .update({
+          phone: formData.phone.trim(),
+          artist_profile_completed: isComplete,
+        })
         .eq('id', targetUserId);
 
       if (!isViewingOther) await refreshProfile();
@@ -412,9 +422,9 @@ export default function ArtistProfile() {
     );
   }
 
-  const isComplete = REQUIRED_FIELDS.every((f) => {
-    const v = (formData as any)[f];
-    return v && String(v).trim() !== '';
+  const isComplete = REQUIRED_FIELDS.every((field) => {
+    const value = formData[field];
+    return value && String(value).trim() !== '';
   });
 
   const sp = artistProfile?.spotify_data;
@@ -648,6 +658,16 @@ export default function ArtistProfile() {
                     <SelectItem value="group">Group</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Nomor Telepon *</Label>
+                <Input
+                  value={formData.phone}
+                  onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                  placeholder="Masukkan nomor telepon aktif"
+                  disabled={!canEdit}
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <Label>Genre Utama *</Label>

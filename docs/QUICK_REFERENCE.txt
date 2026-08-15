@@ -1,0 +1,211 @@
+﻿╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                  🔐 AUTH VERIFICATION QUICK REFERENCE                        ║
+║                        SoundPub Dashboard                                    ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ 📚 DOKUMENTASI FILES                                                        ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  📄 docs/README_AUTH_DOCS.md              → Start here (Index)
+  📋 docs/RANCANGAN_AUTH_VERIFICATION.md   → Full specification
+  📝 docs/RINGKASAN_AUTH_VERIFICATION.md   → Quick summary
+  ✅ docs/IMPLEMENTATION_CHECKLIST.md      → Step-by-step guide
+  🔌 docs/API_DOCUMENTATION.md             → API reference
+  🗄️ migrations-complete/002_auth_*.sql    → Database migration
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ 🗄️ DATABASE SCHEMA                                                          ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  soundpub.profiles (NEW COLUMNS):
+    ✓ email_verified                      BOOLEAN
+    ✓ verification_token                  TEXT
+    ✓ verification_token_expires_at       TIMESTAMPTZ
+    ✓ verification_sent_at                TIMESTAMPTZ
+    ✓ password_reset_token                TEXT
+    ✓ password_reset_token_expires_at     TIMESTAMPTZ
+    ✓ password_reset_sent_at              TIMESTAMPTZ
+
+  soundpub.auth_events (NEW TABLE):
+    ✓ id, user_id, event_type, ip_address, user_agent, metadata, created_at
+
+  soundpub.rate_limits (NEW TABLE):
+    ✓ id, identifier, action_type, attempt_count, blocked_until
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ ⚙️ EDGE FUNCTIONS                                                            ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  1. send-password-reset           → Send reset email
+  2. verify-password-reset-token   → Validate token
+  3. reset-password                → Update password
+  4. send-verification-email       → Send verify email
+  5. verify-email                  → Confirm email
+  6. send-app-email (UPDATE)       → Add 3 new templates
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ 🎨 FRONTEND PAGES                                                            ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  NEW PAGES:
+    ✓ src/pages/ForgotPassword.tsx
+    ✓ src/pages/ResetPassword.tsx
+    ✓ src/pages/VerifyEmail.tsx
+    ✓ src/pages/VerifyEmailRequired.tsx
+
+  UPDATES:
+    ✓ src/pages/Auth.tsx                  → Add "Lupa Password?" link
+    ✓ src/hooks/useAuth.tsx               → Add helper functions
+    ✓ src/components/auth/ProtectedRoute  → Add email verification check
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ 🔑 ENVIRONMENT VARIABLES                                                     ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  REQUIRED:
+    SUPABASE_URL=https://supabase.carubra.com
+    SUPABASE_ANON_KEY=<your-key>
+    SUPABASE_SERVICE_ROLE_KEY=<your-key>
+    DATABASE_SCHEMA=soundpub                    ⚠️ IMPORTANT!
+    LOVABLE_API_KEY=<your-key>
+    GOOGLE_MAIL_API_KEY=<your-key>
+
+  OPTIONAL:
+    RESEND_API_KEY=<fallback-provider>
+    APP_URL=https://dashboard.soundpub.xyz
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ 🔒 SECURITY SPECS                                                            ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  TOKEN GENERATION:     crypto.randomUUID()
+  TOKEN EXPIRY:         24 hours (reset), 7 days (verification)
+  RATE LIMITING:        3 requests/hour per email
+  PASSWORD MIN:         8 characters (mixed case, numbers)
+  AUDIT LOGGING:        All auth events logged
+  RLS POLICIES:         Enabled on all tables
+  EMAIL SECURITY:       SPF/DKIM/DMARC (recommended)
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ 🚀 DEPLOYMENT COMMANDS                                                       ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  DATABASE MIGRATION:
+    pg_dump soundpub > backup_$(date +%Y%m%d).sql
+    psql soundpub < migrations-complete/002_auth_verification_system.sql
+
+  DEPLOY FUNCTIONS:
+    supabase functions deploy send-password-reset
+    supabase functions deploy verify-password-reset-token
+    supabase functions deploy reset-password
+    supabase functions deploy send-verification-email
+    supabase functions deploy verify-email
+
+  FRONTEND BUILD:
+    pnpm build
+    docker build -t soundpub-dashboard:v2.0.0 .
+    docker-compose up -d
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ 🧪 TESTING COMMANDS                                                          ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  UNIT TESTS:           pnpm test
+  E2E TESTS:            pnpm test:e2e
+  LOCAL FUNCTIONS:      supabase functions serve
+
+  cURL TEST:
+    curl -X POST https://supabase.carubra.com/functions/v1/send-password-reset \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer YOUR_ANON_KEY" \
+      -d '{"email":"test@example.com"}'
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ 📊 MONITORING QUERIES                                                        ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  -- Email verification rate (7 days)
+  SELECT 
+    COUNT(*) FILTER (WHERE email_verified = true) * 100.0 / COUNT(*) AS rate
+  FROM soundpub.profiles
+  WHERE created_at >= NOW() - INTERVAL '7 days';
+
+  -- Password reset requests (today)
+  SELECT COUNT(*) FROM soundpub.auth_events
+  WHERE event_type = 'password_reset_requested'
+    AND created_at >= CURRENT_DATE;
+
+  -- Rate limit violations
+  SELECT COUNT(*) FROM soundpub.rate_limits
+  WHERE blocked_until > NOW();
+
+  -- Cleanup functions
+  SELECT soundpub.cleanup_rate_limits();
+  SELECT soundpub.cleanup_expired_tokens();
+  SELECT soundpub.cleanup_old_auth_events();
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ 🐛 TROUBLESHOOTING                                                           ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  EMAIL NOT SENT:
+    → Check: SELECT * FROM soundpub.email_send_log 
+             WHERE recipient_email = 'user@example.com' 
+             ORDER BY created_at DESC LIMIT 5;
+
+  TOKEN INVALID:
+    → Check: SELECT * FROM soundpub.profiles 
+             WHERE verification_token = 'token-here';
+
+  RATE LIMIT STUCK:
+    → Reset: DELETE FROM soundpub.rate_limits 
+             WHERE identifier = 'user@example.com';
+
+  USER UNVERIFIED:
+    → Fix: UPDATE soundpub.profiles SET email_verified = true 
+           WHERE email = 'user@example.com';
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ ⏱️ TIMELINE                                                                  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  Week 1: Database + Backend Functions
+  Week 2: Frontend Implementation
+  Week 3: Testing & QA
+  Week 4: Deployment + Monitoring
+
+  Total: 4 weeks (160 hours) | Budget: ~$8,000
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ 📈 SUCCESS METRICS (KPIs)                                                    ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  Week 1:   Email verification > 60% | Password reset > 70% | Zero bugs
+  Month 1:  Email verification > 80% | Support tickets -30% | NPS > 8/10
+  Month 3:  All users verified in 48h | Self-service 90%+ | Zero incidents
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ ⚠️ CRITICAL REMINDERS                                                        ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  🔴 ALWAYS use schema "soundpub" not "public"
+  🔴 Backup database before migration
+  🔴 Test on staging first
+  🔴 Never commit .env files
+  🔴 Verify email templates before production
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ 📞 SUPPORT                                                                   ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  Technical Questions: dev@soundpub.xyz
+  Documentation: docs/README_AUTH_DOCS.md
+  Start Here: docs/IMPLEMENTATION_CHECKLIST.md
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║           🎵 SoundPub - Empowering Musicians, Securing Accounts 🎵          ║
+║                        Version 2.0 | 2026-08-14                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝

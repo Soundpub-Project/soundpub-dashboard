@@ -9,6 +9,10 @@ import { SsoAuthProvider } from "@/context/SsoAuthContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import VerifyEmail from "./pages/VerifyEmail";
+import VerifyEmailRequired from "./pages/VerifyEmailRequired";
 import Dashboard from "./pages/Dashboard";
 import Releases from "./pages/Releases";
 import ReleaseDetail from "./pages/ReleaseDetail";
@@ -61,6 +65,14 @@ const App = () => (
               {/* Public routes */}
               <Route path="/" element={<Auth />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/login" element={<Auth />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
+              
+              {/* Semi-protected: user must be logged in but email may not be verified */}
+              <Route path="/verify-email-required" element={<VerifyEmailRequired />} />
+              
               {/* Archived: LandingPage tersedia di /catalog untuk penggunaan di masa depan */}
               <Route path="/catalog" element={<LandingPage />} />
 
@@ -137,7 +149,7 @@ const App = () => (
               {/* Whitelabel-specific routes */}
               <Route path="/dashboard/whitelabel" element={
                 <ProtectedRoute requireWhitelabel>
-    <MyArtists />
+                  <MyArtists />
                 </ProtectedRoute>
               } />
               
@@ -266,5 +278,3 @@ const App = () => (
 );
 
 export default App;
-
-
