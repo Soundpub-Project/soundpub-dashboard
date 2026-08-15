@@ -44,6 +44,8 @@ Thumbs.db
 temp-supabase
 *.tmp
 *.temp
+*_temp.md
+*-temp.*
 
 # Data files
 *.csv
@@ -62,3 +64,13 @@ mem
 patches
 migrations-complete
 pnpm-lock.yaml
+
+# Debug and backup files
+debug_*
+*_backup.*
+*.bak
+*.old
+
+# npm cache logs
+npm-cache/
+.npm/
