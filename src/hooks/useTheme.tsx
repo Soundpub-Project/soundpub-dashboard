@@ -10,7 +10,7 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-const THEME_KEY = 'soundpub-theme';
+const THEME_KEY = 'Soundpub-theme';
 
 function getSystemTheme(): 'light' | 'dark' {
   if (typeof window !== 'undefined') {

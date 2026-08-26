@@ -7,9 +7,9 @@
 
 ### ☑️ LANGKAH 1: BACKUP DATABASE (WAJIB!)
 ```bash
-cd I:\website-devops\soundpub-project\soundpub-dashboard
+cd I:\website-devops\Soundpub-project\Soundpub-dashboard
 mkdir -p backups
-pg_dump -h localhost -U postgres soundpub > backups/backup_20260814.sql
+pg_dump -h localhost -U postgres Soundpub > backups/backup_20260814.sql
 ```
 **✅ Sukses jika:** File backup muncul di folder backups/
 
@@ -17,13 +17,13 @@ pg_dump -h localhost -U postgres soundpub > backups/backup_20260814.sql
 
 ### ☑️ LANGKAH 2: JALANKAN MIGRATION
 ```bash
-psql -h localhost -U postgres -d soundpub -f migrations-complete\002_auth_verification_system.sql
+psql -h localhost -U postgres -d Soundpub -f migrations-complete\002_auth_verification_system.sql
 ```
 **✅ Sukses jika:** Muncul "Migration completed successfully!"
 
 **Verify:**
 ```sql
-psql -h localhost -U postgres -d soundpub -c "SELECT column_name FROM information_schema.columns WHERE table_schema='soundpub' AND table_name='profiles' AND column_name = 'email_verified';"
+psql -h localhost -U postgres -d Soundpub -c "SELECT column_name FROM information_schema.columns WHERE table_schema='Soundpub' AND table_name='profiles' AND column_name = 'email_verified';"
 ```
 **✅ Harus return:** `email_verified`
 
@@ -64,7 +64,7 @@ pnpm dev
 
 **Check Database:**
 ```sql
-psql -h localhost -U postgres -d soundpub -c "SELECT email, password_reset_token FROM soundpub.profiles WHERE email = 'EMAIL_ANDA' LIMIT 1;"
+psql -h localhost -U postgres -d Soundpub -c "SELECT email, password_reset_token FROM Soundpub.profiles WHERE email = 'EMAIL_ANDA' LIMIT 1;"
 ```
 **✅ Harus ada:** Token terisi (bukan NULL)
 
@@ -86,8 +86,8 @@ psql -h localhost -U postgres -d soundpub -c "SELECT email, password_reset_token
 pnpm build
 
 # Deploy Docker
-docker build -t soundpub-dashboard:v2.1.0 .
-docker tag soundpub-dashboard:v2.1.0 soundpub-dashboard:latest
+docker build -t Soundpub-dashboard:v2.1.0 .
+docker tag Soundpub-dashboard:v2.1.0 Soundpub-dashboard:latest
 docker-compose down
 docker-compose up -d
 
@@ -112,16 +112,16 @@ docker-compose logs -f --tail=50
 ```sql
 -- Email verification rate
 SELECT COUNT(*) FILTER (WHERE email_verified = true) * 100.0 / COUNT(*) 
-FROM soundpub.profiles 
+FROM Soundpub.profiles 
 WHERE created_at >= NOW() - INTERVAL '7 days';
 
 -- Password reset today
-SELECT COUNT(*) FROM soundpub.auth_events 
+SELECT COUNT(*) FROM Soundpub.auth_events 
 WHERE event_type = 'password_reset_requested' 
 AND created_at >= CURRENT_DATE;
 
 -- Email delivery errors
-SELECT status, COUNT(*) FROM soundpub.email_send_log 
+SELECT status, COUNT(*) FROM Soundpub.email_send_log 
 WHERE created_at >= CURRENT_DATE 
 GROUP BY status;
 ```
@@ -133,20 +133,20 @@ GROUP BY status;
 ### Problem: Migration Error
 ```bash
 # Restore backup
-psql -h localhost -U postgres -d soundpub < backups/backup_20260814.sql
+psql -h localhost -U postgres -d Soundpub < backups/backup_20260814.sql
 ```
 
 ### Problem: Email Tidak Terkirim
 ```sql
 -- Check email logs
-SELECT * FROM soundpub.email_send_log ORDER BY created_at DESC LIMIT 10;
+SELECT * FROM Soundpub.email_send_log ORDER BY created_at DESC LIMIT 10;
 ```
 **Fix:** Verify Gmail API credentials di Supabase
 
 ### Problem: Token Invalid
 ```sql
 -- Generate token manual
-UPDATE soundpub.profiles 
+UPDATE Soundpub.profiles 
 SET password_reset_token = gen_random_uuid()::text,
     password_reset_token_expires_at = NOW() + INTERVAL '24 hours'
 WHERE email = 'user@example.com';
@@ -178,7 +178,7 @@ WHERE email = 'user@example.com';
 - `docs/DEPLOYMENT_GUIDE_AUTH.md` (troubleshooting)
 - `docs/FRONTEND_AUTH_IMPLEMENTATION_COMPLETE.md` (tech details)
 
-**Contact:** dev@soundpub.xyz
+**Contact:** dev@Soundpub.xyz
 
 ---
 

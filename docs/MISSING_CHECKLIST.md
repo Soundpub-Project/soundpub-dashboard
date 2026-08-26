@@ -40,7 +40,7 @@ Tanpa migration, kolom-kolom ini TIDAK ADA di database:
 -- Jalankan query ini di SQL Editor untuk verify:
 SELECT column_name 
 FROM information_schema.columns 
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
   AND table_name='profiles'
   AND column_name IN ('email_verified', 'verification_token', 'password_reset_token');
 ```
@@ -53,7 +53,7 @@ WHERE table_schema='soundpub'
 **Ini sebabnya functions tidak berjalan meskipun sudah deployed!**
 
 Functions butuh environment variables untuk:
-- Connect ke database schema `soundpub`
+- Connect ke database schema `Soundpub`
 - Generate link reset/verify
 - Send email
 
@@ -61,12 +61,12 @@ Functions butuh environment variables untuk:
 
 ```bash
 # Buka terminal/PowerShell di folder project
-cd I:\website-devops\soundpub-project\soundpub-dashboard
+cd I:\website-devops\Soundpub-project\Soundpub-dashboard
 
 # Set secrets (ganti dengan value yang sesuai)
 supabase secrets set SUPABASE_URL=https://supabase.carubra.com
 supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your-actual-service-role-key
-supabase secrets set DATABASE_SCHEMA=soundpub
+supabase secrets set DATABASE_SCHEMA=Soundpub
 supabase secrets set APP_URL=http://localhost:5173
 
 # Optional untuk email (jika sudah ada)
@@ -149,7 +149,7 @@ File `src/hooks/useAuth.tsx` sudah saya update untuk:
 -- Run di Supabase SQL Editor
 SELECT COUNT(*) as kolom_baru
 FROM information_schema.columns 
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
   AND table_name='profiles'
   AND column_name IN ('email_verified', 'verification_token', 'password_reset_token');
 -- Harus return: 3
@@ -177,7 +177,7 @@ supabase functions list | findstr "password\|verification\|verify"
 ```sql
 SELECT column_name 
 FROM information_schema.columns 
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
   AND table_name='profiles'
   AND column_name LIKE '%token%' OR column_name = 'email_verified';
 ```

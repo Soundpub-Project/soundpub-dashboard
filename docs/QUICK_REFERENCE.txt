@@ -1,7 +1,7 @@
 ﻿╔══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                              ║
 ║                  🔐 AUTH VERIFICATION QUICK REFERENCE                        ║
-║                        SoundPub Dashboard                                    ║
+║                        Soundpub Dashboard                                    ║
 ║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
@@ -20,7 +20,7 @@
 ┃ 🗄️ DATABASE SCHEMA                                                          ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
-  soundpub.profiles (NEW COLUMNS):
+  Soundpub.profiles (NEW COLUMNS):
     ✓ email_verified                      BOOLEAN
     ✓ verification_token                  TEXT
     ✓ verification_token_expires_at       TIMESTAMPTZ
@@ -29,10 +29,10 @@
     ✓ password_reset_token_expires_at     TIMESTAMPTZ
     ✓ password_reset_sent_at              TIMESTAMPTZ
 
-  soundpub.auth_events (NEW TABLE):
+  Soundpub.auth_events (NEW TABLE):
     ✓ id, user_id, event_type, ip_address, user_agent, metadata, created_at
 
-  soundpub.rate_limits (NEW TABLE):
+  Soundpub.rate_limits (NEW TABLE):
     ✓ id, identifier, action_type, attempt_count, blocked_until
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
@@ -69,13 +69,13 @@
     SUPABASE_URL=https://supabase.carubra.com
     SUPABASE_ANON_KEY=<your-key>
     SUPABASE_SERVICE_ROLE_KEY=<your-key>
-    DATABASE_SCHEMA=soundpub                    ⚠️ IMPORTANT!
+    DATABASE_SCHEMA=Soundpub                    ⚠️ IMPORTANT!
     LOVABLE_API_KEY=<your-key>
     GOOGLE_MAIL_API_KEY=<your-key>
 
   OPTIONAL:
     RESEND_API_KEY=<fallback-provider>
-    APP_URL=https://dashboard.soundpub.xyz
+    APP_URL=https://dashboard.Soundpub.xyz
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ 🔒 SECURITY SPECS                                                            ┃
@@ -94,8 +94,8 @@
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
   DATABASE MIGRATION:
-    pg_dump soundpub > backup_$(date +%Y%m%d).sql
-    psql soundpub < migrations-complete/002_auth_verification_system.sql
+    pg_dump Soundpub > backup_$(date +%Y%m%d).sql
+    psql Soundpub < migrations-complete/002_auth_verification_system.sql
 
   DEPLOY FUNCTIONS:
     supabase functions deploy send-password-reset
@@ -106,7 +106,7 @@
 
   FRONTEND BUILD:
     pnpm build
-    docker build -t soundpub-dashboard:v2.0.0 .
+    docker build -t Soundpub-dashboard:v2.0.0 .
     docker-compose up -d
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
@@ -130,42 +130,42 @@
   -- Email verification rate (7 days)
   SELECT 
     COUNT(*) FILTER (WHERE email_verified = true) * 100.0 / COUNT(*) AS rate
-  FROM soundpub.profiles
+  FROM Soundpub.profiles
   WHERE created_at >= NOW() - INTERVAL '7 days';
 
   -- Password reset requests (today)
-  SELECT COUNT(*) FROM soundpub.auth_events
+  SELECT COUNT(*) FROM Soundpub.auth_events
   WHERE event_type = 'password_reset_requested'
     AND created_at >= CURRENT_DATE;
 
   -- Rate limit violations
-  SELECT COUNT(*) FROM soundpub.rate_limits
+  SELECT COUNT(*) FROM Soundpub.rate_limits
   WHERE blocked_until > NOW();
 
   -- Cleanup functions
-  SELECT soundpub.cleanup_rate_limits();
-  SELECT soundpub.cleanup_expired_tokens();
-  SELECT soundpub.cleanup_old_auth_events();
+  SELECT Soundpub.cleanup_rate_limits();
+  SELECT Soundpub.cleanup_expired_tokens();
+  SELECT Soundpub.cleanup_old_auth_events();
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ 🐛 TROUBLESHOOTING                                                           ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
   EMAIL NOT SENT:
-    → Check: SELECT * FROM soundpub.email_send_log 
+    → Check: SELECT * FROM Soundpub.email_send_log 
              WHERE recipient_email = 'user@example.com' 
              ORDER BY created_at DESC LIMIT 5;
 
   TOKEN INVALID:
-    → Check: SELECT * FROM soundpub.profiles 
+    → Check: SELECT * FROM Soundpub.profiles 
              WHERE verification_token = 'token-here';
 
   RATE LIMIT STUCK:
-    → Reset: DELETE FROM soundpub.rate_limits 
+    → Reset: DELETE FROM Soundpub.rate_limits 
              WHERE identifier = 'user@example.com';
 
   USER UNVERIFIED:
-    → Fix: UPDATE soundpub.profiles SET email_verified = true 
+    → Fix: UPDATE Soundpub.profiles SET email_verified = true 
            WHERE email = 'user@example.com';
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
@@ -191,7 +191,7 @@
 ┃ ⚠️ CRITICAL REMINDERS                                                        ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
-  🔴 ALWAYS use schema "soundpub" not "public"
+  🔴 ALWAYS use schema "Soundpub" not "public"
   🔴 Backup database before migration
   🔴 Test on staging first
   🔴 Never commit .env files
@@ -201,11 +201,11 @@
 ┃ 📞 SUPPORT                                                                   ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
-  Technical Questions: dev@soundpub.xyz
+  Technical Questions: dev@Soundpub.xyz
   Documentation: docs/README_AUTH_DOCS.md
   Start Here: docs/IMPLEMENTATION_CHECKLIST.md
 
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║           🎵 SoundPub - Empowering Musicians, Securing Accounts 🎵          ║
+║           🎵 Soundpub - Empowering Musicians, Securing Accounts 🎵          ║
 ║                        Version 2.0 | 2026-08-14                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝

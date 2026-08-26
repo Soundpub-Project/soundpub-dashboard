@@ -12,7 +12,7 @@ import { Loader2 } from 'lucide-react';
  */
 export default function IccnIframeAuth() {
   const navigate = useNavigate();
-  const [status, setStatus] = useState<string>('Memuat SoundPub...');
+  const [status, setStatus] = useState<string>('Memuat Soundpub...');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

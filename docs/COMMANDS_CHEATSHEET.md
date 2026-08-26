@@ -32,21 +32,21 @@ docker exec -i supabase-db psql -U postgres -d postgres < ~/migration_002.sql
 
 ### 5. Verifikasi - Check kolom baru
 ```bash
-docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT column_name, data_type FROM information_schema.columns WHERE table_schema='soundpub' AND table_name='profiles' AND column_name IN ('email_verified', 'verification_token', 'password_reset_token');"
+docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT column_name, data_type FROM information_schema.columns WHERE table_schema='Soundpub' AND table_name='profiles' AND column_name IN ('email_verified', 'verification_token', 'password_reset_token');"
 ```
 
 **Expected output:** 3 rows
 
 ### 6. Verifikasi - Check table baru
 ```bash
-docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT table_name FROM information_schema.tables WHERE table_schema='soundpub' AND table_name IN ('auth_events', 'rate_limits');"
+docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT table_name FROM information_schema.tables WHERE table_schema='Soundpub' AND table_name IN ('auth_events', 'rate_limits');"
 ```
 
 **Expected output:** 2 rows
 
 ### 7. Verifikasi - Check functions
 ```bash
-docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT routine_name FROM information_schema.routines WHERE routine_schema='soundpub' AND routine_name LIKE '%rate_limit%' OR routine_name LIKE '%cleanup%';"
+docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT routine_name FROM information_schema.routines WHERE routine_schema='Soundpub' AND routine_name LIKE '%rate_limit%' OR routine_name LIKE '%cleanup%';"
 ```
 
 **Expected output:** 4 functions
@@ -72,9 +72,9 @@ nano docker-compose.yml
 
 **Tambahkan di section `functions > environment`:**
 ```yaml
-DATABASE_SCHEMA: "soundpub"
+DATABASE_SCHEMA: "Soundpub"
 SUPABASE_URL: "https://supabase.carubra.com"
-APP_URL: "https://dashboard.soundpub.com"
+APP_URL: "https://dashboard.Soundpub.com"
 ```
 
 ### 11. Restart functions container
@@ -95,27 +95,27 @@ Press `Ctrl+C` untuk stop watching logs.
 
 ### Test query - Check struktur table profiles
 ```bash
-docker exec -i supabase-db psql -U postgres -d postgres -c "\d soundpub.profiles"
+docker exec -i supabase-db psql -U postgres -d postgres -c "\d Soundpub.profiles"
 ```
 
 ### Test query - Check auth_events table
 ```bash
-docker exec -i supabase-db psql -U postgres -d postgres -c "\d soundpub.auth_events"
+docker exec -i supabase-db psql -U postgres -d postgres -c "\d Soundpub.auth_events"
 ```
 
 ### Test query - Insert test auth event
 ```bash
-docker exec -i supabase-db psql -U postgres -d postgres -c "INSERT INTO soundpub.auth_events (event_type, user_id, ip_address, user_agent) VALUES ('test_event', gen_random_uuid(), '127.0.0.1', 'Test Agent');"
+docker exec -i supabase-db psql -U postgres -d postgres -c "INSERT INTO Soundpub.auth_events (event_type, user_id, ip_address, user_agent) VALUES ('test_event', gen_random_uuid(), '127.0.0.1', 'Test Agent');"
 ```
 
 ### Test query - Check test event
 ```bash
-docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT * FROM soundpub.auth_events WHERE event_type='test_event' ORDER BY created_at DESC LIMIT 1;"
+docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT * FROM Soundpub.auth_events WHERE event_type='test_event' ORDER BY created_at DESC LIMIT 1;"
 ```
 
 ### Test query - Delete test event
 ```bash
-docker exec -i supabase-db psql -U postgres -d postgres -c "DELETE FROM soundpub.auth_events WHERE event_type='test_event';"
+docker exec -i supabase-db psql -U postgres -d postgres -c "DELETE FROM Soundpub.auth_events WHERE event_type='test_event';"
 ```
 
 ---
@@ -145,8 +145,8 @@ docker exec -it supabase-db psql -U postgres -d postgres
 
 Dalam psql shell:
 ```sql
--- Switch to soundpub schema
-SET search_path TO soundpub;
+-- Switch to Soundpub schema
+SET search_path TO Soundpub;
 
 -- List all tables
 \dt
@@ -171,9 +171,9 @@ docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT version();"
 docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT schema_name FROM information_schema.schemata ORDER BY schema_name;"
 ```
 
-### Check if soundpub schema exists
+### Check if Soundpub schema exists
 ```bash
-docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT schema_name FROM information_schema.schemata WHERE schema_name='soundpub';"
+docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT schema_name FROM information_schema.schemata WHERE schema_name='Soundpub';"
 ```
 
 ---
@@ -182,17 +182,17 @@ docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT schema_name F
 
 ### Check RLS policies on profiles
 ```bash
-docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT schemaname, tablename, policyname, permissive, roles, cmd FROM pg_policies WHERE schemaname='soundpub' AND tablename='profiles';"
+docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT schemaname, tablename, policyname, permissive, roles, cmd FROM pg_policies WHERE schemaname='Soundpub' AND tablename='profiles';"
 ```
 
 ### Check RLS policies on auth_events
 ```bash
-docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT schemaname, tablename, policyname, permissive, roles, cmd FROM pg_policies WHERE schemaname='soundpub' AND tablename='auth_events';"
+docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT schemaname, tablename, policyname, permissive, roles, cmd FROM pg_policies WHERE schemaname='Soundpub' AND tablename='auth_events';"
 ```
 
 ### Check indexes on profiles
 ```bash
-docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT indexname, indexdef FROM pg_indexes WHERE schemaname='soundpub' AND tablename='profiles';"
+docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT indexname, indexdef FROM pg_indexes WHERE schemaname='Soundpub' AND tablename='profiles';"
 ```
 
 ---
@@ -201,22 +201,22 @@ docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT indexname, in
 
 ### Count total profiles
 ```bash
-docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT COUNT(*) as total_profiles FROM soundpub.profiles;"
+docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT COUNT(*) as total_profiles FROM Soundpub.profiles;"
 ```
 
 ### Count verified vs unverified users
 ```bash
-docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT email_verified, COUNT(*) as count FROM soundpub.profiles GROUP BY email_verified;"
+docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT email_verified, COUNT(*) as count FROM Soundpub.profiles GROUP BY email_verified;"
 ```
 
 ### Check recent auth events
 ```bash
-docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT event_type, COUNT(*) as count FROM soundpub.auth_events WHERE created_at >= NOW() - INTERVAL '7 days' GROUP BY event_type ORDER BY count DESC;"
+docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT event_type, COUNT(*) as count FROM Soundpub.auth_events WHERE created_at >= NOW() - INTERVAL '7 days' GROUP BY event_type ORDER BY count DESC;"
 ```
 
 ### Check active rate limits
 ```bash
-docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT identifier, action_type, attempt_count, blocked_until FROM soundpub.rate_limits WHERE blocked_until > NOW();"
+docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT identifier, action_type, attempt_count, blocked_until FROM Soundpub.rate_limits WHERE blocked_until > NOW();"
 ```
 
 ---

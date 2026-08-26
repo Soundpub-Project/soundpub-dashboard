@@ -6,7 +6,7 @@ const path = require('path');
 
 const TARGET_URL = process.env.TARGET_SUPABASE_URL;
 const TARGET_SERVICE_KEY = process.env.TARGET_SUPABASE_SERVICE_KEY;
-const TARGET_SCHEMA = process.env.TARGET_DB_SCHEMA || 'soundpub';
+const TARGET_SCHEMA = process.env.TARGET_DB_SCHEMA || 'Soundpub';
 const CSV_DIR = process.env.CSV_IMPORT_DIR || './exported-data';
 const DEFAULT_USER_PASSWORD = process.env.DEFAULT_USER_PASSWORD || 'ChangeMe123456!';
 const CHECK_ONLY = process.argv.includes('--check-only');
@@ -325,7 +325,7 @@ async function createUsersFromProfiles() {
 async function main() {
   console.log('');
   console.log('========================================');
-  console.log('  SoundPub CSV import');
+  console.log('  Soundpub CSV import');
   console.log('========================================');
   console.log('');
   console.log(`Target URL: ${TARGET_URL}`);
@@ -461,9 +461,9 @@ async function main() {
     net_revenue: asNumber(row.net_revenue ?? row.pendapatan_kotor_dsp),
     pendapatan_kotor_dsp: asNumber(row.pendapatan_kotor_dsp ?? row.net_revenue),
     pendapatan_label_artis: asNumber(row.pendapatan_label_artis),
-    pendapatan_bersih_soundpub: asNumber(row.pendapatan_bersih_soundpub),
+    pendapatan_bersih_Soundpub: asNumber(row.pendapatan_bersih_Soundpub),
     artist_revenue: asNumber(row.artist_revenue),
-    soundpub_revenue: asNumber(row.soundpub_revenue),
+    Soundpub_revenue: asNumber(row.Soundpub_revenue),
     artist_user_id: mapUserId(row.artist_user_id),
     label_user_id: mapUserId(row.label_user_id),
     title: row.title,

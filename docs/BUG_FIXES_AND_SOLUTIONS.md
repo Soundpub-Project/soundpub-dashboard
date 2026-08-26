@@ -87,12 +87,12 @@ Tanpa migration, kolom-kolom ini TIDAK ADA:
 #### Option 2: Via psql Command Line
 ```bash
 # Jika Anda punya PostgreSQL client installed
-psql -h localhost -U postgres -d soundpub -f migrations-complete/002_auth_verification_system.sql
+psql -h localhost -U postgres -d Soundpub -f migrations-complete/002_auth_verification_system.sql
 ```
 
 #### Option 3: Via pgAdmin atau Database Tool Lainnya
 1. Buka pgAdmin/DBeaver/TablePlus
-2. Connect ke database soundpub
+2. Connect ke database Soundpub
 3. Open SQL Query window
 4. Copy paste isi migration file
 5. Execute
@@ -102,7 +102,7 @@ psql -h localhost -U postgres -d soundpub -f migrations-complete/002_auth_verifi
 -- Query 1: Check kolom baru
 SELECT column_name, data_type
 FROM information_schema.columns 
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
   AND table_name='profiles'
   AND column_name IN ('email_verified', 'verification_token', 'password_reset_token');
 
@@ -111,7 +111,7 @@ WHERE table_schema='soundpub'
 -- Query 2: Check table baru
 SELECT table_name 
 FROM information_schema.tables 
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
   AND table_name IN ('auth_events', 'rate_limits');
 
 -- Expected: 2 rows returned
@@ -132,7 +132,7 @@ Functions butuh ini untuk:
 # Via Supabase CLI
 supabase secrets set SUPABASE_URL=https://supabase.carubra.com
 supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
-supabase secrets set DATABASE_SCHEMA=soundpub
+supabase secrets set DATABASE_SCHEMA=Soundpub
 supabase secrets set APP_URL=http://localhost:5173
 
 # Untuk email (jika sudah punya)
@@ -186,7 +186,7 @@ Setelah migration dan set secrets, test:
 **Verify di Database:**
 ```sql
 SELECT email, email_verified, verification_token 
-FROM soundpub.profiles 
+FROM Soundpub.profiles 
 WHERE email = 'your-new-email@example.com';
 ```
 **Expected:** email_verified = false, verification_token terisi
@@ -202,7 +202,7 @@ WHERE email = 'your-new-email@example.com';
 **Verify di Database:**
 ```sql
 SELECT email, password_reset_token, password_reset_token_expires_at 
-FROM soundpub.profiles 
+FROM Soundpub.profiles 
 WHERE email = 'your-email@example.com';
 ```
 **Expected:** password_reset_token terisi, expires 24 jam dari sekarang
@@ -251,7 +251,7 @@ SELECT
   status,
   error_message,
   created_at
-FROM soundpub.email_send_log 
+FROM Soundpub.email_send_log 
 WHERE created_at >= CURRENT_DATE
 ORDER BY created_at DESC
 LIMIT 20;
@@ -263,7 +263,7 @@ SELECT
   event_type,
   COUNT(*) as count,
   MAX(created_at) as last_occurrence
-FROM soundpub.auth_events
+FROM Soundpub.auth_events
 WHERE created_at >= CURRENT_DATE
 GROUP BY event_type
 ORDER BY count DESC;
@@ -271,7 +271,7 @@ ORDER BY count DESC;
 
 ### Check Rate Limits
 ```sql
-SELECT * FROM soundpub.rate_limits 
+SELECT * FROM Soundpub.rate_limits 
 WHERE blocked_until > NOW()
 ORDER BY last_attempt_at DESC;
 ```

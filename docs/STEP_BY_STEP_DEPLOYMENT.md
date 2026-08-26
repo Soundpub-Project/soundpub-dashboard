@@ -29,11 +29,11 @@
 ### 1.1 Buat Backup Database
 ```bash
 # Masuk ke folder backups (atau buat jika belum ada)
-cd I:\website-devops\soundpub-project\soundpub-dashboard
+cd I:\website-devops\Soundpub-project\Soundpub-dashboard
 mkdir -p backups
 
 # Buat backup dengan timestamp
-pg_dump -h localhost -U postgres soundpub > backups/backup_before_auth_migration_20260814.sql
+pg_dump -h localhost -U postgres Soundpub > backups/backup_before_auth_migration_20260814.sql
 ```
 
 **Hasil yang Diharapkan:**
@@ -72,7 +72,7 @@ notepad migrations-complete\002_auth_verification_system.sql
 ```
 
 **Yang Harus Dicek:**
-- [ ] Semua query menggunakan schema `soundpub.` (bukan `public.`)
+- [ ] Semua query menggunakan schema `Soundpub.` (bukan `public.`)
 - [ ] Ada BEGIN dan COMMIT transaction
 - [ ] Tidak ada DROP TABLE yang berbahaya
 - [ ] Ada success message di akhir
@@ -80,12 +80,12 @@ notepad migrations-complete\002_auth_verification_system.sql
 ### 2.3 Jalankan Migration
 ```bash
 # Connect ke database dan jalankan script
-psql -h localhost -U postgres -d soundpub -f migrations-complete/002_auth_verification_system.sql
+psql -h localhost -U postgres -d Soundpub -f migrations-complete/002_auth_verification_system.sql
 ```
 
 **Di PowerShell:**
 ```powershell
-psql -h localhost -U postgres -d soundpub -f migrations-complete\002_auth_verification_system.sql
+psql -h localhost -U postgres -d Soundpub -f migrations-complete\002_auth_verification_system.sql
 ```
 
 **Output yang Diharapkan:**
@@ -107,10 +107,10 @@ NOTICE: Migration completed successfully!
 
 **Check 1: Kolom Baru di Profiles**
 ```sql
-psql -h localhost -U postgres -d soundpub -c "
+psql -h localhost -U postgres -d Soundpub -c "
 SELECT column_name, data_type, is_nullable
 FROM information_schema.columns 
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
   AND table_name='profiles'
   AND (column_name LIKE '%token%' OR column_name = 'email_verified')
 ORDER BY column_name;
@@ -132,10 +132,10 @@ verification_token_expires_at    | timestamp with time zone    | YES
 
 **Check 2: Table Baru**
 ```sql
-psql -h localhost -U postgres -d soundpub -c "
+psql -h localhost -U postgres -d Soundpub -c "
 SELECT table_name 
 FROM information_schema.tables 
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
   AND table_name IN ('auth_events', 'rate_limits')
 ORDER BY table_name;
 "
@@ -151,10 +151,10 @@ rate_limits
 
 **Check 3: Functions Baru**
 ```sql
-psql -h localhost -U postgres -d soundpub -c "
+psql -h localhost -U postgres -d Soundpub -c "
 SELECT routine_name 
 FROM information_schema.routines 
-WHERE routine_schema='soundpub' 
+WHERE routine_schema='Soundpub' 
   AND routine_name LIKE '%token%' OR routine_name LIKE '%rate%'
 ORDER BY routine_name;
 "
@@ -171,10 +171,10 @@ cleanup_rate_limits
 
 ### 2.5 Test Functions
 ```sql
-psql -h localhost -U postgres -d soundpub -c "
+psql -h localhost -U postgres -d Soundpub -c "
 -- Test cleanup functions
-SELECT soundpub.cleanup_rate_limits();
-SELECT soundpub.cleanup_expired_tokens();
+SELECT Soundpub.cleanup_rate_limits();
+SELECT Soundpub.cleanup_expired_tokens();
 "
 ```
 
@@ -288,7 +288,7 @@ supabase functions deploy send-app-email
 
 ### 5.1 Build Application
 ```bash
-cd I:\website-devops\soundpub-project\soundpub-dashboard
+cd I:\website-devops\Soundpub-project\Soundpub-dashboard
 
 # Install dependencies (jika ada yang baru)
 pnpm install
@@ -322,13 +322,13 @@ pnpm dev
 
 ### 5.4 Check Database - Token Generated
 ```sql
-psql -h localhost -U postgres -d soundpub -c "
+psql -h localhost -U postgres -d Soundpub -c "
 SELECT 
   email, 
   password_reset_token, 
   password_reset_token_expires_at,
   password_reset_sent_at
-FROM soundpub.profiles 
+FROM Soundpub.profiles 
 WHERE email = 'EMAIL_YANG_ANDA_TEST'
 LIMIT 1;
 "
@@ -341,14 +341,14 @@ LIMIT 1;
 
 ### 5.5 Check Email Terkirim
 ```sql
-psql -h localhost -U postgres -d soundpub -c "
+psql -h localhost -U postgres -d Soundpub -c "
 SELECT 
   recipient_email,
   subject,
   status,
   error_message,
   created_at
-FROM soundpub.email_send_log 
+FROM Soundpub.email_send_log 
 WHERE recipient_email = 'EMAIL_YANG_ANDA_TEST'
 ORDER BY created_at DESC 
 LIMIT 5;
@@ -408,14 +408,14 @@ LIMIT 5;
 
 ### 6.2 Check Database - Verification Token
 ```sql
-psql -h localhost -U postgres -d soundpub -c "
+psql -h localhost -U postgres -d Soundpub -c "
 SELECT 
   email,
   email_verified,
   verification_token,
   verification_token_expires_at,
   created_at
-FROM soundpub.profiles 
+FROM Soundpub.profiles 
 WHERE email = 'EMAIL_SIGNUP_BARU'
 LIMIT 1;
 "
@@ -441,9 +441,9 @@ LIMIT 1;
 
 ### 6.4 Verify di Database
 ```sql
-psql -h localhost -U postgres -d soundpub -c "
+psql -h localhost -U postgres -d Soundpub -c "
 SELECT email, email_verified 
-FROM soundpub.profiles 
+FROM Soundpub.profiles 
 WHERE email = 'EMAIL_SIGNUP_BARU';
 "
 ```
@@ -482,8 +482,8 @@ WHERE email = 'EMAIL_SIGNUP_BARU';
 
 ### 7.2 Check Database
 ```sql
-psql -h localhost -U postgres -d soundpub -c "
-SELECT * FROM soundpub.rate_limits 
+psql -h localhost -U postgres -d Soundpub -c "
+SELECT * FROM Soundpub.rate_limits 
 WHERE identifier = 'EMAIL_YANG_DITEST'
 ORDER BY last_attempt_at DESC;
 "
@@ -536,10 +536,10 @@ Get-ChildItem dist
 ### 8.3 Deploy dengan Docker
 ```bash
 # Build Docker image
-docker build -t soundpub-dashboard:v2.1.0 .
+docker build -t Soundpub-dashboard:v2.1.0 .
 
 # Tag sebagai latest
-docker tag soundpub-dashboard:v2.1.0 soundpub-dashboard:latest
+docker tag Soundpub-dashboard:v2.1.0 Soundpub-dashboard:latest
 
 # Stop container lama
 docker-compose down
@@ -554,7 +554,7 @@ docker-compose logs -f --tail=100
 ### 8.4 Verify Deployment
 ```bash
 # Check container running
-docker ps | findstr soundpub
+docker ps | findstr Soundpub
 
 # Test endpoint
 curl http://localhost:5173/
@@ -585,14 +585,14 @@ SELECT
   COUNT(*) FILTER (WHERE email_verified = true) * 100.0 / NULLIF(COUNT(*), 0) AS verification_rate,
   COUNT(*) as total_users,
   COUNT(*) FILTER (WHERE email_verified = true) as verified_users
-FROM soundpub.profiles
+FROM Soundpub.profiles
 WHERE created_at >= NOW() - INTERVAL '7 days';
 
 -- Query 2: Password reset activity (hari ini)
 SELECT 
   event_type,
   COUNT(*) as count
-FROM soundpub.auth_events
+FROM Soundpub.auth_events
 WHERE event_type LIKE 'password_reset%'
   AND created_at >= CURRENT_DATE
 GROUP BY event_type;
@@ -603,7 +603,7 @@ SELECT
   action_type,
   attempt_count,
   blocked_until
-FROM soundpub.rate_limits
+FROM Soundpub.rate_limits
 WHERE blocked_until > NOW()
 ORDER BY blocked_until DESC;
 
@@ -611,7 +611,7 @@ ORDER BY blocked_until DESC;
 SELECT 
   status,
   COUNT(*) as count
-FROM soundpub.email_send_log
+FROM Soundpub.email_send_log
 WHERE created_at >= CURRENT_DATE
 GROUP BY status;
 ```
@@ -634,7 +634,7 @@ GROUP BY status;
 ### 10.1 Rollback Frontend Only
 ```bash
 # Gunakan versi Docker sebelumnya
-docker tag soundpub-dashboard:v2.0.0 soundpub-dashboard:latest
+docker tag Soundpub-dashboard:v2.0.0 Soundpub-dashboard:latest
 docker-compose down
 docker-compose up -d
 ```
@@ -642,13 +642,13 @@ docker-compose up -d
 ### 10.2 Rollback Database (EXTREME - Hanya jika database corrupt)
 ```bash
 # HATI-HATI: Ini akan menghapus semua data setelah backup!
-psql -h localhost -U postgres -d soundpub < backups/backup_before_auth_migration_20260814.sql
+psql -h localhost -U postgres -d Soundpub < backups/backup_before_auth_migration_20260814.sql
 ```
 
 ### 10.3 Disable Email Verification Requirement (Temporary Fix)
 ```sql
 -- Jika banyak user complain tidak bisa verify
-UPDATE soundpub.profiles 
+UPDATE Soundpub.profiles 
 SET email_verified = true 
 WHERE email_verified = false 
   AND created_at < NOW() - INTERVAL '24 hours';
@@ -692,20 +692,20 @@ WHERE email_verified = false
 ## 🆘 TROUBLESHOOTING UMUM
 
 ### Masalah: Migration gagal
-**Error:** `relation "soundpub.profiles" does not exist`
+**Error:** `relation "Soundpub.profiles" does not exist`
 **Solution:**
 ```sql
 -- Check schema
-SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'soundpub';
+SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'Soundpub';
 
 -- Jika tidak ada, create schema
-CREATE SCHEMA soundpub;
+CREATE SCHEMA Soundpub;
 ```
 
 ### Masalah: Email tidak terkirim
 **Check:**
 ```sql
-SELECT * FROM soundpub.email_send_log 
+SELECT * FROM Soundpub.email_send_log 
 ORDER BY created_at DESC LIMIT 10;
 ```
 **Solution:** Verify Gmail API credentials, check Lovable connector
@@ -714,7 +714,7 @@ ORDER BY created_at DESC LIMIT 10;
 **Check:**
 ```sql
 SELECT verification_token, verification_token_expires_at 
-FROM soundpub.profiles 
+FROM Soundpub.profiles 
 WHERE email = 'user@example.com';
 ```
 **Solution:** Token mungkin expired, generate token baru
@@ -738,7 +738,7 @@ pnpm build
 1. Check dokumentasi lengkap di `docs/DEPLOYMENT_GUIDE_AUTH.md`
 2. Check logs: `docker-compose logs -f`
 3. Check database: Run verification queries
-4. Contact: dev@soundpub.xyz
+4. Contact: dev@Soundpub.xyz
 
 ---
 

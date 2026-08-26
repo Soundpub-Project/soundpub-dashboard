@@ -1,10 +1,10 @@
 ﻿-- Alternative: Distribute admin fee to ALL admin/superadmin profiles
--- Location: docs/soundpub-local-migration/30-alternative-distribute-admin-fee.sql
+-- Location: docs/Soundpub-local-migration/30-alternative-distribute-admin-fee.sql
 
 BEGIN;
 
 -- 1. Add admin_revenue column (same as before)
-ALTER TABLE soundpub.profiles
+ALTER TABLE Soundpub.profiles
 ADD COLUMN IF NOT EXISTS admin_revenue DECIMAL(18, 2) DEFAULT 0;
 
 -- 2. NO need to create company profile (skip this step)
@@ -17,12 +17,12 @@ DECLARE
   admin_share DECIMAL(18,2);
 BEGIN
   -- Calculate total admin fees
-  SELECT COALESCE(SUM(soundpub_revenue), 0) INTO total_admin_fee
-  FROM soundpub.royalties;
+  SELECT COALESCE(SUM(Soundpub_revenue), 0) INTO total_admin_fee
+  FROM Soundpub.royalties;
   
   -- Count active admin/superadmin
   SELECT COUNT(*) INTO admin_count
-  FROM soundpub.user_roles
+  FROM Soundpub.user_roles
   WHERE role IN ('admin', 'superadmin');
   
   -- Calculate share per admin
@@ -30,12 +30,12 @@ BEGIN
     admin_share := total_admin_fee / admin_count;
     
     -- Distribute to all admin/superadmin
-    UPDATE soundpub.profiles p
+    UPDATE Soundpub.profiles p
     SET 
       admin_revenue = admin_share,
       balance = balance + admin_share,
       updated_at = now()
-    FROM soundpub.user_roles ur
+    FROM Soundpub.user_roles ur
     WHERE ur.user_id = p.id
       AND ur.role IN ('admin', 'superadmin');
     
@@ -52,6 +52,6 @@ SELECT
   ur.role::text,
   p.balance,
   p.admin_revenue
-FROM soundpub.profiles p
-JOIN soundpub.user_roles ur ON ur.user_id = p.id
+FROM Soundpub.profiles p
+JOIN Soundpub.user_roles ur ON ur.user_id = p.id
 WHERE ur.role IN ('admin', 'superadmin');

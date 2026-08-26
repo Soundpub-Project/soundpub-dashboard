@@ -21,7 +21,7 @@ ERROR: 42501: must be owner of table profiles
 ```sql
 -- Harus return 3 rows
 SELECT column_name FROM information_schema.columns 
-WHERE table_schema='soundpub' AND table_name='profiles'
+WHERE table_schema='Soundpub' AND table_name='profiles'
 AND column_name IN ('email_verified', 'verification_token', 'password_reset_token');
 ```
 
@@ -40,13 +40,13 @@ AND column_name IN ('email_verified', 'verification_token', 'password_reset_toke
 ## 🆘 JIKA MASIH ERROR
 Option A: Grant permission
 ```sql
-GRANT ALTER ON soundpub.profiles TO authenticated;
-GRANT CREATE ON SCHEMA soundpub TO authenticated;
+GRANT ALTER ON Soundpub.profiles TO authenticated;
+GRANT CREATE ON SCHEMA Soundpub TO authenticated;
 ```
 
 Option B: Run sebagai postgres superuser
 ```bash
-psql -U postgres -d soundpub
+psql -U postgres -d Soundpub
 -- paste script V2
 ```
 

@@ -1,6 +1,6 @@
 ﻿#!/bin/bash
 # ============================================================
-# SOUNDPUB DASHBOARD - DOCKER MIGRATION RUNNER
+# Soundpub DASHBOARD - DOCKER MIGRATION RUNNER
 # ============================================================
 # Purpose: Run database migration on self-hosted Supabase
 # Target: Docker container supabase-db
@@ -21,7 +21,7 @@ DATABASE_NAME="postgres"
 MIGRATION_FILE="002_auth_verification_system_v2.sql"
 
 echo -e "${CYAN}============================================================${NC}"
-echo -e "${CYAN}  SOUNDPUB - Docker Migration Runner${NC}"
+echo -e "${CYAN}  Soundpub - Docker Migration Runner${NC}"
 echo -e "${CYAN}============================================================${NC}"
 echo ""
 
@@ -100,7 +100,7 @@ echo -e "${YELLOW}[INFO] Checking new columns in profiles table...${NC}"
 docker exec -i "$DOCKER_CONTAINER" psql -U "$POSTGRES_USER" -d "$DATABASE_NAME" << EOF
 SELECT column_name, data_type 
 FROM information_schema.columns 
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
   AND table_name='profiles' 
   AND column_name IN ('email_verified', 'verification_token', 'password_reset_token')
 ORDER BY column_name;
@@ -111,7 +111,7 @@ echo -e "${YELLOW}[INFO] Checking new tables...${NC}"
 docker exec -i "$DOCKER_CONTAINER" psql -U "$POSTGRES_USER" -d "$DATABASE_NAME" << EOF
 SELECT table_name 
 FROM information_schema.tables 
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
   AND table_name IN ('auth_events', 'rate_limits')
 ORDER BY table_name;
 EOF
@@ -121,7 +121,7 @@ echo -e "${YELLOW}[INFO] Checking utility functions...${NC}"
 docker exec -i "$DOCKER_CONTAINER" psql -U "$POSTGRES_USER" -d "$DATABASE_NAME" << EOF
 SELECT routine_name
 FROM information_schema.routines
-WHERE routine_schema='soundpub'
+WHERE routine_schema='Soundpub'
   AND routine_name IN ('check_rate_limit', 'cleanup_rate_limits', 'cleanup_expired_tokens', 'cleanup_old_auth_events')
 ORDER BY routine_name;
 EOF

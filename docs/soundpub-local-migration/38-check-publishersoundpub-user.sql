@@ -1,5 +1,5 @@
 ﻿-- =============================================
--- CHECK: Existing publishersoundpub@gmail.com User Data
+-- CHECK: Existing publisherSoundpub@gmail.com User Data
 -- Query to get UUID and all related information
 -- =============================================
 
@@ -16,9 +16,9 @@ SELECT
   is_super_admin,
   last_sign_in_at
 FROM auth.users
-WHERE email = 'publishersoundpub@gmail.com';
+WHERE email = 'publisherSoundpub@gmail.com';
 
--- Check in soundpub.profiles table
+-- Check in Soundpub.profiles table
 SELECT
   'PROFILES' as source,
   p.id as user_id,
@@ -30,9 +30,9 @@ SELECT
   p.created_at,
   p.updated_at,
   pl.full_name as parent_label_name
-FROM soundpub.profiles p
-LEFT JOIN soundpub.profiles pl ON pl.id = p.parent_label_id
-WHERE p.email = 'publishersoundpub@gmail.com';
+FROM Soundpub.profiles p
+LEFT JOIN Soundpub.profiles pl ON pl.id = p.parent_label_id
+WHERE p.email = 'publisherSoundpub@gmail.com';
 
 -- Check roles assigned to this user
 SELECT
@@ -41,9 +41,9 @@ SELECT
   p.email,
   ur.role::text as role,
   ur.created_at
-FROM soundpub.user_roles ur
-JOIN soundpub.profiles p ON p.id = ur.user_id
-WHERE p.email = 'publishersoundpub@gmail.com'
+FROM Soundpub.user_roles ur
+JOIN Soundpub.profiles p ON p.id = ur.user_id
+WHERE p.email = 'publisherSoundpub@gmail.com'
 ORDER BY ur.created_at;
 
 -- Check if user has any labels assigned (if they are a label)
@@ -51,7 +51,7 @@ SELECT
   'LABELS ASSIGNED' as source,
   COUNT(*) as artist_count,
   array_agg(DISTINCT artists.email) as artist_emails
-FROM soundpub.profiles label
-LEFT JOIN soundpub.profiles artists ON artists.parent_label_id = label.id
-WHERE label.email = 'publishersoundpub@gmail.com'
+FROM Soundpub.profiles label
+LEFT JOIN Soundpub.profiles artists ON artists.parent_label_id = label.id
+WHERE label.email = 'publisherSoundpub@gmail.com'
 GROUP BY label.id;

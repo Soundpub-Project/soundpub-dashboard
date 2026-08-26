@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { ReleaseFormDialog } from '@/components/releases/ReleaseFormDialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -86,7 +85,6 @@ export default function ReleaseDetail() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [labelInfo, setLabelInfo] = useState<LabelInfo | null>(null);
   const [loading, setLoading] = useState(true);
-  const [formOpen, setFormOpen] = useState(false);
   
   // Audio player state
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -380,7 +378,7 @@ export default function ReleaseDetail() {
             </div>
           </div>
           {(canManageReleases || isArtist) && (canFullyEdit || canEditLyricsOnly) && (
-            <Button className="gradient-primary" onClick={() => setFormOpen(true)}>
+            <Button className="gradient-primary" onClick={() => navigate(`/dashboard/releases/${release.id}/edit`)}>
               <Pencil className="h-4 w-4 mr-2" />
               {canEditLyricsOnly ? 'Edit Lyrics' : 'Edit Release'}
             </Button>
@@ -722,14 +720,6 @@ export default function ReleaseDetail() {
           </Card>
         )}
       </div>
-
-      <ReleaseFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        release={release}
-        onSuccess={fetchReleaseData}
-        lyricsOnlyMode={canEditLyricsOnly}
-      />
     </DashboardLayout>
   );
 }

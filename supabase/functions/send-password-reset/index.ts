@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
 
 const getDatabaseSchema = () =>
-  Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+  Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'Soundpub'
 
 const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
   const existingDb = options.db || {}
@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const appUrl = Deno.env.get('APP_URL') || 'https://dashboard.soundpub.xyz'
+    const appUrl = Deno.env.get('APP_URL') || 'https://dashboard.Soundpub.xyz'
     const supabase = createSoundpubClient(supabaseUrl, supabaseServiceKey)
 
     const { email } = await measureStep(requestId, 'parse_json', () => req.json())

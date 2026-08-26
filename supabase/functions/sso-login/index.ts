@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'Soundpub'
 
 const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
   const existingDb = options.db || {}
@@ -129,9 +129,9 @@ function resolveSsoClientId(configuredClientId: string | undefined, realm: strin
 
   if (!clientId || clientId === realm || clientId === "playground" || clientId === "PORTALICCN") {
     console.warn(
-      "SSO_CLIENT_ID is missing or points to a realm name; falling back to SoundPub ICCN client"
+      "SSO_CLIENT_ID is missing or points to a realm name; falling back to Soundpub ICCN client"
     );
-    return "soundpub";
+    return "Soundpub";
   }
 
   return clientId;

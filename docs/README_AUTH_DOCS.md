@@ -1,6 +1,6 @@
 ﻿# 📚 AUTH VERIFICATION SYSTEM - Documentation Index
 
-**SoundPub Dashboard - Password Reset & Email Verification**  
+**Soundpub Dashboard - Password Reset & Email Verification**  
 **Version:** 1.0  
 **Created:** 2026-08-14  
 **Status:** 🟡 Ready for Implementation
@@ -264,7 +264,7 @@ SQL migration script siap pakai:
 ## 📂 Struktur File
 
 ```
-soundpub-dashboard/
+Soundpub-dashboard/
 ├── docs/
 │   ├── README_AUTH_DOCS.md                 (File ini)
 │   ├── RANCANGAN_AUTH_VERIFICATION.md      (Rancangan lengkap)
@@ -389,12 +389,12 @@ soundpub-dashboard/
 
 ### ⚠️ INGAT: Supabase Self-hosted
 
-Kamu menggunakan **Supabase self-hosted** dengan schema **`soundpub`**.
+Kamu menggunakan **Supabase self-hosted** dengan schema **`Soundpub`**.
 
 **Semua query harus eksplisit:**
 ```sql
 -- ✅ Correct
-SELECT * FROM soundpub.profiles;
+SELECT * FROM Soundpub.profiles;
 
 -- ❌ Wrong
 SELECT * FROM public.profiles;
@@ -403,7 +403,7 @@ SELECT * FROM public.profiles;
 **Database connection di code:**
 ```typescript
 const supabase = createClient(url, key, {
-  db: { schema: 'soundpub' }
+  db: { schema: 'Soundpub' }
 });
 ```
 
@@ -413,13 +413,13 @@ const supabase = createClient(url, key, {
 - `SUPABASE_URL=https://supabase.carubra.com`
 - `SUPABASE_ANON_KEY=<your-key>`
 - `SUPABASE_SERVICE_ROLE_KEY=<your-key>`
-- `DATABASE_SCHEMA=soundpub`
+- `DATABASE_SCHEMA=Soundpub`
 - `LOVABLE_API_KEY=<your-key>`
 - `GOOGLE_MAIL_API_KEY=<your-key>`
 
 **Optional:**
 - `RESEND_API_KEY=<fallback-provider>`
-- `APP_URL=https://dashboard.soundpub.xyz`
+- `APP_URL=https://dashboard.Soundpub.xyz`
 
 ---
 
@@ -460,7 +460,7 @@ const supabase = createClient(url, key, {
 
 ## 📞 Contact & Support
 
-**Technical Questions:** dev@soundpub.xyz  
+**Technical Questions:** dev@Soundpub.xyz  
 **Project Manager:** (to be assigned)  
 **Tech Lead:** (to be assigned)
 
@@ -482,4 +482,4 @@ Dokumentasi ini dibuat dengan cermat untuk memastikan implementasi yang sukses. 
 
 ---
 
-🎵 **SoundPub - Empowering Musicians, Securing Accounts** 🎵
+🎵 **Soundpub - Empowering Musicians, Securing Accounts** 🎵

@@ -27,8 +27,8 @@ interface SsoAuthContextType {
 }
 
 const SsoAuthContext = createContext<SsoAuthContextType | undefined>(undefined);
-const SSO_PROMPT_NONE_TRIED_KEY = 'soundpub_iccn_prompt_none_tried';
-const SSO_EXCHANGE_KEY = 'soundpub_iccn_exchange_key';
+const SSO_PROMPT_NONE_TRIED_KEY = 'Soundpub_iccn_prompt_none_tried';
+const SSO_EXCHANGE_KEY = 'Soundpub_iccn_exchange_key';
 
 export function SsoAuthProvider({ children }: { children: ReactNode }) {
   const [ssoLoading, setSsoLoading] = useState(false);

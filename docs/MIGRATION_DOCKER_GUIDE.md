@@ -76,7 +76,7 @@ docker exec -i supabase-db psql -U postgres -d postgres < /tmp/migration_002.sql
 docker exec -i supabase-db psql -U postgres -d postgres -c "
 SELECT column_name, data_type 
 FROM information_schema.columns 
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
   AND table_name='profiles' 
   AND column_name IN ('email_verified', 'verification_token', 'password_reset_token');
 "
@@ -88,7 +88,7 @@ Expected output: 3 rows (email_verified, verification_token, password_reset_toke
 docker exec -i supabase-db psql -U postgres -d postgres -c "
 SELECT table_name 
 FROM information_schema.tables 
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
   AND table_name IN ('auth_events', 'rate_limits');
 "
 ```
@@ -117,7 +117,7 @@ docker compose cp /tmp/migration_002.sql db:/tmp/
 docker compose exec -T db psql -U postgres -d postgres < /tmp/migration_002.sql
 
 # Verify
-docker compose exec db psql -U postgres -d postgres -c "SELECT COUNT(*) FROM soundpub.auth_events;"
+docker compose exec db psql -U postgres -d postgres -c "SELECT COUNT(*) FROM Soundpub.auth_events;"
 ```
 
 ---
@@ -131,7 +131,7 @@ After migration completes, verify:
 ```sql
 SELECT column_name, data_type, is_nullable
 FROM information_schema.columns 
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
   AND table_name='profiles'
   AND column_name IN (
     'email_verified', 
@@ -149,9 +149,9 @@ WHERE table_schema='soundpub'
 ```sql
 SELECT table_name, 
        (SELECT COUNT(*) FROM information_schema.columns 
-        WHERE table_schema='soundpub' AND table_name=t.table_name) as column_count
+        WHERE table_schema='Soundpub' AND table_name=t.table_name) as column_count
 FROM information_schema.tables t
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
   AND table_name IN ('auth_events', 'rate_limits');
 ```
 
@@ -164,7 +164,7 @@ WHERE table_schema='soundpub'
 ```sql
 SELECT routine_name, routine_type
 FROM information_schema.routines
-WHERE routine_schema='soundpub'
+WHERE routine_schema='Soundpub'
   AND routine_name IN (
     'check_rate_limit',
     'cleanup_rate_limits',
@@ -183,7 +183,7 @@ SELECT
   email, 
   email_verified, 
   verification_token IS NOT NULL as has_token
-FROM soundpub.profiles 
+FROM Soundpub.profiles 
 LIMIT 5;
 ```
 
@@ -198,15 +198,15 @@ Should return without errors.
 **Solution:** Run with postgres superuser or grant permissions first:
 
 ```sql
-GRANT ALTER ON soundpub.profiles TO authenticated;
+GRANT ALTER ON Soundpub.profiles TO authenticated;
 ```
 
-### Error: "schema soundpub does not exist"
+### Error: "schema Soundpub does not exist"
 
 **Solution:** Create schema first:
 
 ```sql
-CREATE SCHEMA IF NOT EXISTS soundpub;
+CREATE SCHEMA IF NOT EXISTS Soundpub;
 ```
 
 ### Error: "relation profiles does not exist"
@@ -232,7 +232,7 @@ On the server, edit: `~/docker/supabase/supabase-1.26.05/docker/.env` or docker-
 Add/update:
 ```bash
 # Database Schema
-DATABASE_SCHEMA=soundpub
+DATABASE_SCHEMA=Soundpub
 
 # Supabase Config
 SUPABASE_URL=https://supabase.carubra.com
@@ -285,7 +285,7 @@ Or use the deploy script:
 
 ```sql
 SELECT email, email_verified, verification_token IS NOT NULL as has_token
-FROM soundpub.profiles 
+FROM Soundpub.profiles 
 WHERE email = 'test@example.com';
 ```
 
@@ -299,7 +299,7 @@ WHERE email = 'test@example.com';
 
 ```sql
 SELECT email, password_reset_token IS NOT NULL as has_reset_token
-FROM soundpub.profiles 
+FROM Soundpub.profiles 
 WHERE email = 'test@example.com';
 ```
 
@@ -309,7 +309,7 @@ WHERE email = 'test@example.com';
 
 ```sql
 SELECT event_type, COUNT(*) as count
-FROM soundpub.auth_events
+FROM Soundpub.auth_events
 GROUP BY event_type
 ORDER BY count DESC;
 ```
@@ -328,7 +328,7 @@ SELECT
   user_id,
   metadata,
   created_at
-FROM soundpub.auth_events
+FROM Soundpub.auth_events
 ORDER BY created_at DESC
 LIMIT 20;
 ```
@@ -341,7 +341,7 @@ SELECT
   action_type,
   attempt_count,
   blocked_until
-FROM soundpub.rate_limits
+FROM Soundpub.rate_limits
 WHERE blocked_until > NOW()
 ORDER BY blocked_until DESC;
 ```
@@ -354,7 +354,7 @@ SELECT
   email_verified,
   verification_sent_at,
   verification_token_expires_at
-FROM soundpub.profiles
+FROM Soundpub.profiles
 WHERE email_verified = false
   AND verification_token IS NOT NULL
 ORDER BY verification_sent_at DESC;

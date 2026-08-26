@@ -81,7 +81,7 @@ export default function ForgotPassword() {
               <p className="font-medium">Langkah selanjutnya:</p>
               <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
                 <li>Buka inbox email Anda</li>
-                <li>Cari email dari SoundPub</li>
+                <li>Cari email dari Soundpub</li>
                 <li>Klik link reset password</li>
                 <li>Buat password baru</li>
               </ol>

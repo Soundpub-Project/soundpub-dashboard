@@ -11,7 +11,7 @@ SELECT
   p.artist_revenue::numeric(14,2) AS stored_artist_rev,
   p.label_revenue::numeric(14,2) AS stored_label_rev,
   p.updated_at
-FROM soundpub.profiles p
+FROM Soundpub.profiles p
 WHERE p.full_name ILIKE '%KADITRUDIT%'
    OR p.email ILIKE '%kaditrudit%';
 
@@ -25,9 +25,9 @@ SELECT
   SUM(r.net_revenue)::numeric(14,2) AS total_gross_revenue,
   SUM(r.artist_revenue)::numeric(14,2) AS sum_artist_rev,
   SUM(r.label_revenue)::numeric(14,2) AS sum_label_rev,
-  SUM(r.soundpub_revenue)::numeric(14,2) AS sum_admin_rev
-FROM soundpub.royalties r
-JOIN soundpub.profiles p ON p.id = r.label_user_id
+  SUM(r.Soundpub_revenue)::numeric(14,2) AS sum_admin_rev
+FROM Soundpub.royalties r
+JOIN Soundpub.profiles p ON p.id = r.label_user_id
 WHERE p.full_name ILIKE '%KADITRUDIT%'
 GROUP BY r.label_user_id, p.full_name;
 
@@ -40,8 +40,8 @@ SELECT
   COUNT(*) AS rows,
   SUM(r.net_revenue)::numeric(14,2) AS total_revenue,
   SUM(r.label_revenue)::numeric(14,2) AS total_label_rev
-FROM soundpub.royalties r
-LEFT JOIN soundpub.profiles p ON p.id = r.label_user_id
+FROM Soundpub.royalties r
+LEFT JOIN Soundpub.profiles p ON p.id = r.label_user_id
 WHERE r.label_name ILIKE '%KADITRUDIT%'
 GROUP BY r.label_name, r.label_user_id, p.full_name
 ORDER BY rows DESC;
@@ -50,7 +50,7 @@ ORDER BY rows DESC;
 -- (This mirrors what Dashboard.tsx calculates)
 WITH label_profile AS (
   SELECT id, full_name, balance, label_revenue
-  FROM soundpub.profiles
+  FROM Soundpub.profiles
   WHERE full_name ILIKE '%KADITRUDIT%'
   LIMIT 1
 )
@@ -64,5 +64,5 @@ SELECT
   COALESCE(SUM(r.label_revenue), 0)::numeric(14,2) AS expected_balance,
   COUNT(*) AS royalty_count
 FROM label_profile lp
-LEFT JOIN soundpub.royalties r ON r.label_user_id = lp.id
+LEFT JOIN Soundpub.royalties r ON r.label_user_id = lp.id
 GROUP BY lp.id, lp.full_name, lp.balance, lp.label_revenue;

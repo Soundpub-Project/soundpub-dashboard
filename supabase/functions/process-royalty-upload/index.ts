@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
 
-// Fixed schema configuration - always use 'soundpub' schema
-const DATABASE_SCHEMA = 'soundpub'
+// Fixed schema configuration - always use 'Soundpub' schema
+const DATABASE_SCHEMA = 'Soundpub'
 
 const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
   const existingDb = options.db || {}
@@ -17,14 +17,15 @@ const corsHeaders = {
 }
 
 const normalizeISRC = (isrc: string) => isrc.replace(/-/g, '').toUpperCase()
+const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
 
-const SOUNDPUB_LABEL_NAME = 'SOUNDPUB MUSIC'
-const SOUNDPUB_LABEL_ALIASES = new Set(['soundpub', 'soundpub music', 'soundpub music ecosystem'])
-const MANAGED_ARTIST_DOMAIN = 'managed.soundpub.local'
+const Soundpub_LABEL_NAME = 'Soundpub MUSIC'
+const Soundpub_LABEL_ALIASES = new Set(['Soundpub', 'Soundpub music', 'Soundpub music ecosystem'])
+const MANAGED_ARTIST_DOMAIN = 'managed.Soundpub.local'
 const normalizeName = (value: string | null | undefined) => (value || '').trim().replace(/\s+/g, ' ').toLowerCase()
 const slugify = (value: string | null | undefined) => normalizeName(value).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'artist'
-const isSoundpubLabel = (labelUserId: string | null | undefined, labelName: string | null | undefined, soundpubLabelId: string | null | undefined) => {
-  return (!!soundpubLabelId && labelUserId === soundpubLabelId) || SOUNDPUB_LABEL_ALIASES.has(normalizeName(labelName))
+const isSoundpubLabel = (labelUserId: string | null | undefined, labelName: string | null | undefined, SoundpubLabelId: string | null | undefined) => {
+  return (!!SoundpubLabelId && labelUserId === SoundpubLabelId) || Soundpub_LABEL_ALIASES.has(normalizeName(labelName))
 }
 
 Deno.serve(async (req) => {
@@ -59,7 +60,7 @@ Deno.serve(async (req) => {
       country: r.country.trim().toUpperCase(),
       sales_type: r.sales_type?.trim() || null,
       sales_unit: Number(r.sales_unit) || 0,
-      net_revenue: Number(r.net_revenue) || 0,
+      net_revenue: roundCurrency(Number(r.net_revenue) || 0),
     }))
 
     if (!validRows.length) return new Response(JSON.stringify({ success: false, error: 'No valid rows' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -152,31 +153,33 @@ Deno.serve(async (req) => {
     const relMap: Record<string, any> = {}
     ;(releaseData || []).forEach((r: any) => { relMap[r.id] = r })
 
-    const labelIds = [...new Set((releaseData || []).map((r: any) => r.label_id).filter(Boolean))]
-    const { data: labelData, error: labelError } = await supabaseAdmin.from('profiles').select('id, full_name').in('id', labelIds).eq('role', 'label')
-    if (labelError) console.warn('Label fetch failed:', labelError)
+    const { data: labelRoleData, error: labelRoleError } = await supabaseAdmin
+      .from('user_roles')
+      .select('user_id')
+      .eq('role', 'label')
+    if (labelRoleError) throw new Error(`Failed to load label roles: ${labelRoleError.message}`)
+    const labelRoleIds = [...new Set((labelRoleData || []).map((row: any) => row.user_id).filter(Boolean))]
+    const { data: labelData, error: labelError } = await supabaseAdmin
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', labelRoleIds)
+    if (labelError) throw new Error(`Failed to load label profiles: ${labelError.message}`)
     const labelMap: Record<string, string> = {}
     ;(labelData || []).forEach((l: any) => { labelMap[l.id] = l.full_name || '' })
 
-    const { data: soundpubLabelData, error: soundpubError } = await supabaseAdmin
+    const { data: SoundpubLabelData, error: SoundpubError } = await supabaseAdmin
       .from('profiles')
       .select('id')
-      .eq('role', 'label')
-      .ilike('full_name', '%soundpub%')
+      .in('id', labelRoleIds)
+      .ilike('full_name', '%Soundpub%')
       .limit(1)
       .single()
-    const soundpubLabelId = soundpubLabelData?.id || null
-
-    const labelNamesInRows = [...new Set(validRows.map((r: any) => normalizeName(r.label_name)).filter(Boolean))]
-    const { data: labelByName, error: labelByNameError } = await supabaseAdmin
-      .from('profiles')
-      .select('id, full_name')
-      .eq('role', 'label')
-    if (labelByNameError) console.warn('Label by name fetch failed:', labelByNameError)
+    if (SoundpubError || !SoundpubLabelData?.id) throw new Error(`Soundpub label profile not found: ${SoundpubError?.message || 'missing label profile'}`)
+    const SoundpubLabelId = SoundpubLabelData.id
 
     const nameToLabelId: Record<string, string | null> = {}
     const nameCounts: Record<string, number> = {}
-    ;(labelByName || []).forEach((l: any) => {
+    ;(labelData || []).forEach((l: any) => {
       const normalized = normalizeName(l.full_name)
       if (!normalized) return
       nameCounts[normalized] = (nameCounts[normalized] || 0) + 1
@@ -184,11 +187,17 @@ Deno.serve(async (req) => {
     })
     Object.keys(nameCounts).forEach(k => { if (nameCounts[k] > 1) nameToLabelId[k] = null })
 
+    const { data: artistRoleData, error: artistRoleError } = await supabaseAdmin
+      .from('user_roles')
+      .select('user_id')
+      .eq('role', 'artist')
+    if (artistRoleError) throw new Error(`Failed to load artist roles: ${artistRoleError.message}`)
+    const artistRoleIds = [...new Set((artistRoleData || []).map((row: any) => row.user_id).filter(Boolean))]
     const { data: allArtistData, error: allArtistError } = await supabaseAdmin
       .from('profiles')
-      .select('id, full_name, label_id')
-      .eq('role', 'artist')
-    if (allArtistError) console.warn('Artist fetch failed:', allArtistError)
+      .select('id, full_name, parent_label_id')
+      .in('id', artistRoleIds)
+    if (allArtistError) throw new Error(`Failed to load artist profiles: ${allArtistError.message}`)
 
     const artistByLabelAndName: Record<string, string> = {}
     const artistByName: Record<string, string | null> = {}
@@ -196,7 +205,7 @@ Deno.serve(async (req) => {
     ;(allArtistData || []).forEach((a: any) => {
       const normalized = normalizeName(a.full_name)
       if (!normalized) return
-      if (a.label_id) artistByLabelAndName[`${a.label_id}|${normalized}`] = a.id
+      if (a.parent_label_id) artistByLabelAndName[`${a.parent_label_id}|${normalized}`] = a.id
       artistNameCounts[normalized] = (artistNameCounts[normalized] || 0) + 1
       artistByName[normalized] = a.id
     })
@@ -267,18 +276,19 @@ Deno.serve(async (req) => {
         const { error: profileUpdateError } = await supabaseAdmin
           .from('profiles')
           .update({
-            role: 'artist',
             full_name: artistName,
-            label_id: labelId,
+            parent_label_id: labelId,
+            is_managed_artist: true,
             auth_user_status: 'managed_only',
-            email_visibility: 'hidden',
           })
           .eq('id', artistId)
 
-        if (profileUpdateError) {
-          console.error(`[Profile Update Failed] ${artistName}:`, profileUpdateError.message)
-          // Continue even if profile update fails, user is created
-        }
+        if (profileUpdateError) throw new Error(`[Profile Update Failed] ${artistName}: ${profileUpdateError.message}`)
+
+        const { error: roleInsertError } = await supabaseAdmin
+          .from('user_roles')
+          .insert({ user_id: artistId, role: 'artist' })
+        if (roleInsertError) throw new Error(`[Artist Role Insert Failed] ${artistName}: ${roleInsertError.message}`)
 
         managedArtistCache[cacheKey] = artistId
         managedArtistsCreated += 1
@@ -303,9 +313,9 @@ Deno.serve(async (req) => {
         const rel = track ? relMap[track.release_id] : null
         const sourceLabelName = r.label_name || (rel ? labelMap[rel.label_id] : '') || ''
         const matchedLabelId = (rel?.label_id) || nameToLabelId[normalizeName(sourceLabelName)] || null
-        const soundpubLabel = isSoundpubLabel(matchedLabelId, sourceLabelName, soundpubLabelId)
-        const labelName = soundpubLabel ? SOUNDPUB_LABEL_NAME : sourceLabelName
-        const labelUserId = soundpubLabel ? soundpubLabelId : matchedLabelId
+        const SoundpubLabel = isSoundpubLabel(matchedLabelId, sourceLabelName, SoundpubLabelId)
+        const labelName = SoundpubLabel ? Soundpub_LABEL_NAME : sourceLabelName
+        const labelUserId = SoundpubLabel ? SoundpubLabelId : matchedLabelId
         const artistName = r.artist || track?.artist_name || rel?.artist_name || ''
         
         // Priority: track.artist_user_id > release.artist_user_id > label/name lookup > managed artist fallback
@@ -316,10 +326,11 @@ Deno.serve(async (req) => {
           artistUserId = await createManagedArtist(artistName, labelUserId)
         }
 
-        // Revenue split: flat 70/21/9 for all labels (including Soundpub)
-        const adminShare = r.net_revenue * 0.09
-        const labelShare = artistUserId ? r.net_revenue * 0.21 : r.net_revenue * 0.91
-        const artistShare = artistUserId ? r.net_revenue * 0.70 : 0
+        if (!labelUserId) throw new Error(`No label recipient for ${r.isrc} (${sourceLabelName || 'missing label'})`)
+
+        const adminShare = roundCurrency(r.net_revenue * 0.09)
+        const artistShare = artistUserId ? roundCurrency(r.net_revenue * 0.70) : 0
+        const labelShare = roundCurrency(r.net_revenue - adminShare - artistShare)
 
         if (labelUserId) labelRevById[labelUserId] = (labelRevById[labelUserId] || 0) + labelShare
         if (labelName) labelRev[labelName] = (labelRev[labelName] || 0) + labelShare
@@ -342,10 +353,10 @@ Deno.serve(async (req) => {
           unit_penjualan: r.sales_unit,
           pendapatan_kotor_dsp: r.net_revenue,
           pendapatan_label_artis: r.net_revenue,
-          pendapatan_bersih_soundpub: adminShare,
+          pendapatan_bersih_Soundpub: adminShare,
           artist_revenue: artistShare,
           label_revenue: labelShare,
-          soundpub_revenue: adminShare,
+          Soundpub_revenue: adminShare,
           net_revenue: r.net_revenue,
           artist_user_id: artistUserId,
           label_user_id: labelUserId,
@@ -366,43 +377,9 @@ Deno.serve(async (req) => {
       inserted_records: inserted 
     }).eq('id', upload.id)
 
+    const { error: rebuildBalanceError } = await supabaseAdmin.rpc('rebuild_royalty_balances')
+    if (rebuildBalanceError) throw new Error(`Balance rebuild failed: ${rebuildBalanceError.message}`)
     const balanceErrors: string[] = []
-
-    // Rebuild royalty-derived balances from the whole royalties table
-    const { error: resetBalanceError } = await supabaseAdmin
-      .from('profiles')
-      .update({ balance: 0, artist_revenue: 0, label_revenue: 0 })
-      .not('id', 'is', null)
-    if (resetBalanceError) balanceErrors.push(`Balance reset failed: ${resetBalanceError.message}`)
-
-    const { data: allRoyaltyRowsForBalance, error: allRoyaltyError } = await supabaseAdmin
-      .from('royalties')
-      .select('artist_user_id,label_user_id,artist_revenue,label_revenue')
-    if (allRoyaltyError) balanceErrors.push(`Balance rebuild source failed: ${allRoyaltyError.message}`)
-
-    const rebuiltBalances: Record<string, { balance: number; artist_revenue: number; label_revenue: number }> = {}
-    ;(allRoyaltyRowsForBalance || []).forEach((royaltyRow: any) => {
-      if (royaltyRow.artist_user_id) {
-        rebuiltBalances[royaltyRow.artist_user_id] ||= { balance: 0, artist_revenue: 0, label_revenue: 0 }
-        const amount = Number(royaltyRow.artist_revenue || 0)
-        rebuiltBalances[royaltyRow.artist_user_id].balance += amount
-        rebuiltBalances[royaltyRow.artist_user_id].artist_revenue += amount
-      }
-      if (royaltyRow.label_user_id) {
-        rebuiltBalances[royaltyRow.label_user_id] ||= { balance: 0, artist_revenue: 0, label_revenue: 0 }
-        const amount = Number(royaltyRow.label_revenue || 0)
-        rebuiltBalances[royaltyRow.label_user_id].balance += amount
-        rebuiltBalances[royaltyRow.label_user_id].label_revenue += amount
-      }
-    })
-
-    for (const [profileId, totals] of Object.entries(rebuiltBalances)) {
-      const { error: rebuildProfileError } = await supabaseAdmin
-        .from('profiles')
-        .update(totals)
-        .eq('id', profileId)
-      if (rebuildProfileError) balanceErrors.push(`Balance rebuild failed: ${profileId}`)
-    }
 
     const uploadSummary = {
       ...(replaceExisting ? { replace_existing: true, replace_mode: normalizedReplaceMode, replace_periods: uploadedPeriods, replaced_uploads: replacedUploads, replaced_rows: replacedRows } : {}),
@@ -413,7 +390,7 @@ Deno.serve(async (req) => {
 
     // Final status update
     await supabaseAdmin.from('royalty_uploads').update({ 
-      status: 'completed',
+      status: 'success',
       summary: uploadSummary
     }).eq('id', upload.id)
 

@@ -7,7 +7,7 @@
 param(
     [string]$Host = "supabase.carubra.com",
     [string]$User = "postgres",
-    [string]$Database = "soundpub"
+    [string]$Database = "Soundpub"
 )
 
 Write-Host "`n"

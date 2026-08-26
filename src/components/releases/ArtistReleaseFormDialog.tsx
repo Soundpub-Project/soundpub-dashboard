@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { createXenditInvoice, openXenditInvoice } from '@/lib/xendit';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -574,19 +575,10 @@ export function ArtistReleaseFormDialog({
         }
       }
 
-      // Create invoice
-      const { data: invoiceData, error: invoiceError } = await supabase.functions.invoke('create-xendit-invoice', {
-        body: { release_id: releaseId },
-      });
+      const invoiceData = await createXenditInvoice(releaseId);
+      toast.success('Mengarahkan ke halaman pembayaran...');
+      openXenditInvoice(invoiceData.invoice_url);
 
-      if (invoiceError) throw new Error(invoiceError.message || 'Gagal membuat invoice');
-
-      if (invoiceData?.invoice_url) {
-        toast.success('Mengarahkan ke halaman pembayaran...');
-        window.location.href = invoiceData.invoice_url;
-      } else {
-        throw new Error('Invoice URL tidak ditemukan');
-      }
     } catch (error: any) {
       console.error('Payment error:', error);
       toast.error(error.message || 'Gagal memproses pembayaran');

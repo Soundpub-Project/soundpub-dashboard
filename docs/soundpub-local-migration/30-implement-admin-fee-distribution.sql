@@ -1,8 +1,8 @@
 ﻿-- =============================================
--- SOUNDPUB: IMPLEMENT ADMIN FEE DISTRIBUTION
+-- Soundpub: IMPLEMENT ADMIN FEE DISTRIBUTION
 -- Migration: 30-implement-admin-fee-distribution.sql
 -- Date: 2026-07-28
--- Purpose: Credit 9% admin fee to SoundPub Company profile
+-- Purpose: Credit 9% admin fee to Soundpub Company profile
 -- =============================================
 
 BEGIN;
@@ -10,27 +10,27 @@ BEGIN;
 -- =============================================
 -- STEP 1: Add admin_revenue column to profiles
 -- =============================================
-ALTER TABLE soundpub.profiles
+ALTER TABLE Soundpub.profiles
 ADD COLUMN IF NOT EXISTS admin_revenue DECIMAL(18, 2) DEFAULT 0;
 
-COMMENT ON COLUMN soundpub.profiles.admin_revenue IS 
+COMMENT ON COLUMN Soundpub.profiles.admin_revenue IS 
 'Admin/platform fee revenue (9% of royalties). Only used for company/superadmin accounts.';
 
 -- =============================================
--- STEP 2: Create SoundPub Company profile
+-- STEP 2: Create Soundpub Company profile
 -- =============================================
 
 -- Generate a fixed UUID for the company profile
--- Using a deterministic UUID based on "soundpub-company"
+-- Using a deterministic UUID based on "Soundpub-company"
 DO $$
 DECLARE
   company_profile_id UUID := 'a0000000-0000-0000-0000-000000000001'::UUID;
-  company_email TEXT := 'company@soundpub.com';
+  company_email TEXT := 'company@Soundpub.com';
   company_exists BOOLEAN;
 BEGIN
   -- Check if profile already exists
   SELECT EXISTS (
-    SELECT 1 FROM soundpub.profiles WHERE id = company_profile_id
+    SELECT 1 FROM Soundpub.profiles WHERE id = company_profile_id
   ) INTO company_exists;
 
   IF NOT company_exists THEN
@@ -51,19 +51,19 @@ BEGIN
       company_profile_id,
       '00000000-0000-0000-0000-000000000000',
       company_email,
-      crypt('SOUNDPUB-COMPANY-2026', gen_salt('bf')),
+      crypt('Soundpub-COMPANY-2026', gen_salt('bf')),
       now(),
       now(),
       now(),
       '{"provider":"email","providers":["email"]}'::jsonb,
-      '{"full_name":"SoundPub Company"}'::jsonb,
+      '{"full_name":"Soundpub Company"}'::jsonb,
       false,
       'authenticated'
     )
     ON CONFLICT (id) DO NOTHING;
 
     -- Create profile
-    INSERT INTO soundpub.profiles (
+    INSERT INTO Soundpub.profiles (
       id,
       email,
       full_name,
@@ -77,7 +77,7 @@ BEGIN
     ) VALUES (
       company_profile_id,
       company_email,
-      'SoundPub Company',
+      'Soundpub Company',
       'active',
       0,
       0,
@@ -89,24 +89,24 @@ BEGIN
     ON CONFLICT (id) DO NOTHING;
 
     -- Assign superadmin role
-    INSERT INTO soundpub.user_roles (user_id, role)
+    INSERT INTO Soundpub.user_roles (user_id, role)
     VALUES (company_profile_id, 'superadmin')
     ON CONFLICT (user_id) DO NOTHING;
 
-    RAISE NOTICE 'SoundPub Company profile created: %', company_profile_id;
+    RAISE NOTICE 'Soundpub Company profile created: %', company_profile_id;
   ELSE
-    RAISE NOTICE 'SoundPub Company profile already exists: %', company_profile_id;
+    RAISE NOTICE 'Soundpub Company profile already exists: %', company_profile_id;
   END IF;
 END $$;
 
 -- =============================================
 -- STEP 3: Store company profile ID in app_settings
 -- =============================================
-INSERT INTO soundpub.app_settings (key, value, description, value_type)
+INSERT INTO Soundpub.app_settings (key, value, description, value_type)
 VALUES (
-  'soundpub_company_profile_id',
+  'Soundpub_company_profile_id',
   'a0000000-0000-0000-0000-000000000001',
-  'UUID of the SoundPub Company profile where admin fees (9%) are credited',
+  'UUID of the Soundpub Company profile where admin fees (9%) are credited',
   'uuid'
 )
 ON CONFLICT (key) DO UPDATE 
@@ -119,7 +119,7 @@ SET value = EXCLUDED.value,
 -- =============================================
 
 -- 4.1: Reset all balances to 0
-UPDATE soundpub.profiles
+UPDATE Soundpub.profiles
 SET 
   balance = 0,
   artist_revenue = 0,
@@ -129,7 +129,7 @@ SET
 WHERE true;
 
 -- 4.2: Rebuild artist balances
-UPDATE soundpub.profiles p
+UPDATE Soundpub.profiles p
 SET 
   artist_revenue = COALESCE(artist_totals.total, 0),
   balance = COALESCE(artist_totals.total, 0),
@@ -138,14 +138,14 @@ FROM (
   SELECT 
     artist_user_id,
     SUM(artist_revenue) AS total
-  FROM soundpub.royalties
+  FROM Soundpub.royalties
   WHERE artist_user_id IS NOT NULL
   GROUP BY artist_user_id
 ) artist_totals
 WHERE p.id = artist_totals.artist_user_id;
 
 -- 4.3: Rebuild label balances
-UPDATE soundpub.profiles p
+UPDATE Soundpub.profiles p
 SET 
   label_revenue = COALESCE(label_totals.total, 0),
   balance = COALESCE(label_totals.total, 0),
@@ -154,7 +154,7 @@ FROM (
   SELECT 
     label_user_id,
     SUM(label_revenue) AS total
-  FROM soundpub.royalties
+  FROM Soundpub.royalties
   WHERE label_user_id IS NOT NULL
   GROUP BY label_user_id
 ) label_totals
@@ -167,12 +167,12 @@ DECLARE
   total_admin_fee DECIMAL(18, 2);
 BEGIN
   -- Calculate total admin fees from all royalties
-  SELECT COALESCE(SUM(soundpub_revenue), 0)
+  SELECT COALESCE(SUM(Soundpub_revenue), 0)
   INTO total_admin_fee
-  FROM soundpub.royalties;
+  FROM Soundpub.royalties;
 
-  -- Credit to SoundPub Company profile
-  UPDATE soundpub.profiles
+  -- Credit to Soundpub Company profile
+  UPDATE Soundpub.profiles
   SET 
     admin_revenue = total_admin_fee,
     balance = total_admin_fee,
@@ -185,26 +185,26 @@ END $$;
 -- =============================================
 -- STEP 5: Create helper function to get company profile ID
 -- =============================================
-CREATE OR REPLACE FUNCTION soundpub.get_company_profile_id()
+CREATE OR REPLACE FUNCTION Soundpub.get_company_profile_id()
 RETURNS UUID
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = soundpub
+SET search_path = Soundpub
 AS $$
 DECLARE
   profile_id UUID;
 BEGIN
   SELECT value::UUID
   INTO profile_id
-  FROM soundpub.app_settings
-  WHERE key = 'soundpub_company_profile_id';
+  FROM Soundpub.app_settings
+  WHERE key = 'Soundpub_company_profile_id';
   
   RETURN profile_id;
 END;
 $$;
 
-COMMENT ON FUNCTION soundpub.get_company_profile_id() IS
-'Returns the UUID of the SoundPub Company profile where admin fees are credited';
+COMMENT ON FUNCTION Soundpub.get_company_profile_id() IS
+'Returns the UUID of the Soundpub Company profile where admin fees are credited';
 
 -- =============================================
 -- STEP 6: Verification queries
@@ -212,7 +212,7 @@ COMMENT ON FUNCTION soundpub.get_company_profile_id() IS
 
 -- Show company profile balance
 SELECT 
-  '=== SOUNDPUB COMPANY PROFILE ===' AS section,
+  '=== Soundpub COMPANY PROFILE ===' AS section,
   id,
   full_name,
   email,
@@ -220,7 +220,7 @@ SELECT
   admin_revenue,
   artist_revenue,
   label_revenue
-FROM soundpub.profiles
+FROM Soundpub.profiles
 WHERE id = 'a0000000-0000-0000-0000-000000000001'::UUID;
 
 -- Show total admin fees from royalties
@@ -230,18 +230,18 @@ SELECT
   SUM(net_revenue) AS total_gross_revenue,
   SUM(artist_revenue) AS total_artist_share,
   SUM(label_revenue) AS total_label_share,
-  SUM(soundpub_revenue) AS total_admin_fee,
-  ROUND((SUM(soundpub_revenue) / NULLIF(SUM(net_revenue), 0) * 100)::NUMERIC, 2) AS admin_fee_percentage
-FROM soundpub.royalties;
+  SUM(Soundpub_revenue) AS total_admin_fee,
+  ROUND((SUM(Soundpub_revenue) / NULLIF(SUM(net_revenue), 0) * 100)::NUMERIC, 2) AS admin_fee_percentage
+FROM Soundpub.royalties;
 
 -- Show admin fees per period
 SELECT 
   '=== ADMIN FEES PER PERIOD ===' AS section,
   period,
-  SUM(soundpub_revenue) AS admin_fee,
+  SUM(Soundpub_revenue) AS admin_fee,
   SUM(net_revenue) AS gross_revenue,
-  ROUND((SUM(soundpub_revenue) / NULLIF(SUM(net_revenue), 0) * 100)::NUMERIC, 2) AS fee_percentage
-FROM soundpub.royalties
+  ROUND((SUM(Soundpub_revenue) / NULLIF(SUM(net_revenue), 0) * 100)::NUMERIC, 2) AS fee_percentage
+FROM Soundpub.royalties
 GROUP BY period
 ORDER BY period DESC
 LIMIT 10;
@@ -255,8 +255,8 @@ SELECT
   SUM(artist_revenue) AS total_artist_revenue,
   SUM(label_revenue) AS total_label_revenue,
   SUM(admin_revenue) AS total_admin_revenue
-FROM soundpub.profiles p
-JOIN soundpub.user_roles ur ON ur.user_id = p.id
+FROM Soundpub.profiles p
+JOIN Soundpub.user_roles ur ON ur.user_id = p.id
 GROUP BY role
 ORDER BY role::text;
 
@@ -266,26 +266,26 @@ COMMIT;
 -- MANUAL VERIFICATION STEPS
 -- =============================================
 -- 1. Check company profile exists:
---    SELECT * FROM soundpub.profiles WHERE id = 'a0000000-0000-0000-0000-000000000001'::UUID;
+--    SELECT * FROM Soundpub.profiles WHERE id = 'a0000000-0000-0000-0000-000000000001'::UUID;
 --
 -- 2. Check admin_revenue is populated:
---    SELECT admin_revenue FROM soundpub.profiles WHERE id = 'a0000000-0000-0000-0000-000000000001'::UUID;
+--    SELECT admin_revenue FROM Soundpub.profiles WHERE id = 'a0000000-0000-0000-0000-000000000001'::UUID;
 --
 -- 3. Check total admin fees match:
---    SELECT SUM(soundpub_revenue) FROM soundpub.royalties;
+--    SELECT SUM(Soundpub_revenue) FROM Soundpub.royalties;
 --
 -- 4. Test balance rebuild:
---    SELECT soundpub.get_company_profile_id();
+--    SELECT Soundpub.get_company_profile_id();
 --
 -- 5. Check app_settings:
---    SELECT * FROM soundpub.app_settings WHERE key = 'soundpub_company_profile_id';
+--    SELECT * FROM Soundpub.app_settings WHERE key = 'Soundpub_company_profile_id';
 
 -- =============================================
 -- ROLLBACK (if needed)
 -- =============================================
--- DROP FUNCTION IF EXISTS soundpub.get_company_profile_id();
--- DELETE FROM soundpub.app_settings WHERE key = 'soundpub_company_profile_id';
--- DELETE FROM soundpub.user_roles WHERE user_id = 'a0000000-0000-0000-0000-000000000001'::UUID;
--- DELETE FROM soundpub.profiles WHERE id = 'a0000000-0000-0000-0000-000000000001'::UUID;
+-- DROP FUNCTION IF EXISTS Soundpub.get_company_profile_id();
+-- DELETE FROM Soundpub.app_settings WHERE key = 'Soundpub_company_profile_id';
+-- DELETE FROM Soundpub.user_roles WHERE user_id = 'a0000000-0000-0000-0000-000000000001'::UUID;
+-- DELETE FROM Soundpub.profiles WHERE id = 'a0000000-0000-0000-0000-000000000001'::UUID;
 -- DELETE FROM auth.users WHERE id = 'a0000000-0000-0000-0000-000000000001'::UUID;
--- ALTER TABLE soundpub.profiles DROP COLUMN IF EXISTS admin_revenue;
+-- ALTER TABLE Soundpub.profiles DROP COLUMN IF EXISTS admin_revenue;

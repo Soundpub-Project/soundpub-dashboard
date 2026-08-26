@@ -178,7 +178,7 @@ These files are related to the same issue:
 | File | Status | Notes |
 |------|--------|-------|
 | `41-check-schema-permissions.sql` | Diagnostic | Use for checking current state |
-| `42-grant-create-permission-soundpub.sql` | Outdated | Replaced by 46 |
+| `42-grant-create-permission-Soundpub.sql` | Outdated | Replaced by 46 |
 | `43-create-trigger-as-supabase-admin.sql` | Active | Run AFTER this fix |
 | `44-create-trigger-direct-as-admin.sql` | Active | Run AFTER this fix |
 | `45-fix-schema-ownership.sql` | Outdated | Replaced by 46 |
@@ -193,14 +193,14 @@ After applying the fix, use these to verify:
 ```sql
 -- From 46-fix-schema-ownership-comprehensive.sql (end section)
 SELECT nspname, has_schema_privilege('postgres', nspname, 'CREATE') 
-FROM pg_namespace WHERE nspname = 'soundpub';
+FROM pg_namespace WHERE nspname = 'Soundpub';
 ```
 
 **Object permissions:**
 ```sql
 -- From EXECUTION-CHECKLIST.md (step 5)
-SELECT tablename, has_table_privilege('postgres', 'soundpub.' || tablename, 'SELECT')
-FROM pg_tables WHERE schemaname = 'soundpub';
+SELECT tablename, has_table_privilege('postgres', 'Soundpub.' || tablename, 'SELECT')
+FROM pg_tables WHERE schemaname = 'Soundpub';
 ```
 
 ---

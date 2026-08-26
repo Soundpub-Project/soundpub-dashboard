@@ -2,17 +2,17 @@
 
 ## 📋 Problem Summary
 
-The `soundpub` schema is owned by `supabase_admin`, and the `postgres` user cannot create triggers or modify the schema because it lacks the necessary permissions.
+The `Soundpub` schema is owned by `supabase_admin`, and the `postgres` user cannot create triggers or modify the schema because it lacks the necessary permissions.
 
 **Error encountered:**
 ```
-ERROR:  must be owner of schema soundpub
-WARNING:  no privileges were granted for "soundpub"
+ERROR:  must be owner of schema Soundpub
+WARNING:  no privileges were granted for "Soundpub"
 ```
 
 ## 🎯 Root Cause
 
-1. Schema `soundpub` is owned by `supabase_admin`
+1. Schema `Soundpub` is owned by `supabase_admin`
 2. User `postgres` doesn't have CREATE privilege on the schema
 3. Without CREATE privilege, triggers cannot be created
 4. Attempted `ALTER SCHEMA` commands fail because `postgres` is not the owner
@@ -43,22 +43,22 @@ bash /path/to/fix-schema-ownership.sh
 
 # Option B: Run commands directly
 docker exec -it supabase-db psql -U supabase_admin -d postgres -c "
-  ALTER SCHEMA soundpub OWNER TO supabase_admin;
-  GRANT USAGE, CREATE ON SCHEMA soundpub TO postgres;
-  GRANT ALL ON ALL TABLES IN SCHEMA soundpub TO postgres;
-  GRANT ALL ON ALL SEQUENCES IN SCHEMA soundpub TO postgres;
-  GRANT ALL ON ALL FUNCTIONS IN SCHEMA soundpub TO postgres;
+  ALTER SCHEMA Soundpub OWNER TO supabase_admin;
+  GRANT USAGE, CREATE ON SCHEMA Soundpub TO postgres;
+  GRANT ALL ON ALL TABLES IN SCHEMA Soundpub TO postgres;
+  GRANT ALL ON ALL SEQUENCES IN SCHEMA Soundpub TO postgres;
+  GRANT ALL ON ALL FUNCTIONS IN SCHEMA Soundpub TO postgres;
   
-  ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA soundpub 
+  ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA Soundpub 
     GRANT ALL ON TABLES TO postgres;
-  ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA soundpub 
+  ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA Soundpub 
     GRANT ALL ON SEQUENCES TO postgres;
-  ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA soundpub 
+  ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA Soundpub 
     GRANT ALL ON FUNCTIONS TO postgres;
   
-  GRANT USAGE ON SCHEMA soundpub TO authenticated, service_role, anon, authenticator;
-  GRANT SELECT ON ALL TABLES IN SCHEMA soundpub TO authenticated;
-  GRANT ALL ON ALL TABLES IN SCHEMA soundpub TO service_role;
+  GRANT USAGE ON SCHEMA Soundpub TO authenticated, service_role, anon, authenticator;
+  GRANT SELECT ON ALL TABLES IN SCHEMA Soundpub TO authenticated;
+  GRANT ALL ON ALL TABLES IN SCHEMA Soundpub TO service_role;
 "
 ```
 
@@ -72,7 +72,7 @@ docker exec -it supabase-db psql -U postgres -d postgres -c "
     has_schema_privilege('postgres', nspname, 'CREATE') AS can_create,
     has_schema_privilege('postgres', nspname, 'USAGE') AS can_use
   FROM pg_namespace 
-  WHERE nspname = 'soundpub';
+  WHERE nspname = 'Soundpub';
 "
 ```
 
@@ -80,7 +80,7 @@ Expected output:
 ```
  schema_name |     owner      | can_create | can_use
 -------------+----------------+------------+---------
- soundpub    | supabase_admin | t          | t
+ Soundpub    | supabase_admin | t          | t
 ```
 
 ### Method 2: SQL Editor with Role Switch
@@ -95,22 +95,22 @@ If you have access to Supabase Studio SQL Editor:
 -- File: 46-fix-schema-ownership-comprehensive.sql
 SET ROLE supabase_admin;
 
-ALTER SCHEMA soundpub OWNER TO supabase_admin;
-GRANT USAGE, CREATE ON SCHEMA soundpub TO postgres;
-GRANT ALL ON ALL TABLES IN SCHEMA soundpub TO postgres;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA soundpub TO postgres;
-GRANT ALL ON ALL FUNCTIONS IN SCHEMA soundpub TO postgres;
+ALTER SCHEMA Soundpub OWNER TO supabase_admin;
+GRANT USAGE, CREATE ON SCHEMA Soundpub TO postgres;
+GRANT ALL ON ALL TABLES IN SCHEMA Soundpub TO postgres;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA Soundpub TO postgres;
+GRANT ALL ON ALL FUNCTIONS IN SCHEMA Soundpub TO postgres;
 
-ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA soundpub 
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA Soundpub 
   GRANT ALL ON TABLES TO postgres;
-ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA soundpub 
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA Soundpub 
   GRANT ALL ON SEQUENCES TO postgres;
-ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA soundpub 
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA Soundpub 
   GRANT ALL ON FUNCTIONS TO postgres;
 
-GRANT USAGE ON SCHEMA soundpub TO authenticated, service_role, anon, authenticator;
-GRANT SELECT ON ALL TABLES IN SCHEMA soundpub TO authenticated;
-GRANT ALL ON ALL TABLES IN SCHEMA soundpub TO service_role;
+GRANT USAGE ON SCHEMA Soundpub TO authenticated, service_role, anon, authenticator;
+GRANT SELECT ON ALL TABLES IN SCHEMA Soundpub TO authenticated;
+GRANT ALL ON ALL TABLES IN SCHEMA Soundpub TO service_role;
 
 RESET ROLE;
 
@@ -120,7 +120,7 @@ SELECT
   nspowner::regrole AS owner,
   has_schema_privilege('postgres', nspname, 'CREATE') AS can_create
 FROM pg_namespace 
-WHERE nspname = 'soundpub';
+WHERE nspname = 'Soundpub';
 ```
 
 ### Method 3: Direct psql Connection
@@ -149,7 +149,7 @@ SELECT
   has_schema_privilege('postgres', nspname, 'USAGE') AS postgres_can_use,
   has_schema_privilege('authenticated', nspname, 'USAGE') AS authenticated_can_use
 FROM pg_namespace 
-WHERE nspname = 'soundpub';
+WHERE nspname = 'Soundpub';
 ```
 
 **Expected:**
@@ -164,10 +164,10 @@ WHERE nspname = 'soundpub';
 SELECT 
   tablename,
   tableowner,
-  has_table_privilege('postgres', 'soundpub.' || tablename, 'SELECT') AS can_select,
-  has_table_privilege('postgres', 'soundpub.' || tablename, 'INSERT') AS can_insert
+  has_table_privilege('postgres', 'Soundpub.' || tablename, 'SELECT') AS can_select,
+  has_table_privilege('postgres', 'Soundpub.' || tablename, 'INSERT') AS can_insert
 FROM pg_tables
-WHERE schemaname = 'soundpub'
+WHERE schemaname = 'Soundpub'
 ORDER BY tablename
 LIMIT 5;
 ```
@@ -178,14 +178,14 @@ LIMIT 5;
 
 ```sql
 -- This should now work without errors
-CREATE OR REPLACE FUNCTION soundpub.test_function()
+CREATE OR REPLACE FUNCTION Soundpub.test_function()
 RETURNS TRIGGER AS $$
 BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-DROP FUNCTION IF EXISTS soundpub.test_function();
+DROP FUNCTION IF EXISTS Soundpub.test_function();
 ```
 
 **Expected:** No errors, function created and dropped successfully
@@ -208,13 +208,13 @@ Once the schema ownership is fixed:
    ```sql
    SELECT trigger_name, event_object_table, action_timing
    FROM information_schema.triggers
-   WHERE trigger_schema = 'soundpub'
+   WHERE trigger_schema = 'Soundpub'
    ORDER BY trigger_name;
    ```
 
 3. ✅ Test user creation flow:
    - Create a new user via your application
-   - Check if they are automatically assigned to soundpub label
+   - Check if they are automatically assigned to Soundpub label
    - Verify they get the 'artist' role automatically
 
 ## 🐛 Troubleshooting
@@ -226,7 +226,7 @@ Once the schema ownership is fixed:
 docker exec -it supabase-db psql -U supabase_admin -d postgres
 ```
 
-### Issue: "permission denied for schema soundpub"
+### Issue: "permission denied for schema Soundpub"
 
 **Cause:** The fix wasn't applied with correct permissions
 
@@ -236,20 +236,20 @@ docker exec -it supabase-db psql -U supabase_admin -d postgres
 
 **Solution:** Check if postgres has CREATE privilege:
 ```sql
-SELECT has_schema_privilege('postgres', 'soundpub', 'CREATE');
+SELECT has_schema_privilege('postgres', 'Soundpub', 'CREATE');
 ```
 
 If false, re-run the fix script.
 
-### Issue: API can't access soundpub tables
+### Issue: API can't access Soundpub tables
 
 **Cause:** Missing grants to authenticated/service_role
 
 **Solution:** Run these additional grants:
 ```sql
-GRANT USAGE ON SCHEMA soundpub TO authenticated, service_role, anon;
-GRANT SELECT ON ALL TABLES IN SCHEMA soundpub TO authenticated;
-GRANT ALL ON ALL TABLES IN SCHEMA soundpub TO service_role;
+GRANT USAGE ON SCHEMA Soundpub TO authenticated, service_role, anon;
+GRANT SELECT ON ALL TABLES IN SCHEMA Soundpub TO authenticated;
+GRANT ALL ON ALL TABLES IN SCHEMA Soundpub TO service_role;
 ```
 
 ## 📊 Technical Details
@@ -290,17 +290,17 @@ If you encounter issues:
 
 1. Check the error message carefully
 2. Verify which user is running the command (`SELECT current_user;`)
-3. Check schema ownership (`SELECT nspowner::regrole FROM pg_namespace WHERE nspname = 'soundpub';`)
+3. Check schema ownership (`SELECT nspowner::regrole FROM pg_namespace WHERE nspname = 'Soundpub';`)
 4. Review PostgreSQL logs for detailed errors
 
 ## ✅ Success Criteria
 
 You'll know the fix worked when:
 
-- ✅ `postgres` user can create triggers on `soundpub.profiles`
+- ✅ `postgres` user can create triggers on `Soundpub.profiles`
 - ✅ No "must be owner of schema" errors
 - ✅ Triggers execute successfully on INSERT
-- ✅ New users are automatically assigned to soundpub label
+- ✅ New users are automatically assigned to Soundpub label
 - ✅ New users get the 'artist' role automatically
 
 ---

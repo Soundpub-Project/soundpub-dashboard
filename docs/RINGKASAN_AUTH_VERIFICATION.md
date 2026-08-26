@@ -1,7 +1,7 @@
 ﻿# 📋 RINGKASAN RANCANGAN - AUTH VERIFICATION SYSTEM
 
 **Tanggal:** 2026-08-14  
-**Proyek:** SoundPub Dashboard  
+**Proyek:** Soundpub Dashboard  
 **Fitur:** Password Reset & Email Verification  
 
 ---
@@ -34,7 +34,7 @@ Menambahkan sistem **Lupa Password** dan **Verifikasi Email** untuk user yang me
 
 ### A. Database Changes
 
-**1. Tambahan Kolom di `soundpub.profiles`:**
+**1. Tambahan Kolom di `Soundpub.profiles`:**
 ```sql
 - email_verified (BOOLEAN)
 - verification_token (TEXT)
@@ -45,12 +45,12 @@ Menambahkan sistem **Lupa Password** dan **Verifikasi Email** untuk user yang me
 - password_reset_sent_at (TIMESTAMPTZ)
 ```
 
-**2. Table Baru `soundpub.auth_events`:**
+**2. Table Baru `Soundpub.auth_events`:**
 - Audit log untuk semua aktivitas auth
 - Track: password reset, email verification, login attempts
 - Retention: 90 hari
 
-**3. Table Baru `soundpub.rate_limits`:**
+**3. Table Baru `Soundpub.rate_limits`:**
 - Anti-spam protection
 - Limits: 3 requests/hour per email
 - Auto cleanup setelah 24 jam
@@ -139,14 +139,14 @@ Week 5+: Iteration
 **Phase 1: Database (Day 1-2)**
 ```bash
 # Backup
-pg_dump soundpub > backup_20260814.sql
+pg_dump Soundpub > backup_20260814.sql
 
 # Run migration
-psql soundpub < migrations-complete/002_auth_verification_system.sql
+psql Soundpub < migrations-complete/002_auth_verification_system.sql
 
 # Verify
-psql soundpub -c "SELECT column_name FROM information_schema.columns 
-                  WHERE table_schema='soundpub' AND table_name='profiles';"
+psql Soundpub -c "SELECT column_name FROM information_schema.columns 
+                  WHERE table_schema='Soundpub' AND table_name='profiles';"
 ```
 
 **Phase 2: Backend Functions (Day 3-7)**
@@ -167,7 +167,7 @@ pnpm dev
 pnpm build
 
 # Deploy
-docker build -t soundpub-dashboard:latest .
+docker build -t Soundpub-dashboard:latest .
 docker-compose up -d
 ```
 
@@ -199,24 +199,24 @@ docker-compose up -d
 SUPABASE_URL=https://supabase.carubra.com
 SUPABASE_ANON_KEY=<your-anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
-DATABASE_SCHEMA=soundpub
+DATABASE_SCHEMA=Soundpub
 LOVABLE_API_KEY=<your-lovable-key>
 GOOGLE_MAIL_API_KEY=<your-gmail-key>
-APP_URL=https://dashboard.soundpub.xyz
+APP_URL=https://dashboard.Soundpub.xyz
 ```
 
 ### Migration
 ```bash
 # 1. Connect to database
-psql -h localhost -U postgres -d soundpub
+psql -h localhost -U postgres -d Soundpub
 
 # 2. Run migration
 \i migrations-complete/002_auth_verification_system.sql
 
 # 3. Check results
-SELECT * FROM soundpub.profiles LIMIT 1;
-SELECT * FROM soundpub.auth_events LIMIT 1;
-SELECT * FROM soundpub.rate_limits LIMIT 1;
+SELECT * FROM Soundpub.profiles LIMIT 1;
+SELECT * FROM Soundpub.auth_events LIMIT 1;
+SELECT * FROM Soundpub.rate_limits LIMIT 1;
 ```
 
 ### Testing
@@ -239,13 +239,13 @@ curl -X POST https://supabase.carubra.com/functions/v1/verify-email \
 ### Email tidak terkirim
 ```sql
 -- Check email logs
-SELECT * FROM soundpub.email_send_log 
+SELECT * FROM Soundpub.email_send_log 
 WHERE recipient_email = 'user@example.com' 
 ORDER BY created_at DESC LIMIT 10;
 
 -- Check error messages
 SELECT status, error_message, COUNT(*) 
-FROM soundpub.email_send_log 
+FROM Soundpub.email_send_log 
 GROUP BY status, error_message;
 ```
 
@@ -253,21 +253,21 @@ GROUP BY status, error_message;
 ```sql
 -- Check token existence
 SELECT id, email, verification_token, verification_token_expires_at 
-FROM soundpub.profiles 
+FROM Soundpub.profiles 
 WHERE verification_token = 'token-here';
 
 -- Clear expired tokens manually
-SELECT soundpub.cleanup_expired_tokens();
+SELECT Soundpub.cleanup_expired_tokens();
 ```
 
 ### Rate limit false positive
 ```sql
 -- Check rate limits
-SELECT * FROM soundpub.rate_limits 
+SELECT * FROM Soundpub.rate_limits 
 WHERE identifier = 'user@example.com';
 
 -- Reset rate limit manually
-DELETE FROM soundpub.rate_limits 
+DELETE FROM Soundpub.rate_limits 
 WHERE identifier = 'user@example.com' 
   AND action_type = 'password_reset';
 ```
@@ -275,7 +275,7 @@ WHERE identifier = 'user@example.com'
 ### User stuck in unverified state
 ```sql
 -- Force verify user
-UPDATE soundpub.profiles 
+UPDATE Soundpub.profiles 
 SET email_verified = true 
 WHERE email = 'user@example.com';
 
@@ -294,23 +294,23 @@ WHERE email = 'user@example.com';
 -- Email verification rate (7 days)
 SELECT 
   COUNT(*) FILTER (WHERE email_verified = true) * 100.0 / COUNT(*) AS verification_rate
-FROM soundpub.profiles
+FROM Soundpub.profiles
 WHERE created_at >= NOW() - INTERVAL '7 days';
 
 -- Password reset requests (today)
 SELECT COUNT(*) AS reset_requests
-FROM soundpub.auth_events
+FROM Soundpub.auth_events
 WHERE event_type = 'password_reset_requested'
   AND created_at >= CURRENT_DATE;
 
 -- Rate limit violations
 SELECT COUNT(*) AS blocked_users
-FROM soundpub.rate_limits
+FROM Soundpub.rate_limits
 WHERE blocked_until > NOW();
 
 -- Failed verifications (today)
 SELECT COUNT(*) AS failed_verifications
-FROM soundpub.auth_events
+FROM Soundpub.auth_events
 WHERE event_type = 'email_verification_failed'
   AND created_at >= CURRENT_DATE;
 ```
@@ -331,7 +331,7 @@ WHERE event_type = 'email_verification_failed'
 
 ## 📞 KONTAK & SUPPORT
 
-**Questions?** dev@soundpub.xyz  
+**Questions?** dev@Soundpub.xyz  
 **Documentation:** `/docs/RANCANGAN_AUTH_VERIFICATION.md`  
 **Migration Script:** `/migrations-complete/002_auth_verification_system.sql`
 
@@ -354,4 +354,4 @@ WHERE event_type = 'email_verification_failed'
 **Version:** 1.0  
 **Last Updated:** 2026-08-14
 
-🎵 **SoundPub - Empowering Musicians, Securing Accounts** 🎵
+🎵 **Soundpub - Empowering Musicians, Securing Accounts** 🎵

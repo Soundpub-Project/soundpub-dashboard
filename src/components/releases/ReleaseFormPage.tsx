@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -32,7 +32,8 @@ import {
   Trash2, 
   Music, 
   ImageIcon,
-  UserPlus
+  UserPlus,
+  ChevronDown
 } from 'lucide-react';
 import {
   Command,
@@ -53,6 +54,7 @@ import { cn } from '@/lib/utils';
 import { MediaUploadSection } from './MediaUploadSection';
 import { ArtistSelector } from './ArtistSelector';
 import { ContributorSelector } from './ContributorSelector';
+import { createXenditInvoice, openXenditInvoice } from '@/lib/xendit';
 
 // Genre list
 const GENRE_LIST = [
@@ -179,6 +181,7 @@ export function ReleaseFormPage({
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [coverError, setCoverError] = useState<string | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [labels, setLabels] = useState<LabelProfile[]>([]);
   const [loadingLabels, setLoadingLabels] = useState(false);
@@ -191,6 +194,7 @@ export function ReleaseFormPage({
   const [expandedTracks, setExpandedTracks] = useState<Record<number, boolean>>({ 0: true });
 
   const isEditMode = !!release;
+  const areTrackCreditsRequired = isArtist || isLabel;
 
   const form = useForm<ReleaseFormValues>({
     resolver: zodResolver(releaseFormSchema),
@@ -372,6 +376,7 @@ export function ReleaseFormPage({
       // Always reset cover state first when dialog opens
       setCoverFile(null);
       setCoverPreview(null);
+      setCoverError(null);
       
       if (release) {
         loadReleaseData();
@@ -415,6 +420,7 @@ export function ReleaseFormPage({
       // Reset everything when dialog closes
       setCoverFile(null);
       setCoverPreview(null);
+      setCoverError(null);
       setLabelArtists([]);
     }
   }, [open, release?.id]);
@@ -503,6 +509,15 @@ export function ReleaseFormPage({
 
     setCoverFile(file);
     setCoverPreview(URL.createObjectURL(file));
+    setCoverError(null);
+  };
+
+  const validateCover = () => {
+    if (lyricsOnlyMode || coverPreview) return true;
+
+    setCoverError('Cover art wajib diupload');
+    toast.error('Upload cover art sebelum melanjutkan');
+    return false;
   };
 
   // Upload cover to Supabase Storage
@@ -577,6 +592,14 @@ export function ReleaseFormPage({
   const onSubmit = async (values: ReleaseFormValues) => {
     if (!user) {
       toast.error('Anda harus login terlebih dahulu');
+      return;
+    }
+
+    if (!validateCover()) {
+      return;
+    }
+
+    if (!lyricsOnlyMode && areTrackCreditsRequired && !validateRequiredTrackCredits(values.tracks)) {
       return;
     }
 
@@ -785,14 +808,22 @@ export function ReleaseFormPage({
   };
 
   const handlePayment = async () => {
+    if (!validateCover()) {
+      return;
+    }
+
     // First validate and save the release
     const isValid = await form.trigger();
     if (!isValid) {
       toast.error('Mohon lengkapi semua field yang wajib diisi');
       return;
     }
-    
+
     const values = form.getValues();
+    if (areTrackCreditsRequired && !validateRequiredTrackCredits(values.tracks)) {
+      return;
+    }
+
     if (!user) return;
 
     setPaymentLoading(true);
@@ -873,19 +904,9 @@ export function ReleaseFormPage({
         if (tracksError) throw tracksError;
       }
 
-      // Call create-xendit-invoice
-      const { data: invoiceData, error: invoiceError } = await supabase.functions.invoke('create-xendit-invoice', {
-        body: { release_id: releaseId },
-      });
-
-      if (invoiceError) throw new Error(invoiceError.message || 'Gagal membuat invoice pembayaran');
-      
-      if (invoiceData?.invoice_url) {
-        toast.success(`Mengarahkan ke halaman pembayaran...`);
-        window.location.href = invoiceData.invoice_url;
-      } else {
-        throw new Error('Invoice URL tidak ditemukan');
-      }
+      const invoiceData = await createXenditInvoice(releaseId);
+      toast.success('Mengarahkan ke halaman pembayaran...');
+      openXenditInvoice(invoiceData.invoice_url);
 
     } catch (error: any) {
       console.error('Payment error:', error);
@@ -911,6 +932,40 @@ export function ReleaseFormPage({
       duration: null,
     });
     setExpandedTracks(prev => ({ ...prev, [trackFields.length]: true }));
+  };
+
+  const validateRequiredTrackCredits = (tracks: ReleaseFormValues['tracks']) => {
+    let isValid = true;
+
+    tracks.forEach((track, trackIndex) => {
+      if (!track.composer?.trim()) {
+        form.setError(`tracks.${trackIndex}.composer`, {
+          type: 'required',
+          message: 'Composer wajib diisi',
+        });
+        isValid = false;
+      }
+
+      if (!track.lyricist?.trim()) {
+        form.setError(`tracks.${trackIndex}.lyricist`, {
+          type: 'required',
+          message: 'Lyricist wajib diisi',
+        });
+        isValid = false;
+      }
+    });
+
+    if (!isValid) {
+      setCurrentStep(2);
+      onStepChange?.(2);
+      setExpandedTracks(tracks.reduce<Record<number, boolean>>((expanded, _, index) => {
+        expanded[index] = true;
+        return expanded;
+      }, {}));
+      toast.error('Composer dan lyricist wajib diisi untuk artist dan label');
+    }
+
+    return isValid;
   };
 
   // NOTE: ArtistSelector component is now imported from ./ArtistSelector.tsx
@@ -1000,6 +1055,10 @@ export function ReleaseFormPage({
   };
 
   const handleNextStep = async () => {
+    if (!validateCover()) {
+      return;
+    }
+
     const fieldsToValidate: Array<keyof ReleaseFormValues> = ['title', 'artist_name', 'release_type'];
     if (isAdmin) fieldsToValidate.push('label_id');
 
@@ -1038,7 +1097,7 @@ export function ReleaseFormPage({
               {/* Cover Upload - Hidden in lyricsOnlyMode */}
               {!lyricsOnlyMode && currentStep === 1 && (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Cover Art</label>
+                  <label className="text-sm font-medium">Cover Art *</label>
                   <div className="flex items-start gap-4">
                     <div
                       className="w-32 h-32 rounded-lg border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-muted/50 cursor-pointer hover:border-primary/50 transition-colors"
@@ -1079,6 +1138,7 @@ export function ReleaseFormPage({
                           onClick={() => {
                             setCoverFile(null);
                             setCoverPreview(null);
+                            setCoverError('Cover art wajib diupload');
                           }}
                         >
                           <X className="h-4 w-4 mr-1" />
@@ -1087,6 +1147,7 @@ export function ReleaseFormPage({
                       )}
                     </div>
                   </div>
+                  {coverError && <p className="text-sm text-destructive">{coverError}</p>}
                 </div>
               )}
 
@@ -1428,7 +1489,9 @@ export function ReleaseFormPage({
                               variant="ghost"
                               size="sm"
                               onClick={() => setExpandedTracks(prev => ({ ...prev, [trackIndex]: !prev[trackIndex] }))}
+                              aria-expanded={!!expandedTracks[trackIndex]}
                             >
+                              <ChevronDown className={cn("h-4 w-4 transition-transform", expandedTracks[trackIndex] && "rotate-180")} />
                               {expandedTracks[trackIndex] ? 'Tutup' : 'Detail'}
                             </Button>
                             {!lyricsOnlyMode && trackFields.length > 1 && (
@@ -1495,8 +1558,8 @@ export function ReleaseFormPage({
                               control={form.control}
                               name={`tracks.${trackIndex}.composer`}
                               render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Composer</FormLabel>
+                                  <FormItem>
+                                  <FormLabel>Composer{areTrackCreditsRequired ? ' *' : ''}</FormLabel>
                                   <FormControl>
                                     <Input placeholder="Composer" {...field} />
                                   </FormControl>
@@ -1509,8 +1572,8 @@ export function ReleaseFormPage({
                               control={form.control}
                               name={`tracks.${trackIndex}.lyricist`}
                               render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Lyricist</FormLabel>
+                                  <FormItem>
+                                  <FormLabel>Lyricist{areTrackCreditsRequired ? ' *' : ''}</FormLabel>
                                   <FormControl>
                                     <Input placeholder="Lyricist" {...field} />
                                   </FormControl>
@@ -1544,7 +1607,7 @@ export function ReleaseFormPage({
                         )}
 
                         {/* Artists Section - Hidden in lyricsOnlyMode */}
-                        {!lyricsOnlyMode && currentStep === 2 && (
+                        {!lyricsOnlyMode && currentStep === 2 && expandedTracks[trackIndex] && (
                           <div className="space-y-2">
                         <div className="flex items-center justify-between pb-2">
                               <FormLabel>Artists *</FormLabel>
@@ -1600,7 +1663,7 @@ export function ReleaseFormPage({
                         )}
 
                         {/* Contributors Section - Hidden in lyricsOnlyMode */}
-                        {!lyricsOnlyMode && currentStep === 2 && (
+                        {!lyricsOnlyMode && currentStep === 2 && expandedTracks[trackIndex] && (
                           <div className="space-y-2">
                         <div className="flex items-center justify-between pb-2">
                               <FormLabel>Additional Contributors</FormLabel>
@@ -1647,26 +1710,28 @@ export function ReleaseFormPage({
                         )}
 
                         {/* Lyrics - Always visible */}
-                        <FormField
-                          control={form.control}
-                          name={`tracks.${trackIndex}.lyrics`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Lyrics</FormLabel>
-                              <FormControl>
-                                <Textarea
-                                  placeholder="Masukkan lirik lagu..."
-                                  className={lyricsOnlyMode ? "min-h-[200px]" : "min-h-[80px]"}
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                        {(lyricsOnlyMode || expandedTracks[trackIndex]) && (
+                          <FormField
+                            control={form.control}
+                            name={`tracks.${trackIndex}.lyrics`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Lyrics</FormLabel>
+                                <FormControl>
+                                  <Textarea
+                                    placeholder="Masukkan lirik lagu..."
+                                    className={lyricsOnlyMode ? "min-h-[200px]" : "min-h-[80px]"}
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
 
                         {/* Media Upload Section - Hidden in lyricsOnlyMode */}
-                        {!lyricsOnlyMode && currentStep === 2 && (
+                        {!lyricsOnlyMode && currentStep === 2 && expandedTracks[trackIndex] && (
                           <MediaUploadSection
                             trackIndex={trackIndex}
                             audioUrl={form.watch(`tracks.${trackIndex}.audio_url`) || undefined}
@@ -1767,14 +1832,3 @@ export function ReleaseFormPage({
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-

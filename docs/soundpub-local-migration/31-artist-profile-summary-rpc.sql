@@ -2,14 +2,14 @@
 -- Aggregates artist dashboard data server-side to avoid REST row limits.
 -- Run after artist profile RLS/schema migrations.
 
-DROP FUNCTION IF EXISTS soundpub.get_artist_profile_summary(uuid);
+DROP FUNCTION IF EXISTS Soundpub.get_artist_profile_summary(uuid);
 
-CREATE OR REPLACE FUNCTION soundpub.get_artist_profile_summary(_artist_user_id uuid)
+CREATE OR REPLACE FUNCTION Soundpub.get_artist_profile_summary(_artist_user_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
-SET search_path TO soundpub, auth
+SET search_path TO Soundpub, auth
 AS $$
 DECLARE
   can_view boolean;
@@ -17,10 +17,10 @@ DECLARE
 BEGIN
   SELECT
     auth.uid() = _artist_user_id
-    OR soundpub.is_admin(auth.uid())
+    OR Soundpub.is_admin(auth.uid())
     OR EXISTS (
       SELECT 1
-      FROM soundpub.profiles p
+      FROM Soundpub.profiles p
       WHERE p.id = _artist_user_id
         AND p.parent_label_id = auth.uid()
     )
@@ -32,12 +32,12 @@ BEGIN
 
   SELECT jsonb_build_object(
     'totals', jsonb_build_object(
-      'totalRevenue', COALESCE((SELECT SUM(r.net_revenue) FROM soundpub.royalties r WHERE r.artist_user_id = _artist_user_id), 0),
-      'artistBalance', COALESCE((SELECT SUM(r.artist_revenue) FROM soundpub.royalties r WHERE r.artist_user_id = _artist_user_id), 0),
-      'totalStreams', COALESCE((SELECT SUM(r.unit_penjualan)::bigint FROM soundpub.royalties r WHERE r.artist_user_id = _artist_user_id), 0),
-      'uniqueTracks', COALESCE((SELECT COUNT(DISTINCT r.isrc) FROM soundpub.royalties r WHERE r.artist_user_id = _artist_user_id), 0),
-      'releaseCount', COALESCE((SELECT COUNT(*) FROM soundpub.releases rel WHERE rel.artist_user_id = _artist_user_id), 0),
-      'trackCount', COALESCE((SELECT COUNT(*) FROM soundpub.tracks t WHERE t.artist_user_id = _artist_user_id), 0)
+      'totalRevenue', COALESCE((SELECT SUM(r.net_revenue) FROM Soundpub.royalties r WHERE r.artist_user_id = _artist_user_id), 0),
+      'artistBalance', COALESCE((SELECT SUM(r.artist_revenue) FROM Soundpub.royalties r WHERE r.artist_user_id = _artist_user_id), 0),
+      'totalStreams', COALESCE((SELECT SUM(r.unit_penjualan)::bigint FROM Soundpub.royalties r WHERE r.artist_user_id = _artist_user_id), 0),
+      'uniqueTracks', COALESCE((SELECT COUNT(DISTINCT r.isrc) FROM Soundpub.royalties r WHERE r.artist_user_id = _artist_user_id), 0),
+      'releaseCount', COALESCE((SELECT COUNT(*) FROM Soundpub.releases rel WHERE rel.artist_user_id = _artist_user_id), 0),
+      'trackCount', COALESCE((SELECT COUNT(*) FROM Soundpub.tracks t WHERE t.artist_user_id = _artist_user_id), 0)
     ),
     'topTracks', COALESCE((
       SELECT jsonb_agg(row_to_json(track_row)::jsonb ORDER BY (track_row.artist_revenue) DESC)
@@ -49,7 +49,7 @@ BEGIN
           COALESCE(SUM(r.artist_revenue), 0) AS artist_revenue,
           COALESCE(SUM(r.unit_penjualan)::bigint, 0) AS streams,
           COUNT(DISTINCT r.platform) AS platform_count
-        FROM soundpub.royalties r
+        FROM Soundpub.royalties r
         WHERE r.artist_user_id = _artist_user_id
         GROUP BY COALESCE(r.title, 'Untitled'), r.isrc
         ORDER BY artist_revenue DESC
@@ -68,7 +68,7 @@ BEGIN
           rel.upc,
           rel.created_at,
           rel.release_date
-        FROM soundpub.releases rel
+        FROM Soundpub.releases rel
         WHERE rel.artist_user_id = _artist_user_id
         ORDER BY rel.created_at DESC
         LIMIT 8
@@ -82,7 +82,7 @@ BEGIN
           COALESCE(SUM(r.net_revenue), 0) AS total_revenue,
           COALESCE(SUM(r.artist_revenue), 0) AS artist_revenue,
           COALESCE(SUM(r.unit_penjualan)::bigint, 0) AS streams
-        FROM soundpub.royalties r
+        FROM Soundpub.royalties r
         WHERE r.artist_user_id = _artist_user_id
         GROUP BY r.period
         ORDER BY r.period
@@ -95,6 +95,6 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION soundpub.get_artist_profile_summary(uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION Soundpub.get_artist_profile_summary(uuid) TO authenticated, service_role;
 
 NOTIFY pgrst, 'reload schema';

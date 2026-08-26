@@ -120,7 +120,7 @@ export function EditArtistDialog({
             <Input
               id="editEmail"
               type="email"
-              value={artist?.email?.includes('@soundpub.xyz') ? 'Managed Artist (Tanpa Email)' : artist?.email || ''}
+              value={artist?.email?.includes('@Soundpub.xyz') ? 'Managed Artist (Tanpa Email)' : artist?.email || ''}
               disabled
               className="opacity-60"
             />

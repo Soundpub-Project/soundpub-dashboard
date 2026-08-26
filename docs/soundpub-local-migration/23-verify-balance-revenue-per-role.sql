@@ -10,8 +10,8 @@ SELECT
   p.balance AS profile_balance,
   p.artist_revenue AS profile_artist_revenue,
   p.label_revenue AS profile_label_revenue
-FROM soundpub.profiles p
-JOIN soundpub.user_roles ur ON ur.user_id = p.id
+FROM Soundpub.profiles p
+JOIN Soundpub.user_roles ur ON ur.user_id = p.id
 WHERE ur.role = 'artist'
 ORDER BY p.balance DESC NULLS LAST
 LIMIT 20;
@@ -26,9 +26,9 @@ SELECT
   SUM(r.net_revenue) AS total_gross_revenue,
   SUM(r.artist_revenue) AS sum_artist_revenue,
   SUM(r.label_revenue) AS sum_label_revenue,
-  SUM(r.soundpub_revenue) AS sum_admin_revenue
-FROM soundpub.royalties r
-JOIN soundpub.profiles p ON p.id = r.artist_user_id
+  SUM(r.Soundpub_revenue) AS sum_admin_revenue
+FROM Soundpub.royalties r
+JOIN Soundpub.profiles p ON p.id = r.artist_user_id
 WHERE r.artist_user_id IS NOT NULL
 GROUP BY r.artist_user_id, p.full_name, p.email
 ORDER BY sum_artist_revenue DESC NULLS LAST
@@ -43,8 +43,8 @@ SELECT
   p.balance AS profile_balance,
   p.artist_revenue AS profile_artist_revenue,
   p.label_revenue AS profile_label_revenue
-FROM soundpub.profiles p
-JOIN soundpub.user_roles ur ON ur.user_id = p.id
+FROM Soundpub.profiles p
+JOIN Soundpub.user_roles ur ON ur.user_id = p.id
 WHERE ur.role IN ('label', 'whitelabel')
 ORDER BY p.balance DESC NULLS LAST
 LIMIT 20;
@@ -59,9 +59,9 @@ SELECT
   SUM(r.net_revenue) AS total_gross_revenue,
   SUM(r.artist_revenue) AS sum_artist_revenue,
   SUM(r.label_revenue) AS sum_label_revenue,
-  SUM(r.soundpub_revenue) AS sum_admin_revenue
-FROM soundpub.royalties r
-JOIN soundpub.profiles p ON p.id = r.label_user_id
+  SUM(r.Soundpub_revenue) AS sum_admin_revenue
+FROM Soundpub.royalties r
+JOIN Soundpub.profiles p ON p.id = r.label_user_id
 WHERE r.label_user_id IS NOT NULL
 GROUP BY r.label_user_id, p.full_name, p.email
 ORDER BY sum_label_revenue DESC NULLS LAST
@@ -79,17 +79,17 @@ SELECT
   p.label_revenue AS profile_label_rev,
   COALESCE(label_sum.total, 0) AS royalties_label_rev,
   (p.balance - COALESCE(artist_sum.total, 0) - COALESCE(label_sum.total, 0)) AS balance_diff
-FROM soundpub.profiles p
-JOIN soundpub.user_roles ur ON ur.user_id = p.id
+FROM Soundpub.profiles p
+JOIN Soundpub.user_roles ur ON ur.user_id = p.id
 LEFT JOIN (
   SELECT artist_user_id, SUM(artist_revenue) AS total
-  FROM soundpub.royalties
+  FROM Soundpub.royalties
   WHERE artist_user_id IS NOT NULL
   GROUP BY artist_user_id
 ) artist_sum ON artist_sum.artist_user_id = p.id
 LEFT JOIN (
   SELECT label_user_id, SUM(label_revenue) AS total
-  FROM soundpub.royalties
+  FROM Soundpub.royalties
   WHERE label_user_id IS NOT NULL
   GROUP BY label_user_id
 ) label_sum ON label_sum.label_user_id = p.id

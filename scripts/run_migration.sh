@@ -7,7 +7,7 @@
 
 HOST=${1:-supabase.carubra.com}
 USER=${2:-postgres}
-DATABASE=${3:-soundpub}
+DATABASE=${3:-Soundpub}
 
 echo ""
 echo "╔════════════════════════════════════════════════════════════╗"

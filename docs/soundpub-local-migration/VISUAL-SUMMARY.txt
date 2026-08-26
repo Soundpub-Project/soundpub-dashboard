@@ -13,11 +13,11 @@
 
 From: pasted-text.txt (attached file)
 
-    ERROR:  must be owner of schema soundpub
-    WARNING:  no privileges were granted for "soundpub"
+    ERROR:  must be owner of schema Soundpub
+    WARNING:  no privileges were granted for "Soundpub"
 
 Root Cause:
-    • Schema soundpub owned by supabase_admin
+    • Schema Soundpub owned by supabase_admin
     • User postgres lacks CREATE privilege
     • Cannot create triggers or modify schema
 
@@ -50,7 +50,7 @@ while keeping schema ownership with supabase_admin (Supabase best practice).
 
 Total: 58.1 KB comprehensive documentation
 
-Location: docs/soundpub-local-migration/
+Location: docs/Soundpub-local-migration/
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -62,25 +62,25 @@ Step 1: SSH to Supabase Server
 
 Step 2: Run One-Liner Fix
     $ docker exec -it supabase-db psql -U supabase_admin -d postgres -c \
-      "ALTER SCHEMA soundpub OWNER TO supabase_admin; \
-       GRANT USAGE, CREATE ON SCHEMA soundpub TO postgres; \
-       GRANT ALL ON ALL TABLES IN SCHEMA soundpub TO postgres; \
-       GRANT ALL ON ALL SEQUENCES IN SCHEMA soundpub TO postgres; \
-       GRANT ALL ON ALL FUNCTIONS IN SCHEMA soundpub TO postgres; \
-       ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA soundpub \
+      "ALTER SCHEMA Soundpub OWNER TO supabase_admin; \
+       GRANT USAGE, CREATE ON SCHEMA Soundpub TO postgres; \
+       GRANT ALL ON ALL TABLES IN SCHEMA Soundpub TO postgres; \
+       GRANT ALL ON ALL SEQUENCES IN SCHEMA Soundpub TO postgres; \
+       GRANT ALL ON ALL FUNCTIONS IN SCHEMA Soundpub TO postgres; \
+       ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA Soundpub \
          GRANT ALL ON TABLES TO postgres; \
-       ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA soundpub \
+       ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA Soundpub \
          GRANT ALL ON SEQUENCES TO postgres; \
-       ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA soundpub \
+       ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA Soundpub \
          GRANT ALL ON FUNCTIONS TO postgres; \
-       GRANT USAGE ON SCHEMA soundpub TO authenticated, service_role, anon; \
-       GRANT SELECT ON ALL TABLES IN SCHEMA soundpub TO authenticated; \
-       GRANT ALL ON ALL TABLES IN SCHEMA soundpub TO service_role;"
+       GRANT USAGE ON SCHEMA Soundpub TO authenticated, service_role, anon; \
+       GRANT SELECT ON ALL TABLES IN SCHEMA Soundpub TO authenticated; \
+       GRANT ALL ON ALL TABLES IN SCHEMA Soundpub TO service_role;"
 
 Step 3: Verify
     $ docker exec -it supabase-db psql -U postgres -d postgres -c \
       "SELECT nspname, has_schema_privilege('postgres', nspname, 'CREATE') \
-       FROM pg_namespace WHERE nspname = 'soundpub';"
+       FROM pg_namespace WHERE nspname = 'Soundpub';"
 
 Expected: can_create = t ✅
 
@@ -105,7 +105,7 @@ Expected: can_create = t ✅
 
 BEFORE FIX:
     ┌─────────────────────────┐
-    │  soundpub schema        │
+    │  Soundpub schema        │
     │  Owner: supabase_admin  │
     ├─────────────────────────┤
     │  postgres:              │
@@ -119,7 +119,7 @@ BEFORE FIX:
 
 AFTER FIX:
     ┌─────────────────────────┐
-    │  soundpub schema        │
+    │  Soundpub schema        │
     │  Owner: supabase_admin  │
     ├─────────────────────────┤
     │  postgres:              │
@@ -162,7 +162,7 @@ You'll know it worked when:
     ✅ Triggers created successfully
     ✅ Functions created without errors
     ✅ API queries work properly
-    ✅ New users auto-assigned to soundpub label
+    ✅ New users auto-assigned to Soundpub label
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -205,7 +205,7 @@ Still stuck?              → Review PostgreSQL logs in Docker
 
 Environment:      Supabase self-hosted (Docker)
 Database:         PostgreSQL 15.8
-Schema:           soundpub
+Schema:           Soundpub
 Owner:            supabase_admin (unchanged)
 Granted to:       postgres, authenticated, service_role
 Changes:          Permissions only (no ownership transfer)
@@ -233,7 +233,7 @@ Impact:           Enables schema modifications and trigger creation
 
 You are ready to deploy! Choose your method and proceed with confidence.
 
-All files are in: docs/soundpub-local-migration/
+All files are in: docs/Soundpub-local-migration/
 
 Created: 2026-08-14
 Status: ✅ Complete and Production-Ready

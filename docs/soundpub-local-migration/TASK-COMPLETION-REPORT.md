@@ -14,10 +14,10 @@
 
 ### Problem Identified
 From the attached `pasted-text.txt` file, the issue was:
-- Schema `soundpub` owned by `supabase_admin`
+- Schema `Soundpub` owned by `supabase_admin`
 - User `postgres` lacks CREATE privilege
 - Cannot create triggers or modify schema
-- Error: "must be owner of schema soundpub"
+- Error: "must be owner of schema Soundpub"
 
 ### Solution Delivered
 A comprehensive fix package with 10 files totaling 75.63 KB of documentation:
@@ -45,23 +45,23 @@ Grant CREATE privilege and all necessary permissions to `postgres` user while ke
 ### What Gets Changed
 ```sql
 -- Keep ownership correct
-ALTER SCHEMA soundpub OWNER TO supabase_admin;
+ALTER SCHEMA Soundpub OWNER TO supabase_admin;
 
 -- Grant operational permissions
-GRANT USAGE, CREATE ON SCHEMA soundpub TO postgres;
-GRANT ALL ON ALL TABLES IN SCHEMA soundpub TO postgres;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA soundpub TO postgres;
-GRANT ALL ON ALL FUNCTIONS IN SCHEMA soundpub TO postgres;
+GRANT USAGE, CREATE ON SCHEMA Soundpub TO postgres;
+GRANT ALL ON ALL TABLES IN SCHEMA Soundpub TO postgres;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA Soundpub TO postgres;
+GRANT ALL ON ALL FUNCTIONS IN SCHEMA Soundpub TO postgres;
 
 -- Set default privileges for future objects
-ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA soundpub 
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA Soundpub 
   GRANT ALL ON TABLES TO postgres;
 -- (+ sequences, functions)
 
 -- Enable API access
-GRANT USAGE ON SCHEMA soundpub TO authenticated, service_role, anon;
-GRANT SELECT ON ALL TABLES IN SCHEMA soundpub TO authenticated;
-GRANT ALL ON ALL TABLES IN SCHEMA soundpub TO service_role;
+GRANT USAGE ON SCHEMA Soundpub TO authenticated, service_role, anon;
+GRANT SELECT ON ALL TABLES IN SCHEMA Soundpub TO authenticated;
+GRANT ALL ON ALL TABLES IN SCHEMA Soundpub TO service_role;
 ```
 
 ---
@@ -73,13 +73,13 @@ GRANT ALL ON ALL TABLES IN SCHEMA soundpub TO service_role;
 SSH to Supabase server and run:
 
 ```bash
-docker exec -it supabase-db psql -U supabase_admin -d postgres -c "ALTER SCHEMA soundpub OWNER TO supabase_admin; GRANT USAGE, CREATE ON SCHEMA soundpub TO postgres; GRANT ALL ON ALL TABLES IN SCHEMA soundpub TO postgres; GRANT ALL ON ALL SEQUENCES IN SCHEMA soundpub TO postgres; GRANT ALL ON ALL FUNCTIONS IN SCHEMA soundpub TO postgres; ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA soundpub GRANT ALL ON TABLES TO postgres; ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA soundpub GRANT ALL ON SEQUENCES TO postgres; ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA soundpub GRANT ALL ON FUNCTIONS TO postgres; GRANT USAGE ON SCHEMA soundpub TO authenticated, service_role, anon, authenticator; GRANT SELECT ON ALL TABLES IN SCHEMA soundpub TO authenticated; GRANT ALL ON ALL TABLES IN SCHEMA soundpub TO service_role;"
+docker exec -it supabase-db psql -U supabase_admin -d postgres -c "ALTER SCHEMA Soundpub OWNER TO supabase_admin; GRANT USAGE, CREATE ON SCHEMA Soundpub TO postgres; GRANT ALL ON ALL TABLES IN SCHEMA Soundpub TO postgres; GRANT ALL ON ALL SEQUENCES IN SCHEMA Soundpub TO postgres; GRANT ALL ON ALL FUNCTIONS IN SCHEMA Soundpub TO postgres; ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA Soundpub GRANT ALL ON TABLES TO postgres; ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA Soundpub GRANT ALL ON SEQUENCES TO postgres; ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA Soundpub GRANT ALL ON FUNCTIONS TO postgres; GRANT USAGE ON SCHEMA Soundpub TO authenticated, service_role, anon, authenticator; GRANT SELECT ON ALL TABLES IN SCHEMA Soundpub TO authenticated; GRANT ALL ON ALL TABLES IN SCHEMA Soundpub TO service_role;"
 ```
 
 ### Verify
 
 ```bash
-docker exec -it supabase-db psql -U postgres -d postgres -c "SELECT nspname, has_schema_privilege('postgres', nspname, 'CREATE') AS can_create FROM pg_namespace WHERE nspname = 'soundpub';"
+docker exec -it supabase-db psql -U postgres -d postgres -c "SELECT nspname, has_schema_privilege('postgres', nspname, 'CREATE') AS can_create FROM pg_namespace WHERE nspname = 'Soundpub';"
 ```
 
 Expected: `can_create = t` ✅
@@ -122,7 +122,7 @@ Expected: `can_create = t` ✅
 
 All files created in:
 ```
-docs/soundpub-local-migration/
+docs/Soundpub-local-migration/
 ```
 
 ### Files List
@@ -199,7 +199,7 @@ docker exec -it supabase-db psql -U postgres -d postgres -c "
     has_schema_privilege('postgres', nspname, 'CREATE') AS can_create,
     has_schema_privilege('postgres', nspname, 'USAGE') AS can_use
   FROM pg_namespace 
-  WHERE nspname = 'soundpub';
+  WHERE nspname = 'Soundpub';
 "
 ```
 
@@ -207,7 +207,7 @@ Expected output:
 ```
  nspname  | can_create | can_use
 ----------+------------+---------
- soundpub | t          | t
+ Soundpub | t          | t
 ```
 
 ---
@@ -332,7 +332,7 @@ By completing this task, the solution provides understanding of:
 **Original Task:** Continue from Fix 001
 **Problem Source:** Attached file `pasted-text.txt`
 **Environment:** Supabase self-hosted (Docker), PostgreSQL 15.8
-**Schema:** soundpub
+**Schema:** Soundpub
 **Previous Attempts:** Files 41-45 (all superseded by this solution)
 
 ---
@@ -382,7 +382,7 @@ By completing this task, the solution provides understanding of:
 ## 📂 File Organization
 
 ```
-docs/soundpub-local-migration/
+docs/Soundpub-local-migration/
 ├── 00-START-HERE.md                         (Master overview)
 ├── INDEX.md                                 (Navigation)
 ├── QUICK-FIX.md                             (Emergency)

@@ -1,7 +1,7 @@
 ﻿# 📁 FILE MANIFEST - Auth Verification System
 
 **Generated:** 2026-08-14 19:05 WIB  
-**Project:** SoundPub Dashboard - Auth Verification System  
+**Project:** Soundpub Dashboard - Auth Verification System  
 **Status:** ✅ Complete
 
 ---
@@ -238,7 +238,7 @@ All aspects covered:
 
 **Documentation:**
 ```
-I:\website-devops\soundpub-project\soundpub-dashboard\docs\
+I:\website-devops\Soundpub-project\Soundpub-dashboard\docs\
 ├── INDEX.md
 ├── README.md
 ├── README_AUTH_DOCS.md
@@ -253,7 +253,7 @@ I:\website-devops\soundpub-project\soundpub-dashboard\docs\
 
 **Migration:**
 ```
-I:\website-devops\soundpub-project\soundpub-dashboard\migrations-complete\
+I:\website-devops\Soundpub-project\Soundpub-dashboard\migrations-complete\
 └── 002_auth_verification_system.sql
 ```
 
@@ -283,7 +283,7 @@ I:\website-devops\soundpub-project\soundpub-dashboard\migrations-complete\
 ## 📞 Support
 
 **Questions about files?** Refer to `README_AUTH_DOCS.md`  
-**Technical questions?** dev@soundpub.xyz  
+**Technical questions?** dev@Soundpub.xyz  
 **Missing files?** All files should be present as listed above  
 
 ---
@@ -303,4 +303,4 @@ I:\website-devops\soundpub-project\soundpub-dashboard\migrations-complete\
 **Version:** 1.0  
 **Status:** ✅ Complete
 
-🎵 SoundPub - Empowering Musicians, Securing Accounts 🎵
+🎵 Soundpub - Empowering Musicians, Securing Accounts 🎵

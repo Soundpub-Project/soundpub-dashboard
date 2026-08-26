@@ -1,11 +1,11 @@
 ﻿# 🔐 RANCANGAN SISTEM AUTENTIKASI & VERIFIKASI
-**SoundPub Dashboard - Password Reset & Email Verification**
+**Soundpub Dashboard - Password Reset & Email Verification**
 
 ---
 
 ## 📋 RINGKASAN EKSEKUTIF
 
-Dokumen ini merancang implementasi sistem **Lupa Password** dan **Verifikasi Email** untuk user artis yang mendaftar manual (bukan via Google OAuth). Sistem ini terintegrasi dengan **Supabase Self-hosted** menggunakan schema `soundpub`.
+Dokumen ini merancang implementasi sistem **Lupa Password** dan **Verifikasi Email** untuk user artis yang mendaftar manual (bukan via Google OAuth). Sistem ini terintegrasi dengan **Supabase Self-hosted** menggunakan schema `Soundpub`.
 
 ### Tujuan Utama
 1. Memberikan mekanisme pemulihan password yang aman
@@ -114,7 +114,7 @@ Dokumen ini merancang implementasi sistem **Lupa Password** dan **Verifikasi Ema
 ├─────────────────────────────────────────────────────────────┤
 │                                                               │
 │  ┌────────────────────┐      ┌────────────────────────┐    │
-│  │  auth.users        │      │  soundpub.profiles     │    │
+│  │  auth.users        │      │  Soundpub.profiles     │    │
 │  │  - id              │◄────►│  - id                  │    │
 │  │  - email           │      │  - email_verified      │    │
 │  │  - confirmed_at    │      │  - verification_token  │    │
@@ -142,11 +142,11 @@ Dokumen ini merancang implementasi sistem **Lupa Password** dan **Verifikasi Ema
 
 ### B. DATABASE SCHEMA CHANGES
 
-#### 1. Tambahan Kolom di `soundpub.profiles`
+#### 1. Tambahan Kolom di `Soundpub.profiles`
 
 ```sql
 -- Menambahkan tracking verifikasi email
-ALTER TABLE soundpub.profiles
+ALTER TABLE Soundpub.profiles
   ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS verification_token TEXT,
   ADD COLUMN IF NOT EXISTS verification_token_expires_at TIMESTAMPTZ,
@@ -157,22 +157,22 @@ ALTER TABLE soundpub.profiles
 
 -- Index untuk performa query token
 CREATE INDEX IF NOT EXISTS idx_profiles_verification_token 
-  ON soundpub.profiles(verification_token) 
+  ON Soundpub.profiles(verification_token) 
   WHERE verification_token IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_profiles_password_reset_token 
-  ON soundpub.profiles(password_reset_token) 
+  ON Soundpub.profiles(password_reset_token) 
   WHERE password_reset_token IS NOT NULL;
 
 -- Index untuk email verification status
 CREATE INDEX IF NOT EXISTS idx_profiles_email_verified 
-  ON soundpub.profiles(email_verified);
+  ON Soundpub.profiles(email_verified);
 ```
 
-#### 2. Table Baru: `soundpub.auth_events` (Security Audit Log)
+#### 2. Table Baru: `Soundpub.auth_events` (Security Audit Log)
 
 ```sql
-CREATE TABLE IF NOT EXISTS soundpub.auth_events (
+CREATE TABLE IF NOT EXISTS Soundpub.auth_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   event_type TEXT NOT NULL, 
@@ -185,28 +185,28 @@ CREATE TABLE IF NOT EXISTS soundpub.auth_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_auth_events_user_id ON soundpub.auth_events(user_id);
-CREATE INDEX idx_auth_events_type ON soundpub.auth_events(event_type);
-CREATE INDEX idx_auth_events_created_at ON soundpub.auth_events(created_at DESC);
+CREATE INDEX idx_auth_events_user_id ON Soundpub.auth_events(user_id);
+CREATE INDEX idx_auth_events_type ON Soundpub.auth_events(event_type);
+CREATE INDEX idx_auth_events_created_at ON Soundpub.auth_events(created_at DESC);
 
 -- RLS Policy
-ALTER TABLE soundpub.auth_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE Soundpub.auth_events ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can view own auth events"
-  ON soundpub.auth_events FOR SELECT
+  ON Soundpub.auth_events FOR SELECT
   TO authenticated
   USING (user_id = auth.uid());
 
 CREATE POLICY "Service can insert auth events"
-  ON soundpub.auth_events FOR INSERT
+  ON Soundpub.auth_events FOR INSERT
   TO authenticated
   WITH CHECK (true);
 ```
 
-#### 3. Table: `soundpub.rate_limits` (Anti-spam)
+#### 3. Table: `Soundpub.rate_limits` (Anti-spam)
 
 ```sql
-CREATE TABLE IF NOT EXISTS soundpub.rate_limits (
+CREATE TABLE IF NOT EXISTS Soundpub.rate_limits (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   identifier TEXT NOT NULL, -- email atau IP
   action_type TEXT NOT NULL, -- 'password_reset', 'email_verification'
@@ -217,15 +217,15 @@ CREATE TABLE IF NOT EXISTS soundpub.rate_limits (
   UNIQUE(identifier, action_type)
 );
 
-CREATE INDEX idx_rate_limits_identifier ON soundpub.rate_limits(identifier, action_type);
-CREATE INDEX idx_rate_limits_blocked ON soundpub.rate_limits(blocked_until) 
+CREATE INDEX idx_rate_limits_identifier ON Soundpub.rate_limits(identifier, action_type);
+CREATE INDEX idx_rate_limits_blocked ON Soundpub.rate_limits(blocked_until) 
   WHERE blocked_until IS NOT NULL;
 
 -- Auto cleanup old entries (> 24 jam)
-CREATE OR REPLACE FUNCTION soundpub.cleanup_rate_limits()
+CREATE OR REPLACE FUNCTION Soundpub.cleanup_rate_limits()
 RETURNS void AS $$
 BEGIN
-  DELETE FROM soundpub.rate_limits
+  DELETE FROM Soundpub.rate_limits
   WHERE last_attempt_at < NOW() - INTERVAL '24 hours';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -269,7 +269,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 ```
 1. Validate email format
 2. Check rate limit (3 requests/hour per email)
-3. Query user by email from soundpub.profiles
+3. Query user by email from Soundpub.profiles
 4. If not found → return generic success (security)
 5. Generate secure token: crypto.randomUUID()
 6. Set expiry: NOW() + 24 hours
@@ -282,14 +282,14 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 **Rate Limiting Logic:**
 ```sql
 -- Upsert rate limit
-INSERT INTO soundpub.rate_limits (identifier, action_type, attempt_count, last_attempt_at)
+INSERT INTO Soundpub.rate_limits (identifier, action_type, attempt_count, last_attempt_at)
 VALUES ($email, 'password_reset', 1, NOW())
 ON CONFLICT (identifier, action_type) 
 DO UPDATE SET 
-  attempt_count = soundpub.rate_limits.attempt_count + 1,
+  attempt_count = Soundpub.rate_limits.attempt_count + 1,
   last_attempt_at = NOW(),
   blocked_until = CASE 
-    WHEN soundpub.rate_limits.attempt_count >= 3 
+    WHEN Soundpub.rate_limits.attempt_count >= 3 
     THEN NOW() + INTERVAL '1 hour'
     ELSE NULL
   END
@@ -456,13 +456,13 @@ Tambahkan 3 template baru:
 // Template: password-reset
 TEMPLATES['password-reset'] = (data, recipientName) => ({
   scope: 'security',
-  subject: '🔐 Reset Password Anda - SoundPub',
+  subject: '🔐 Reset Password Anda - Soundpub',
   html: layout(
     'Reset Password',
     'linear-gradient(135deg,#ef4444 0%,#dc2626 100%)',
     `
       <p>Hai <strong>${recipientName}</strong>,</p>
-      <p>Kami menerima permintaan untuk reset password akun SoundPub Anda.</p>
+      <p>Kami menerima permintaan untuk reset password akun Soundpub Anda.</p>
       <p>Klik tombol di bawah untuk membuat password baru:</p>
       <div style="text-align:center;margin:28px 0;">
         <a href="${data.resetUrl}" 
@@ -491,13 +491,13 @@ TEMPLATES['password-reset'] = (data, recipientName) => ({
 // Template: email-verification
 TEMPLATES['email-verification'] = (data, recipientName) => ({
   scope: 'security',
-  subject: '✅ Verifikasi Email Anda - SoundPub',
+  subject: '✅ Verifikasi Email Anda - Soundpub',
   html: layout(
     'Verifikasi Email',
     'linear-gradient(135deg,#10b981 0%,#059669 100%)',
     `
       <p>Hai <strong>${recipientName}</strong>,</p>
-      <p>Terima kasih telah mendaftar di SoundPub! 🎵</p>
+      <p>Terima kasih telah mendaftar di Soundpub! 🎵</p>
       <p>Klik tombol di bawah untuk verifikasi email Anda:</p>
       <div style="text-align:center;margin:28px 0;">
         <a href="${data.verifyUrl}" 
@@ -518,13 +518,13 @@ TEMPLATES['email-verification'] = (data, recipientName) => ({
 // Template: password-reset-confirmation
 TEMPLATES['password-reset-confirmation'] = (data, recipientName) => ({
   scope: 'security',
-  subject: '✅ Password Berhasil Direset - SoundPub',
+  subject: '✅ Password Berhasil Direset - Soundpub',
   html: layout(
     'Password Berhasil Direset',
     'linear-gradient(135deg,#10b981 0%,#059669 100%)',
     `
       <p>Hai <strong>${recipientName}</strong>,</p>
-      <p>Password akun SoundPub Anda telah berhasil direset.</p>
+      <p>Password akun Soundpub Anda telah berhasil direset.</p>
       <p style="color:#6b7280;font-size:14px;">
         <strong>Waktu:</strong> ${new Date().toLocaleString('id-ID')}<br>
         <strong>IP Address:</strong> ${data.ipAddress || 'N/A'}
@@ -859,17 +859,17 @@ const checkRateLimit = async (identifier: string, action: string) => {
 
 **Anti-Phishing:**
 - Tampilkan nama user di email (personalisasi)
-- Gunakan domain official: `noreply@soundpub.xyz`
+- Gunakan domain official: `noreply@Soundpub.xyz`
 - Tambahkan footer dengan contact info
 - Jangan include sensitive info di email
 
 **Link Safety:**
 ```typescript
 // Gunakan HTTPS
-const resetUrl = `https://dashboard.soundpub.xyz/reset-password?token=${token}`;
+const resetUrl = `https://dashboard.Soundpub.xyz/reset-password?token=${token}`;
 
 // Tambahkan domain verification
-const verifyUrl = `https://dashboard.soundpub.xyz/verify-email?token=${token}`;
+const verifyUrl = `https://dashboard.Soundpub.xyz/verify-email?token=${token}`;
 ```
 
 ---
@@ -946,14 +946,14 @@ SELECT
   COUNT(*) FILTER (WHERE email_verified = true) AS verified,
   COUNT(*) AS total,
   ROUND(100.0 * COUNT(*) FILTER (WHERE email_verified = true) / COUNT(*), 2) AS rate
-FROM soundpub.profiles
+FROM Soundpub.profiles
 WHERE created_at >= NOW() - INTERVAL '7 days';
 
 -- Password reset requests (30 hari terakhir)
 SELECT 
   DATE(created_at) AS date,
   COUNT(*) AS reset_requests
-FROM soundpub.auth_events
+FROM Soundpub.auth_events
 WHERE event_type = 'password_reset_requested'
   AND created_at >= NOW() - INTERVAL '30 days'
 GROUP BY DATE(created_at)
@@ -1162,14 +1162,14 @@ test('password reset flow', async ({ page }) => {
 **SQL Execution Order:**
 ```bash
 # 1. Backup
-pg_dump soundpub > backup_$(date +%Y%m%d).sql
+pg_dump Soundpub > backup_$(date +%Y%m%d).sql
 
 # 2. Run migrations
-psql soundpub < migrations/002_auth_verification.sql
+psql Soundpub < migrations/002_auth_verification.sql
 
 # 3. Verify
-psql soundpub -c "SELECT column_name FROM information_schema.columns 
-                  WHERE table_schema='soundpub' AND table_name='profiles';"
+psql Soundpub -c "SELECT column_name FROM information_schema.columns 
+                  WHERE table_schema='Soundpub' AND table_name='profiles';"
 ```
 
 ---
@@ -1205,7 +1205,7 @@ psql soundpub -c "SELECT column_name FROM information_schema.columns
    ```
 7. ✅ Deploy to production (Docker build)
    ```bash
-   docker build -t soundpub-dashboard:latest .
+   docker build -t Soundpub-dashboard:latest .
    docker-compose up -d
    ```
 
@@ -1265,7 +1265,7 @@ psql soundpub -c "SELECT column_name FROM information_schema.columns
 ### Weekly Tasks
 - Cleanup expired tokens (automated via cron)
   ```sql
-  DELETE FROM soundpub.profiles
+  DELETE FROM Soundpub.profiles
   WHERE verification_token_expires_at < NOW() - INTERVAL '30 days';
   ```
 - Review auth_events for patterns
@@ -1305,7 +1305,7 @@ psql soundpub -c "SELECT column_name FROM information_schema.columns
    - Suspicious activity detection
 
 5. **Email Deliverability Improvements**
-   - Custom domain email (noreply@soundpub.xyz)
+   - Custom domain email (noreply@Soundpub.xyz)
    - DKIM, SPF, DMARC setup
    - Email reputation monitoring
    - Fallback provider (Resend, SendGrid)
@@ -1337,7 +1337,7 @@ psql soundpub -c "SELECT column_name FROM information_schema.columns
 
 **3. Rate limit false positive**
 - ✅ Check `rate_limits` table
-- ✅ Manual reset: `DELETE FROM soundpub.rate_limits WHERE identifier = 'email@example.com';`
+- ✅ Manual reset: `DELETE FROM Soundpub.rate_limits WHERE identifier = 'email@example.com';`
 - ✅ Adjust limits in function code
 
 **4. Email verification loop**
@@ -1514,8 +1514,8 @@ Week 5+: Iteration & Improvements
 
 ## 📝 CATATAN PENTING UNTUK TIM
 
-> **INGAT:** Kamu menggunakan **Supabase self-hosted** dengan schema `soundpub`.
-> Semua query harus eksplisit menggunakan `soundpub.table_name`, bukan `public.table_name`.
+> **INGAT:** Kamu menggunakan **Supabase self-hosted** dengan schema `Soundpub`.
+> Semua query harus eksplisit menggunakan `Soundpub.table_name`, bukan `public.table_name`.
 
 **Environment Variables to Set:**
 ```bash
@@ -1523,7 +1523,7 @@ Week 5+: Iteration & Improvements
 SUPABASE_URL=https://supabase.carubra.com
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 SUPABASE_SERVICE_ROLE_KEY=<service_role_key>
-DATABASE_SCHEMA=soundpub
+DATABASE_SCHEMA=Soundpub
 
 # Email
 LOVABLE_API_KEY=<from_lovable>
@@ -1535,17 +1535,17 @@ RESEND_API_KEY=<fallback_email_provider>
 
 **Database Connection:**
 ```typescript
-// Selalu gunakan schema soundpub
+// Selalu gunakan schema Soundpub
 const supabase = createClient(url, key, {
-  db: { schema: 'soundpub' }
+  db: { schema: 'Soundpub' }
 });
 ```
 
 **Testing Accounts:**
 ```
 # Staging
-test+reset@soundpub.xyz
-test+verify@soundpub.xyz
+test+reset@Soundpub.xyz
+test+verify@Soundpub.xyz
 
 # Production (hati-hati!)
 Gunakan email pribadi untuk testing awal
@@ -1567,11 +1567,11 @@ Gunakan email pribadi untuk testing awal
 - [ ] Security Officer
 - [ ] DevOps Lead
 
-**Questions?** Contact: dev@soundpub.xyz
+**Questions?** Contact: dev@Soundpub.xyz
 
 ---
 
-🎵 **SoundPub - Empowering Musicians, Securing Accounts** 🎵
+🎵 **Soundpub - Empowering Musicians, Securing Accounts** 🎵
 
 ---
 
@@ -1585,14 +1585,14 @@ File: `migrations/002_auth_verification.sql`
 -- =====================================================
 -- AUTH VERIFICATION SYSTEM MIGRATION
 -- =====================================================
--- Schema: soundpub
+-- Schema: Soundpub
 -- Created: 2026-08-14
 -- Purpose: Add password reset & email verification
 
 BEGIN;
 
 -- 1. Add columns to profiles
-ALTER TABLE soundpub.profiles
+ALTER TABLE Soundpub.profiles
   ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS verification_token TEXT,
   ADD COLUMN IF NOT EXISTS verification_token_expires_at TIMESTAMPTZ,
@@ -1603,18 +1603,18 @@ ALTER TABLE soundpub.profiles
 
 -- 2. Create indexes
 CREATE INDEX IF NOT EXISTS idx_profiles_verification_token 
-  ON soundpub.profiles(verification_token) 
+  ON Soundpub.profiles(verification_token) 
   WHERE verification_token IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_profiles_password_reset_token 
-  ON soundpub.profiles(password_reset_token) 
+  ON Soundpub.profiles(password_reset_token) 
   WHERE password_reset_token IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_profiles_email_verified 
-  ON soundpub.profiles(email_verified);
+  ON Soundpub.profiles(email_verified);
 
 -- 3. Create auth_events table
-CREATE TABLE IF NOT EXISTS soundpub.auth_events (
+CREATE TABLE IF NOT EXISTS Soundpub.auth_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   event_type TEXT NOT NULL,
@@ -1624,12 +1624,12 @@ CREATE TABLE IF NOT EXISTS soundpub.auth_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_auth_events_user_id ON soundpub.auth_events(user_id);
-CREATE INDEX idx_auth_events_type ON soundpub.auth_events(event_type);
-CREATE INDEX idx_auth_events_created_at ON soundpub.auth_events(created_at DESC);
+CREATE INDEX idx_auth_events_user_id ON Soundpub.auth_events(user_id);
+CREATE INDEX idx_auth_events_type ON Soundpub.auth_events(event_type);
+CREATE INDEX idx_auth_events_created_at ON Soundpub.auth_events(created_at DESC);
 
 -- 4. Create rate_limits table
-CREATE TABLE IF NOT EXISTS soundpub.rate_limits (
+CREATE TABLE IF NOT EXISTS Soundpub.rate_limits (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   identifier TEXT NOT NULL,
   action_type TEXT NOT NULL,
@@ -1640,55 +1640,55 @@ CREATE TABLE IF NOT EXISTS soundpub.rate_limits (
   UNIQUE(identifier, action_type)
 );
 
-CREATE INDEX idx_rate_limits_identifier ON soundpub.rate_limits(identifier, action_type);
-CREATE INDEX idx_rate_limits_blocked ON soundpub.rate_limits(blocked_until) 
+CREATE INDEX idx_rate_limits_identifier ON Soundpub.rate_limits(identifier, action_type);
+CREATE INDEX idx_rate_limits_blocked ON Soundpub.rate_limits(blocked_until) 
   WHERE blocked_until IS NOT NULL;
 
 -- 5. Enable RLS
-ALTER TABLE soundpub.auth_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE soundpub.rate_limits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE Soundpub.auth_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE Soundpub.rate_limits ENABLE ROW LEVEL SECURITY;
 
 -- 6. Create RLS policies
 CREATE POLICY "Users can view own auth events"
-  ON soundpub.auth_events FOR SELECT
+  ON Soundpub.auth_events FOR SELECT
   TO authenticated
   USING (user_id = auth.uid());
 
 CREATE POLICY "Service can insert auth events"
-  ON soundpub.auth_events FOR INSERT
+  ON Soundpub.auth_events FOR INSERT
   TO authenticated
   WITH CHECK (true);
 
 CREATE POLICY "Admins can view rate limits"
-  ON soundpub.rate_limits FOR SELECT
+  ON Soundpub.rate_limits FOR SELECT
   TO authenticated
-  USING (soundpub.is_admin(auth.uid()));
+  USING (Soundpub.is_admin(auth.uid()));
 
 CREATE POLICY "Service can manage rate limits"
-  ON soundpub.rate_limits FOR ALL
+  ON Soundpub.rate_limits FOR ALL
   TO authenticated
   WITH CHECK (true);
 
 -- 7. Create cleanup function
-CREATE OR REPLACE FUNCTION soundpub.cleanup_rate_limits()
+CREATE OR REPLACE FUNCTION Soundpub.cleanup_rate_limits()
 RETURNS void AS $$
 BEGIN
-  DELETE FROM soundpub.rate_limits
+  DELETE FROM Soundpub.rate_limits
   WHERE last_attempt_at < NOW() - INTERVAL '24 hours';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 8. Create cleanup function for expired tokens
-CREATE OR REPLACE FUNCTION soundpub.cleanup_expired_tokens()
+CREATE OR REPLACE FUNCTION Soundpub.cleanup_expired_tokens()
 RETURNS void AS $$
 BEGIN
-  UPDATE soundpub.profiles
+  UPDATE Soundpub.profiles
   SET 
     verification_token = NULL,
     verification_token_expires_at = NULL
   WHERE verification_token_expires_at < NOW();
   
-  UPDATE soundpub.profiles
+  UPDATE Soundpub.profiles
   SET 
     password_reset_token = NULL,
     password_reset_token_expires_at = NULL
@@ -1714,7 +1714,7 @@ END $$;
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-DATABASE_SCHEMA=soundpub
+DATABASE_SCHEMA=Soundpub
 
 # Email Provider
 LOVABLE_API_KEY=
@@ -1722,7 +1722,7 @@ GOOGLE_MAIL_API_KEY=
 
 # Optional
 RESEND_API_KEY=
-APP_URL=https://dashboard.soundpub.xyz
+APP_URL=https://dashboard.Soundpub.xyz
 
 # Monitoring (Optional)
 SENTRY_DSN=
@@ -1779,7 +1779,7 @@ SELECT
   COUNT(*) AS total_signups,
   COUNT(*) FILTER (WHERE email_verified = true) AS verified,
   ROUND(100.0 * COUNT(*) FILTER (WHERE email_verified = true) / COUNT(*), 2) AS verification_rate
-FROM soundpub.profiles
+FROM Soundpub.profiles
 WHERE created_at >= NOW() - INTERVAL '30 days'
 GROUP BY DATE(created_at)
 ORDER BY date DESC;
@@ -1789,7 +1789,7 @@ SELECT
   event_type,
   COUNT(*) AS event_count,
   COUNT(DISTINCT user_id) AS unique_users
-FROM soundpub.auth_events
+FROM Soundpub.auth_events
 WHERE event_type IN ('password_reset_requested', 'password_reset_completed')
   AND created_at >= NOW() - INTERVAL '7 days'
 GROUP BY event_type;
@@ -1801,7 +1801,7 @@ SELECT
   attempt_count,
   blocked_until,
   last_attempt_at
-FROM soundpub.rate_limits
+FROM Soundpub.rate_limits
 WHERE blocked_until > NOW()
 ORDER BY last_attempt_at DESC;
 
@@ -1809,7 +1809,7 @@ ORDER BY last_attempt_at DESC;
 SELECT 
   DATE(created_at) AS date,
   COUNT(*) AS failed_attempts
-FROM soundpub.auth_events
+FROM Soundpub.auth_events
 WHERE event_type = 'email_verification_failed'
   AND created_at >= NOW() - INTERVAL '7 days'
 GROUP BY DATE(created_at)

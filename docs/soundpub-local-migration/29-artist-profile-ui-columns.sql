@@ -2,7 +2,7 @@
 -- Fixes PostgREST schema cache error: profile_image_url column missing.
 -- Run this once after managed artist/profile migration.
 
-ALTER TABLE soundpub.artist_profiles
+ALTER TABLE Soundpub.artist_profiles
   ADD COLUMN IF NOT EXISTS profile_image_url text,
   ADD COLUMN IF NOT EXISTS legal_name text,
   ADD COLUMN IF NOT EXISTS country text,
@@ -18,7 +18,7 @@ ALTER TABLE soundpub.artist_profiles
   ADD COLUMN IF NOT EXISTS spotify_synced_at timestamptz,
   ADD COLUMN IF NOT EXISTS verified boolean DEFAULT false;
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON soundpub.artist_profiles TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON soundpub.artist_profiles TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON Soundpub.artist_profiles TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON Soundpub.artist_profiles TO service_role;
 
 NOTIFY pgrst, 'reload schema';

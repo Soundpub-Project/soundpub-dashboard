@@ -1,5 +1,5 @@
 ﻿-- =============================================
--- SOUNDPUB ORPHAN DATA SCAN AND OPTIONAL FIX
+-- Soundpub ORPHAN DATA SCAN AND OPTIONAL FIX
 -- Use this to find profile/release/track references that point to missing users
 -- or profiles without a valid artist role.
 -- =============================================
@@ -13,7 +13,7 @@ SELECT
   p.parent_label_id,
   p.status,
   p.created_at
-FROM soundpub.profiles p
+FROM Soundpub.profiles p
 LEFT JOIN auth.users au ON au.id = p.id
 WHERE au.id IS NULL
 ORDER BY p.created_at DESC;
@@ -28,14 +28,14 @@ SELECT
   parent.full_name AS parent_label_name,
   au.id IS NOT NULL AS has_auth_user,
   array_remove(array_agg(ur.role::text), NULL) AS roles
-FROM soundpub.profiles p
-JOIN soundpub.profiles parent ON parent.id = p.parent_label_id
+FROM Soundpub.profiles p
+JOIN Soundpub.profiles parent ON parent.id = p.parent_label_id
 LEFT JOIN auth.users au ON au.id = p.id
-LEFT JOIN soundpub.user_roles ur ON ur.user_id = p.id
+LEFT JOIN Soundpub.user_roles ur ON ur.user_id = p.id
 WHERE NOT EXISTS (
-  SELECT 1 FROM soundpub.user_roles artist_role
+  SELECT 1 FROM Soundpub.user_roles artist_role
   WHERE artist_role.user_id = p.id
-    AND artist_role.role = 'artist'::soundpub.app_role
+    AND artist_role.role = 'artist'::Soundpub.app_role
 )
 OR au.id IS NULL
 GROUP BY p.id, p.email, p.full_name, p.parent_label_id, parent.full_name, au.id
@@ -52,17 +52,17 @@ SELECT
   label.full_name AS label_name,
   au.id IS NOT NULL AS has_auth_user,
   array_remove(array_agg(ur.role::text), NULL) AS roles
-FROM soundpub.releases r
-LEFT JOIN soundpub.profiles label ON label.id = r.label_id
+FROM Soundpub.releases r
+LEFT JOIN Soundpub.profiles label ON label.id = r.label_id
 LEFT JOIN auth.users au ON au.id = r.artist_user_id
-LEFT JOIN soundpub.user_roles ur ON ur.user_id = r.artist_user_id
+LEFT JOIN Soundpub.user_roles ur ON ur.user_id = r.artist_user_id
 WHERE r.artist_user_id IS NOT NULL
   AND (
     au.id IS NULL
     OR NOT EXISTS (
-      SELECT 1 FROM soundpub.user_roles artist_role
+      SELECT 1 FROM Soundpub.user_roles artist_role
       WHERE artist_role.user_id = r.artist_user_id
-        AND artist_role.role = 'artist'::soundpub.app_role
+        AND artist_role.role = 'artist'::Soundpub.app_role
     )
   )
 GROUP BY r.id, r.title, r.artist_name, r.artist_user_id, r.label_id, label.full_name, au.id
@@ -79,17 +79,17 @@ SELECT
   r.title AS release_title,
   au.id IS NOT NULL AS has_auth_user,
   array_remove(array_agg(ur.role::text), NULL) AS roles
-FROM soundpub.tracks t
-LEFT JOIN soundpub.releases r ON r.id = t.release_id
+FROM Soundpub.tracks t
+LEFT JOIN Soundpub.releases r ON r.id = t.release_id
 LEFT JOIN auth.users au ON au.id = t.artist_user_id
-LEFT JOIN soundpub.user_roles ur ON ur.user_id = t.artist_user_id
+LEFT JOIN Soundpub.user_roles ur ON ur.user_id = t.artist_user_id
 WHERE t.artist_user_id IS NOT NULL
   AND (
     au.id IS NULL
     OR NOT EXISTS (
-      SELECT 1 FROM soundpub.user_roles artist_role
+      SELECT 1 FROM Soundpub.user_roles artist_role
       WHERE artist_role.user_id = t.artist_user_id
-        AND artist_role.role = 'artist'::soundpub.app_role
+        AND artist_role.role = 'artist'::Soundpub.app_role
     )
   )
 GROUP BY t.id, t.title, t.artist_name, t.artist_user_id, t.release_id, r.title, au.id
@@ -104,8 +104,8 @@ SELECT
   r.artist_user_id,
   r.label_id,
   label.full_name AS label_name
-FROM soundpub.releases r
-LEFT JOIN soundpub.profiles label ON label.id = r.label_id
+FROM Soundpub.releases r
+LEFT JOIN Soundpub.profiles label ON label.id = r.label_id
 WHERE r.artist_user_id IS NULL
   AND NULLIF(TRIM(r.artist_name), '') IS NOT NULL
 ORDER BY label.full_name, r.artist_name, r.title;
@@ -116,37 +116,37 @@ ORDER BY label.full_name, r.artist_name, r.title;
 -- =============================================
 
 -- A) Hide invalid child profiles from label/whitelabel artist lists by marking inactive.
--- UPDATE soundpub.profiles p
+-- UPDATE Soundpub.profiles p
 -- SET status = 'inactive', updated_at = now()
 -- WHERE p.parent_label_id IS NOT NULL
 --   AND (
 --     NOT EXISTS (SELECT 1 FROM auth.users au WHERE au.id = p.id)
 --     OR NOT EXISTS (
---       SELECT 1 FROM soundpub.user_roles ur
---       WHERE ur.user_id = p.id AND ur.role = 'artist'::soundpub.app_role
+--       SELECT 1 FROM Soundpub.user_roles ur
+--       WHERE ur.user_id = p.id AND ur.role = 'artist'::Soundpub.app_role
 --     )
 --   );
 
 -- B) Remove invalid artist_user_id links from releases; keeps artist_name text.
--- UPDATE soundpub.releases r
+-- UPDATE Soundpub.releases r
 -- SET artist_user_id = NULL
 -- WHERE r.artist_user_id IS NOT NULL
 --   AND (
 --     NOT EXISTS (SELECT 1 FROM auth.users au WHERE au.id = r.artist_user_id)
 --     OR NOT EXISTS (
---       SELECT 1 FROM soundpub.user_roles ur
---       WHERE ur.user_id = r.artist_user_id AND ur.role = 'artist'::soundpub.app_role
+--       SELECT 1 FROM Soundpub.user_roles ur
+--       WHERE ur.user_id = r.artist_user_id AND ur.role = 'artist'::Soundpub.app_role
 --     )
 --   );
 
 -- C) Remove invalid artist_user_id links from tracks; keeps artist_name text.
--- UPDATE soundpub.tracks t
+-- UPDATE Soundpub.tracks t
 -- SET artist_user_id = NULL
 -- WHERE t.artist_user_id IS NOT NULL
 --   AND (
 --     NOT EXISTS (SELECT 1 FROM auth.users au WHERE au.id = t.artist_user_id)
 --     OR NOT EXISTS (
---       SELECT 1 FROM soundpub.user_roles ur
---       WHERE ur.user_id = t.artist_user_id AND ur.role = 'artist'::soundpub.app_role
+--       SELECT 1 FROM Soundpub.user_roles ur
+--       WHERE ur.user_id = t.artist_user_id AND ur.role = 'artist'::Soundpub.app_role
 --     )
 --   );

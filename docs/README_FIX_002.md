@@ -39,7 +39,7 @@ Migration ini akan menambahkan Auth Verification System ke database Anda:
 
 ### ✅ Database Changes
 
-**Kolom baru di `soundpub.profiles`:**
+**Kolom baru di `Soundpub.profiles`:**
 - `email_verified` (BOOLEAN) - Status verifikasi email
 - `verification_token` (TEXT) - Token untuk verifikasi email
 - `verification_token_expires_at` (TIMESTAMPTZ) - Expiry token verifikasi
@@ -49,8 +49,8 @@ Migration ini akan menambahkan Auth Verification System ke database Anda:
 - `password_reset_sent_at` (TIMESTAMPTZ) - Kapan email reset dikirim
 
 **Table baru:**
-- `soundpub.auth_events` - Log semua auth events (signup, login, reset, dll)
-- `soundpub.rate_limits` - Rate limiting untuk mencegah abuse
+- `Soundpub.auth_events` - Log semua auth events (signup, login, reset, dll)
+- `Soundpub.rate_limits` - Rate limiting untuk mencegah abuse
 
 **Functions baru:**
 - `check_rate_limit()` - Check apakah user kena rate limit
@@ -128,14 +128,14 @@ Setelah migration selesai, verify dengan:
 # Check kolom baru (harus 3 rows)
 docker exec -i supabase-db psql -U postgres -d postgres -c "
 SELECT column_name FROM information_schema.columns 
-WHERE table_schema='soundpub' AND table_name='profiles' 
+WHERE table_schema='Soundpub' AND table_name='profiles' 
 AND column_name IN ('email_verified', 'verification_token', 'password_reset_token');
 "
 
 # Check table baru (harus 2 rows)
 docker exec -i supabase-db psql -U postgres -d postgres -c "
 SELECT table_name FROM information_schema.tables 
-WHERE table_schema='soundpub' AND table_name IN ('auth_events', 'rate_limits');
+WHERE table_schema='Soundpub' AND table_name IN ('auth_events', 'rate_limits');
 "
 ```
 
@@ -156,12 +156,12 @@ Edit docker-compose.yml atau .env di server:
 ```yaml
 functions:
   environment:
-    DATABASE_SCHEMA: "soundpub"
+    DATABASE_SCHEMA: "Soundpub"
     SUPABASE_URL: "https://supabase.carubra.com"
-    APP_URL: "https://dashboard.soundpub.com"
+    APP_URL: "https://dashboard.Soundpub.com"
     # Optional untuk email
     RESEND_API_KEY: "your-key"
-    NOTIFICATION_EMAIL: "no-reply@soundpub.com"
+    NOTIFICATION_EMAIL: "no-reply@Soundpub.com"
 ```
 
 ### 2. Restart Functions Container
@@ -197,7 +197,7 @@ Atau gunakan script:
 3. Check database:
 ```sql
 SELECT email, email_verified, verification_token IS NOT NULL 
-FROM soundpub.profiles 
+FROM Soundpub.profiles 
 WHERE email = 'test@example.com';
 ```
 **Expected:** `email_verified = false`, token exists
@@ -208,7 +208,7 @@ WHERE email = 'test@example.com';
 3. Check database:
 ```sql
 SELECT email, password_reset_token IS NOT NULL 
-FROM soundpub.profiles 
+FROM Soundpub.profiles 
 WHERE email = 'test@example.com';
 ```
 **Expected:** token exists
@@ -216,7 +216,7 @@ WHERE email = 'test@example.com';
 ### Test 3: Auth Events
 ```sql
 SELECT event_type, COUNT(*) 
-FROM soundpub.auth_events 
+FROM Soundpub.auth_events 
 GROUP BY event_type;
 ```
 **Expected:** Events logged (signup_attempted, etc.)
@@ -228,7 +228,7 @@ GROUP BY event_type;
 ### ❌ "permission denied"
 **Solution:**
 ```sql
-GRANT ALTER ON soundpub.profiles TO authenticated;
+GRANT ALTER ON Soundpub.profiles TO authenticated;
 ```
 
 ### ❌ "container not found"
@@ -240,10 +240,10 @@ docker ps | grep supabase
 # Update DOCKER_CONTAINER variable in script
 ```
 
-### ❌ "schema soundpub does not exist"
+### ❌ "schema Soundpub does not exist"
 **Solution:**
 ```sql
-CREATE SCHEMA IF NOT EXISTS soundpub;
+CREATE SCHEMA IF NOT EXISTS Soundpub;
 ```
 
 ### ❌ "column already exists"
@@ -259,7 +259,7 @@ SELECT
   event_type,
   COUNT(*) as count,
   MAX(created_at) as last_occurrence
-FROM soundpub.auth_events
+FROM Soundpub.auth_events
 WHERE created_at >= CURRENT_DATE
 GROUP BY event_type
 ORDER BY count DESC;
@@ -267,7 +267,7 @@ ORDER BY count DESC;
 
 ### Rate Limit Status
 ```sql
-SELECT * FROM soundpub.rate_limits 
+SELECT * FROM Soundpub.rate_limits 
 WHERE blocked_until > NOW()
 ORDER BY last_attempt_at DESC;
 ```
@@ -278,7 +278,7 @@ SELECT
   email,
   verification_sent_at,
   verification_token_expires_at
-FROM soundpub.profiles
+FROM Soundpub.profiles
 WHERE email_verified = false
   AND verification_token IS NOT NULL;
 ```

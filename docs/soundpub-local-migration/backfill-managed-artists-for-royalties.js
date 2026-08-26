@@ -4,7 +4,7 @@ const { createClient } = require('@supabase/supabase-js');
 
 const TARGET_URL = process.env.TARGET_SUPABASE_URL;
 const TARGET_SERVICE_KEY = process.env.TARGET_SUPABASE_SERVICE_KEY;
-const TARGET_SCHEMA = process.env.TARGET_DB_SCHEMA || 'soundpub';
+const TARGET_SCHEMA = process.env.TARGET_DB_SCHEMA || 'Soundpub';
 const DEFAULT_USER_PASSWORD = process.env.DEFAULT_USER_PASSWORD || 'ChangeMe123456!';
 const DRY_RUN = process.argv.includes('--dry-run');
 const LIMIT_GROUPS_ARG = process.argv.find((arg) => arg.startsWith('--limit='));
@@ -41,7 +41,7 @@ function slugify(value) {
 function managedEmail(artistName, labelId) {
   const labelPart = String(labelId || '').replace(/-/g, '').slice(0, 10) || 'label';
   const randomPart = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
-  return `${slugify(artistName).slice(0, 48)}-${labelPart}-${randomPart}@managed.soundpub.local`;
+  return `${slugify(artistName).slice(0, 48)}-${labelPart}-${randomPart}@managed.Soundpub.local`;
 }
 
 async function fetchAll(table, select, buildQuery) {

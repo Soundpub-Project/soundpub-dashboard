@@ -232,7 +232,7 @@ export default function Auth() {
               <p className="font-medium">Langkah selanjutnya:</p>
               <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
                 <li>Buka inbox email Anda</li>
-                <li>Cari email dari SoundPub</li>
+                <li>Cari email dari Soundpub</li>
                 <li>Klik link verifikasi</li>
                 <li>Login dan mulai menggunakan dashboard</li>
               </ol>
@@ -293,7 +293,7 @@ export default function Auth() {
             )}
             {/* <div>
               <CardTitle className="text-2xl font-bold">Selamat Datang</CardTitle>
-              <CardDescription>SoundPub Dashboard</CardDescription>
+              <CardDescription>Soundpub Dashboard</CardDescription>
             </div> */}
 
             {ssoError && (

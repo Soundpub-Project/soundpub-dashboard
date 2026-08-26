@@ -74,7 +74,7 @@ const contractStatusOrder = ['draft', 'generated', 'stamping_pending', 'stamped'
 const pdfServiceUrl = (import.meta as { env?: Record<string, string> }).env?.VITE_PDF_SERVICE_URL || 'http://localhost:3001';
 const contractBucket = (import.meta as { env?: Record<string, string> }).env?.VITE_CONTRACT_BUCKET || 'contracts';
 
-const templatePath = 'FINAL%20-%20DRAFT%20KONTRAK%20SOUNDPUB%20COMPLETE.docx';
+const templatePath = 'FINAL%20-%20DRAFT%20KONTRAK%20Soundpub%20COMPLETE.docx';
 
 const getContractStatusIndex = (status?: string | null) => {
   if (!status) return -1;
@@ -342,7 +342,7 @@ export default function CopyrightRegistrationReview() {
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = objectUrl;
-      link.download = `soundpub-contract-draft-${selected.id}.pdf`;
+      link.download = `Soundpub-contract-draft-${selected.id}.pdf`;
       link.click();
       URL.revokeObjectURL(objectUrl);
       toast.success('Draft PDF berhasil diunduh');

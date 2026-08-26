@@ -1,5 +1,5 @@
 ﻿# ============================================================
-# SOUNDPUB DASHBOARD - DOCKER MIGRATION RUNNER (SSH)
+# Soundpub DASHBOARD - DOCKER MIGRATION RUNNER (SSH)
 # ============================================================
 # Purpose: Run database migration on self-hosted Supabase
 # Target: Docker container supabase-db on remote server
@@ -7,7 +7,7 @@
 # ============================================================
 
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "  SOUNDPUB - Docker Migration Runner (SSH)" -ForegroundColor Cyan
+Write-Host "  Soundpub - Docker Migration Runner (SSH)" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -120,7 +120,7 @@ try {
     Write-Host "[INFO] Verifying new columns..." -ForegroundColor Yellow
     
     $verifyCmd = @"
-ssh ${REMOTE_USER}@${REMOTE_HOST} "docker exec -i $DOCKER_CONTAINER psql -U $POSTGRES_USER -d $DATABASE_NAME -c \"SELECT column_name FROM information_schema.columns WHERE table_schema='soundpub' AND table_name='profiles' AND column_name IN ('email_verified', 'verification_token', 'password_reset_token');\""
+ssh ${REMOTE_USER}@${REMOTE_HOST} "docker exec -i $DOCKER_CONTAINER psql -U $POSTGRES_USER -d $DATABASE_NAME -c \"SELECT column_name FROM information_schema.columns WHERE table_schema='Soundpub' AND table_name='profiles' AND column_name IN ('email_verified', 'verification_token', 'password_reset_token');\""
 "@
     
     Invoke-Expression $verifyCmd
@@ -129,7 +129,7 @@ ssh ${REMOTE_USER}@${REMOTE_HOST} "docker exec -i $DOCKER_CONTAINER psql -U $POS
     Write-Host "[INFO] Verifying new tables..." -ForegroundColor Yellow
     
     $verifyTables = @"
-ssh ${REMOTE_USER}@${REMOTE_HOST} "docker exec -i $DOCKER_CONTAINER psql -U $POSTGRES_USER -d $DATABASE_NAME -c \"SELECT table_name FROM information_schema.tables WHERE table_schema='soundpub' AND table_name IN ('auth_events', 'rate_limits');\""
+ssh ${REMOTE_USER}@${REMOTE_HOST} "docker exec -i $DOCKER_CONTAINER psql -U $POSTGRES_USER -d $DATABASE_NAME -c \"SELECT table_name FROM information_schema.tables WHERE table_schema='Soundpub' AND table_name IN ('auth_events', 'rate_limits');\""
 "@
     
     Invoke-Expression $verifyTables

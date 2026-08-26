@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,7 +26,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
-import { Music, Search, Loader2, Play, Filter, X } from 'lucide-react';
+import { Music, Search, Loader2, Pause, Play, Filter, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -62,6 +62,8 @@ const PAGE_SIZE_OPTIONS = [
   { value: 'all', label: 'Semua' },
 ];
 
+const hasAudioFile = (track: Track) => Boolean(track.audio_url?.trim());
+
 export default function Tracks() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [releases, setReleases] = useState<Release[]>([]);
@@ -76,6 +78,9 @@ export default function Tracks() {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<string>('10');
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -84,14 +89,18 @@ export default function Tracks() {
   const fetchData = async () => {
     try {
       const [tracksRes, releasesRes] = await Promise.all([
-        supabase.from('tracks').select('*').order('created_at', { ascending: false }),
+        supabase
+          .from('tracks')
+          .select('*')
+          .not('audio_url', 'is', null)
+          .order('created_at', { ascending: false }),
         supabase.from('releases').select('id, title, label_id'),
       ]);
 
       if (tracksRes.error) throw tracksRes.error;
       if (releasesRes.error) throw releasesRes.error;
 
-      setTracks(tracksRes.data || []);
+      setTracks((tracksRes.data || []).filter(hasAudioFile));
       setReleases(releasesRes.data || []);
 
       // Fetch labels
@@ -107,6 +116,31 @@ export default function Tracks() {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePlayTrack = async (track: Track) => {
+    const audio = audioRef.current;
+    if (!audio || !track.audio_url) return;
+
+    if (activeTrackId === track.id) {
+      if (audio.paused) {
+        await audio.play();
+      } else {
+        audio.pause();
+      }
+      return;
+    }
+
+    audio.src = track.audio_url;
+    setActiveTrackId(track.id);
+
+    try {
+      await audio.play();
+    } catch (error) {
+      console.error('Error playing track:', error);
+      setActiveTrackId(null);
+      setIsPlaying(false);
     }
   };
 
@@ -205,6 +239,16 @@ export default function Tracks() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        <audio
+          ref={audioRef}
+          className="hidden"
+          onEnded={() => {
+            setActiveTrackId(null);
+            setIsPlaying(false);
+          }}
+          onPause={() => setIsPlaying(false)}
+          onPlay={() => setIsPlaying(true)}
+        />
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Tracks</h1>
           <p className="text-muted-foreground">Daftar semua lagu Anda</p>
@@ -326,9 +370,14 @@ export default function Tracks() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
-                              disabled={!track.audio_url}
+                              onClick={() => void handlePlayTrack(track)}
+                              aria-label={isPlaying && activeTrackId === track.id ? `Jeda ${track.title}` : `Putar ${track.title}`}
                             >
-                              <Play className="h-4 w-4" />
+                              {isPlaying && activeTrackId === track.id ? (
+                                <Pause className="h-4 w-4" />
+                              ) : (
+                                <Play className="h-4 w-4" />
+                              )}
                             </Button>
                           </TableCell>
                           <TableCell className="font-medium">{track.title}</TableCell>

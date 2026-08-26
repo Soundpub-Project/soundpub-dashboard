@@ -2,13 +2,13 @@
 -- CHECK: Schema Ownership and Permissions
 -- =============================================
 
--- Check who owns the soundpub schema
+-- Check who owns the Soundpub schema
 SELECT 
   schema_name,
   schema_owner,
   catalog_name
 FROM information_schema.schemata
-WHERE schema_name = 'soundpub';
+WHERE schema_name = 'Soundpub';
 
 -- Check current user
 SELECT current_user, session_user;
@@ -24,11 +24,11 @@ SELECT
 FROM pg_roles r
 WHERE r.rolname = current_user;
 
--- Check permissions on soundpub schema
+-- Check permissions on Soundpub schema
 SELECT 
   nspname as schema_name,
   nspowner::regrole as owner,
   has_schema_privilege(current_user, nspname, 'USAGE') as has_usage,
   has_schema_privilege(current_user, nspname, 'CREATE') as has_create
 FROM pg_namespace
-WHERE nspname = 'soundpub';
+WHERE nspname = 'Soundpub';

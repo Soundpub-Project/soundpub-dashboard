@@ -336,9 +336,9 @@ export default function UploadRoyalty() {
     
     return Object.entries(labelTotals).map(([label, totalRevenue]) => {
       // Flat split for all labels: 70% Artist, 21% Label, 9% Admin
-      const artistShare = totalRevenue * 0.70;
-      const labelShare = totalRevenue * 0.21;
-      const adminShare = totalRevenue * 0.09;
+      const adminShare = Math.round((totalRevenue * 0.09 + Number.EPSILON) * 100) / 100;
+      const artistShare = Math.round((totalRevenue * 0.70 + Number.EPSILON) * 100) / 100;
+      const labelShare = Math.round((totalRevenue - adminShare - artistShare + Number.EPSILON) * 100) / 100;
       return {
         label,
         totalRevenue,

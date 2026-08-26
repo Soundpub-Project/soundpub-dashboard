@@ -1,5 +1,5 @@
 /**
- * SoundPub Dashboard - Data Migration Script
+ * Soundpub Dashboard - Data Migration Script
  * 
  * Script untuk migrasi data dari Lovable Cloud ke Supabase eksternal.
  * 
@@ -287,7 +287,7 @@ async function migrateStorage() {
 async function main() {
   console.log('');
   console.log('========================================');
-  console.log('  SoundPub Dashboard - Data Migration');
+  console.log('  Soundpub Dashboard - Data Migration');
   console.log('========================================');
   console.log('');
   console.log(`Source: ${SOURCE_URL}`);

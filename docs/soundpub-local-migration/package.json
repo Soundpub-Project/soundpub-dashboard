@@ -1,11 +1,11 @@
 ﻿{
-    "name":  "soundpub-local-migration",
+    "name":  "Soundpub-local-migration",
     "version":  "1.0.0",
     "private":  true,
     "type":  "commonjs",
     "scripts":  {
-                    "import:csv":  "node import-csv-soundpub.js",
-                    "check:csv":  "node import-csv-soundpub.js --check-only",
+                    "import:csv":  "node import-csv-Soundpub.js",
+                    "check:csv":  "node import-csv-Soundpub.js --check-only",
                     "backfill:managed-artists":  "node backfill-managed-artists-for-royalties.js",
                     "backfill:managed-artists:dry":  "node backfill-managed-artists-for-royalties.js --dry-run"
                 },

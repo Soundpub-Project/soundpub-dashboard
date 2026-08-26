@@ -1,8 +1,8 @@
-CREATE OR REPLACE FUNCTION soundpub.handle_new_user()
+CREATE OR REPLACE FUNCTION Soundpub.handle_new_user()
  RETURNS trigger
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'soundpub', 'public', 'auth'
+ SET search_path TO 'Soundpub', 'public', 'auth'
 AS $function$
 DECLARE
   v_full_name TEXT;
@@ -33,7 +33,7 @@ BEGIN
     ELSE NULL
   END;
 
-  INSERT INTO soundpub.profiles (
+  INSERT INTO Soundpub.profiles (
     id,
     email,
     full_name,
@@ -55,11 +55,11 @@ BEGIN
   )
   ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
-    full_name = COALESCE(soundpub.profiles.full_name, EXCLUDED.full_name),
-    sso_provider = COALESCE(soundpub.profiles.sso_provider, EXCLUDED.sso_provider),
+    full_name = COALESCE(Soundpub.profiles.full_name, EXCLUDED.full_name),
+    sso_provider = COALESCE(Soundpub.profiles.sso_provider, EXCLUDED.sso_provider),
     updated_at = NOW();
 
-  INSERT INTO soundpub.user_roles (user_id, role)
+  INSERT INTO Soundpub.user_roles (user_id, role)
   VALUES (NEW.id, 'artist')
   ON CONFLICT (user_id, role) DO NOTHING;
 

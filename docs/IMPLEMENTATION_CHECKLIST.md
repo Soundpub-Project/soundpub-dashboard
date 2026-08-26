@@ -1,5 +1,5 @@
 ﻿# ✅ IMPLEMENTATION CHECKLIST
-**SoundPub Dashboard - Auth Verification System**
+**Soundpub Dashboard - Auth Verification System**
 
 ---
 
@@ -16,7 +16,7 @@
 
 ### Environment Preparation
 - [ ] Verify Supabase self-hosted running
-- [ ] Confirm database access (soundpub schema)
+- [ ] Confirm database access (Soundpub schema)
 - [ ] Check Gmail API credentials valid
 - [ ] Backup production database
 - [ ] Setup environment variables (staging & production)
@@ -29,7 +29,7 @@
 ### Pre-Migration
 - [ ] Create database backup
   ```bash
-  pg_dump soundpub > backups/backup_$(date +%Y%m%d_%H%M%S).sql
+  pg_dump Soundpub > backups/backup_$(date +%Y%m%d_%H%M%S).sql
   ```
 - [ ] Verify backup integrity
   ```bash
@@ -42,32 +42,32 @@
 - [ ] Connect to staging database
 - [ ] Run migration script
   ```bash
-  psql -h staging-db -U postgres soundpub < migrations-complete/002_auth_verification_system.sql
+  psql -h staging-db -U postgres Soundpub < migrations-complete/002_auth_verification_system.sql
   ```
 - [ ] Verify new columns exist
   ```sql
   SELECT column_name, data_type 
   FROM information_schema.columns 
-  WHERE table_schema='soundpub' AND table_name='profiles'
+  WHERE table_schema='Soundpub' AND table_name='profiles'
   AND column_name LIKE '%token%' OR column_name = 'email_verified';
   ```
 - [ ] Verify new tables created
   ```sql
   SELECT table_name FROM information_schema.tables 
-  WHERE table_schema='soundpub' 
+  WHERE table_schema='Soundpub' 
   AND table_name IN ('auth_events', 'rate_limits');
   ```
 - [ ] Verify indexes created
   ```sql
   SELECT indexname FROM pg_indexes 
-  WHERE schemaname='soundpub' 
+  WHERE schemaname='Soundpub' 
   AND indexname LIKE 'idx_%token%';
   ```
 - [ ] Test new functions
   ```sql
-  SELECT soundpub.cleanup_rate_limits();
-  SELECT soundpub.cleanup_expired_tokens();
-  SELECT soundpub.check_rate_limit('test@example.com', 'password_reset', 3, 60);
+  SELECT Soundpub.cleanup_rate_limits();
+  SELECT Soundpub.cleanup_expired_tokens();
+  SELECT Soundpub.check_rate_limit('test@example.com', 'password_reset', 3, 60);
   ```
 
 ### Run Migration (Production)
@@ -393,8 +393,8 @@
   ```
 - [ ] Deploy frontend
   ```bash
-  docker build -t soundpub-dashboard:v2.0.0 .
-  docker tag soundpub-dashboard:v2.0.0 soundpub-dashboard:latest
+  docker build -t Soundpub-dashboard:v2.0.0 .
+  docker tag Soundpub-dashboard:v2.0.0 Soundpub-dashboard:latest
   docker-compose up -d
   ```
 - [ ] Verify deployment successful
@@ -433,8 +433,8 @@
 - [ ] Review weekly metrics
 - [ ] Run cleanup functions manually (if cron not setup)
   ```sql
-  SELECT soundpub.cleanup_rate_limits();
-  SELECT soundpub.cleanup_expired_tokens();
+  SELECT Soundpub.cleanup_rate_limits();
+  SELECT Soundpub.cleanup_expired_tokens();
   ```
 - [ ] Review user feedback
 - [ ] Update documentation if needed
@@ -445,7 +445,7 @@
 - [ ] Performance review
 - [ ] Database cleanup (auth_events > 90 days)
   ```sql
-  SELECT soundpub.cleanup_old_auth_events();
+  SELECT Soundpub.cleanup_old_auth_events();
   ```
 - [ ] Dependency updates
 - [ ] Backup rotation
@@ -502,7 +502,7 @@
 **Step 2: Rollback Frontend**
 ```bash
 docker-compose down
-docker run -d soundpub-dashboard:v1.0.0
+docker run -d Soundpub-dashboard:v1.0.0
 ```
 
 **Step 3: Rollback Backend Functions (if needed)**
@@ -514,7 +514,7 @@ supabase functions deploy send-app-email --project-ref prod
 **Step 4: Rollback Database (if needed - EXTREME)**
 ```bash
 # Only if database corruption occurs
-pg_restore -d soundpub backups/backup_YYYYMMDD_HHMMSS.sql
+pg_restore -d Soundpub backups/backup_YYYYMMDD_HHMMSS.sql
 ```
 
 **Step 5: Verify System Stable**
@@ -554,4 +554,4 @@ pg_restore -d soundpub backups/backup_YYYYMMDD_HHMMSS.sql
 
 🎉 **Congratulations! Auth Verification System is now live!** 🎉
 
-🎵 **SoundPub - Empowering Musicians, Securing Accounts** 🎵
+🎵 **Soundpub - Empowering Musicians, Securing Accounts** 🎵

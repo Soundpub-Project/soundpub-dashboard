@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -40,13 +40,13 @@ import {
   PaginationPrevious,
 } from '@/components/ui/pagination';
 import { Disc3, Search, Plus, Loader2, Pencil, Eye, MoreHorizontal, Trash2, Archive, ArchiveRestore, CheckSquare, Beaker, Filter, X, CheckCircle, DollarSign } from 'lucide-react';
-import { ReleaseFormDialog } from '@/components/releases/ReleaseFormDialog';
 import { ActivateReleaseModal } from '@/components/releases/ActivateReleaseModal';
 import { RejectReleaseModal } from '@/components/releases/RejectReleaseModal';
 
 import { DeleteReleaseDialog } from '@/components/releases/DeleteReleaseDialog';
 import { ArchiveReleaseDialog } from '@/components/releases/ArchiveReleaseDialog';
 import { toast } from 'sonner';
+import { createXenditInvoice, openXenditInvoice } from '@/lib/xendit';
 
 interface Release {
   id: string;
@@ -85,7 +85,6 @@ export default function Releases() {
   const [labels, setLabels] = useState<LabelInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [formOpen, setFormOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
@@ -96,7 +95,6 @@ export default function Releases() {
   const [showArchived, setShowArchived] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkLoading, setBulkLoading] = useState(false);
-  const [lyricsOnlyMode, setLyricsOnlyMode] = useState(false);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -290,34 +288,18 @@ export default function Releases() {
       return;
     }
     setSelectedRelease(null);
-    setLyricsOnlyMode(false);
     navigate('/dashboard/releases/new');
   };
 
   const handleEditRelease = (release: Release) => {
-    setSelectedRelease(release);
-    if (isWhitelabel && !isAdmin && release.status === 'active') {
-      setLyricsOnlyMode(true);
-    } else {
-      setLyricsOnlyMode(false);
-    }
-    setFormOpen(true);
+    navigate(`/dashboard/releases/${release.id}/edit`);
   };
 
   const handleContinuePayment = async (release: Release) => {
     try {
-      const { data: invoiceData, error: invoiceError } = await supabase.functions.invoke('create-xendit-invoice', {
-        body: { release_id: release.id },
-      });
-
-      if (invoiceError) throw new Error(invoiceError.message || 'Gagal membuat invoice');
-
-      if (invoiceData?.invoice_url) {
-        toast.success('Mengarahkan ke halaman pembayaran...');
-        window.location.href = invoiceData.invoice_url;
-      } else {
-        throw new Error('Invoice URL tidak ditemukan');
-      }
+      const invoiceData = await createXenditInvoice(release.id);
+      toast.success('Mengarahkan ke halaman pembayaran...');
+      openXenditInvoice(invoiceData.invoice_url);
     } catch (error: any) {
       console.error('Payment error:', error);
       toast.error(error.message || 'Gagal memproses pembayaran');
@@ -949,14 +931,6 @@ export default function Releases() {
         </Card>
 
         {/* Dialogs */}
-        <ReleaseFormDialog
-          open={formOpen}
-          onOpenChange={setFormOpen}
-          release={selectedRelease}
-          onSuccess={handleFormSuccess}
-          lyricsOnlyMode={lyricsOnlyMode}
-        />
-
 
         <DeleteReleaseDialog
           open={deleteDialogOpen}
@@ -999,5 +973,3 @@ export default function Releases() {
     </DashboardLayout>
   );
 }
-
-

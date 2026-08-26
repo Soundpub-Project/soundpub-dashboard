@@ -17,7 +17,7 @@ SELECT
   status,
   created_at,
   error_message
-FROM soundpub.email_send_log
+FROM Soundpub.email_send_log
 WHERE created_at > NOW() - INTERVAL '1 hour'
 ORDER BY created_at DESC;
 ```
@@ -40,7 +40,7 @@ Expected: < 2 seconds
 
 **Check:**
 ```sql
-SELECT * FROM soundpub.email_send_log 
+SELECT * FROM Soundpub.email_send_log 
 WHERE status = 'failed' 
 ORDER BY created_at DESC LIMIT 10;
 ```
@@ -83,7 +83,7 @@ supabase functions deploy send-password-reset --no-verify-jwt
 SELECT 
   error_message,
   COUNT(*) as count
-FROM soundpub.email_send_log
+FROM Soundpub.email_send_log
 WHERE status = 'failed'
   AND created_at > NOW() - INTERVAL '24 hours'
 GROUP BY error_message
@@ -105,7 +105,7 @@ SELECT
   template_name,
   idempotency_key,
   COUNT(*) as count
-FROM soundpub.email_send_log
+FROM Soundpub.email_send_log
 WHERE created_at > NOW() - INTERVAL '1 hour'
 GROUP BY recipient_email, template_name, idempotency_key
 HAVING COUNT(*) > 1;
@@ -132,7 +132,7 @@ SELECT
   status,
   COUNT(*) as count,
   ROUND(AVG(EXTRACT(EPOCH FROM (created_at - created_at))), 2) as avg_delay_seconds
-FROM soundpub.email_send_log
+FROM Soundpub.email_send_log
 WHERE created_at > NOW() - INTERVAL '1 hour'
 GROUP BY status;
 ```
@@ -145,7 +145,7 @@ SELECT
   attempt_count,
   window_start,
   blocked_until
-FROM soundpub.rate_limits
+FROM Soundpub.rate_limits
 WHERE blocked_until > NOW()
 ORDER BY blocked_until DESC;
 ```
@@ -182,7 +182,7 @@ WITH recent_emails AS (
     status,
     COUNT(*) as count,
     MAX(created_at) as last_sent
-  FROM soundpub.email_send_log
+  FROM Soundpub.email_send_log
   WHERE created_at > NOW() - INTERVAL '1 hour'
   GROUP BY status
 )

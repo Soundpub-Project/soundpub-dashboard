@@ -17,6 +17,7 @@ import Dashboard from "./pages/Dashboard";
 import Releases from "./pages/Releases";
 import ReleaseDetail from "./pages/ReleaseDetail";
 import ReleaseCreate from "./pages/ReleaseCreate";
+import ReleaseEdit from "./pages/ReleaseEdit";
 import Tracks from "./pages/Tracks";
 import Royalties from "./pages/Royalties";
 import RoyaltySummary from "./pages/RoyaltySummary";
@@ -93,6 +94,11 @@ const App = () => (
               <Route path="/dashboard/releases/new" element={
                 <ProtectedRoute>
                   <ReleaseCreate />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/releases/:id/edit" element={
+                <ProtectedRoute>
+                  <ReleaseEdit />
                 </ProtectedRoute>
               } />
               <Route path="/dashboard/releases/:id" element={

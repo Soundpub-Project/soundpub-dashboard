@@ -1,5 +1,5 @@
 /**
- * SoundPub Dashboard - CSV Import Script
+ * Soundpub Dashboard - CSV Import Script
  * 
  * Import data dari CSV files (hasil export dari Lovable Cloud) ke Supabase target.
  * TIDAK membutuhkan SOURCE_SUPABASE_SERVICE_KEY.
@@ -293,7 +293,7 @@ async function importTable(step, table, filename, mapFn) {
 async function main() {
   console.log('');
   console.log('========================================');
-  console.log('  SoundPub Dashboard - CSV Import');
+  console.log('  Soundpub Dashboard - CSV Import');
   console.log('========================================');
   console.log('');
   console.log(`Target: ${TARGET_URL}`);

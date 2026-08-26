@@ -11,8 +11,8 @@ Sebelum menjalankan migration, pastikan semua item di bawah sudah di-check:
 ├────────────────────────────────────────────────────────────────────────────────┤
 │   [ ] Punya akses ke database server                                          │
 │   [ ] Username & password tersedia                                            │
-│   [ ] Database: soundpub                                                      │
-│   [ ] Schema: soundpub                                                        │
+│   [ ] Database: Soundpub                                                      │
+│   [ ] Schema: Soundpub                                                        │
 │   [ ] Koneksi telah di-test dan berhasil                                     │
 └────────────────────────────────────────────────────────────────────────────────┘
 
@@ -31,7 +31,7 @@ Sebelum menjalankan migration, pastikan semua item di bawah sudah di-check:
 │ 3. MIGRATION SCRIPT                                                            │
 ├────────────────────────────────────────────────────────────────────────────────┤
 │   [✅] Migration script exists                                                 │
-│   [✅] Script uses 'soundpub' schema                                           │
+│   [✅] Script uses 'Soundpub' schema                                           │
 │   [✅] Script is idempotent (IF NOT EXISTS)                                    │
 │   [✅] Script uses transactions (BEGIN/COMMIT)                                 │
 │   [ ] Script has been reviewed by team                                        │

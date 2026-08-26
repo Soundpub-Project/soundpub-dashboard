@@ -2,8 +2,8 @@ import Keycloak from 'keycloak-js';
 
 const SSO_BASE_URL = import.meta.env.VITE_SSO_BASE_URL || 'https://sso.iccn.or.id';
 const SSO_REALM = import.meta.env.VITE_SSO_REALM || 'PORTALICCN';
-const SSO_CLIENT_ID = import.meta.env.VITE_SSO_CLIENT_ID || 'soundpub';
-const SSO_PKCE_KEY = 'soundpub_iccn_sso_pkce';
+const SSO_CLIENT_ID = import.meta.env.VITE_SSO_CLIENT_ID || 'Soundpub';
+const SSO_PKCE_KEY = 'Soundpub_iccn_sso_pkce';
 
 let keycloakInstance: Keycloak | null = null;
 let initPromise: Promise<boolean> | null = null;
@@ -29,7 +29,7 @@ export interface SsoCallbackParams {
 // recently, so we can be more aggressive with silent checks even
 // when 3rd-party cookies are blocked between visits.
 // ---------------------------------------------------------------
-const SSO_ACTIVE_KEY = 'soundpub_iccn_sso_active';
+const SSO_ACTIVE_KEY = 'Soundpub_iccn_sso_active';
 const SSO_ACTIVE_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 
 export function markSsoActive(): void {
@@ -222,8 +222,8 @@ export function setupTokenRefresh(onRefresh?: (token: string) => void): void {
  */
 export async function initKeycloakAndLogin(): Promise<void> {
   try {
-    sessionStorage.removeItem('soundpub_iccn_exchange_key');
-    sessionStorage.removeItem('soundpub_iccn_prompt_none_tried');
+    sessionStorage.removeItem('Soundpub_iccn_exchange_key');
+    sessionStorage.removeItem('Soundpub_iccn_prompt_none_tried');
     console.log('SSO: Redirecting to ICCN authorization endpoint...');
     window.location.href = await createSsoLoginUrl();
   } catch (error) {
@@ -253,8 +253,8 @@ export function keycloakLogout(): void {
 
   try {
     sessionStorage.removeItem(SSO_PKCE_KEY);
-    sessionStorage.removeItem('soundpub_iccn_prompt_none_tried');
-    sessionStorage.removeItem('soundpub_iccn_exchange_key');
+    sessionStorage.removeItem('Soundpub_iccn_prompt_none_tried');
+    sessionStorage.removeItem('Soundpub_iccn_exchange_key');
   } catch {
     // ignore
   }

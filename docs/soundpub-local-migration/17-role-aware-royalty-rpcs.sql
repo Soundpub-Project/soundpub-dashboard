@@ -1,10 +1,10 @@
 ﻿-- =============================================
--- SOUNDPUB ROLE-AWARE ROYALTY RPCS
--- Run after 16-normalize-soundpub-split-and-recalculate.sql
+-- Soundpub ROLE-AWARE ROYALTY RPCS
+-- Run after 16-normalize-Soundpub-split-and-recalculate.sql
 -- Gross revenue = net_revenue. Net balance/share = artist_revenue or label_revenue.
 -- =============================================
 
-CREATE OR REPLACE FUNCTION soundpub.current_user_can_view_royalty(
+CREATE OR REPLACE FUNCTION Soundpub.current_user_can_view_royalty(
   _artist_user_id uuid,
   _label_user_id uuid
 )
@@ -12,23 +12,23 @@ RETURNS boolean
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO soundpub, auth
+SET search_path TO Soundpub, auth
 AS $$
   SELECT
     auth.uid() IS NOT NULL
     AND (
       EXISTS (
         SELECT 1
-        FROM soundpub.user_roles ur
+        FROM Soundpub.user_roles ur
         WHERE ur.user_id = auth.uid()
-          AND ur.role IN ('admin'::soundpub.app_role, 'superadmin'::soundpub.app_role)
+          AND ur.role IN ('admin'::Soundpub.app_role, 'superadmin'::Soundpub.app_role)
       )
       OR _artist_user_id = auth.uid()
       OR _label_user_id = auth.uid()
     );
 $$;
 
-CREATE OR REPLACE FUNCTION soundpub.get_royalty_stats()
+CREATE OR REPLACE FUNCTION Soundpub.get_royalty_stats()
 RETURNS TABLE(
   total_revenue numeric,
   total_streams bigint,
@@ -40,7 +40,7 @@ RETURNS TABLE(
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO soundpub
+SET search_path TO Soundpub
 AS $$
   SELECT
     COALESCE(SUM(r.net_revenue), 0) AS total_revenue,
@@ -49,78 +49,78 @@ AS $$
     COUNT(DISTINCT r.label_name) AS unique_labels,
     COUNT(DISTINCT r.platform) AS unique_platforms,
     COUNT(DISTINCT r.isrc) AS unique_tracks
-  FROM soundpub.royalties r
-  WHERE soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id);
+  FROM Soundpub.royalties r
+  WHERE Soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id);
 $$;
 
-CREATE OR REPLACE FUNCTION soundpub.get_royalty_periods()
+CREATE OR REPLACE FUNCTION Soundpub.get_royalty_periods()
 RETURNS TABLE(period text)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO soundpub
+SET search_path TO Soundpub
 AS $$
   SELECT DISTINCT r.period
-  FROM soundpub.royalties r
+  FROM Soundpub.royalties r
   WHERE r.period IS NOT NULL
-    AND soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
+    AND Soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
   ORDER BY r.period DESC;
 $$;
 
-CREATE OR REPLACE FUNCTION soundpub.get_royalty_monthly_summary()
+CREATE OR REPLACE FUNCTION Soundpub.get_royalty_monthly_summary()
 RETURNS TABLE(period text, revenue numeric, streams bigint)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO soundpub
+SET search_path TO Soundpub
 AS $$
   SELECT
     r.period,
     COALESCE(SUM(r.net_revenue), 0) AS revenue,
     COALESCE(SUM(r.unit_penjualan)::bigint, 0) AS streams
-  FROM soundpub.royalties r
-  WHERE soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
+  FROM Soundpub.royalties r
+  WHERE Soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
   GROUP BY r.period
   ORDER BY r.period;
 $$;
 
-CREATE OR REPLACE FUNCTION soundpub.get_royalty_platform_summary(_limit integer DEFAULT 10)
+CREATE OR REPLACE FUNCTION Soundpub.get_royalty_platform_summary(_limit integer DEFAULT 10)
 RETURNS TABLE(platform text, revenue numeric, streams bigint)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO soundpub
+SET search_path TO Soundpub
 AS $$
   SELECT
     COALESCE(r.platform, 'Unknown') AS platform,
     COALESCE(SUM(r.net_revenue), 0) AS revenue,
     COALESCE(SUM(r.unit_penjualan)::bigint, 0) AS streams
-  FROM soundpub.royalties r
-  WHERE soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
+  FROM Soundpub.royalties r
+  WHERE Soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
   GROUP BY COALESCE(r.platform, 'Unknown')
   ORDER BY revenue DESC
   LIMIT _limit;
 $$;
 
-CREATE OR REPLACE FUNCTION soundpub.get_royalty_country_summary(_limit integer DEFAULT 10)
+CREATE OR REPLACE FUNCTION Soundpub.get_royalty_country_summary(_limit integer DEFAULT 10)
 RETURNS TABLE(country text, revenue numeric, streams bigint)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO soundpub
+SET search_path TO Soundpub
 AS $$
   SELECT
     COALESCE(r.country, 'Unknown') AS country,
     COALESCE(SUM(r.net_revenue), 0) AS revenue,
     COALESCE(SUM(r.unit_penjualan)::bigint, 0) AS streams
-  FROM soundpub.royalties r
-  WHERE soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
+  FROM Soundpub.royalties r
+  WHERE Soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
   GROUP BY COALESCE(r.country, 'Unknown')
   ORDER BY revenue DESC
   LIMIT _limit;
 $$;
 
-CREATE OR REPLACE FUNCTION soundpub.get_royalty_period_summary()
+CREATE OR REPLACE FUNCTION Soundpub.get_royalty_period_summary()
 RETURNS TABLE(
   period text,
   revenue numeric,
@@ -135,12 +135,12 @@ RETURNS TABLE(
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO soundpub
+SET search_path TO Soundpub
 AS $$
   WITH visible AS (
     SELECT *
-    FROM soundpub.royalties r
-    WHERE soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
+    FROM Soundpub.royalties r
+    WHERE Soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
   ), base AS (
     SELECT
       r.period,
@@ -178,7 +178,7 @@ AS $$
   ORDER BY b.period DESC;
 $$;
 
-CREATE OR REPLACE FUNCTION soundpub.get_royalty_label_breakdown(_period text DEFAULT NULL)
+CREATE OR REPLACE FUNCTION Soundpub.get_royalty_label_breakdown(_period text DEFAULT NULL)
 RETURNS TABLE(
   label_name text,
   revenue numeric,
@@ -190,7 +190,7 @@ RETURNS TABLE(
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO soundpub
+SET search_path TO Soundpub
 AS $$
   SELECT
     COALESCE(r.label_name, 'Unknown') AS label_name,
@@ -198,21 +198,21 @@ AS $$
     COALESCE(SUM(r.unit_penjualan)::bigint, 0) AS streams,
     COALESCE(SUM(r.artist_revenue), 0) AS artist_share,
     COALESCE(SUM(r.label_revenue), 0) AS label_share,
-    COALESCE(SUM(r.soundpub_revenue), 0) AS admin_share
-  FROM soundpub.royalties r
+    COALESCE(SUM(r.Soundpub_revenue), 0) AS admin_share
+  FROM Soundpub.royalties r
   WHERE (_period IS NULL OR r.period = _period)
-    AND soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
+    AND Soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
   GROUP BY COALESCE(r.label_name, 'Unknown')
   ORDER BY revenue DESC;
 $$;
 
-CREATE OR REPLACE FUNCTION soundpub.get_royalty_artist_breakdown(_period text DEFAULT NULL, _limit integer DEFAULT 20)
+CREATE OR REPLACE FUNCTION Soundpub.get_royalty_artist_breakdown(_period text DEFAULT NULL, _limit integer DEFAULT 20)
 RETURNS TABLE(
   artist_name text,
   revenue numeric,
   streams bigint,
   track_count bigint,
-  is_soundpub boolean,
+  is_Soundpub boolean,
   artist_share numeric,
   label_share numeric,
   admin_share numeric
@@ -220,26 +220,26 @@ RETURNS TABLE(
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO soundpub
+SET search_path TO Soundpub
 AS $$
   SELECT
     COALESCE(r.artist, r.artist_name, 'Unknown') AS artist_name,
     COALESCE(SUM(r.net_revenue), 0) AS revenue,
     COALESCE(SUM(r.unit_penjualan)::bigint, 0) AS streams,
     COUNT(DISTINCT r.isrc) AS track_count,
-    BOOL_OR(r.label_user_id = '423ecca4-2cd0-429d-b9f8-f9a8e8135289'::uuid) AS is_soundpub,
+    BOOL_OR(r.label_user_id = '423ecca4-2cd0-429d-b9f8-f9a8e8135289'::uuid) AS is_Soundpub,
     COALESCE(SUM(r.artist_revenue), 0) AS artist_share,
     COALESCE(SUM(r.label_revenue), 0) AS label_share,
-    COALESCE(SUM(r.soundpub_revenue), 0) AS admin_share
-  FROM soundpub.royalties r
+    COALESCE(SUM(r.Soundpub_revenue), 0) AS admin_share
+  FROM Soundpub.royalties r
   WHERE (_period IS NULL OR r.period = _period)
-    AND soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
+    AND Soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
   GROUP BY COALESCE(r.artist, r.artist_name, 'Unknown')
   ORDER BY revenue DESC
   LIMIT _limit;
 $$;
 
-CREATE OR REPLACE FUNCTION soundpub.get_royalty_track_breakdown(_period text DEFAULT NULL)
+CREATE OR REPLACE FUNCTION Soundpub.get_royalty_track_breakdown(_period text DEFAULT NULL)
 RETURNS TABLE(
   isrc text,
   title text,
@@ -249,7 +249,7 @@ RETURNS TABLE(
   streams bigint,
   platform_count bigint,
   country_count bigint,
-  is_soundpub boolean,
+  is_Soundpub boolean,
   artist_share numeric,
   label_share numeric,
   admin_share numeric
@@ -257,7 +257,7 @@ RETURNS TABLE(
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO soundpub
+SET search_path TO Soundpub
 AS $$
   SELECT
     r.isrc,
@@ -268,43 +268,43 @@ AS $$
     COALESCE(SUM(r.unit_penjualan)::bigint, 0) AS streams,
     COUNT(DISTINCT r.platform) AS platform_count,
     COUNT(DISTINCT r.country) AS country_count,
-    BOOL_OR(r.label_user_id = '423ecca4-2cd0-429d-b9f8-f9a8e8135289'::uuid) AS is_soundpub,
+    BOOL_OR(r.label_user_id = '423ecca4-2cd0-429d-b9f8-f9a8e8135289'::uuid) AS is_Soundpub,
     COALESCE(SUM(r.artist_revenue), 0) AS artist_share,
     COALESCE(SUM(r.label_revenue), 0) AS label_share,
-    COALESCE(SUM(r.soundpub_revenue), 0) AS admin_share
-  FROM soundpub.royalties r
+    COALESCE(SUM(r.Soundpub_revenue), 0) AS admin_share
+  FROM Soundpub.royalties r
   WHERE (_period IS NULL OR r.period = _period)
     AND r.isrc IS NOT NULL
-    AND soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
+    AND Soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
   GROUP BY r.isrc
   ORDER BY revenue DESC;
 $$;
 
-CREATE OR REPLACE FUNCTION soundpub.get_royalty_comparison(_current_periods text[], _previous_periods text[])
+CREATE OR REPLACE FUNCTION Soundpub.get_royalty_comparison(_current_periods text[], _previous_periods text[])
 RETURNS TABLE(data_type text, period text, revenue numeric, streams bigint)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO soundpub
+SET search_path TO Soundpub
 AS $$
   SELECT 'current'::text AS data_type, r.period,
     COALESCE(SUM(r.net_revenue), 0) AS revenue,
     COALESCE(SUM(r.unit_penjualan)::bigint, 0) AS streams
-  FROM soundpub.royalties r
+  FROM Soundpub.royalties r
   WHERE r.period = ANY(_current_periods)
-    AND soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
+    AND Soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
   GROUP BY r.period
   UNION ALL
   SELECT 'previous'::text AS data_type, r.period,
     COALESCE(SUM(r.net_revenue), 0) AS revenue,
     COALESCE(SUM(r.unit_penjualan)::bigint, 0) AS streams
-  FROM soundpub.royalties r
+  FROM Soundpub.royalties r
   WHERE r.period = ANY(_previous_periods)
-    AND soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
+    AND Soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
   GROUP BY r.period;
 $$;
 
-CREATE OR REPLACE FUNCTION soundpub.get_royalty_top_performers(
+CREATE OR REPLACE FUNCTION Soundpub.get_royalty_top_performers(
   _current_periods text[],
   _previous_periods text[],
   _group_by text DEFAULT 'title',
@@ -314,7 +314,7 @@ RETURNS TABLE(name text, revenue numeric, streams bigint, growth numeric)
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
-SET search_path TO soundpub
+SET search_path TO Soundpub
 AS $$
 BEGIN
   RETURN QUERY
@@ -327,9 +327,9 @@ BEGIN
       END AS group_name,
       COALESCE(SUM(r.net_revenue), 0) AS current_revenue,
       COALESCE(SUM(r.unit_penjualan)::bigint, 0) AS current_streams
-    FROM soundpub.royalties r
+    FROM Soundpub.royalties r
     WHERE r.period = ANY(_current_periods)
-      AND soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
+      AND Soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
     GROUP BY group_name
   ), previous_data AS (
     SELECT
@@ -339,9 +339,9 @@ BEGIN
         ELSE COALESCE(r.title, 'Unknown')
       END AS group_name,
       COALESCE(SUM(r.net_revenue), 0) AS previous_revenue
-    FROM soundpub.royalties r
+    FROM Soundpub.royalties r
     WHERE r.period = ANY(_previous_periods)
-      AND soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
+      AND Soundpub.current_user_can_view_royalty(r.artist_user_id, r.label_user_id)
     GROUP BY group_name
   )
   SELECT
@@ -359,6 +359,6 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION soundpub.current_user_can_view_royalty(uuid, uuid) TO authenticated, service_role;
-GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA soundpub TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION Soundpub.current_user_can_view_royalty(uuid, uuid) TO authenticated, service_role;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA Soundpub TO anon, authenticated, service_role;
 NOTIFY pgrst, 'reload schema';

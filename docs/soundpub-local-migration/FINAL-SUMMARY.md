@@ -16,8 +16,8 @@ A complete solution package with **11 files (87.55 KB)** to fix the Supabase sch
 
 ### The Problem (From Attached File)
 ```
-ERROR:  must be owner of schema soundpub
-WARNING:  no privileges were granted for "soundpub"
+ERROR:  must be owner of schema Soundpub
+WARNING:  no privileges were granted for "Soundpub"
 ```
 
 ### The Solution
@@ -27,7 +27,7 @@ Grant CREATE privilege and full permissions to `postgres` user while keeping sch
 
 ## 📁 All Files Created
 
-**Location:** `docs/soundpub-local-migration/`
+**Location:** `docs/Soundpub-local-migration/`
 
 | # | File | Size | Purpose |
 |---|------|------|---------|
@@ -89,8 +89,8 @@ Automated execution with built-in verification.
 ## ✅ What This Fixes
 
 ### Before
-- ❌ Cannot create triggers on soundpub.profiles
-- ❌ Cannot modify soundpub schema
+- ❌ Cannot create triggers on Soundpub.profiles
+- ❌ Cannot modify Soundpub schema
 - ❌ Permission denied errors
 - ❌ Blocks trigger creation (files 43, 44)
 
@@ -126,7 +126,7 @@ Automated execution with built-in verification.
 
 **Environment:** Supabase self-hosted (Docker)
 **Database:** PostgreSQL 15.8
-**Schema:** soundpub
+**Schema:** Soundpub
 **Changes:** Permissions only
 
 **What gets changed:**
@@ -145,7 +145,7 @@ You'll know it worked when:
 ✅ No "must be owner of schema" errors
 ✅ postgres can execute CREATE commands
 ✅ Triggers created successfully
-✅ New users auto-assigned to soundpub label
+✅ New users auto-assigned to Soundpub label
 ✅ API queries work without permission errors
 
 ---
@@ -215,7 +215,7 @@ This solution teaches:
 ## 📂 File Organization
 
 ```
-docs/soundpub-local-migration/
+docs/Soundpub-local-migration/
 ├── 00-START-HERE.md                          ← Start here!
 ├── QUICK-FIX.md                              ← Emergency fix
 ├── EXECUTION-CHECKLIST.md                    ← Safe execution
@@ -234,7 +234,7 @@ docs/soundpub-local-migration/
 ## 🚀 Ready to Deploy
 
 **All files are ready in:**
-`docs/soundpub-local-migration/`
+`docs/Soundpub-local-migration/`
 
 **Recommended starting point:**
 `00-START-HERE.md` or `QUICK-FIX.md`
@@ -256,6 +256,6 @@ docs/soundpub-local-migration/
 
 🎉 **Congratulations!** You now have everything needed to fix the schema ownership issue and unblock trigger creation.
 
-All documentation is in `docs/soundpub-local-migration/` - choose your preferred method and deploy with confidence!
+All documentation is in `docs/Soundpub-local-migration/` - choose your preferred method and deploy with confidence!
 
 Good luck! 🚀

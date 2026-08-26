@@ -5,13 +5,13 @@
 ### On Supabase Server (via SSH):
 
 ```bash
-docker exec -it supabase-db psql -U supabase_admin -d postgres -c "ALTER SCHEMA soundpub OWNER TO supabase_admin; GRANT USAGE, CREATE ON SCHEMA soundpub TO postgres; GRANT ALL ON ALL TABLES IN SCHEMA soundpub TO postgres; GRANT ALL ON ALL SEQUENCES IN SCHEMA soundpub TO postgres; GRANT ALL ON ALL FUNCTIONS IN SCHEMA soundpub TO postgres; ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA soundpub GRANT ALL ON TABLES TO postgres; ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA soundpub GRANT ALL ON SEQUENCES TO postgres; ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA soundpub GRANT ALL ON FUNCTIONS TO postgres; GRANT USAGE ON SCHEMA soundpub TO authenticated, service_role, anon, authenticator; GRANT SELECT ON ALL TABLES IN SCHEMA soundpub TO authenticated; GRANT ALL ON ALL TABLES IN SCHEMA soundpub TO service_role;"
+docker exec -it supabase-db psql -U supabase_admin -d postgres -c "ALTER SCHEMA Soundpub OWNER TO supabase_admin; GRANT USAGE, CREATE ON SCHEMA Soundpub TO postgres; GRANT ALL ON ALL TABLES IN SCHEMA Soundpub TO postgres; GRANT ALL ON ALL SEQUENCES IN SCHEMA Soundpub TO postgres; GRANT ALL ON ALL FUNCTIONS IN SCHEMA Soundpub TO postgres; ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA Soundpub GRANT ALL ON TABLES TO postgres; ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA Soundpub GRANT ALL ON SEQUENCES TO postgres; ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA Soundpub GRANT ALL ON FUNCTIONS TO postgres; GRANT USAGE ON SCHEMA Soundpub TO authenticated, service_role, anon, authenticator; GRANT SELECT ON ALL TABLES IN SCHEMA Soundpub TO authenticated; GRANT ALL ON ALL TABLES IN SCHEMA Soundpub TO service_role;"
 ```
 
 ### Verify (should show can_create = t):
 
 ```bash
-docker exec -it supabase-db psql -U postgres -d postgres -c "SELECT nspname, nspowner::regrole AS owner, has_schema_privilege('postgres', nspname, 'CREATE') AS can_create FROM pg_namespace WHERE nspname = 'soundpub';"
+docker exec -it supabase-db psql -U postgres -d postgres -c "SELECT nspname, nspowner::regrole AS owner, has_schema_privilege('postgres', nspname, 'CREATE') AS can_create FROM pg_namespace WHERE nspname = 'Soundpub';"
 ```
 
 ## What This Does:

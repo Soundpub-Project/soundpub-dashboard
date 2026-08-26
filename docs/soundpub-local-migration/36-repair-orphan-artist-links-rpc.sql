@@ -15,7 +15,7 @@
 
 BEGIN;
 
-CREATE OR REPLACE FUNCTION soundpub.repair_orphan_artist_link(
+CREATE OR REPLACE FUNCTION Soundpub.repair_orphan_artist_link(
   _issue_type text,
   _profile_id uuid DEFAULT NULL,
   _full_name text DEFAULT NULL,
@@ -24,7 +24,7 @@ CREATE OR REPLACE FUNCTION soundpub.repair_orphan_artist_link(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = soundpub, public
+SET search_path = Soundpub, public
 AS $$
 DECLARE
   current_user_id uuid := auth.uid();
@@ -39,7 +39,7 @@ DECLARE
 BEGIN
   SELECT EXISTS (
     SELECT 1
-    FROM soundpub.user_roles ur
+    FROM Soundpub.user_roles ur
     WHERE ur.user_id = current_user_id
       AND ur.role::text IN ('admin', 'superadmin')
   ) INTO is_admin;
@@ -55,12 +55,12 @@ BEGIN
 
     SELECT count(*), min(p.id)
     INTO matched_artist_count, matched_artist_id
-    FROM soundpub.profiles p
+    FROM Soundpub.profiles p
     WHERE p.parent_label_id = _related_label_id
       AND lower(trim(p.full_name)) = lower(trim(_full_name))
       AND EXISTS (
         SELECT 1
-        FROM soundpub.user_roles ur
+        FROM Soundpub.user_roles ur
         WHERE ur.user_id = p.id
           AND ur.role::text = 'artist'
       )
@@ -74,7 +74,7 @@ BEGIN
       RAISE EXCEPTION 'Multiple matching artist profiles found under this label for %. Repair manually.', _full_name;
     END IF;
 
-    UPDATE soundpub.releases r
+    UPDATE Soundpub.releases r
     SET artist_user_id = matched_artist_id
     WHERE r.artist_user_id IS NULL
       AND r.label_id = _related_label_id
@@ -82,9 +82,9 @@ BEGIN
 
     GET DIAGNOSTICS updated_releases = ROW_COUNT;
 
-    UPDATE soundpub.tracks t
+    UPDATE Soundpub.tracks t
     SET artist_user_id = matched_artist_id
-    FROM soundpub.releases r
+    FROM Soundpub.releases r
     WHERE t.release_id = r.id
       AND t.artist_user_id IS NULL
       AND r.artist_user_id = matched_artist_id
@@ -92,10 +92,10 @@ BEGIN
 
     GET DIAGNOSTICS updated_tracks = ROW_COUNT;
 
-    SELECT p.full_name INTO artist_name FROM soundpub.profiles p WHERE p.id = matched_artist_id;
-    SELECT p.full_name INTO label_name FROM soundpub.profiles p WHERE p.id = _related_label_id;
+    SELECT p.full_name INTO artist_name FROM Soundpub.profiles p WHERE p.id = matched_artist_id;
+    SELECT p.full_name INTO label_name FROM Soundpub.profiles p WHERE p.id = _related_label_id;
 
-    INSERT INTO soundpub.audit_logs (action, actor_id, target_id, target_type, details)
+    INSERT INTO Soundpub.audit_logs (action, actor_id, target_id, target_type, details)
     VALUES (
       'orphan_artist_link_repaired',
       current_user_id,
@@ -129,12 +129,12 @@ BEGIN
     END IF;
 
     SELECT p.full_name INTO artist_name
-    FROM soundpub.profiles p
+    FROM Soundpub.profiles p
     WHERE p.id = _profile_id
       AND p.parent_label_id IS NULL
       AND EXISTS (
         SELECT 1
-        FROM soundpub.user_roles ur
+        FROM Soundpub.user_roles ur
         WHERE ur.user_id = p.id
           AND ur.role::text = 'artist'
       );
@@ -145,25 +145,25 @@ BEGIN
 
     IF NOT EXISTS (
       SELECT 1
-      FROM soundpub.user_roles ur
+      FROM Soundpub.user_roles ur
       WHERE ur.user_id = _related_label_id
         AND ur.role::text IN ('label', 'whitelabel')
     ) THEN
       RAISE EXCEPTION 'related_label_id is not a label/whitelabel';
     END IF;
 
-    UPDATE soundpub.profiles
+    UPDATE Soundpub.profiles
     SET parent_label_id = _related_label_id
     WHERE id = _profile_id
       AND parent_label_id IS NULL;
 
     GET DIAGNOSTICS updated_releases = ROW_COUNT;
 
-    INSERT INTO soundpub.artists (name, label_id)
+    INSERT INTO Soundpub.artists (name, label_id)
     SELECT artist_name, _related_label_id
     WHERE NOT EXISTS (
       SELECT 1
-      FROM soundpub.artists a
+      FROM Soundpub.artists a
       WHERE a.label_id = _related_label_id
         AND lower(trim(a.name)) = lower(trim(artist_name))
     );
@@ -171,9 +171,9 @@ BEGIN
     GET DIAGNOSTICS updated_tracks = ROW_COUNT;
     inserted_artist_helper := updated_tracks > 0;
 
-    SELECT p.full_name INTO label_name FROM soundpub.profiles p WHERE p.id = _related_label_id;
+    SELECT p.full_name INTO label_name FROM Soundpub.profiles p WHERE p.id = _related_label_id;
 
-    INSERT INTO soundpub.audit_logs (action, actor_id, target_id, target_type, details)
+    INSERT INTO Soundpub.audit_logs (action, actor_id, target_id, target_type, details)
     VALUES (
       'orphan_artist_link_repaired',
       current_user_id,
@@ -210,12 +210,12 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION soundpub.repair_orphan_artist_link(text, uuid, text, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION Soundpub.repair_orphan_artist_link(text, uuid, text, uuid) TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
 
 COMMIT;
 
 -- Test examples after running:
--- SELECT soundpub.repair_orphan_artist_link('RELEASE_WITHOUT_ARTIST_USER_ID', NULL, 'Rio Fiendy', '2408459a-d132-42a1-b267-d0b340f5d00f');
--- SELECT soundpub.repair_orphan_artist_link('ARTIST_WITHOUT_PARENT_LABEL', '37e238fb-3240-4aa5-bdf0-ded917b523bd', NULL, '8825a7dd-7c3a-4878-8f6a-cb9554eaa6cf');
+-- SELECT Soundpub.repair_orphan_artist_link('RELEASE_WITHOUT_ARTIST_USER_ID', NULL, 'Rio Fiendy', '2408459a-d132-42a1-b267-d0b340f5d00f');
+-- SELECT Soundpub.repair_orphan_artist_link('ARTIST_WITHOUT_PARENT_LABEL', '37e238fb-3240-4aa5-bdf0-ded917b523bd', NULL, '8825a7dd-7c3a-4878-8f6a-cb9554eaa6cf');

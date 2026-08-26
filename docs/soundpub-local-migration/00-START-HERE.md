@@ -11,13 +11,13 @@
 
 ## 📦 What You Have Now
 
-A complete, production-ready solution to fix the Supabase `soundpub` schema ownership and permission issues.
+A complete, production-ready solution to fix the Supabase `Soundpub` schema ownership and permission issues.
 
 ### The Problem (From Fix 001)
 
 ```
-ERROR:  must be owner of schema soundpub
-WARNING:  no privileges were granted for "soundpub"
+ERROR:  must be owner of schema Soundpub
+WARNING:  no privileges were granted for "Soundpub"
 ```
 
 ### The Solution
@@ -31,13 +31,13 @@ Grant CREATE privilege and all necessary permissions to `postgres` user while ke
 **SSH to your Supabase server and run:**
 
 ```bash
-docker exec -it supabase-db psql -U supabase_admin -d postgres -c "ALTER SCHEMA soundpub OWNER TO supabase_admin; GRANT USAGE, CREATE ON SCHEMA soundpub TO postgres; GRANT ALL ON ALL TABLES IN SCHEMA soundpub TO postgres; GRANT ALL ON ALL SEQUENCES IN SCHEMA soundpub TO postgres; GRANT ALL ON ALL FUNCTIONS IN SCHEMA soundpub TO postgres; ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA soundpub GRANT ALL ON TABLES TO postgres; ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA soundpub GRANT ALL ON SEQUENCES TO postgres; ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA soundpub GRANT ALL ON FUNCTIONS TO postgres; GRANT USAGE ON SCHEMA soundpub TO authenticated, service_role, anon, authenticator; GRANT SELECT ON ALL TABLES IN SCHEMA soundpub TO authenticated; GRANT ALL ON ALL TABLES IN SCHEMA soundpub TO service_role;"
+docker exec -it supabase-db psql -U supabase_admin -d postgres -c "ALTER SCHEMA Soundpub OWNER TO supabase_admin; GRANT USAGE, CREATE ON SCHEMA Soundpub TO postgres; GRANT ALL ON ALL TABLES IN SCHEMA Soundpub TO postgres; GRANT ALL ON ALL SEQUENCES IN SCHEMA Soundpub TO postgres; GRANT ALL ON ALL FUNCTIONS IN SCHEMA Soundpub TO postgres; ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA Soundpub GRANT ALL ON TABLES TO postgres; ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA Soundpub GRANT ALL ON SEQUENCES TO postgres; ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA Soundpub GRANT ALL ON FUNCTIONS TO postgres; GRANT USAGE ON SCHEMA Soundpub TO authenticated, service_role, anon, authenticator; GRANT SELECT ON ALL TABLES IN SCHEMA Soundpub TO authenticated; GRANT ALL ON ALL TABLES IN SCHEMA Soundpub TO service_role;"
 ```
 
 **Verify:**
 
 ```bash
-docker exec -it supabase-db psql -U postgres -d postgres -c "SELECT nspname, has_schema_privilege('postgres', nspname, 'CREATE') AS can_create FROM pg_namespace WHERE nspname = 'soundpub';"
+docker exec -it supabase-db psql -U postgres -d postgres -c "SELECT nspname, has_schema_privilege('postgres', nspname, 'CREATE') AS can_create FROM pg_namespace WHERE nspname = 'Soundpub';"
 ```
 
 Expected: `can_create = t` ✅
@@ -57,7 +57,7 @@ Expected: `can_create = t` ✅
 | 7 | **fix-schema-ownership.sh** | 2.0 KB | 💻 Bash automation script |
 | 8 | **46-fix-schema-ownership-comprehensive.sql** | 4.9 KB | 🔧 Raw SQL script |
 
-**Total:** 48.86 KB | All files in `docs/soundpub-local-migration/`
+**Total:** 48.86 KB | All files in `docs/Soundpub-local-migration/`
 
 ---
 
@@ -166,7 +166,7 @@ docker exec -it supabase-db psql -U postgres -d postgres -c "
     has_schema_privilege('postgres', nspname, 'CREATE') AS can_create,
     has_schema_privilege('postgres', nspname, 'USAGE') AS can_use
   FROM pg_namespace 
-  WHERE nspname = 'soundpub';
+  WHERE nspname = 'Soundpub';
 "
 ```
 
@@ -174,7 +174,7 @@ Expected output:
 ```
  schema   | can_create | can_use
 ----------+------------+---------
- soundpub | t          | t
+ Soundpub | t          | t
 ```
 
 ---
@@ -185,13 +185,13 @@ Expected output:
 
 **Bad Approach (Previous attempts):**
 ```sql
-ALTER SCHEMA soundpub OWNER TO postgres;  -- ❌ Wrong!
+ALTER SCHEMA Soundpub OWNER TO postgres;  -- ❌ Wrong!
 ```
 
 **Good Approach (This fix):**
 ```sql
-ALTER SCHEMA soundpub OWNER TO supabase_admin;  -- ✅ Keep correct owner
-GRANT CREATE ON SCHEMA soundpub TO postgres;    -- ✅ Grant permissions
+ALTER SCHEMA Soundpub OWNER TO supabase_admin;  -- ✅ Keep correct owner
+GRANT CREATE ON SCHEMA Soundpub TO postgres;    -- ✅ Grant permissions
 ```
 
 ### Key Concepts
@@ -298,7 +298,7 @@ You'll know it worked when:
 - ✅ No "must be owner of schema" errors
 - ✅ `postgres` can execute CREATE commands
 - ✅ Triggers created successfully
-- ✅ New users auto-assigned to soundpub label
+- ✅ New users auto-assigned to Soundpub label
 - ✅ API queries work without permission errors
 
 ---
@@ -334,7 +334,7 @@ You'll know it worked when:
 
 **Environment:** Supabase self-hosted (Docker)
 **Database:** PostgreSQL 15.8
-**Schema:** soundpub
+**Schema:** Soundpub
 **Issue:** Permission denied for schema operations
 **Solution:** Grant CREATE privilege to postgres user
 **Status:** ✅ Complete and tested
@@ -397,7 +397,7 @@ This solution package provides everything needed to:
 5. Troubleshoot issues
 6. Move forward with confidence
 
-**All files are in:** `docs/soundpub-local-migration/`
+**All files are in:** `docs/Soundpub-local-migration/`
 
 **Start with:** `INDEX.md` for navigation or `QUICK-FIX.md` for immediate action
 
@@ -406,7 +406,7 @@ This solution package provides everything needed to:
 **Solution Package Version:** 1.0
 **Created:** 2026-08-14 07:48 UTC
 **Status:** ✅ Complete and Production-Ready
-**Maintainer:** SoundPub DevOps Team
+**Maintainer:** Soundpub DevOps Team
 
 ---
 

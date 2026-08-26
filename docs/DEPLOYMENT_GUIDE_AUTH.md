@@ -30,7 +30,7 @@
 ### Backup Database First
 ```bash
 # Create backup
-pg_dump -h localhost -U postgres -d soundpub > backups/backup_20260814_$(date +%H%M%S).sql
+pg_dump -h localhost -U postgres -d Soundpub > backups/backup_20260814_$(date +%H%M%S).sql
 
 # Verify backup
 ls -lh backups/
@@ -39,7 +39,7 @@ ls -lh backups/
 ### Run Migration
 ```bash
 # Connect to database
-psql -h localhost -U postgres -d soundpub
+psql -h localhost -U postgres -d Soundpub
 
 # Run migration script
 \i migrations-complete/002_auth_verification_system.sql
@@ -53,7 +53,7 @@ psql -h localhost -U postgres -d soundpub
 -- Check new columns in profiles
 SELECT column_name, data_type 
 FROM information_schema.columns 
-WHERE table_schema='soundpub' AND table_name='profiles'
+WHERE table_schema='Soundpub' AND table_name='profiles'
 AND (column_name LIKE '%token%' OR column_name = 'email_verified');
 
 -- Expected output:
@@ -67,7 +67,7 @@ AND (column_name LIKE '%token%' OR column_name = 'email_verified');
 
 -- Check new tables
 SELECT table_name FROM information_schema.tables 
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
 AND table_name IN ('auth_events', 'rate_limits');
 
 -- Expected output:
@@ -75,8 +75,8 @@ AND table_name IN ('auth_events', 'rate_limits');
 -- rate_limits
 
 -- Test utility functions
-SELECT soundpub.cleanup_rate_limits();
-SELECT soundpub.cleanup_expired_tokens();
+SELECT Soundpub.cleanup_rate_limits();
+SELECT Soundpub.cleanup_expired_tokens();
 ```
 
 ---
@@ -166,10 +166,10 @@ ls -lh dist/
 ### Deploy with Docker
 ```bash
 # Build Docker image
-docker build -t soundpub-dashboard:v2.1.0 .
+docker build -t Soundpub-dashboard:v2.1.0 .
 
 # Tag as latest
-docker tag soundpub-dashboard:v2.1.0 soundpub-dashboard:latest
+docker tag Soundpub-dashboard:v2.1.0 Soundpub-dashboard:latest
 
 # Stop current container
 docker-compose down
@@ -184,7 +184,7 @@ docker-compose logs -f --tail=100
 ### Verify Deployment
 ```bash
 # Check container running
-docker ps | grep soundpub
+docker ps | grep Soundpub
 
 # Check health
 curl http://localhost:5173/
@@ -255,38 +255,38 @@ curl http://localhost:5173/
 -- Save these queries for monitoring
 
 -- Daily signup & verification rate
-CREATE OR REPLACE VIEW soundpub.daily_verification_stats AS
+CREATE OR REPLACE VIEW Soundpub.daily_verification_stats AS
 SELECT 
   DATE(created_at) AS date,
   COUNT(*) AS total_signups,
   COUNT(*) FILTER (WHERE email_verified = true) AS verified_count,
   ROUND(100.0 * COUNT(*) FILTER (WHERE email_verified = true) / COUNT(*), 2) AS verification_rate
-FROM soundpub.profiles
+FROM Soundpub.profiles
 WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
 GROUP BY DATE(created_at)
 ORDER BY date DESC;
 
 -- Password reset activity
-CREATE OR REPLACE VIEW soundpub.password_reset_stats AS
+CREATE OR REPLACE VIEW Soundpub.password_reset_stats AS
 SELECT 
   DATE(created_at) AS date,
   event_type,
   COUNT(*) AS event_count
-FROM soundpub.auth_events
+FROM Soundpub.auth_events
 WHERE event_type LIKE 'password_reset%'
   AND created_at >= CURRENT_DATE - INTERVAL '7 days'
 GROUP BY DATE(created_at), event_type
 ORDER BY date DESC;
 
 -- Current rate limits
-CREATE OR REPLACE VIEW soundpub.active_rate_limits AS
+CREATE OR REPLACE VIEW Soundpub.active_rate_limits AS
 SELECT 
   identifier,
   action_type,
   attempt_count,
   blocked_until,
   last_attempt_at
-FROM soundpub.rate_limits
+FROM Soundpub.rate_limits
 WHERE blocked_until > NOW()
 ORDER BY last_attempt_at DESC;
 ```
@@ -308,10 +308,10 @@ ORDER BY last_attempt_at DESC;
 SUPABASE_URL=https://supabase.carubra.com
 SUPABASE_ANON_KEY=<your-anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
-DATABASE_SCHEMA=soundpub
+DATABASE_SCHEMA=Soundpub
 LOVABLE_API_KEY=<your-lovable-key>
 GOOGLE_MAIL_API_KEY=<your-gmail-key>
-APP_URL=https://dashboard.soundpub.xyz
+APP_URL=https://dashboard.Soundpub.xyz
 ```
 
 ### Verify in Edge Functions
@@ -328,7 +328,7 @@ supabase functions logs send-password-reset
 
 **Option 1: Rollback Frontend Only**
 ```bash
-docker tag soundpub-dashboard:v2.0.0 soundpub-dashboard:latest
+docker tag Soundpub-dashboard:v2.0.0 Soundpub-dashboard:latest
 docker-compose down
 docker-compose up -d
 ```
@@ -336,13 +336,13 @@ docker-compose up -d
 **Option 2: Rollback Database (EXTREME)**
 ```bash
 # Only if database corruption occurs
-psql -h localhost -U postgres -d soundpub < backups/backup_20260814_*.sql
+psql -h localhost -U postgres -d Soundpub < backups/backup_20260814_*.sql
 ```
 
 **Option 3: Disable Features**
 ```sql
 -- Temporarily disable email verification requirement
-UPDATE soundpub.profiles SET email_verified = true WHERE email_verified = false;
+UPDATE Soundpub.profiles SET email_verified = true WHERE email_verified = false;
 ```
 
 ---
@@ -374,14 +374,14 @@ UPDATE soundpub.profiles SET email_verified = true WHERE email_verified = false;
 ### Issue: Email tidak terkirim
 ```sql
 -- Check email logs
-SELECT * FROM soundpub.email_send_log 
+SELECT * FROM Soundpub.email_send_log 
 WHERE created_at >= CURRENT_DATE - INTERVAL '1 day'
 ORDER BY created_at DESC 
 LIMIT 50;
 
 -- Check for errors
 SELECT status, error_message, COUNT(*) 
-FROM soundpub.email_send_log 
+FROM Soundpub.email_send_log 
 WHERE created_at >= CURRENT_DATE
 GROUP BY status, error_message;
 ```
@@ -397,7 +397,7 @@ SELECT
   verification_token_expires_at,
   password_reset_token,
   password_reset_token_expires_at
-FROM soundpub.profiles 
+FROM Soundpub.profiles 
 WHERE email = 'user@example.com';
 ```
 
@@ -406,11 +406,11 @@ WHERE email = 'user@example.com';
 ### Issue: Rate limit false positive
 ```sql
 -- Check and clear rate limit
-SELECT * FROM soundpub.rate_limits 
+SELECT * FROM Soundpub.rate_limits 
 WHERE identifier = 'user@example.com';
 
 -- Clear specific rate limit
-DELETE FROM soundpub.rate_limits 
+DELETE FROM Soundpub.rate_limits 
 WHERE identifier = 'user@example.com' 
 AND action_type = 'password_reset';
 ```
@@ -449,4 +449,4 @@ AND action_type = 'password_reset';
 **Version:** v2.1.0  
 **Date:** 2026-08-14
 
-🎵 **SoundPub - Empowering Musicians, Securing Accounts** 🎵
+🎵 **Soundpub - Empowering Musicians, Securing Accounts** 🎵

@@ -35,7 +35,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         'postgres_changes',
         {
           event: 'UPDATE',
-          schema: 'soundpub',
+          schema: 'Soundpub',
           table: 'profiles',
           filter: `id=eq.${profile.id}`,
         },
@@ -97,7 +97,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               <div className="flex min-w-0 items-center gap-2">
                 <SidebarTrigger className="h-10 w-10" />
                 <div className="min-w-0 sm:hidden">
-                  <p className="truncate text-sm font-semibold text-foreground">SoundPub</p>
+                  <p className="truncate text-sm font-semibold text-foreground">Soundpub</p>
                   {profile && (
                   <>
                     <p className="truncate text-xs text-muted-foreground">{profile.full_name}</p>

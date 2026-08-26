@@ -147,7 +147,7 @@ export default function CopyrightRegistrationForm() {
   };
 
   const buildDraftPreviewUrl = () => {
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Draft Kontrak</title><style>body{font-family:Arial,sans-serif;padding:40px;line-height:1.6}h1{font-size:24px}h2{font-size:18px;margin-top:24px}.watermark{position:fixed;top:45%;left:15%;right:15%;transform:rotate(-25deg);font-size:48px;opacity:.12;font-weight:700;text-align:center}</style></head><body><div class="watermark">DRAFT - BELUM DIBAYAR</div><h1>Draft Kontrak Soundpub Publishing</h1><p><strong>Nomor Surat:</strong> P00001/Soundpub/I/PBLSR/2026 <em>(format contoh, final setelah approve)</em></p><p><strong>Pihak Pertama:</strong> PT UTERO KREATIF INDONESIA (SOUNDPUB)</p><p><strong>Pihak Kedua:</strong> ${legalName || '-'}</p><p><strong>Wilayah:</strong> Seluruh Dunia</p><p><strong>Masa Kontrak:</strong> 3 Tahun + perpanjangan otomatis</p><p><strong>Biaya Registrasi:</strong> Rp100.000</p><h2>Daftar Karya</h2><ul>${works.filter((work) => work.title.trim()).map((work) => `<li>${work.title}</li>`).join('')}</ul></body></html>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Draft Kontrak</title><style>body{font-family:Arial,sans-serif;padding:40px;line-height:1.6}h1{font-size:24px}h2{font-size:18px;margin-top:24px}.watermark{position:fixed;top:45%;left:15%;right:15%;transform:rotate(-25deg);font-size:48px;opacity:.12;font-weight:700;text-align:center}</style></head><body><div class="watermark">DRAFT - BELUM DIBAYAR</div><h1>Draft Kontrak Soundpub Publishing</h1><p><strong>Nomor Surat:</strong> P00001/Soundpub/I/PBLSR/2026 <em>(format contoh, final setelah approve)</em></p><p><strong>Pihak Pertama:</strong> PT UTERO KREATIF INDONESIA (Soundpub)</p><p><strong>Pihak Kedua:</strong> ${legalName || '-'}</p><p><strong>Wilayah:</strong> Seluruh Dunia</p><p><strong>Masa Kontrak:</strong> 3 Tahun + perpanjangan otomatis</p><p><strong>Biaya Registrasi:</strong> Rp100.000</p><h2>Daftar Karya</h2><ul>${works.filter((work) => work.title.trim()).map((work) => `<li>${work.title}</li>`).join('')}</ul></body></html>`;
     return URL.createObjectURL(new Blob([html], { type: 'text/html' }));
   };
 
@@ -155,7 +155,7 @@ export default function CopyrightRegistrationForm() {
     const url = buildDraftPreviewUrl();
     const link = document.createElement('a');
     link.href = url;
-    link.download = `soundpub-copyright-draft-${legalName || 'registration'}.html`;
+    link.download = `Soundpub-copyright-draft-${legalName || 'registration'}.html`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -185,8 +185,8 @@ export default function CopyrightRegistrationForm() {
     const loadExistingDraft = async () => {
       if (!user) return;
       try {
-        const soundpub = (supabase as any).schema('soundpub');
-        const { data: registration } = await soundpub
+        const Soundpub = (supabase as any).schema('Soundpub');
+        const { data: registration } = await Soundpub
           .from('copyright_registrations')
           .select('*')
           .eq('user_id', user.id)
@@ -213,7 +213,7 @@ export default function CopyrightRegistrationForm() {
         setBankAccountNumber(registration.bank_account_number || '');
         setBankAccountName(registration.bank_account_name || '');
 
-        const { data: workRows } = await soundpub
+        const { data: workRows } = await Soundpub
           .from('copyright_registration_works')
           .select('*')
           .eq('registration_id', registration.id)
@@ -237,7 +237,7 @@ export default function CopyrightRegistrationForm() {
           })));
         }
 
-        const { data: fileRows } = await soundpub
+        const { data: fileRows } = await Soundpub
           .from('copyright_registration_files')
           .select('file_type, file_name, file_url')
           .eq('registration_id', registration.id)
@@ -278,7 +278,7 @@ export default function CopyrightRegistrationForm() {
 
     setSaving(true);
     try {
-      const soundpub = (supabase as any).schema('soundpub');
+      const Soundpub = (supabase as any).schema('Soundpub');
       const payload = {
         user_id: user!.id,
         status: 'draft',
@@ -297,13 +297,13 @@ export default function CopyrightRegistrationForm() {
 
       let currentRegistrationId = registrationId;
       if (currentRegistrationId) {
-        const { error } = await soundpub
+        const { error } = await Soundpub
           .from('copyright_registrations')
           .update(payload)
           .eq('id', currentRegistrationId);
         if (error) throw error;
       } else {
-        const { data, error } = await soundpub
+        const { data, error } = await Soundpub
           .from('copyright_registrations')
           .insert(payload)
           .select('id')
@@ -313,7 +313,7 @@ export default function CopyrightRegistrationForm() {
         setRegistrationId(data.id);
       }
 
-      await soundpub
+      await Soundpub
         .from('copyright_registration_works')
         .delete()
         .eq('registration_id', currentRegistrationId);
@@ -339,7 +339,7 @@ export default function CopyrightRegistrationForm() {
         }));
 
       if (workPayload.length > 0) {
-        const { error } = await soundpub
+        const { error } = await Soundpub
           .from('copyright_registration_works')
           .insert(workPayload);
         if (error) throw error;
@@ -362,8 +362,8 @@ export default function CopyrightRegistrationForm() {
         .filter(Boolean);
 
       if (fileRows.length > 0) {
-        await soundpub.from('copyright_registration_files').delete().eq('registration_id', currentRegistrationId);
-        const { error: fileError } = await soundpub
+        await Soundpub.from('copyright_registration_files').delete().eq('registration_id', currentRegistrationId);
+        const { error: fileError } = await Soundpub
           .from('copyright_registration_files')
           .insert(fileRows);
         if (fileError) throw fileError;
@@ -391,14 +391,14 @@ export default function CopyrightRegistrationForm() {
 
     setSaving(true);
     try {
-      const soundpub = (supabase as any).schema('soundpub');
-      const { error: registrationError } = await soundpub
+      const Soundpub = (supabase as any).schema('Soundpub');
+      const { error: registrationError } = await Soundpub
         .from('copyright_registrations')
         .update({ status: 'awaiting_payment', submitted_at: new Date().toISOString() })
         .eq('id', currentRegistrationId);
       if (registrationError) throw registrationError;
 
-      const { error: paymentError } = await soundpub
+      const { error: paymentError } = await Soundpub
         .from('copyright_registration_payments')
         .insert({
           registration_id: currentRegistrationId,
@@ -727,7 +727,7 @@ export default function CopyrightRegistrationForm() {
                 <CardContent className="grid gap-4 md:grid-cols-2">
                 <div>
                   <p className="text-sm text-muted-foreground">Pihak Pertama</p>
-                  <p className="font-medium">PT UTERO KREATIF INDONESIA (SOUNDPUB)</p>
+                  <p className="font-medium">PT UTERO KREATIF INDONESIA (Soundpub)</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Nomor Surat</p>

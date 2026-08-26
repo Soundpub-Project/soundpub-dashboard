@@ -1,6 +1,6 @@
 ﻿# 🔐 Password Reset & Email Verification System
 
-**Project:** SoundPub Dashboard  
+**Project:** Soundpub Dashboard  
 **Status:** ✅ Ready for Implementation  
 **Date:** 2026-08-14
 
@@ -54,9 +54,9 @@
 ## 🏗️ System Overview
 
 ### Database (3 new tables)
-- `soundpub.profiles` - 7 new columns for tokens
-- `soundpub.auth_events` - Security audit log
-- `soundpub.rate_limits` - Anti-spam protection
+- `Soundpub.profiles` - 7 new columns for tokens
+- `Soundpub.auth_events` - Security audit log
+- `Soundpub.rate_limits` - Anti-spam protection
 
 ### Backend (6 edge functions)
 1. `send-password-reset`
@@ -85,10 +85,10 @@ code docs/INDEX.md
 ### 2. Run Database Migration
 ```bash
 # Backup first!
-pg_dump soundpub > backup_$(date +%Y%m%d).sql
+pg_dump Soundpub > backup_$(date +%Y%m%d).sql
 
 # Run migration
-psql soundpub < ../migrations-complete/002_auth_verification_system.sql
+psql Soundpub < ../migrations-complete/002_auth_verification_system.sql
 ```
 
 ### 3. Deploy Functions
@@ -103,7 +103,7 @@ supabase functions deploy verify-email
 ### 4. Build Frontend
 ```bash
 pnpm build
-docker build -t soundpub-dashboard:v2.0.0 .
+docker build -t Soundpub-dashboard:v2.0.0 .
 docker-compose up -d
 ```
 
@@ -111,9 +111,9 @@ docker-compose up -d
 
 ## ⚠️ Critical Reminders
 
-🔴 **ALWAYS use schema `soundpub` not `public`**
+🔴 **ALWAYS use schema `Soundpub` not `public`**
 ```sql
-✅ SELECT * FROM soundpub.profiles;
+✅ SELECT * FROM Soundpub.profiles;
 ❌ SELECT * FROM public.profiles;
 ```
 
@@ -146,7 +146,7 @@ docker-compose up -d
 
 ## 📞 Support
 
-**Email:** dev@soundpub.xyz  
+**Email:** dev@Soundpub.xyz  
 **Documentation:** [INDEX.md](INDEX.md)  
 **Issues:** See troubleshooting in full documentation  
 
@@ -169,6 +169,6 @@ docs/
 
 ---
 
-🎵 **SoundPub - Empowering Musicians, Securing Accounts** 🎵
+🎵 **Soundpub - Empowering Musicians, Securing Accounts** 🎵
 
 **Version 2.0 | 2026-08-14**

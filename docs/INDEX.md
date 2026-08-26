@@ -1,6 +1,6 @@
 ﻿# 🔐 AUTH VERIFICATION SYSTEM - INDEX
 
-**Proyek:** SoundPub Dashboard  
+**Proyek:** Soundpub Dashboard  
 **Fitur:** Password Reset & Email Verification  
 **Versi:** 1.0  
 **Tanggal:** 2026-08-14  
@@ -170,10 +170,10 @@ Summary visual dengan border dan formatting untuk presentasi.
 Script SQL siap pakai untuk migration database.
 
 **Konten:**
-- Add 7 columns to soundpub.profiles
+- Add 7 columns to Soundpub.profiles
 - Create indexes (performance optimized)
-- Create soundpub.auth_events table
-- Create soundpub.rate_limits table
+- Create Soundpub.auth_events table
+- Create Soundpub.rate_limits table
 - Enable RLS policies
 - Create 4 utility functions
 - Update existing data (optional)
@@ -193,7 +193,7 @@ Script SQL siap pakai untuk migration database.
 ## 📁 STRUKTUR FILE
 
 ```
-soundpub-dashboard/
+Soundpub-dashboard/
 │
 ├── docs/
 │   ├── INDEX.md                            ← YOU ARE HERE
@@ -276,10 +276,10 @@ Week 4: Deployment & Monitoring
 ### Database Migration
 ```bash
 # Backup
-pg_dump soundpub > backup_$(date +%Y%m%d).sql
+pg_dump Soundpub > backup_$(date +%Y%m%d).sql
 
 # Run migration
-psql soundpub < migrations-complete/002_auth_verification_system.sql
+psql Soundpub < migrations-complete/002_auth_verification_system.sql
 ```
 
 ### Deploy Functions
@@ -294,7 +294,7 @@ supabase functions deploy verify-email
 ### Build & Deploy Frontend
 ```bash
 pnpm build
-docker build -t soundpub-dashboard:v2.0.0 .
+docker build -t Soundpub-dashboard:v2.0.0 .
 docker-compose up -d
 ```
 
@@ -307,22 +307,22 @@ docker-compose up -d
 SUPABASE_URL=https://supabase.carubra.com
 SUPABASE_ANON_KEY=<your-key>
 SUPABASE_SERVICE_ROLE_KEY=<your-key>
-DATABASE_SCHEMA=soundpub                    # ⚠️ IMPORTANT!
+DATABASE_SCHEMA=Soundpub                    # ⚠️ IMPORTANT!
 LOVABLE_API_KEY=<your-key>
 GOOGLE_MAIL_API_KEY=<your-key>
 
 # Optional
 RESEND_API_KEY=<fallback-provider>
-APP_URL=https://dashboard.soundpub.xyz
+APP_URL=https://dashboard.Soundpub.xyz
 ```
 
 ---
 
 ## ⚠️ CRITICAL REMINDERS
 
-🔴 **ALWAYS use schema `soundpub` not `public`**
+🔴 **ALWAYS use schema `Soundpub` not `public`**
 ```sql
-✅ SELECT * FROM soundpub.profiles;
+✅ SELECT * FROM Soundpub.profiles;
 ❌ SELECT * FROM public.profiles;
 ```
 
@@ -336,16 +336,16 @@ APP_URL=https://dashboard.soundpub.xyz
 ## 🆘 TROUBLESHOOTING
 
 ### Email tidak terkirim?
-→ Check `soundpub.email_send_log`
+→ Check `Soundpub.email_send_log`
 
 ### Token tidak valid?
-→ Check `soundpub.profiles` WHERE token = 'xxx'
+→ Check `Soundpub.profiles` WHERE token = 'xxx'
 
 ### Rate limit stuck?
-→ DELETE FROM `soundpub.rate_limits` WHERE identifier = 'email'
+→ DELETE FROM `Soundpub.rate_limits` WHERE identifier = 'email'
 
 ### User unverified?
-→ UPDATE `soundpub.profiles` SET email_verified = true
+→ UPDATE `Soundpub.profiles` SET email_verified = true
 
 **Detail:** Lihat troubleshooting section di [RANCANGAN_AUTH_VERIFICATION.md](RANCANGAN_AUTH_VERIFICATION.md)
 
@@ -356,15 +356,15 @@ APP_URL=https://dashboard.soundpub.xyz
 ```sql
 -- Email verification rate
 SELECT COUNT(*) FILTER (WHERE email_verified = true) * 100.0 / COUNT(*)
-FROM soundpub.profiles WHERE created_at >= NOW() - INTERVAL '7 days';
+FROM Soundpub.profiles WHERE created_at >= NOW() - INTERVAL '7 days';
 
 -- Password reset requests
-SELECT COUNT(*) FROM soundpub.auth_events
+SELECT COUNT(*) FROM Soundpub.auth_events
 WHERE event_type = 'password_reset_requested' 
   AND created_at >= CURRENT_DATE;
 
 -- Rate limit violations
-SELECT COUNT(*) FROM soundpub.rate_limits
+SELECT COUNT(*) FROM Soundpub.rate_limits
 WHERE blocked_until > NOW();
 ```
 
@@ -384,7 +384,7 @@ WHERE blocked_until > NOW();
 
 ## 📞 SUPPORT & CONTACT
 
-**Technical Questions:** dev@soundpub.xyz  
+**Technical Questions:** dev@Soundpub.xyz  
 **Documentation Issues:** Create GitHub issue  
 **Implementation Help:** Refer to IMPLEMENTATION_CHECKLIST.md  
 
@@ -443,6 +443,6 @@ Sebelum mulai implementasi:
 
 ---
 
-🎵 **SoundPub - Empowering Musicians, Securing Accounts** 🎵
+🎵 **Soundpub - Empowering Musicians, Securing Accounts** 🎵
 
 **Good luck with the implementation! 🚀**

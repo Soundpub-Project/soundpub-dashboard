@@ -6,15 +6,15 @@
 -- whenever royalties are inserted, updated, or deleted.
 
 -- Step 1: Drop existing trigger if any
-DROP TRIGGER IF EXISTS sync_profile_balance_on_royalty_change ON soundpub.royalties;
-DROP FUNCTION IF EXISTS soundpub.sync_profile_balance_from_royalties();
+DROP TRIGGER IF EXISTS sync_profile_balance_on_royalty_change ON Soundpub.royalties;
+DROP FUNCTION IF EXISTS Soundpub.sync_profile_balance_from_royalties();
 
 -- Step 2: Create the trigger function
-CREATE OR REPLACE FUNCTION soundpub.sync_profile_balance_from_royalties()
+CREATE OR REPLACE FUNCTION Soundpub.sync_profile_balance_from_royalties()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO soundpub, public, pg_catalog
+SET search_path TO Soundpub, public, pg_catalog
 AS $$
 DECLARE
   affected_artist_id uuid;
@@ -34,7 +34,7 @@ BEGIN
 
   -- Update artist profile balance
   IF affected_artist_id IS NOT NULL THEN
-    UPDATE soundpub.profiles p
+    UPDATE Soundpub.profiles p
     SET 
       artist_revenue = COALESCE(artist_totals.total, 0),
       balance = COALESCE(artist_totals.total, 0),
@@ -43,7 +43,7 @@ BEGIN
       SELECT 
         artist_user_id,
         SUM(artist_revenue) AS total
-      FROM soundpub.royalties
+      FROM Soundpub.royalties
       WHERE artist_user_id = affected_artist_id
       GROUP BY artist_user_id
     ) artist_totals
@@ -51,14 +51,14 @@ BEGIN
     
     -- If no royalties left, reset to 0
     IF NOT FOUND THEN
-      UPDATE soundpub.profiles
+      UPDATE Soundpub.profiles
       SET 
         artist_revenue = 0,
         balance = 0,
         updated_at = now()
       WHERE id = affected_artist_id
         AND EXISTS (
-          SELECT 1 FROM soundpub.user_roles 
+          SELECT 1 FROM Soundpub.user_roles 
           WHERE user_id = affected_artist_id AND role = 'artist'
         );
     END IF;
@@ -66,7 +66,7 @@ BEGIN
 
   -- Update label profile balance
   IF affected_label_id IS NOT NULL THEN
-    UPDATE soundpub.profiles p
+    UPDATE Soundpub.profiles p
     SET 
       label_revenue = COALESCE(label_totals.total, 0),
       balance = COALESCE(label_totals.total, 0),
@@ -75,7 +75,7 @@ BEGIN
       SELECT 
         label_user_id,
         SUM(label_revenue) AS total
-      FROM soundpub.royalties
+      FROM Soundpub.royalties
       WHERE label_user_id = affected_label_id
       GROUP BY label_user_id
     ) label_totals
@@ -83,14 +83,14 @@ BEGIN
     
     -- If no royalties left, reset to 0
     IF NOT FOUND THEN
-      UPDATE soundpub.profiles
+      UPDATE Soundpub.profiles
       SET 
         label_revenue = 0,
         balance = 0,
         updated_at = now()
       WHERE id = affected_label_id
         AND EXISTS (
-          SELECT 1 FROM soundpub.user_roles 
+          SELECT 1 FROM Soundpub.user_roles 
           WHERE user_id = affected_label_id AND role IN ('label', 'whitelabel')
         );
     END IF;
@@ -106,12 +106,12 @@ $$;
 
 -- Step 3: Create the trigger
 CREATE TRIGGER sync_profile_balance_on_royalty_change
-AFTER INSERT OR UPDATE OR DELETE ON soundpub.royalties
+AFTER INSERT OR UPDATE OR DELETE ON Soundpub.royalties
 FOR EACH ROW
-EXECUTE FUNCTION soundpub.sync_profile_balance_from_royalties();
+EXECUTE FUNCTION Soundpub.sync_profile_balance_from_royalties();
 
 -- Step 4: Grant necessary permissions
-GRANT EXECUTE ON FUNCTION soundpub.sync_profile_balance_from_royalties() TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION Soundpub.sync_profile_balance_from_royalties() TO anon, authenticated, service_role;
 
 -- Step 5: Rebuild all existing balances to ensure consistency
 DO $$
@@ -119,7 +119,7 @@ BEGIN
   RAISE NOTICE 'Starting balance rebuild...';
   
   -- Reset all balances to 0
-  UPDATE soundpub.profiles
+  UPDATE Soundpub.profiles
   SET 
     balance = 0,
     artist_revenue = 0,
@@ -130,7 +130,7 @@ BEGIN
   RAISE NOTICE 'All balances reset to 0';
 
   -- Rebuild artist balances
-  UPDATE soundpub.profiles p
+  UPDATE Soundpub.profiles p
   SET 
     artist_revenue = COALESCE(artist_totals.total, 0),
     balance = COALESCE(artist_totals.total, 0),
@@ -139,7 +139,7 @@ BEGIN
     SELECT 
       artist_user_id,
       SUM(artist_revenue) AS total
-    FROM soundpub.royalties
+    FROM Soundpub.royalties
     WHERE artist_user_id IS NOT NULL
     GROUP BY artist_user_id
   ) artist_totals
@@ -148,7 +148,7 @@ BEGIN
   RAISE NOTICE 'Artist balances rebuilt';
 
   -- Rebuild label balances
-  UPDATE soundpub.profiles p
+  UPDATE Soundpub.profiles p
   SET 
     label_revenue = COALESCE(label_totals.total, 0),
     balance = COALESCE(label_totals.total, 0),
@@ -157,7 +157,7 @@ BEGIN
     SELECT 
       label_user_id,
       SUM(label_revenue) AS total
-    FROM soundpub.royalties
+    FROM Soundpub.royalties
     WHERE label_user_id IS NOT NULL
     GROUP BY label_user_id
   ) label_totals
@@ -175,5 +175,5 @@ SELECT
   SUM(balance)::numeric(16,2) AS total_balance,
   SUM(artist_revenue)::numeric(16,2) AS total_artist_revenue,
   SUM(label_revenue)::numeric(16,2) AS total_label_revenue
-FROM soundpub.profiles
+FROM Soundpub.profiles
 WHERE balance > 0 OR artist_revenue > 0 OR label_revenue > 0;

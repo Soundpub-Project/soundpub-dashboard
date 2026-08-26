@@ -61,6 +61,7 @@ import { cn } from '@/lib/utils';
 import { MediaUploadSection } from './MediaUploadSection';
 import { ArtistSelector } from './ArtistSelector';
 import { ContributorSelector } from './ContributorSelector';
+import { createXenditInvoice, openXenditInvoice } from '@/lib/xendit';
 
 // Genre list
 const GENRE_LIST = [
@@ -863,19 +864,9 @@ export function ReleaseFormDialog({
         await supabase.from('tracks').insert(tracksToInsert);
       }
 
-      // Call create-xendit-invoice
-      const { data: invoiceData, error: invoiceError } = await supabase.functions.invoke('create-xendit-invoice', {
-        body: { release_id: releaseId },
-      });
-
-      if (invoiceError) throw new Error(invoiceError.message || 'Gagal membuat invoice pembayaran');
-      
-      if (invoiceData?.invoice_url) {
-        toast.success(`Mengarahkan ke halaman pembayaran...`);
-        window.location.href = invoiceData.invoice_url;
-      } else {
-        throw new Error('Invoice URL tidak ditemukan');
-      }
+      const invoiceData = await createXenditInvoice(releaseId);
+      toast.success('Mengarahkan ke halaman pembayaran...');
+      openXenditInvoice(invoiceData.invoice_url);
 
     } catch (error: any) {
       console.error('Payment error:', error);
@@ -1686,9 +1677,3 @@ export function ReleaseFormDialog({
     </Dialog>
   );
 }
-
-
-
-
-
-

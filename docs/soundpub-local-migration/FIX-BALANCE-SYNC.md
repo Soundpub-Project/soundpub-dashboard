@@ -5,11 +5,13 @@ Balance di header (Rp 38.214,7) dan Saldo Tersedia di dashboard (Rp 439.551) tid
 
 ## Root Cause
 - Balance di header menggunakan profiles.balance (static field)
-- Saldo Tersedia di dashboard menggunakan kalkulasi real-time dari oyalties table
+- Saldo Tersedia di dashboard menggunakan kalkulasi real-time dari 
+oyalties table
 - profiles.balance tidak di-update otomatis ketika royalties berubah
 
 ## Solution
-1. **Database Trigger**: Otomatis update profiles.balance setiap kali ada perubahan di oyalties table
+1. **Database Trigger**: Otomatis update profiles.balance setiap kali ada perubahan di 
+oyalties table
 2. **Frontend Real-time Subscription**: Balance di header akan otomatis update via Supabase realtime
 3. **Balance Rebuild**: Sync ulang semua balance yang sudah tidak sinkron
 
@@ -18,7 +20,7 @@ Balance di header (Rp 38.214,7) dan Saldo Tersedia di dashboard (Rp 439.551) tid
 ### Method 1: Using Supabase Dashboard (RECOMMENDED)
 
 1. Buka **Supabase Dashboard**
-2. Pilih project Anda
+2. Pilih project AndSoundpub
 3. Go to **SQL Editor** (di sidebar kiri)
 4. Buka file: \docs/soundpub-local-migration/31-auto-sync-profile-balance-trigger-supabase.sql\
 5. Copy seluruh isi file tersebut
@@ -31,20 +33,20 @@ Balance di header (Rp 38.214,7) dan Saldo Tersedia di dashboard (Rp 439.551) tid
 - Langsung bisa lihat hasilnya
 
 ### Method 2: Using PowerShell Script
-
-\\\powershell
+SoundpubSoundpub
+\\\poweSoundpub
 cd I:\website-devops\soundpub-project\soundpub-dashboard
 .\docs\soundpub-local-migration\run-migration-31.ps1
 \\\
 
 ### Method 3: Using psql
-
+SoundpubSoundpub
 \\\ash
 psql -U postgres -d soundpub -f docs/soundpub-local-migration/31-auto-sync-profile-balance-trigger.sql
 \\\
 
 ### Method 4: Using Supabase CLI
-
+Soundpub
 \\\ash
 supabase db execute --file docs/soundpub-local-migration/31-auto-sync-profile-balance-trigger.sql
 \\\
@@ -101,7 +103,7 @@ File \src/components/layout/DashboardLayout.tsx\ sudah di-update dengan:
 3. (Optional) Upload royalty baru
 4. Balance harus otomatis update di kedua tempat
 
-## Troubleshooting
+## TroubleshootingSoundpub
 
 ### Error: "permission denied for schema soundpub"
 **Solution**: Gunakan Method 1 (Supabase Dashboard SQL Editor)
@@ -119,9 +121,9 @@ SELECT * FROM information_schema.triggers
 WHERE trigger_name = 'sync_profile_balance_on_royalty_change';
 \\\
 
-## Files Changed/Created
-
-- ✅ \docs/soundpub-local-migration/31-auto-sync-profile-balance-trigger.sql\
+## Files CSoundpubreated
+Soundpub
+- ✅ \docs/Soundpub-local-migration/31-auto-sync-profile-balance-trigger.sql\
 - ✅ \docs/soundpub-local-migration/31-auto-sync-profile-balance-trigger-supabase.sql\
 - ✅ \docs/soundpub-local-migration/run-migration-31.ps1\
 - ✅ \src/components/layout/DashboardLayout.tsx\ (modified)

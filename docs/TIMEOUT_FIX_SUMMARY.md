@@ -138,7 +138,7 @@ SELECT
   status,
   COUNT(*) as count,
   MAX(created_at) as last_sent
-FROM soundpub.email_send_log
+FROM Soundpub.email_send_log
 WHERE created_at > NOW() - INTERVAL '1 hour'
 GROUP BY template_name, status
 ORDER BY last_sent DESC;
@@ -151,7 +151,7 @@ SELECT
   recipient_email,
   error_message,
   created_at
-FROM soundpub.email_send_log
+FROM Soundpub.email_send_log
 WHERE status = 'failed'
   AND created_at > NOW() - INTERVAL '24 hours'
 ORDER BY created_at DESC;
@@ -163,7 +163,7 @@ SELECT
   email,
   password_reset_sent_at,
   password_reset_token_expires_at
-FROM soundpub.profiles
+FROM Soundpub.profiles
 WHERE password_reset_sent_at > NOW() - INTERVAL '1 hour'
 ORDER BY password_reset_sent_at DESC;
 ```

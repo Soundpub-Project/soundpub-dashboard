@@ -122,7 +122,7 @@ Created:
 
 ## 📞 SUPPORT
 
-**Questions:** dev@soundpub.xyz
+**Questions:** dev@Soundpub.xyz
 
 **Documentation:**
 - See: `docs/FRONTEND_AUTH_IMPLEMENTATION_COMPLETE.md`

@@ -42,7 +42,7 @@ Saya sudah membuat versi baru yang lebih aman dan memberikan feedback lebih baik
 1. Login ke server database
 2. Connect sebagai postgres:
    ```bash
-   psql -U postgres -d soundpub
+   psql -U postgres -d Soundpub
    ```
 3. Paste migration script
 4. Run
@@ -54,12 +54,12 @@ Saya sudah membuat versi baru yang lebih aman dan memberikan feedback lebih baik
 **Step 1: Grant permission**
 ```sql
 -- Run sebagai postgres superuser atau table owner
-GRANT ALTER ON soundpub.profiles TO authenticated;
-GRANT ALTER ON soundpub.profiles TO service_role;
+GRANT ALTER ON Soundpub.profiles TO authenticated;
+GRANT ALTER ON Soundpub.profiles TO service_role;
 
 -- Grant untuk create table
-GRANT CREATE ON SCHEMA soundpub TO authenticated;
-GRANT CREATE ON SCHEMA soundpub TO service_role;
+GRANT CREATE ON SCHEMA Soundpub TO authenticated;
+GRANT CREATE ON SCHEMA Soundpub TO service_role;
 ```
 
 **Step 2: Run migration**
@@ -75,14 +75,14 @@ Setelah grant, jalankan migration script seperti biasa
 
 **Lokasi:** 
 ```
-I:\website-devops\soundpub-project\soundpub-dashboard\
+I:\website-devops\Soundpub-project\Soundpub-dashboard\
 migrations-complete\002_auth_verification_system_v2.sql
 ```
 
 ### 2. Jalankan via Supabase SQL Editor
 
 1. Buka: https://supabase.carubra.com
-2. Login, pilih project soundpub
+2. Login, pilih project Soundpub
 3. Klik **SQL Editor** di sidebar
 4. Klik **New query**
 5. Buka file `002_auth_verification_system_v2.sql` di komputer
@@ -112,7 +112,7 @@ NOTICE: ════════════════════════
 ```sql
 SELECT column_name, data_type
 FROM information_schema.columns 
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
   AND table_name='profiles'
   AND column_name IN (
     'email_verified',
@@ -141,7 +141,7 @@ verification_token_expires_at    | timestamp with time zone
 ```sql
 SELECT table_name 
 FROM information_schema.tables 
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
   AND table_name IN ('auth_events', 'rate_limits')
 ORDER BY table_name;
 ```
@@ -160,17 +160,17 @@ rate_limits
 
 ## 🔍 JIKA MASIH ERROR
 
-### Error: "relation soundpub.profiles does not exist"
+### Error: "relation Soundpub.profiles does not exist"
 
 **Cek schema dan table:**
 ```sql
 -- Check schema
 SELECT schema_name FROM information_schema.schemata 
-WHERE schema_name = 'soundpub';
+WHERE schema_name = 'Soundpub';
 
 -- Check table
 SELECT table_name FROM information_schema.tables 
-WHERE table_schema = 'soundpub' AND table_name = 'profiles';
+WHERE table_schema = 'Soundpub' AND table_name = 'profiles';
 ```
 
 **Solusi:** Table profiles mungkin di schema berbeda (public?)
@@ -188,13 +188,13 @@ WHERE table_name = 'profiles';
 **Solusi:** Grant CREATE permission:
 ```sql
 -- Run sebagai postgres superuser
-GRANT CREATE ON SCHEMA soundpub TO authenticated;
-GRANT CREATE ON SCHEMA soundpub TO service_role;
+GRANT CREATE ON SCHEMA Soundpub TO authenticated;
+GRANT CREATE ON SCHEMA Soundpub TO service_role;
 ```
 
 ---
 
-### Error: Function soundpub.is_admin does not exist
+### Error: Function Soundpub.is_admin does not exist
 
 **Solusi:** Function is_admin harus dibuat dulu atau skip RLS policies:
 
@@ -203,11 +203,11 @@ Edit script, comment section PART 6 (RLS Policies)
 
 **Opsi B - Create is_admin function:**
 ```sql
-CREATE OR REPLACE FUNCTION soundpub.is_admin(user_id UUID)
+CREATE OR REPLACE FUNCTION Soundpub.is_admin(user_id UUID)
 RETURNS BOOLEAN AS $$
 BEGIN
   RETURN EXISTS (
-    SELECT 1 FROM soundpub.user_roles
+    SELECT 1 FROM Soundpub.user_roles
     WHERE user_id = $1 AND role IN ('superadmin', 'admin')
   );
 END;
@@ -222,7 +222,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 - [ ] Backup database (jika production)
 - [ ] Gunakan file v2 (002_auth_verification_system_v2.sql)
 - [ ] Connected sebagai user yang punya permission
-- [ ] Schema 'soundpub' exists
+- [ ] Schema 'Soundpub' exists
 - [ ] Table 'profiles' exists
 
 ### Setelah Run Migration:
@@ -245,7 +245,7 @@ SELECT current_user, session_user;
 ```sql
 SELECT grantee, privilege_type 
 FROM information_schema.table_privileges 
-WHERE table_schema = 'soundpub' 
+WHERE table_schema = 'Soundpub' 
   AND table_name = 'profiles'
   AND grantee = current_user;
 ```
@@ -254,15 +254,15 @@ WHERE table_schema = 'soundpub'
 ```sql
 SELECT schemaname, tablename, tableowner 
 FROM pg_tables 
-WHERE schemaname = 'soundpub' 
+WHERE schemaname = 'Soundpub' 
   AND tablename = 'profiles';
 ```
 
 ### Grant All Permissions (Jika Perlu)
 ```sql
 -- Run sebagai postgres superuser
-GRANT ALL ON soundpub.profiles TO authenticated;
-GRANT ALL ON SCHEMA soundpub TO authenticated;
+GRANT ALL ON Soundpub.profiles TO authenticated;
+GRANT ALL ON SCHEMA Soundpub TO authenticated;
 ```
 
 ---
@@ -279,7 +279,7 @@ GRANT ALL ON SCHEMA soundpub TO authenticated;
 
 **File v2 sudah dibuat dan tersimpan di:**
 ```
-I:\website-devops\soundpub-project\soundpub-dashboard\
+I:\website-devops\Soundpub-project\Soundpub-dashboard\
 migrations-complete\002_auth_verification_system_v2.sql
 ```
 

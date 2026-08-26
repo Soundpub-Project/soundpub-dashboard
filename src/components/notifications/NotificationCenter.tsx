@@ -34,7 +34,7 @@ export function NotificationCenter() {
         'postgres_changes',
         {
           event: 'INSERT',
-          schema: 'soundpub',
+          schema: 'Soundpub',
           table: 'notifications',
           filter: `user_id=eq.${user.id}`,
         },

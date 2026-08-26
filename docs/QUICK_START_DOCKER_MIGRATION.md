@@ -35,7 +35,7 @@ docker exec -i supabase-db psql -U postgres -d postgres < migration_002.sql
 docker exec -i supabase-db psql -U postgres -d postgres -c "
 SELECT column_name 
 FROM information_schema.columns 
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
   AND table_name='profiles' 
   AND column_name IN ('email_verified', 'verification_token', 'password_reset_token');
 "
@@ -69,7 +69,7 @@ Tambahkan di section `functions`:
 ```yaml
 functions:
   environment:
-    DATABASE_SCHEMA: soundpub
+    DATABASE_SCHEMA: Soundpub
     SUPABASE_URL: https://supabase.carubra.com
     APP_URL: https://your-dashboard-url.com
 ```
@@ -88,7 +88,7 @@ docker compose restart functions
 ```bash
 # Login as postgres user
 docker exec -it supabase-db psql -U postgres -d postgres
-# Then run: GRANT ALTER ON soundpub.profiles TO authenticated;
+# Then run: GRANT ALTER ON Soundpub.profiles TO authenticated;
 ```
 
 ### Error: "container not found"

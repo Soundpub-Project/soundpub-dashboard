@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
-const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'Soundpub'
 
 const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
   const existingDb = options.db || {}
@@ -16,6 +16,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-callback-token',
 }
 
+const jsonResponse = (body: Record<string, unknown>, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -27,7 +33,7 @@ Deno.serve(async (req) => {
 
     if (webhookToken && callbackToken !== webhookToken) {
       console.error('Invalid webhook token')
-      return new Response(JSON.stringify({ error: 'Invalid callback token' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return jsonResponse({ error: 'Invalid callback token' }, 403)
     }
 
     const body = await req.json()
@@ -36,11 +42,16 @@ Deno.serve(async (req) => {
     const { id: invoiceId, status } = body
 
     if (!invoiceId || !status) {
-      return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return jsonResponse({ error: 'Missing required fields' }, 400)
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return jsonResponse({ error: 'Supabase function environment is incomplete' }, 500)
+    }
+
     const supabase = createSoundpubClient(supabaseUrl, supabaseServiceKey)
 
     const { data: payment, error: paymentError } = await supabase
@@ -51,7 +62,7 @@ Deno.serve(async (req) => {
 
     if (paymentError || !payment) {
       console.error('Payment not found for invoice:', invoiceId)
-      return new Response(JSON.stringify({ error: 'Payment record not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return jsonResponse({ error: 'Payment record not found' }, 404)
     }
 
     const statusMap: Record<string, string> = {
@@ -68,16 +79,26 @@ Deno.serve(async (req) => {
       updateData.paid_at = new Date().toISOString()
     }
 
-    await supabase
+    const { error: paymentUpdateError } = await supabase
       .from('release_payments')
       .update(updateData)
       .eq('id', payment.id)
 
+    if (paymentUpdateError) {
+      console.error('Payment update error:', paymentUpdateError)
+      return jsonResponse({ error: 'Failed to update payment record', details: paymentUpdateError.message }, 500)
+    }
+
     if (mappedStatus === 'paid') {
-      await supabase
+      const { error: releaseUpdateError } = await supabase
         .from('releases')
         .update({ status: 'pending_paid' })
         .eq('id', payment.release_id)
+
+      if (releaseUpdateError) {
+        console.error('Release update error:', releaseUpdateError)
+        return jsonResponse({ error: 'Failed to update release status', details: releaseUpdateError.message }, 500)
+      }
 
       const releaseInfo = payment.releases as any
 
@@ -132,10 +153,15 @@ Deno.serve(async (req) => {
         console.error('Email notification failed:', emailError)
       }
     } else if (mappedStatus === 'expired' || mappedStatus === 'failed') {
-      await supabase
+      const { error: releaseResetError } = await supabase
         .from('releases')
         .update({ status: 'draft' })
         .eq('id', payment.release_id)
+
+      if (releaseResetError) {
+        console.error('Release reset error:', releaseResetError)
+        return jsonResponse({ error: 'Failed to reset release status', details: releaseResetError.message }, 500)
+      }
 
       const releaseInfo = payment.releases as any
       await supabase.from('notifications').insert({
@@ -147,19 +173,16 @@ Deno.serve(async (req) => {
       })
     }
 
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ success: true })
 
   } catch (error) {
     console.error('Webhook error:', error)
-    return new Response(JSON.stringify({ error: 'Internal server error' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    return jsonResponse({ error: error?.message || 'Internal server error' }, 500)
   }
 })
 
 async function sendEmailNotification(payment: any, supabase: any) {
-  const notificationEmail = Deno.env.get('NOTIFICATION_EMAIL') || 'publisher@soundpub.xyz'
+  const notificationEmail = Deno.env.get('NOTIFICATION_EMAIL') || 'publisher@Soundpub.xyz'
   const resendApiKey = Deno.env.get('RESEND_API_KEY')
   
   if (!resendApiKey) {
@@ -196,9 +219,9 @@ async function sendEmailNotification(payment: any, supabase: any) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'SoundPub <noreply@soundpub.xyz>',
+      from: 'Soundpub <noreply@Soundpub.xyz>',
       to: [notificationEmail],
-      subject: `[SoundPub] Release Baru Dibayar: ${release.title}`,
+      subject: `[Soundpub] Release Baru Dibayar: ${release.title}`,
       html: emailHtml,
     }),
   })

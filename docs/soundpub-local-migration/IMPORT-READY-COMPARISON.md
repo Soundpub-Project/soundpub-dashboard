@@ -1,13 +1,13 @@
-﻿# Perbandingan Perubahan vs Paket Import SoundPub Local Terakhir
+﻿# Perbandingan Perubahan vs Paket Import Soundpub Local Terakhir
 
-Dokumen ini merangkum posisi terakhir folder `docs/soundpub-local-migration/` setelah rangkaian migrasi Lovable -> Supabase Local schema `soundpub`.
+Dokumen ini merangkum posisi terakhir folder `docs/Soundpub-local-migration/` setelah rangkaian migrasi Lovable -> Supabase Local schema `Soundpub`.
 
 ## Paket Import Terbaru Yang Siap Dipakai
 
 Urutan siap import saat ini adalah:
 
-1. `00-HARDRESET-SOUNDPUB-LOCAL.sql` *(opsional, hanya jika ingin reset total data SoundPub)*
-2. `01-reset-and-recreate-soundpub.sql`
+1. `00-HARDRESET-Soundpub-LOCAL.sql` *(opsional, hanya jika ingin reset total data Soundpub)*
+2. `01-reset-and-recreate-Soundpub.sql`
 3. `02-initial-seed.sql`
 4. `03-align-schema-to-csv.sql`
 5. `04-runtime-permissions-and-rpc.sql`
@@ -17,12 +17,12 @@ Urutan siap import saat ini adalah:
 9. `08-user-profile-role-support.sql`
 10. `09-storage-buckets-and-policies.sql`
 11. `10-reconcile-user-roles-from-csv.sql`
-12. `11-signup-default-artist-under-soundpub.sql`
+12. `11-signup-default-artist-under-Soundpub.sql`
 13. `12-add-missing-royalties-columns.sql`
 14. `13-recalculate-royalty-balances.sql`
 15. `14-reset-all-profile-balances.sql` *(opsional, hanya untuk reset saldo manual)*
 16. `15-scan-orphan-artist-data.sql` *(audit/helper)*
-17. `16-normalize-soundpub-split-and-recalculate.sql`
+17. `16-normalize-Soundpub-split-and-recalculate.sql`
 18. `17-role-aware-royalty-rpcs.sql`
 19. `18-repair-artist-role-links.sql`
 20. `19-backfill-artist-share.sql`
@@ -34,8 +34,8 @@ Urutan siap import saat ini adalah:
 
 | Area | File | Fungsi |
 | --- | --- | --- |
-| Hard reset | `00-HARDRESET-SOUNDPUB-LOCAL.sql` | Menghapus schema `soundpub`, auth users terkait `soundpub.profiles`, dan object storage SoundPub yang aman dihapus |
-| Schema awal | `01-reset-and-recreate-soundpub.sql` | Membuat ulang schema utama SoundPub |
+| Hard reset | `00-HARDRESET-Soundpub-LOCAL.sql` | Menghapus schema `Soundpub`, auth users terkait `Soundpub.profiles`, dan object storage Soundpub yang aman dihapus |
+| Schema awal | `01-reset-and-recreate-Soundpub.sql` | Membuat ulang schema utama Soundpub |
 | CSV alignment | `03-align-schema-to-csv.sql` | Menyesuaikan kolom database dengan data CSV Lovable |
 | Runtime/RPC | `04-runtime-permissions-and-rpc.sql` | Permission runtime dan helper RPC dasar |
 | Dashboard royalty | `05-royalty-dashboard-rpcs.sql` | RPC awal untuk dashboard royalty |
@@ -56,7 +56,7 @@ Urutan siap import saat ini adalah:
 | Release form | `src/components/releases/ReleaseFormDialog.tsx` | Release dan track sekarang mengisi `artist_user_id` dari pilihan artis |
 | Royalty upload | `supabase/functions/process-royalty-upload/index.ts` | Fallback mapping `artist_user_id` dari nama artis + label jika track/release belum punya ID |
 | Edit artist | `src/components/users/EditArtistDialog.tsx` | Menyamarkan dummy email managed artist |
-| Profile mapping docs | `docs/PROFILE_ARTIS_SOUNDPUB_MAPPING.md` | Dokumen mapping form -> schema `soundpub` dan dampak royalty |
+| Profile mapping docs | `docs/PROFILE_ARTIS_Soundpub_MAPPING.md` | Dokumen mapping form -> schema `Soundpub` dan dampak royalty |
 
 ## Perbandingan Dengan Database Import Terakhir
 
@@ -65,14 +65,14 @@ Urutan siap import saat ini adalah:
 - Import CSV bisa masuk, tetapi banyak baris royalty hanya punya nama artis, bukan `artist_user_id`.
 - Jika `artist_user_id` kosong, sistem menghitung:
   - `artist_revenue = 0`
-  - label menerima 70% untuk kasus label selain SoundPub
+  - label menerima 70% untuk kasus label selain Soundpub
   - hasil UI menampilkan `Artist Share` nol.
 - Release form juga belum selalu menyimpan `tracks.artist_user_id`, sehingga royalty upload berikutnya tetap sulit map ke artis.
 
 ### Setelah perubahan terbaru
 
-- Artis baru dari role `label` tetap punya `auth.users.id` + `soundpub.profiles.id`.
-- `soundpub.artist_profiles` dibuat oleh `create-user` edge function memakai service role.
+- Artis baru dari role `label` tetap punya `auth.users.id` + `Soundpub.profiles.id`.
+- `Soundpub.artist_profiles` dibuat oleh `create-user` edge function memakai service role.
 - Release baru menyimpan `releases.artist_user_id` dan `tracks.artist_user_id`.
 - Royalty upload punya fallback mapping nama artis + label ke `artist_user_id`.
 - SQL `19-backfill-artist-share.sql` dapat memperbaiki data lama dan menghitung ulang share.
@@ -82,17 +82,17 @@ Urutan siap import saat ini adalah:
 Minimal setelah import CSV, jalankan ulang/akhirkan dengan:
 
 ```sql
--- Normalisasi split dan label SoundPub
--- docs/soundpub-local-migration/16-normalize-soundpub-split-and-recalculate.sql
+-- Normalisasi split dan label Soundpub
+-- docs/Soundpub-local-migration/16-normalize-Soundpub-split-and-recalculate.sql
 
 -- RPC role-aware
--- docs/soundpub-local-migration/17-role-aware-royalty-rpcs.sql
+-- docs/Soundpub-local-migration/17-role-aware-royalty-rpcs.sql
 
 -- Repair role/profile artist
--- docs/soundpub-local-migration/18-repair-artist-role-links.sql
+-- docs/Soundpub-local-migration/18-repair-artist-role-links.sql
 
 -- Backfill artist_user_id + recalculate share
--- docs/soundpub-local-migration/19-backfill-artist-share.sql
+-- docs/Soundpub-local-migration/19-backfill-artist-share.sql
 ```
 
 ## Checklist Verifikasi Setelah Import
@@ -105,9 +105,9 @@ SELECT
   SUM(COALESCE(net_revenue, 0)) AS total_revenue,
   SUM(COALESCE(artist_revenue, 0)) AS artist_share,
   SUM(COALESCE(label_revenue, 0)) AS label_share,
-  SUM(COALESCE(soundpub_revenue, 0)) AS admin_share,
+  SUM(COALESCE(Soundpub_revenue, 0)) AS admin_share,
   COUNT(*) FILTER (WHERE artist_user_id IS NULL) AS rows_without_artist_user_id
-FROM soundpub.royalties
+FROM Soundpub.royalties
 GROUP BY COALESCE(label_name, '-')
 ORDER BY rows_without_artist_user_id DESC, total_revenue DESC;
 ```
@@ -122,8 +122,8 @@ Target hasil:
 
 Karena Supabase localhost ini dipakai beberapa project/schema, file hard reset sengaja **tidak** menjalankan `DROP DATABASE` dan **tidak** menghapus schema lain. Reset hanya menyasar:
 
-- `soundpub` schema
-- `auth.users` yang ID-nya pernah tercatat di `soundpub.profiles`
-- object storage bucket SoundPub yang owner-nya user SoundPub
+- `Soundpub` schema
+- `auth.users` yang ID-nya pernah tercatat di `Soundpub.profiles`
+- object storage bucket Soundpub yang owner-nya user Soundpub
 
 Ini supaya project lain di Supabase local tetap aman.

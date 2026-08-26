@@ -52,7 +52,7 @@ SELECT
   status,
   COUNT(*) as count,
   MAX(created_at) as last_sent
-FROM soundpub.email_send_log
+FROM Soundpub.email_send_log
 WHERE created_at > NOW() - INTERVAL '1 hour'
 GROUP BY template_name, status
 ORDER BY last_sent DESC;
@@ -109,4 +109,4 @@ if (shouldNotify) {
 ## Resources
 - [Supabase Edge Functions Docs](https://supabase.com/docs/guides/functions)
 - [Deno Deploy Limits](https://deno.com/deploy/docs/limits)
-- Email delivery logs: `soundpub.email_send_log`
+- Email delivery logs: `Soundpub.email_send_log`

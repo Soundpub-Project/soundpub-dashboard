@@ -11,8 +11,8 @@ SELECT
   COUNT(*) AS royalty_rows_found,
   SUM(r.net_revenue)::numeric(14,2) AS should_be_total_revenue,
   SUM(r.label_revenue)::numeric(14,2) AS should_be_balance
-FROM soundpub.profiles p
-LEFT JOIN soundpub.royalties r ON r.label_user_id = p.id
+FROM Soundpub.profiles p
+LEFT JOIN Soundpub.royalties r ON r.label_user_id = p.id
 WHERE p.full_name = 'KADITRUDIT'
 GROUP BY p.id;
 
@@ -24,7 +24,7 @@ SELECT
   COUNT(CASE WHEN label_user_id IS NULL THEN 1 END) AS null_label_user_id,
   COUNT(CASE WHEN label_user_id IS NOT NULL THEN 1 END) AS has_label_user_id,
   SUM(CASE WHEN label_user_id IS NULL THEN label_revenue ELSE 0 END)::numeric(14,2) AS orphan_revenue
-FROM soundpub.royalties
+FROM Soundpub.royalties
 WHERE label_name = 'KADITRUDIT'
   OR label_name ILIKE '%KADITRUDIT%';
 
@@ -36,7 +36,7 @@ SELECT
   COUNT(CASE WHEN artist_user_id IS NOT NULL THEN 1 END) AS with_artist_id,
   COUNT(CASE WHEN artist_user_id IS NULL THEN 1 END) AS null_artist_id,
   SUM(CASE WHEN artist_user_id IS NULL THEN net_revenue ELSE 0 END)::numeric(14,2) AS revenue_without_artist
-FROM soundpub.royalties;
+FROM Soundpub.royalties;
 
 -- 4. Check RLS on royalties table
 -- (verify authenticated user can read royalties)
@@ -51,7 +51,7 @@ SELECT
   with_check
 FROM pg_policies
 WHERE tablename = 'royalties'
-  AND schemaname = 'soundpub';
+  AND schemaname = 'Soundpub';
 
 -- 5. Sample check - first 5 royalty rows for KADITRUDIT
 -- (inspect actual data quality)
@@ -66,6 +66,6 @@ SELECT
   r.net_revenue::numeric(14,2),
   r.artist_revenue::numeric(14,2),
   r.label_revenue::numeric(14,2)
-FROM soundpub.royalties r
+FROM Soundpub.royalties r
 WHERE r.label_name = 'KADITRUDIT'
 LIMIT 5;

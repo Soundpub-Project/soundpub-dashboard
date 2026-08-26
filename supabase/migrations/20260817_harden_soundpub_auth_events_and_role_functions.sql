@@ -1,19 +1,19 @@
-ALTER TABLE soundpub.auth_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE Soundpub.auth_events ENABLE ROW LEVEL SECURITY;
 
-REVOKE ALL ON TABLE soundpub.auth_events FROM anon, authenticated;
-GRANT SELECT ON TABLE soundpub.auth_events TO authenticated;
+REVOKE ALL ON TABLE Soundpub.auth_events FROM anon, authenticated;
+GRANT SELECT ON TABLE Soundpub.auth_events TO authenticated;
 
-DROP POLICY IF EXISTS "Admins can view auth events" ON soundpub.auth_events;
+DROP POLICY IF EXISTS "Admins can view auth events" ON Soundpub.auth_events;
 CREATE POLICY "Admins can view auth events"
-  ON soundpub.auth_events
+  ON Soundpub.auth_events
   FOR SELECT
   TO authenticated
-  USING (soundpub.is_admin(auth.uid()));
+  USING (Soundpub.is_admin(auth.uid()));
 
-REVOKE EXECUTE ON FUNCTION soundpub.has_role(uuid, soundpub.app_role) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION soundpub.is_admin(uuid) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION soundpub.handle_new_user() FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION Soundpub.has_role(uuid, Soundpub.app_role) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION Soundpub.is_admin(uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION Soundpub.handle_new_user() FROM PUBLIC, anon;
 
-GRANT EXECUTE ON FUNCTION soundpub.has_role(uuid, soundpub.app_role) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION soundpub.is_admin(uuid) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION soundpub.handle_new_user() TO supabase_auth_admin, service_role;
+GRANT EXECUTE ON FUNCTION Soundpub.has_role(uuid, Soundpub.app_role) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION Soundpub.is_admin(uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION Soundpub.handle_new_user() TO supabase_auth_admin, service_role;

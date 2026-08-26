@@ -361,7 +361,7 @@ export function AppSidebar() {
           ) : (
             <div className="flex items-center gap-2">
               <Music2 className="h-6 w-6 text-primary" />
-              {!isCollapsed && <span className="font-semibold text-lg">SoundPub</span>}
+              {!isCollapsed && <span className="font-semibold text-lg">Soundpub</span>}
             </div>
           )}
         </div>

@@ -17,13 +17,13 @@ const SCOPE_TO_OPTIN = {
 
 TEMPLATES['password-reset'] = (data, recipientName) => ({
   scope: 'security',
-  subject: '🔐 Reset Password Anda - SoundPub',
+  subject: '🔐 Reset Password Anda - Soundpub',
   html: layout(
     'Reset Password',
     'linear-gradient(135deg,#ef4444 0%,#dc2626 100%)',
     `
       <p>Hai <strong>${recipientName}</strong>,</p>
-      <p>Kami menerima permintaan untuk reset password akun SoundPub Anda.</p>
+      <p>Kami menerima permintaan untuk reset password akun Soundpub Anda.</p>
       <p>Klik tombol di bawah untuk membuat password baru:</p>
     `,
     'Reset Password',
@@ -45,13 +45,13 @@ TEMPLATES['password-reset'] = (data, recipientName) => ({
 
 TEMPLATES['email-verification'] = (data, recipientName) => ({
   scope: 'security',
-  subject: '✅ Verifikasi Email Anda - SoundPub',
+  subject: '✅ Verifikasi Email Anda - Soundpub',
   html: layout(
     'Verifikasi Email',
     'linear-gradient(135deg,#10b981 0%,#059669 100%)',
     `
       <p>Hai <strong>${recipientName}</strong>,</p>
-      <p>Terima kasih telah mendaftar di SoundPub! 🎵</p>
+      <p>Terima kasih telah mendaftar di Soundpub! 🎵</p>
       <p>Klik tombol di bawah untuk verifikasi email Anda:</p>
     `,
     'Verifikasi Email',
@@ -73,13 +73,13 @@ TEMPLATES['email-verification'] = (data, recipientName) => ({
 
 TEMPLATES['password-reset-confirmation'] = (data, recipientName) => ({
   scope: 'security',
-  subject: '✅ Password Berhasil Direset - SoundPub',
+  subject: '✅ Password Berhasil Direset - Soundpub',
   html: layout(
     'Password Berhasil Direset',
     'linear-gradient(135deg,#10b981 0%,#059669 100%)',
     `
       <p>Hai <strong>${recipientName}</strong>,</p>
-      <p>Password akun SoundPub Anda telah berhasil direset.</p>
+      <p>Password akun Soundpub Anda telah berhasil direset.</p>
       <p style="color:#6b7280;font-size:14px;margin-top:16px;">
         <strong>Waktu:</strong> ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}<br>
         <strong>IP Address:</strong> ${data.ipAddress || 'N/A'}

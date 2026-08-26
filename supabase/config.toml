@@ -57,7 +57,7 @@ verify_jwt = false
 [functions.xendit-webhook]
 verify_jwt = false
 
-[functions.info-soundpub]
+[functions.info-Soundpub]
 verify_jwt = false
 
 [functions.backup-storage-to-drive]

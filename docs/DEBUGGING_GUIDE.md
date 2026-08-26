@@ -50,7 +50,7 @@
 -- Query 1: Cek apakah kolom baru ada
 SELECT column_name, data_type, is_nullable
 FROM information_schema.columns 
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
   AND table_name='profiles'
   AND column_name IN (
     'email_verified', 
@@ -84,7 +84,7 @@ verification_token_expires_at    | timestamp with time zone    | YES
 -- File: migrations-complete/002_auth_verification_system.sql
 
 -- Atau jalankan via command line (jika psql tersedia):
--- psql -h localhost -U postgres -d soundpub -f migrations-complete/002_auth_verification_system.sql
+-- psql -h localhost -U postgres -d Soundpub -f migrations-complete/002_auth_verification_system.sql
 ```
 
 **PENTING:** Setelah migration, cek lagi dengan Query 1 di atas!
@@ -96,7 +96,7 @@ verification_token_expires_at    | timestamp with time zone    | YES
 -- Query 2: Cek table baru
 SELECT table_name 
 FROM information_schema.tables 
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
   AND table_name IN ('auth_events', 'rate_limits')
 ORDER BY table_name;
 ```
@@ -140,7 +140,7 @@ APP_URL
 # Set secrets untuk Edge Functions
 supabase secrets set SUPABASE_URL=https://supabase.carubra.com
 supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-supabase secrets set DATABASE_SCHEMA=soundpub
+supabase secrets set DATABASE_SCHEMA=Soundpub
 supabase secrets set LOVABLE_API_KEY=your-lovable-key
 supabase secrets set GOOGLE_MAIL_API_KEY=your-gmail-key
 supabase secrets set APP_URL=http://localhost:5173
@@ -290,7 +290,7 @@ supabase secrets list
 ```typescript
 // Check di function code, harus ada:
 const getDatabaseSchema = () => 
-  Deno.env.get('DATABASE_SCHEMA') || 'soundpub'
+  Deno.env.get('DATABASE_SCHEMA') || 'Soundpub'
 ```
 
 #### Issue C: CORS Error

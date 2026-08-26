@@ -127,7 +127,7 @@ export default function VerifyEmailRequired() {
             <p className="text-sm font-medium">Langkah verifikasi:</p>
             <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1">
               <li>Buka inbox email Anda</li>
-              <li>Cari email dari SoundPub</li>
+              <li>Cari email dari Soundpub</li>
               <li>Klik link verifikasi dalam email</li>
               <li>Akun Anda akan aktif otomatis</li>
             </ol>

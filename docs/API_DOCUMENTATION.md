@@ -1,5 +1,5 @@
 ﻿# 🔌 API DOCUMENTATION - Auth Verification System
-**SoundPub Dashboard Edge Functions**
+**Soundpub Dashboard Edge Functions**
 
 ---
 
@@ -476,7 +476,7 @@ const corsHeaders = {
 };
 
 const getDatabaseSchema = () => 
-  Deno.env.get('DATABASE_SCHEMA') || 'soundpub';
+  Deno.env.get('DATABASE_SCHEMA') || 'Soundpub';
 
 const createSoundpubClient = (url: string, key: string) => {
   return createClient(url, key, {
@@ -564,7 +564,7 @@ Deno.serve(async (req) => {
       .eq('id', profile.id);
 
     // Send email
-    const appUrl = Deno.env.get('APP_URL') || 'https://dashboard.soundpub.xyz';
+    const appUrl = Deno.env.get('APP_URL') || 'https://dashboard.Soundpub.xyz';
     const resetUrl = `${appUrl}/reset-password?token=${token}`;
 
     await supabase.functions.invoke('send-app-email', {
@@ -651,7 +651,7 @@ Import this JSON into Postman:
 ```json
 {
   "info": {
-    "name": "SoundPub Auth Verification",
+    "name": "Soundpub Auth Verification",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -702,7 +702,7 @@ Import this JSON into Postman:
 
 ## 📞 Support
 
-**Questions?** dev@soundpub.xyz  
+**Questions?** dev@Soundpub.xyz  
 **Documentation:** `/docs/RANCANGAN_AUTH_VERIFICATION.md`  
 **Bug Reports:** GitHub Issues
 
@@ -710,6 +710,6 @@ Import this JSON into Postman:
 
 **Last Updated:** 2026-08-14  
 **Version:** 1.0  
-**Maintained By:** SoundPub Development Team
+**Maintained By:** Soundpub Development Team
 
-🎵 **SoundPub - Empowering Musicians, Securing Accounts** 🎵
+🎵 **Soundpub - Empowering Musicians, Securing Accounts** 🎵

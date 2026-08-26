@@ -1,7 +1,7 @@
 ﻿-- =============================================
--- SOUNDPUB STORAGE BUCKETS AND POLICIES PATCH
+-- Soundpub STORAGE BUCKETS AND POLICIES PATCH
 -- Run after 01-reset/04-runtime when upload/download storage gets 400/403.
--- This only touches Storage buckets/policies used by SoundPub.
+-- This only touches Storage buckets/policies used by Soundpub.
 -- =============================================
 
 -- Buckets used by the frontend.
@@ -19,45 +19,45 @@ ON CONFLICT (id) DO UPDATE SET
   file_size_limit = EXCLUDED.file_size_limit,
   allowed_mime_types = EXCLUDED.allowed_mime_types;
 
--- Remove only local SoundPub storage patch policies so this file can be re-run.
-DROP POLICY IF EXISTS "SoundPub public read public buckets" ON storage.objects;
-DROP POLICY IF EXISTS "SoundPub authenticated read private buckets" ON storage.objects;
-DROP POLICY IF EXISTS "SoundPub authenticated upload buckets" ON storage.objects;
-DROP POLICY IF EXISTS "SoundPub authenticated update buckets" ON storage.objects;
-DROP POLICY IF EXISTS "SoundPub authenticated delete buckets" ON storage.objects;
-DROP POLICY IF EXISTS "SoundPub service role manage buckets" ON storage.objects;
+-- Remove only local Soundpub storage patch policies so this file can be re-run.
+DROP POLICY IF EXISTS "Soundpub public read public buckets" ON storage.objects;
+DROP POLICY IF EXISTS "Soundpub authenticated read private buckets" ON storage.objects;
+DROP POLICY IF EXISTS "Soundpub authenticated upload buckets" ON storage.objects;
+DROP POLICY IF EXISTS "Soundpub authenticated update buckets" ON storage.objects;
+DROP POLICY IF EXISTS "Soundpub authenticated delete buckets" ON storage.objects;
+DROP POLICY IF EXISTS "Soundpub service role manage buckets" ON storage.objects;
 
 -- Public buckets can be viewed without login.
-CREATE POLICY "SoundPub public read public buckets"
+CREATE POLICY "Soundpub public read public buckets"
 ON storage.objects FOR SELECT
 TO anon, authenticated
 USING (bucket_id IN ('avatars', 'label-logos', 'iccn-gallery', 'audio-clips'));
 
 -- Private buckets can be viewed by logged-in users. The app also creates signed URLs for these.
-CREATE POLICY "SoundPub authenticated read private buckets"
+CREATE POLICY "Soundpub authenticated read private buckets"
 ON storage.objects FOR SELECT
 TO authenticated
 USING (bucket_id IN ('release-covers', 'track-audio', 'track-video'));
 
--- During local migration/debug, allow logged-in users to upload to SoundPub buckets.
-CREATE POLICY "SoundPub authenticated upload buckets"
+-- During local migration/debug, allow logged-in users to upload to Soundpub buckets.
+CREATE POLICY "Soundpub authenticated upload buckets"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (bucket_id IN ('avatars', 'label-logos', 'iccn-gallery', 'release-covers', 'track-audio', 'track-video', 'audio-clips'));
 
-CREATE POLICY "SoundPub authenticated update buckets"
+CREATE POLICY "Soundpub authenticated update buckets"
 ON storage.objects FOR UPDATE
 TO authenticated
 USING (bucket_id IN ('avatars', 'label-logos', 'iccn-gallery', 'release-covers', 'track-audio', 'track-video', 'audio-clips'))
 WITH CHECK (bucket_id IN ('avatars', 'label-logos', 'iccn-gallery', 'release-covers', 'track-audio', 'track-video', 'audio-clips'));
 
-CREATE POLICY "SoundPub authenticated delete buckets"
+CREATE POLICY "Soundpub authenticated delete buckets"
 ON storage.objects FOR DELETE
 TO authenticated
 USING (bucket_id IN ('avatars', 'label-logos', 'iccn-gallery', 'release-covers', 'track-audio', 'track-video', 'audio-clips'));
 
 -- Service role/import tools may need full access.
-CREATE POLICY "SoundPub service role manage buckets"
+CREATE POLICY "Soundpub service role manage buckets"
 ON storage.objects FOR ALL
 TO service_role
 USING (bucket_id IN ('avatars', 'label-logos', 'iccn-gallery', 'release-covers', 'track-audio', 'track-video', 'audio-clips'))

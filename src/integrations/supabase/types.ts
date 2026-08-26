@@ -12,7 +12,7 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
-  soundpub: {
+  Soundpub: {
     Tables: {
       app_settings: {
         Row: {
@@ -902,7 +902,7 @@ export type Database = {
           admin_share: number
           artist_name: string
           artist_share: number
-          is_soundpub: boolean
+          is_Soundpub: boolean
           label_share: number
           revenue: number
           streams: number
@@ -1005,7 +1005,7 @@ export type Database = {
           artist_name: string
           artist_share: number
           country_count: number
-          is_soundpub: boolean
+          is_Soundpub: boolean
           isrc: string
           label: string
           label_share: number
@@ -1958,7 +1958,7 @@ public: {
           admin_share: number
           artist_name: string
           artist_share: number
-          is_soundpub: boolean
+          is_Soundpub: boolean
           label_share: number
           revenue: number
           streams: number
@@ -2061,7 +2061,7 @@ public: {
           artist_name: string
           artist_share: number
           country_count: number
-          is_soundpub: boolean
+          is_Soundpub: boolean
           isrc: string
           label: string
           label_share: number

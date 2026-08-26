@@ -1,5 +1,5 @@
 -- =====================================================
--- SoundPub Dashboard - Full Database Schema Export v2.2
+-- Soundpub Dashboard - Full Database Schema Export v2.2
 -- Updated: April 2026
 -- Untuk migrasi ke Supabase Self-Hosted di VPS
 -- =====================================================
@@ -728,7 +728,7 @@ $$;
 
 -- Get royalty artist breakdown
 CREATE OR REPLACE FUNCTION public.get_royalty_artist_breakdown(_period TEXT DEFAULT NULL, _limit INTEGER DEFAULT 20)
-RETURNS TABLE(artist_name TEXT, revenue NUMERIC, streams BIGINT, track_count BIGINT, is_soundpub BOOLEAN, artist_share NUMERIC, label_share NUMERIC, admin_share NUMERIC)
+RETURNS TABLE(artist_name TEXT, revenue NUMERIC, streams BIGINT, track_count BIGINT, is_Soundpub BOOLEAN, artist_share NUMERIC, label_share NUMERIC, admin_share NUMERIC)
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
@@ -748,7 +748,7 @@ BEGIN
     SUM(r.net_revenue) AS revenue,
     SUM(r.sales_unit)::bigint AS streams,
     COUNT(DISTINCT r.isrc) AS track_count,
-    false AS is_soundpub,
+    false AS is_Soundpub,
     SUM(r.net_revenue) * 0.70 AS artist_share,
     SUM(r.net_revenue) * 0.21 AS label_share,
     SUM(r.net_revenue) * 0.09 AS admin_share
@@ -770,7 +770,7 @@ $$;
 
 -- Get royalty track breakdown
 CREATE OR REPLACE FUNCTION public.get_royalty_track_breakdown(_period TEXT DEFAULT NULL)
-RETURNS TABLE(isrc TEXT, title TEXT, artist_name TEXT, label TEXT, revenue NUMERIC, streams BIGINT, platform_count BIGINT, country_count BIGINT, is_soundpub BOOLEAN, artist_share NUMERIC, label_share NUMERIC, admin_share NUMERIC)
+RETURNS TABLE(isrc TEXT, title TEXT, artist_name TEXT, label TEXT, revenue NUMERIC, streams BIGINT, platform_count BIGINT, country_count BIGINT, is_Soundpub BOOLEAN, artist_share NUMERIC, label_share NUMERIC, admin_share NUMERIC)
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
@@ -794,7 +794,7 @@ BEGIN
     SUM(r.sales_unit)::bigint AS streams,
     COUNT(DISTINCT r.platform) AS platform_count,
     COUNT(DISTINCT r.country) AS country_count,
-    false AS is_soundpub,
+    false AS is_Soundpub,
     SUM(r.net_revenue) * 0.70 AS artist_share,
     SUM(r.net_revenue) * 0.21 AS label_share,
     SUM(r.net_revenue) * 0.09 AS admin_share
@@ -1451,7 +1451,7 @@ CREATE POLICY "Labels can delete label logos" ON storage.objects
 
 INSERT INTO public.app_settings (key, value) VALUES 
   ('ga4_measurement_id', NULL),
-  ('app_name', 'SoundPub Dashboard'),
+  ('app_name', 'Soundpub Dashboard'),
   ('storage_provider', 'supabase')
 ON CONFLICT (key) DO NOTHING;
 

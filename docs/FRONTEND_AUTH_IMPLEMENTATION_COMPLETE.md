@@ -2,7 +2,7 @@
 
 **Tanggal:** 2026-08-14  
 **Status:** ✅ Frontend Implementation Complete  
-**Proyek:** SoundPub Dashboard  
+**Proyek:** Soundpub Dashboard  
 
 ---
 
@@ -194,14 +194,14 @@ migrations-complete/
 ### Step 1: Database Migration
 ```bash
 # Connect to database
-psql -h localhost -U postgres -d soundpub
+psql -h localhost -U postgres -d Soundpub
 
 # Run migration
 \i migrations-complete/002_auth_verification_system.sql
 
 # Verify
 SELECT column_name FROM information_schema.columns 
-WHERE table_schema='soundpub' AND table_name='profiles'
+WHERE table_schema='Soundpub' AND table_name='profiles'
 AND column_name LIKE '%token%';
 ```
 
@@ -230,8 +230,8 @@ Pastikan template email berikut tersedia di `send-app-email`:
 pnpm build
 
 # Deploy (Docker)
-docker build -t soundpub-dashboard:v2.1.0 .
-docker tag soundpub-dashboard:v2.1.0 soundpub-dashboard:latest
+docker build -t Soundpub-dashboard:v2.1.0 .
+docker tag Soundpub-dashboard:v2.1.0 Soundpub-dashboard:latest
 docker-compose up -d
 ```
 
@@ -257,7 +257,7 @@ docker-compose up -d
 ```sql
 SELECT 
   COUNT(*) FILTER (WHERE email_verified = true) * 100.0 / COUNT(*) AS verification_rate
-FROM soundpub.profiles
+FROM Soundpub.profiles
 WHERE created_at >= NOW() - INTERVAL '7 days';
 ```
 
@@ -266,7 +266,7 @@ WHERE created_at >= NOW() - INTERVAL '7 days';
 SELECT 
   DATE(created_at) AS date,
   COUNT(*) AS reset_requests
-FROM soundpub.auth_events
+FROM Soundpub.auth_events
 WHERE event_type = 'password_reset_requested'
   AND created_at >= NOW() - INTERVAL '7 days'
 GROUP BY DATE(created_at)
@@ -280,7 +280,7 @@ SELECT
   action_type,
   attempt_count,
   blocked_until
-FROM soundpub.rate_limits
+FROM Soundpub.rate_limits
 WHERE blocked_until > NOW()
 ORDER BY last_attempt_at DESC;
 ```
@@ -316,7 +316,7 @@ ORDER BY last_attempt_at DESC;
 - Tahapan: `docs/TAHAPAN_IMPLEMENTASI.md`
 - Checklist: `docs/IMPLEMENTATION_CHECKLIST.md`
 
-**Questions:** dev@soundpub.xyz
+**Questions:** dev@Soundpub.xyz
 
 ---
 
@@ -343,4 +343,4 @@ ORDER BY last_attempt_at DESC;
 **Version:** v2.1.0  
 **Created:** 2026-08-14
 
-🎵 **SoundPub - Empowering Musicians, Securing Accounts** 🎵
+🎵 **Soundpub - Empowering Musicians, Securing Accounts** 🎵

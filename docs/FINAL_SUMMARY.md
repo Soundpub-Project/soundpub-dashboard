@@ -41,7 +41,7 @@ Apakah ada checklist yang terlewatkan?"
 │ COMMAND:                                                          │
 │   supabase secrets set SUPABASE_URL=...                          │
 │   supabase secrets set SUPABASE_SERVICE_ROLE_KEY=...             │
-│   supabase secrets set DATABASE_SCHEMA=soundpub                  │
+│   supabase secrets set DATABASE_SCHEMA=Soundpub                  │
 │   supabase secrets set APP_URL=http://localhost:5173             │
 │                                                                   │
 │ THEN: Re-deploy semua functions                                  │
@@ -69,10 +69,10 @@ Apakah ada checklist yang terlewatkan?"
 
 Cara:
 1. Buka https://supabase.carubra.com
-2. Login, pilih project soundpub
+2. Login, pilih project Soundpub
 3. Sidebar kiri → SQL Editor → New query
 4. Di komputer, buka file:
-   I:\website-devops\soundpub-project\soundpub-dashboard\
+   I:\website-devops\Soundpub-project\Soundpub-dashboard\
    migrations-complete\002_auth_verification_system.sql
 5. Copy SEMUA isi file (Ctrl+A, Ctrl+C)
 6. Paste ke SQL Editor (Ctrl+V)
@@ -82,7 +82,7 @@ Cara:
 Verify berhasil dengan query ini:
 ┌─────────────────────────────────────────────────────────────┐
 │ SELECT column_name FROM information_schema.columns          │
-│ WHERE table_schema='soundpub' AND table_name='profiles'     │
+│ WHERE table_schema='Soundpub' AND table_name='profiles'     │
 │ AND column_name IN ('email_verified', 'verification_token', │
 │                     'password_reset_token');                 │
 └─────────────────────────────────────────────────────────────┘
@@ -95,12 +95,12 @@ HARUS RETURN: 3 rows!
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
 Buka PowerShell di folder project:
-> cd I:\website-devops\soundpub-project\soundpub-dashboard
+> cd I:\website-devops\Soundpub-project\Soundpub-dashboard
 
 Set secrets (ganti dengan value yang benar):
 > supabase secrets set SUPABASE_URL=https://supabase.carubra.com
 > supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your-actual-key
-> supabase secrets set DATABASE_SCHEMA=soundpub
+> supabase secrets set DATABASE_SCHEMA=Soundpub
 > supabase secrets set APP_URL=http://localhost:5173
 
 Verify:
@@ -139,7 +139,7 @@ Test 2: Forgot Password
 4. ✅ Expected: "Email Terkirim!" muncul
 
 Verify di database:
-SELECT email, password_reset_token FROM soundpub.profiles 
+SELECT email, password_reset_token FROM Soundpub.profiles 
 WHERE email = 'your-test-email@example.com';
 ✅ Token harus terisi (bukan NULL)
 
@@ -213,7 +213,7 @@ Kirimkan info berikut untuk debugging:
 
 4. Query check kolom:
    SELECT column_name FROM information_schema.columns 
-   WHERE table_schema='soundpub' AND table_name='profiles'
+   WHERE table_schema='Soundpub' AND table_name='profiles'
    AND column_name LIKE '%token%' OR column_name = 'email_verified';
 
 5. Screenshot error message (jika ada)

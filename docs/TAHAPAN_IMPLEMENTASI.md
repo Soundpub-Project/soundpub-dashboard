@@ -1,5 +1,5 @@
 ﻿# 🚀 TAHAPAN IMPLEMENTASI - Auth Verification System
-**SoundPub Dashboard - Password Reset & Email Verification**
+**Soundpub Dashboard - Password Reset & Email Verification**
 
 ---
 
@@ -58,7 +58,7 @@ Phase 5: Deployment
 **Tasks:**
 1. ✅ Backup production database
    ```bash
-   pg_dump -h localhost -U postgres -d soundpub > backup_$(date +%Y%m%d_%H%M%S).sql
+   pg_dump -h localhost -U postgres -d Soundpub > backup_$(date +%Y%m%d_%H%M%S).sql
    ```
 
 2. ✅ Verify backup integrity
@@ -67,14 +67,14 @@ Phase 5: Deployment
    ls -lh backup_*.sql
    
    # Test restore to temp database (optional)
-   createdb soundpub_backup_test
-   psql soundpub_backup_test < backup_*.sql
-   dropdb soundpub_backup_test
+   createdb Soundpub_backup_test
+   psql Soundpub_backup_test < backup_*.sql
+   dropdb Soundpub_backup_test
    ```
 
 3. ✅ Review migration script
    - Open: `migrations-complete/002_auth_verification_system.sql`
-   - Verify: semua query menggunakan `soundpub.` schema
+   - Verify: semua query menggunakan `Soundpub.` schema
    - Check: tidak ada hardcoded values yang salah
 
 **Success Criteria:**
@@ -91,16 +91,16 @@ Phase 5: Deployment
 **Tasks:**
 1. ✅ Connect to database
    ```bash
-   psql -h localhost -U postgres -d soundpub
+   psql -h localhost -U postgres -d Soundpub
    ```
 
 2. ✅ Run migration (STAGING FIRST!)
    ```bash
    # STAGING
-   psql -h staging-db -U postgres soundpub < migrations-complete/002_auth_verification_system.sql
+   psql -h staging-db -U postgres Soundpub < migrations-complete/002_auth_verification_system.sql
    
    # Jika staging OK, baru production
-   psql -h localhost -U postgres soundpub < migrations-complete/002_auth_verification_system.sql
+   psql -h localhost -U postgres Soundpub < migrations-complete/002_auth_verification_system.sql
    ```
 
 3. ✅ Check migration output
@@ -125,32 +125,32 @@ Phase 5: Deployment
    ```sql
    SELECT column_name, data_type 
    FROM information_schema.columns 
-   WHERE table_schema='soundpub' AND table_name='profiles'
+   WHERE table_schema='Soundpub' AND table_name='profiles'
    AND column_name LIKE '%token%' OR column_name = 'email_verified';
    ```
 
 2. ✅ Verify new tables created
    ```sql
    SELECT table_name FROM information_schema.tables 
-   WHERE table_schema='soundpub' 
+   WHERE table_schema='Soundpub' 
    AND table_name IN ('auth_events', 'rate_limits');
    ```
 
 3. ✅ Test utility functions
    ```sql
    -- Test cleanup functions
-   SELECT soundpub.cleanup_rate_limits();
-   SELECT soundpub.cleanup_expired_tokens();
+   SELECT Soundpub.cleanup_rate_limits();
+   SELECT Soundpub.cleanup_expired_tokens();
    
    -- Test rate limit function
-   SELECT soundpub.check_rate_limit('test@example.com', 'password_reset', 3, 60);
+   SELECT Soundpub.check_rate_limit('test@example.com', 'password_reset', 3, 60);
    ```
 
 4. ✅ Check RLS policies
    ```sql
    SELECT schemaname, tablename, policyname 
    FROM pg_policies 
-   WHERE schemaname = 'soundpub';
+   WHERE schemaname = 'Soundpub';
    ```
 
 **Success Criteria:**
@@ -694,8 +694,8 @@ Phase 5: Deployment
 - ✅ Deploy frontend to production
   ```bash
   pnpm build
-  docker build -t soundpub-dashboard:v2.0.0 .
-  docker tag soundpub-dashboard:v2.0.0 soundpub-dashboard:latest
+  docker build -t Soundpub-dashboard:v2.0.0 .
+  docker tag Soundpub-dashboard:v2.0.0 Soundpub-dashboard:latest
   docker-compose up -d
   ```
 
@@ -725,19 +725,19 @@ Phase 5: Deployment
 ```sql
 -- Email delivery rate
 SELECT status, COUNT(*) 
-FROM soundpub.email_send_log 
+FROM Soundpub.email_send_log 
 WHERE created_at >= CURRENT_DATE 
 GROUP BY status;
 
 -- Password reset requests
 SELECT COUNT(*) 
-FROM soundpub.auth_events 
+FROM Soundpub.auth_events 
 WHERE event_type = 'password_reset_requested' 
   AND created_at >= CURRENT_DATE;
 
 -- Rate limit violations
 SELECT COUNT(*) 
-FROM soundpub.rate_limits 
+FROM Soundpub.rate_limits 
 WHERE blocked_until > NOW();
 ```
 
@@ -746,7 +746,7 @@ WHERE blocked_until > NOW();
 -- Email verification rate
 SELECT 
   COUNT(*) FILTER (WHERE email_verified = true) * 100.0 / COUNT(*) AS rate
-FROM soundpub.profiles
+FROM Soundpub.profiles
 WHERE created_at >= NOW() - INTERVAL '7 days';
 ```
 
@@ -799,7 +799,7 @@ WHERE created_at >= NOW() - INTERVAL '7 days';
 
 ## ⚠️ CRITICAL REMINDERS
 
-🔴 **ALWAYS** use schema `soundpub` not `public`  
+🔴 **ALWAYS** use schema `Soundpub` not `public`  
 🔴 **BACKUP** database before migration  
 🔴 **TEST** on staging first  
 🔴 **REVIEW** all code before production  
@@ -810,7 +810,7 @@ WHERE created_at >= NOW() - INTERVAL '7 days';
 
 **Reference Documentation:** `docs/IMPLEMENTATION_CHECKLIST.md`  
 **API Reference:** `docs/API_DOCUMENTATION.md`  
-**Questions:** dev@soundpub.xyz
+**Questions:** dev@Soundpub.xyz
 
 ---
 
@@ -818,4 +818,4 @@ WHERE created_at >= NOW() - INTERVAL '7 days';
 **Version:** 1.0  
 **Status:** Ready to Execute
 
-🎵 **SoundPub - Empowering Musicians, Securing Accounts** 🎵
+🎵 **Soundpub - Empowering Musicians, Securing Accounts** 🎵

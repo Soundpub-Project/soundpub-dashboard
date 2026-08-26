@@ -1,5 +1,5 @@
 ﻿# ============================================================
-# SOUNDPUB DASHBOARD - DOCKER MIGRATION RUNNER
+# Soundpub DASHBOARD - DOCKER MIGRATION RUNNER
 # ============================================================
 # Purpose: Run database migration on self-hosted Supabase
 # Target: Docker container supabase-db
@@ -7,7 +7,7 @@
 # ============================================================
 
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "  SOUNDPUB - Docker Migration Runner" -ForegroundColor Cyan
+Write-Host "  Soundpub - Docker Migration Runner" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -107,13 +107,13 @@ try {
     $verifyQuery = @"
 SELECT column_name, data_type
 FROM information_schema.columns 
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
   AND table_name='profiles'
   AND column_name IN ('email_verified', 'verification_token', 'password_reset_token');
 
 SELECT table_name 
 FROM information_schema.tables 
-WHERE table_schema='soundpub' 
+WHERE table_schema='Soundpub' 
   AND table_name IN ('auth_events', 'rate_limits');
 "@
     
