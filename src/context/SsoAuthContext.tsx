@@ -91,6 +91,8 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     const run = async () => {
+      if (location.pathname === '/iccn/iframe') return;
+
       // Guard against React StrictMode double-invocation reusing the same code
       if (exchangedRef.current) return;
       // Don't run silent check if user already has a Supabase session.

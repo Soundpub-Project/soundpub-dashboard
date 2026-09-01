@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { createXenditInvoice, openXenditInvoice } from '@/lib/xendit';
+import { buildCoverStoragePath } from '@/lib/storagePaths';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -277,8 +278,13 @@ export function ArtistReleaseFormDialog({
       }
       const userId = sessionData.session.user.id;
       const fileExt = coverFile.name.split('.').pop();
-      const fileName = `${crypto.randomUUID()}.${fileExt}`;
-      const filePath = `${userId}/${fileName}`;
+      const filePath = buildCoverStoragePath({
+        userId,
+        releaseTitle: form.getValues('title'),
+        releaseId: release?.id,
+        extension: fileExt,
+        uploadId: crypto.randomUUID(),
+      });
 
       const { error: uploadError } = await supabase.storage
         .from('release-covers')

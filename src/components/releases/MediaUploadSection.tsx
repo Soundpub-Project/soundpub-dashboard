@@ -17,9 +17,14 @@ import {
   Scissors
 } from 'lucide-react';
 import { AudioClipCutterDialog } from './AudioClipCutterDialog';
+import { buildTrackStoragePath } from '@/lib/storagePaths';
 
 interface MediaUploadSectionProps {
   trackIndex: number;
+  releaseTitle?: string;
+  releaseId?: string;
+  trackTitle?: string;
+  trackId?: string;
   audioUrl?: string;
   clipUrl?: string;
   duration?: number;
@@ -59,6 +64,10 @@ const ICON_MAP: Record<MediaType, React.ReactNode> = {
 
 export function MediaUploadSection({
   trackIndex,
+  releaseTitle,
+  releaseId,
+  trackTitle,
+  trackId,
   audioUrl,
   clipUrl,
   duration,
@@ -118,9 +127,17 @@ export function MediaUploadSection({
       throw new Error('Not authenticated');
     }
     const userId = sessionData.session.user.id;
-    // Path-scoped to uploader for RLS ownership checks (non-public buckets).
-    const baseName = `${type}-${trackIndex}-${Date.now()}.${fileExt}`;
-    const fileName = bucket === 'audio-clips' ? baseName : `${userId}/${baseName}`;
+    const fileName = buildTrackStoragePath({
+      userId,
+      releaseTitle,
+      releaseId,
+      trackIndex,
+      trackTitle,
+      trackId,
+      extension: fileExt,
+      type,
+      uploadId: crypto.randomUUID(),
+    });
 
     console.log(`Uploading to Supabase Storage bucket: ${bucket}, file: ${fileName}`);
 

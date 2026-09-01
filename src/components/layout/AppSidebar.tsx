@@ -209,7 +209,7 @@ const systemAdminItems: NavItem[] = [
 const labelManagementItems: NavItem[] = [
   { 
     title: 'Artis', 
-    url: '/dashboard/artists', 
+    url: '/dashboard/my-artists',
     icon: Users,
     roles: ['superadmin', 'admin', 'label', 'whitelabel'],
   },

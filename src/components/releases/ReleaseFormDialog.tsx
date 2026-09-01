@@ -62,6 +62,7 @@ import { MediaUploadSection } from './MediaUploadSection';
 import { ArtistSelector } from './ArtistSelector';
 import { ContributorSelector } from './ContributorSelector';
 import { createXenditInvoice, openXenditInvoice } from '@/lib/xendit';
+import { buildCoverStoragePath } from '@/lib/storagePaths';
 
 // Genre list
 const GENRE_LIST = [
@@ -512,7 +513,13 @@ export function ReleaseFormDialog({
         throw new Error('Anda harus login terlebih dahulu');
       }
       const userId = sessionData.session.user.id;
-      const fileName = `${userId}/cover-${Date.now()}.${fileExt}`;
+      const fileName = buildCoverStoragePath({
+        userId,
+        releaseTitle: form.getValues('title'),
+        releaseId: release?.id,
+        extension: fileExt,
+        uploadId: crypto.randomUUID(),
+      });
 
       console.log(`Uploading cover to Supabase Storage bucket: ${bucket}, file: ${fileName}`);
 
@@ -1587,6 +1594,10 @@ export function ReleaseFormDialog({
                         {!lyricsOnlyMode && (
                           <MediaUploadSection
                             trackIndex={trackIndex}
+                            releaseTitle={form.watch('title')}
+                            releaseId={release?.id}
+                            trackTitle={form.watch(`tracks.${trackIndex}.title`)}
+                            trackId={form.watch(`tracks.${trackIndex}.id`)}
                             audioUrl={form.watch(`tracks.${trackIndex}.audio_url`) || undefined}
                             clipUrl={form.watch(`tracks.${trackIndex}.clip_url`) || undefined}
                             duration={form.watch(`tracks.${trackIndex}.duration`) || undefined}

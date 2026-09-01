@@ -29,7 +29,7 @@ const CreateUserSchema = z.object({
     .max(200, 'Nama terlalu panjang')
     .regex(/^[\p{L}\p{M}\s'.-]+$/u, 'Nama mengandung karakter tidak valid'),
   phone: z.string()
-    .regex(/^(\+?[1-9]\d{1,14})?$/, 'Format nomor telepon tidak valid')
+    .regex(/^(\+?[0-9][0-9\s().-]{1,19})?$/, 'Format nomor telepon tidak valid')
     .max(20, 'Nomor telepon terlalu panjang')
     .optional()
     .nullable()

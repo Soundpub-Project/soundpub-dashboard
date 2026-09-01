@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { ArtistOnboardingDialog } from '@/components/onboarding/ArtistOnboardingDialog';
@@ -95,6 +95,7 @@ export default function Releases() {
   const [showArchived, setShowArchived] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState('');
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -319,11 +320,13 @@ export default function Releases() {
   const handleFormSuccess = () => {
     fetchReleases();
     setSelectedIds([]);
+    setBulkStatus('');
   };
 
   const toggleSelectAll = () => {
     if (selectedIds.length === paginatedReleases.length) {
       setSelectedIds([]);
+      setBulkStatus('');
     } else {
       setSelectedIds(paginatedReleases.map((r) => r.id));
     }
@@ -360,6 +363,30 @@ export default function Releases() {
     } catch (error: any) {
       console.error('Error bulk archiving:', error);
       toast.error(error.message || 'Gagal memproses bulk action');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleBulkStatusChange = async () => {
+    if (selectedIds.length === 0 || !bulkStatus) return;
+
+    setBulkLoading(true);
+    try {
+      const { error } = await supabase
+        .from('releases')
+        .update({ status: bulkStatus, updated_at: new Date().toISOString() })
+        .in('id', selectedIds);
+
+      if (error) throw error;
+
+      toast.success(`${selectedIds.length} release berhasil diubah ke status ${getStatusLabel(bulkStatus)}`);
+      fetchReleases();
+      setSelectedIds([]);
+      setBulkStatus('');
+    } catch (error: any) {
+      console.error('Error bulk status change:', error);
+      toast.error(error.message || 'Gagal mengubah status releases');
     } finally {
       setBulkLoading(false);
     }
@@ -568,6 +595,27 @@ export default function Releases() {
                   {selectedIds.length} release dipilih
                 </span>
                 <div className="flex-1" />
+                <Select value={bulkStatus} onValueChange={setBulkStatus} disabled={bulkLoading}>
+                  <SelectTrigger className="h-9 w-[180px]">
+                    <SelectValue placeholder="Ubah status..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {['active', 'pending', 'pending_paid', 'processing', 'draft', 'rejected', 'inactive'].map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {getStatusLabel(status)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBulkStatusChange}
+                  disabled={bulkLoading || !bulkStatus}
+                >
+                  {bulkLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Ubah Status
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -666,8 +714,10 @@ export default function Releases() {
                             </div>
                           </div>
                           <div className="flex flex-wrap gap-2 pt-1">
-                            <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/releases/${release.id}`)}>
-                              <Eye className="h-4 w-4 mr-1" /> Detail
+                            <Button variant="outline" size="sm" asChild>
+                              <Link to={`/dashboard/releases/${release.id}`}>
+                                <Eye className="h-4 w-4 mr-1" /> Detail
+                              </Link>
                             </Button>
                             {(release.status === 'pending' || release.status === 'draft' || (release.status === 'active' && isAdmin)) && (
                               <Button variant="outline" size="sm" onClick={() => handleEditRelease(release)}>
@@ -785,12 +835,10 @@ export default function Releases() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => navigate(`/dashboard/releases/${release.id}`)}
-                              >
-                                <Eye className="h-4 w-4" />
+                              <Button variant="ghost" size="sm" asChild>
+                                <Link to={`/dashboard/releases/${release.id}`} aria-label={`Lihat detail ${release.title}`}>
+                                  <Eye className="h-4 w-4" />
+                                </Link>
                               </Button>
                               {(canManageReleases || isArtist) && (
                                 <DropdownMenu>

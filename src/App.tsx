@@ -1,4 +1,4 @@
-﻿import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -48,6 +48,7 @@ import ArtistProfile from "./pages/ArtistProfile";
 import NotificationManagement from "./pages/NotificationManagement";
 import PaymentSettings from "./pages/PaymentSettings";
 import Invoices from "./pages/Invoices";
+import ArtistDeletionRequests from "./pages/ArtistDeletionRequests";
 import NotFound from "./pages/NotFound";
 import IccnIframeAuth from "./pages/IccnIframeAuth";
 
@@ -139,6 +140,16 @@ const App = () => (
               <Route path="/dashboard/my-artists" element={
                 <ProtectedRoute allowedRoles={['label', 'whitelabel']}>
                   <MyArtists />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/artists" element={
+                <ProtectedRoute allowedRoles={['superadmin', 'admin', 'label', 'whitelabel']}>
+                  <MyArtists />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/artist-deletion-requests" element={
+                <ProtectedRoute allowedRoles={['label', 'whitelabel']}>
+                  <ArtistDeletionRequests />
                 </ProtectedRoute>
               } />
               <Route path="/dashboard/artist-profile" element={
