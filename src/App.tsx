@@ -49,6 +49,7 @@ import NotificationManagement from "./pages/NotificationManagement";
 import PaymentSettings from "./pages/PaymentSettings";
 import Invoices from "./pages/Invoices";
 import ArtistDeletionRequests from "./pages/ArtistDeletionRequests";
+import Takedown from "./pages/Takedown";
 import NotFound from "./pages/NotFound";
 import IccnIframeAuth from "./pages/IccnIframeAuth";
 
@@ -110,6 +111,11 @@ const App = () => (
               <Route path="/dashboard/tracks" element={
                 <ProtectedRoute>
                   <Tracks />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/takedown" element={
+                <ProtectedRoute allowedRoles={['superadmin', 'admin', 'label', 'artist']}>
+                  <Takedown />
                 </ProtectedRoute>
               } />
               <Route path="/dashboard/royalties" element={

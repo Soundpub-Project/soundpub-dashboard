@@ -41,6 +41,12 @@ const xenditMessage = (body: any) => {
   return 'Xendit menolak pembuatan invoice'
 }
 
+const parseCsvEnv = (value: string | undefined) =>
+  value?.split(',').map((item) => item.trim()).filter(Boolean)
+
+const isForbiddenXenditError = (status: number, body: any) =>
+  status === 403 || body?.error_code === 'REQUEST_FORBIDDEN_ERROR'
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -92,6 +98,7 @@ Deno.serve(async (req) => {
       .from('release_payments')
       .select('*')
       .eq('release_id', releaseId)
+      .eq('user_id', user.id)
       .eq('status', 'pending')
       .order('created_at', { ascending: false })
       .limit(1)
@@ -120,7 +127,31 @@ Deno.serve(async (req) => {
           })
         }
 
-        const expiredStatus = checkBody.status === 'PAID' ? 'paid' : 'expired'
+        if (checkResponse.ok && ['PAID', 'SETTLED'].includes(checkBody.status)) {
+          const { error: updatePaidError } = await supabase
+            .from('release_payments')
+            .update({ status: 'paid', paid_at: checkBody.paid_at || new Date().toISOString() })
+            .eq('id', existingPayment.id)
+
+          if (updatePaidError) {
+            console.error('Existing paid payment update error:', updatePaidError)
+          }
+
+          await supabase
+            .from('releases')
+            .update({ status: 'pending_paid' })
+            .eq('id', existingPayment.release_id)
+            .neq('status', 'active')
+
+          return jsonResponse({ error: 'Invoice ini sudah dibayar', invoice_id: existingPayment.xendit_invoice_id }, 409)
+        }
+
+        if (!checkResponse.ok || !['EXPIRED', 'FAILED'].includes(checkBody.status)) {
+          console.warn('Existing invoice status is not reusable:', checkResponse.status, JSON.stringify(checkBody))
+          return jsonResponse({ error: 'Invoice lama belum bisa diganti. Coba refresh atau hubungi admin.', invoice_id: existingPayment.xendit_invoice_id }, 409)
+        }
+
+        const expiredStatus = checkBody.status === 'FAILED' ? 'failed' : 'expired'
         const { error: updateExistingError } = await supabase
           .from('release_payments')
           .update({ status: expiredStatus })
@@ -136,7 +167,7 @@ Deno.serve(async (req) => {
 
     const { data: release, error: releaseError } = await supabase
       .from('releases')
-      .select('id, title, artist_name, label_id, status, release_type')
+      .select('id, title, artist_name, label_id, created_by, status, release_type')
       .eq('id', releaseId)
       .single()
 
@@ -146,6 +177,22 @@ Deno.serve(async (req) => {
 
     if (release.status === 'pending_paid' || release.status === 'active') {
       return jsonResponse({ error: 'Release sudah dibayar atau aktif' }, 409)
+    }
+
+    const { data: roleRows, error: roleError } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+
+    if (roleError) {
+      console.error('User role lookup error:', roleError)
+      return jsonResponse({ error: 'Gagal memverifikasi izin user', details: roleError.message }, 500)
+    }
+
+    const isAdmin = roleRows?.some((row: { role: string }) => row.role === 'admin' || row.role === 'superadmin')
+    const canCreateInvoice = isAdmin || release.created_by === user.id || release.label_id === user.id
+    if (!canCreateInvoice) {
+      return jsonResponse({ error: 'User tidak berhak membuat invoice untuk release ini' }, 403)
     }
 
     const { count: trackCount, error: trackError } = await supabase
@@ -211,7 +258,8 @@ Deno.serve(async (req) => {
 
     const origin = req.headers.get('origin') || Deno.env.get('PUBLIC_SITE_URL') || 'https://Soundpub-dashboard.lovable.app'
     const externalId = `release-${releaseId}-${Date.now()}`
-    const invoicePayload = {
+    const configuredPaymentMethods = parseCsvEnv(Deno.env.get('XENDIT_PAYMENT_METHODS'))
+    const invoicePayload: Record<string, unknown> = {
       external_id: externalId,
       amount: totalAmount,
       currency: 'IDR',
@@ -231,6 +279,10 @@ Deno.serve(async (req) => {
       }],
     }
 
+    if (configuredPaymentMethods?.length) {
+      invoicePayload.payment_methods = configuredPaymentMethods
+    }
+
     const xenditResponse = await fetch('https://api.xendit.co/v2/invoices', {
       method: 'POST',
       headers: {
@@ -244,17 +296,25 @@ Deno.serve(async (req) => {
 
     if (!xenditResponse.ok) {
       console.error('Xendit create invoice error:', xenditResponse.status, JSON.stringify(xenditBody))
+      if (isForbiddenXenditError(xenditResponse.status, xenditBody)) {
+        return jsonResponse({
+          error: 'Xendit API key tidak punya izin membuat invoice',
+          details: 'Aktifkan permission Invoice/Create Invoice di Xendit Dashboard atau ganti XENDIT_SECRET_KEY dengan secret key yang punya akses invoice.',
+          xendit_status: xenditResponse.status,
+          xendit_error_code: xenditBody?.error_code,
+        }, 422)
+      }
       return jsonResponse({
         error: 'Failed to create payment invoice',
         details: xenditMessage(xenditBody),
         xendit_status: xenditResponse.status,
         xendit_error_code: xenditBody?.error_code,
-      }, xenditResponse.status === 401 ? 502 : 400)
+      }, xenditResponse.status === 401 ? 422 : 400)
     }
 
     if (!xenditBody?.id || !xenditBody?.invoice_url) {
       console.error('Unexpected Xendit invoice response:', JSON.stringify(xenditBody))
-      return jsonResponse({ error: 'Invalid invoice response from Xendit' }, 502)
+      return jsonResponse({ error: 'Invalid invoice response from Xendit' }, 422)
     }
 
     const { error: paymentError } = await supabase

@@ -22,6 +22,16 @@ const jsonResponse = (body: Record<string, unknown>, status = 200) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 
+const statusMap: Record<string, 'paid' | 'expired' | 'failed'> = {
+  PAID: 'paid',
+  SETTLED: 'paid',
+  EXPIRED: 'expired',
+  FAILED: 'failed',
+}
+
+const amountsMatch = (expected: unknown, received: unknown) =>
+  received === undefined || received === null || Number(expected) === Number(received)
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -31,7 +41,12 @@ Deno.serve(async (req) => {
     const webhookToken = Deno.env.get('XENDIT_WEBHOOK_TOKEN')
     const callbackToken = req.headers.get('x-callback-token')
 
-    if (webhookToken && callbackToken !== webhookToken) {
+    if (!webhookToken) {
+      console.error('XENDIT_WEBHOOK_TOKEN is not configured')
+      return jsonResponse({ error: 'Webhook authentication is not configured' }, 503)
+    }
+
+    if (callbackToken !== webhookToken) {
       console.error('Invalid webhook token')
       return jsonResponse({ error: 'Invalid callback token' }, 403)
     }
@@ -39,7 +54,7 @@ Deno.serve(async (req) => {
     const body = await req.json()
     console.log('Xendit webhook received:', JSON.stringify(body))
 
-    const { id: invoiceId, status } = body
+    const { id: invoiceId, status, amount, currency } = body
 
     if (!invoiceId || !status) {
       return jsonResponse({ error: 'Missing required fields' }, 400)
@@ -65,28 +80,45 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Payment record not found' }, 404)
     }
 
-    const statusMap: Record<string, string> = {
-      'PAID': 'paid',
-      'SETTLED': 'paid',
-      'EXPIRED': 'expired',
-      'FAILED': 'failed',
+    const mappedStatus = statusMap[String(status).toUpperCase()]
+    if (!mappedStatus) {
+      console.warn('Ignoring unsupported Xendit invoice status:', status)
+      return jsonResponse({ success: true, ignored: true, reason: 'unsupported_status' })
     }
 
-    const mappedStatus = statusMap[status.toUpperCase()] || 'pending'
+    if (!amountsMatch(payment.amount, amount) || (currency && String(currency).toUpperCase() !== payment.currency.toUpperCase())) {
+      console.error('Webhook payment amount or currency mismatch:', invoiceId)
+      return jsonResponse({ error: 'Webhook payment data does not match invoice' }, 409)
+    }
+
+    if (payment.status === 'paid') {
+      return jsonResponse({ success: true, duplicate: true })
+    }
+
+    if ((mappedStatus === 'expired' || mappedStatus === 'failed') && payment.status !== 'pending') {
+      return jsonResponse({ success: true, ignored: true, reason: 'terminal_payment_status' })
+    }
 
     const updateData: Record<string, any> = { status: mappedStatus }
     if (mappedStatus === 'paid') {
       updateData.paid_at = new Date().toISOString()
     }
 
-    const { error: paymentUpdateError } = await supabase
+    const { data: updatedPayment, error: paymentUpdateError } = await supabase
       .from('release_payments')
       .update(updateData)
       .eq('id', payment.id)
+      .eq('status', payment.status)
+      .select('id')
+      .maybeSingle()
 
     if (paymentUpdateError) {
       console.error('Payment update error:', paymentUpdateError)
       return jsonResponse({ error: 'Failed to update payment record', details: paymentUpdateError.message }, 500)
+    }
+
+    if (!updatedPayment) {
+      return jsonResponse({ success: true, duplicate: true })
     }
 
     if (mappedStatus === 'paid') {
@@ -94,6 +126,7 @@ Deno.serve(async (req) => {
         .from('releases')
         .update({ status: 'pending_paid' })
         .eq('id', payment.release_id)
+        .neq('status', 'active')
 
       if (releaseUpdateError) {
         console.error('Release update error:', releaseUpdateError)
@@ -153,16 +186,6 @@ Deno.serve(async (req) => {
         console.error('Email notification failed:', emailError)
       }
     } else if (mappedStatus === 'expired' || mappedStatus === 'failed') {
-      const { error: releaseResetError } = await supabase
-        .from('releases')
-        .update({ status: 'draft' })
-        .eq('id', payment.release_id)
-
-      if (releaseResetError) {
-        console.error('Release reset error:', releaseResetError)
-        return jsonResponse({ error: 'Failed to reset release status', details: releaseResetError.message }, 500)
-      }
-
       const releaseInfo = payment.releases as any
       await supabase.from('notifications').insert({
         user_id: payment.user_id,

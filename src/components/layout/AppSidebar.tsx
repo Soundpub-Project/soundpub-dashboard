@@ -41,6 +41,7 @@ import {
   FileText,
   Bell,
   ClipboardList,
+  ShieldAlert,
   History,
   Wallet,
   UserRound,
@@ -90,6 +91,12 @@ const musicDashboardItems: NavItem[] = [
     url: '/dashboard/royalty-summary', 
     icon: PieChart,
     roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel'],
+  },
+  {
+    title: 'Takedown',
+    url: '/dashboard/takedown',
+    icon: ShieldAlert,
+    roles: ['superadmin', 'admin', 'label', 'artist'],
   },
 ];
 
@@ -177,7 +184,7 @@ const userManagementItems: NavItem[] = [
   },
 ];
 
-// === ADMINISTRASI SISTEM (Superadmin Only) ===
+// === ADMINISTRASI SISTEM (Admin & Superadmin) ===
 const systemAdminItems: NavItem[] = [
   { 
     title: 'Log Aktivitas', 
@@ -201,7 +208,7 @@ const systemAdminItems: NavItem[] = [
     title: 'Pengaturan Pembayaran', 
     url: '/dashboard/payment-settings', 
     icon: CreditCard,
-    roles: ['superadmin'],
+    roles: ['superadmin', 'admin'],
   },
 ];
 
@@ -473,7 +480,7 @@ export function AppSidebar() {
         )}
 
         {/* Administrasi Sistem */}
-        {isSuperAdmin && filterByRole(systemAdminItems).length > 0 && (
+        {(isSuperAdmin || isAdmin) && filterByRole(systemAdminItems).length > 0 && (
           <SidebarGroup>
             <SidebarGroupLabel>Administrasi Sistem</SidebarGroupLabel>
             <SidebarGroupContent>
