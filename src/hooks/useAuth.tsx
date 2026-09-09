@@ -1,7 +1,9 @@
-﻿import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { useState, useEffect, useRef, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
+import { clearSessionLimit, getSessionExpiresAt, markSessionExpired } from '@/lib/sessionLimit';
+import { toast } from 'sonner';
 
 type AppRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user' | 'copyright' | 'whitelabel';
 
@@ -55,6 +57,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
   const queryClient = useQueryClient();
+  const sessionExpiryTimer = useRef<number | null>(null);
+  const expiringSession = useRef(false);
+
+  const clearSessionExpiryTimer = () => {
+    if (sessionExpiryTimer.current !== null) {
+      window.clearTimeout(sessionExpiryTimer.current);
+      sessionExpiryTimer.current = null;
+    }
+  };
+
+  const clearAuthState = () => {
+    queryClient.clear();
+    setUser(null);
+    setSession(null);
+    setProfile(null);
+    setRole(null);
+  };
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -69,6 +88,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             fetchProfileAndRole(session.user.id);
           }, 0);
         } else {
+          clearSessionExpiryTimer();
+          if (!expiringSession.current) clearSessionLimit();
+          expiringSession.current = false;
           setProfile(null);
           setRole(null);
           setLoading(false);
@@ -88,8 +110,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearSessionExpiryTimer();
+      subscription.unsubscribe();
+    };
   }, []);
+
+
+  useEffect(() => {
+    const expireSession = async () => {
+      expiringSession.current = true;
+      markSessionExpired();
+      await supabase.auth.signOut();
+      clearAuthState();
+      toast.error('Sesi berakhir setelah 6 jam. Silakan login kembali.');
+    };
+
+    const enforceSessionLimit = () => {
+      clearSessionExpiryTimer();
+      if (!session) return;
+
+      const remainingMs = getSessionExpiresAt(session) - Date.now();
+      if (remainingMs <= 0) {
+        void expireSession();
+        return;
+      }
+
+      sessionExpiryTimer.current = window.setTimeout(() => {
+        void expireSession();
+      }, remainingMs);
+    };
+
+    enforceSessionLimit();
+    window.addEventListener('focus', enforceSessionLimit);
+    document.addEventListener('visibilitychange', enforceSessionLimit);
+
+    return () => {
+      clearSessionExpiryTimer();
+      window.removeEventListener('focus', enforceSessionLimit);
+      document.removeEventListener('visibilitychange', enforceSessionLimit);
+    };
+  }, [session]);
 
   const fetchProfileAndRole = async (userId: string) => {
     try {
@@ -126,10 +187,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
+    clearSessionLimit();
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+    if (!error) {
+      void (supabase as any).rpc('record_auth_audit', { p_action: 'auth.login' });
+    }
     return { error: error as Error | null };
   };
 
@@ -152,6 +217,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    if (user) {
+      await (supabase as any).rpc('record_auth_audit', { p_action: 'auth.logout' });
+    }
     await supabase.auth.signOut();
     // Bersihkan semua cache data dari React Query agar tidak bocor ke user lain saat berganti akun
     queryClient.clear();

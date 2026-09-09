@@ -6,6 +6,7 @@ import { useRoyaltyStats, useRoyaltyMonthlySummary, useRoyaltyPlatformSummary } 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { ReleaseStatusBadge } from '@/components/releases/ReleaseStatusBadge';
 import { Button } from '@/components/ui/button';
 import { 
   Disc3, 
@@ -350,7 +351,7 @@ export default function Dashboard() {
                     {formatCurrency(stats.totalRevenue)}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Dari semua royalties
+                    {isLabel || isWhitelabel ? 'Akumulasi semua artis label' : 'Dari semua royalties'}
                   </p>
                 </>
               )}
@@ -360,7 +361,7 @@ export default function Dashboard() {
           <Card className="bg-card/50 border-border/50 hover:border-primary/30 transition-colors">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Saldo Tersedia
+                {isLabel || isWhitelabel ? 'Saldo Tersedia Label' : 'Saldo Tersedia'}
               </CardTitle>
               <div className="p-2 rounded-full bg-yellow-500/10">
                 <Wallet className="h-4 w-4 text-yellow-500" />
@@ -375,8 +376,14 @@ export default function Dashboard() {
                     {formatCurrency(stats.balance)}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Bisa ditarik kapan saja
+                    {isLabel || isWhitelabel ? 'Akumulasi saldo artis di bawah label' : 'Bisa ditarik kapan saja'}
                   </p>
+                  {(isLabel || isWhitelabel) && stats.balance > 0 && (
+                    <Button size="sm" variant="outline" className="mt-3" onClick={() => navigate('/dashboard/payouts')}>
+                      Tarik Dana Artis
+                      <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                    </Button>
+                  )}
                 </>
               )}
             </CardContent>
@@ -617,10 +624,7 @@ export default function Dashboard() {
                       <Badge variant="outline" className="capitalize hidden sm:inline-flex">
                         {release.release_type}
                       </Badge>
-                      <Badge variant={getStatusBadge(release.status)} className="capitalize">
-                        {release.status === 'active' && <CheckCircle className="h-3 w-3 mr-1" />}
-                        {release.status}
-                      </Badge>
+                      <ReleaseStatusBadge status={release.status} />
                     </div>
                   </div>
                 ))}
@@ -642,3 +646,4 @@ export default function Dashboard() {
     </DashboardLayout>
   );
 }
+

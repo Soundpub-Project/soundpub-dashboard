@@ -544,6 +544,9 @@ export default function UploadRoyalty() {
 
       // Call edge function for server-side validation and processing
       const { data, error } = await supabase.functions.invoke('process-royalty-upload', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: {
           rows: parsedData,
           filename: `royalty_${Date.now()}.csv`,

@@ -11,7 +11,8 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, Loader2, Search, ExternalLink, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { FileDown, FileText, Loader2, Search, ExternalLink, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 
@@ -40,6 +41,7 @@ export default function Invoices() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [tab, setTab] = useState<'all' | 'pending' | 'paid' | 'expired'>('all');
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isAdmin) fetchInvoices();
@@ -94,6 +96,23 @@ export default function Invoices() {
       case 'expired': return { icon: XCircle, color: 'bg-red-500/20 text-red-600', label: 'Expired' };
       case 'failed': return { icon: XCircle, color: 'bg-red-500/20 text-red-600', label: 'Gagal' };
       default: return { icon: Clock, color: 'bg-muted text-muted-foreground', label: status };
+    }
+  };
+
+  const downloadInvoice = async (paymentId: string) => {
+    setDownloadingId(paymentId);
+    try {
+      const { data, error } = await supabase.functions.invoke('download-release-invoice', {
+        body: { payment_id: paymentId },
+      });
+      if (error) throw error;
+      if (!data?.url) throw new Error('Link invoice tidak tersedia');
+      window.open(data.url, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      console.error('Invoice PDF download failed:', error);
+      toast.error('Gagal menyiapkan PDF invoice');
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -230,7 +249,11 @@ export default function Invoices() {
                             {formatDate(inv.status === 'paid' ? inv.paid_at : inv.created_at)}
                           </TableCell>
                           <TableCell>
-                            {inv.xendit_invoice_url && inv.status === 'pending' ? (
+                            {inv.status === 'paid' ? (
+                              <Button variant="ghost" size="sm" onClick={() => downloadInvoice(inv.id)} disabled={downloadingId === inv.id} title="Unduh invoice PDF">
+                                {downloadingId === inv.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+                              </Button>
+                            ) : inv.xendit_invoice_url && inv.status === 'pending' ? (
                               <Button variant="ghost" size="sm" asChild>
                                 <a href={inv.xendit_invoice_url} target="_blank" rel="noopener noreferrer">
                                   <ExternalLink className="h-4 w-4" />

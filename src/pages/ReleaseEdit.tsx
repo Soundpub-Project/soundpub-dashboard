@@ -18,7 +18,7 @@ interface Release {
   genre: string | null;
   release_type: string;
   status: string;
-  label_id: string;
+  label_id: string | null;
 }
 
 export default function ReleaseEdit() {
@@ -42,7 +42,28 @@ export default function ReleaseEdit() {
       if (error) {
         console.error('Error loading release:', error);
       }
-      setRelease(data || null);
+      let releaseData = data || null;
+
+      if (releaseData && !releaseData.label_id && releaseData.artist_user_id) {
+        const { data: artistProfile, error: artistProfileError } = await supabase
+          .from('profiles')
+          .select('parent_label_id')
+          .eq('id', releaseData.artist_user_id)
+          .maybeSingle();
+
+        if (artistProfileError) {
+          console.error('Error loading release artist label:', artistProfileError);
+        }
+
+        if (artistProfile?.parent_label_id) {
+          releaseData = {
+            ...releaseData,
+            label_id: artistProfile.parent_label_id,
+          };
+        }
+      }
+
+      setRelease(releaseData);
       setLoading(false);
     };
 
@@ -75,12 +96,12 @@ export default function ReleaseEdit() {
     );
   }
 
-  const isPendingOrDraft = release.status === 'pending' || release.status === 'draft';
+  const isEditableResubmissionStatus = release?.status === 'pending' || release?.status === 'draft' || release?.status === 'rejected';
   const isOwnRelease = isArtist && (
     release.artist_user_id === user?.id ||
     (!release.artist_user_id && release.artist_name === user?.user_metadata?.full_name)
   );
-  const canFullyEdit = isAdmin || ((isLabel || isWhitelabel) && isPendingOrDraft) || (isOwnRelease && isPendingOrDraft);
+  const canFullyEdit = isAdmin || ((isLabel || isWhitelabel) && isEditableResubmissionStatus) || (isOwnRelease && isEditableResubmissionStatus);
   const lyricsOnlyMode = (isLabel || isWhitelabel) && release.status === 'active';
 
   if (!canFullyEdit && !lyricsOnlyMode) {

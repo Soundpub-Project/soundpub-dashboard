@@ -16,7 +16,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { CreditCard, Plus, Loader2, Wallet } from 'lucide-react';
+import { CreditCard, Plus, Loader2, Wallet, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface PayoutRequest {
@@ -29,17 +29,20 @@ interface PayoutRequest {
   notes: string | null;
   created_at: string;
   processed_at: string | null;
+  payment_proof_path: string | null;
+  payment_proof_name: string | null;
 }
 
 const BANK_LIST = ['BCA', 'BNI', 'BRI', 'Mandiri', 'CIMB Niaga', 'Bank Jago', 'Bank Jenius', 'SeaBank', 'Dana', 'OVO', 'GoPay', 'ShopeePay', 'Lainnya'];
 
 export default function Payouts() {
-  const { profile, user } = useAuth();
+  const { profile, user, isLabel, isWhitelabel } = useAuth();
   const [payouts, setPayouts] = useState<PayoutRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [minPayout, setMinPayout] = useState(50000);
+  const [availableBalance, setAvailableBalance] = useState(0);
 
   const [form, setForm] = useState({
     bank_name: '',
@@ -51,7 +54,8 @@ export default function Payouts() {
   useEffect(() => {
     fetchPayouts();
     fetchMinPayout();
-  }, []);
+    fetchAvailableBalance();
+  }, [profile?.id, isLabel, isWhitelabel]);
 
   const fetchPayouts = async () => {
     try {
@@ -68,6 +72,15 @@ export default function Payouts() {
     }
   };
 
+  const fetchAvailableBalance = async () => {
+    if (!profile) return;
+    if (!isLabel && !isWhitelabel) {
+      setAvailableBalance(Number(profile.balance || 0));
+      return;
+    }
+    const { data } = await supabase.rpc('get_dashboard_role_stats' as never).single();
+    setAvailableBalance(Number((data as unknown as { available_balance?: number } | null)?.available_balance || 0));
+  };
   const fetchMinPayout = async () => {
     const { data } = await supabase
       .from('app_settings')
@@ -88,20 +101,18 @@ export default function Payouts() {
       toast.error(`Minimal penarikan Rp ${minPayout.toLocaleString('id-ID')}`);
       return;
     }
-    if (amount > profile.balance) {
+    if (amount > availableBalance) {
       toast.error('Saldo tidak mencukupi');
       return;
     }
 
     setSubmitting(true);
     try {
-      const { error } = await supabase.from('payout_requests').insert({
-        user_id: user.id,
-        amount,
-        bank_name: form.bank_name,
-        account_number: form.account_number,
-        account_holder_name: form.account_holder_name,
-        status: 'pending',
+      const { error } = await supabase.rpc('request_payout' as never, {
+        _amount: amount,
+        _bank_name: form.bank_name,
+        _account_number: form.account_number,
+        _account_holder_name: form.account_holder_name,
       });
       if (error) throw error;
 
@@ -112,7 +123,7 @@ export default function Payouts() {
         .in('role', ['superadmin', 'admin']);
 
       if (adminRoles && adminRoles.length > 0) {
-        const notifs = adminRoles.map((ar: any) => ({
+        const notifs = adminRoles.map((ar: { user_id: string }) => ({
           user_id: ar.user_id,
           type: 'payout',
           title: 'Pengajuan Payout Baru',
@@ -140,12 +151,22 @@ export default function Payouts() {
       toast.success('Pengajuan payout berhasil dikirim');
       setDialogOpen(false);
       setForm({ bank_name: '', account_number: '', account_holder_name: '', amount: '' });
-      fetchPayouts();
-    } catch (err: any) {
-      toast.error(err.message || 'Gagal mengajukan payout');
+      await Promise.all([fetchPayouts(), fetchAvailableBalance()]);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Gagal mengajukan payout');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const openPaymentProof = async (payout: PayoutRequest) => {
+    if (!payout.payment_proof_path) return;
+    const { data, error } = await supabase.storage.from('payout-proofs').createSignedUrl(payout.payment_proof_path, 60);
+    if (error) {
+      toast.error('Gagal membuka bukti pembayaran');
+      return;
+    }
+    window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
   };
 
   const getStatusBadge = (status: string) => {
@@ -158,7 +179,7 @@ export default function Payouts() {
     return colors[status] || '';
   };
 
-  const balance = profile?.balance || 0;
+  const balance = availableBalance;
   const canRequestPayout = balance >= minPayout;
 
   return (
@@ -207,7 +228,7 @@ export default function Payouts() {
         <Card className="bg-card/50 border-border/50">
           <CardHeader>
             <CardTitle>Riwayat Payout</CardTitle>
-            <CardDescription>Daftar permintaan penarikan dana Anda</CardDescription>
+            <CardDescription>{isLabel || isWhitelabel ? 'Pencairan dana artis yang diajukan label' : 'Daftar permintaan penarikan dana Anda'}</CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -229,6 +250,7 @@ export default function Payouts() {
                       <TableHead className="text-right">Jumlah</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Catatan</TableHead>
+                      <TableHead>Bukti</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -243,6 +265,13 @@ export default function Payouts() {
                           <Badge className={`capitalize ${getStatusBadge(payout.status)}`}>{payout.status}</Badge>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{payout.notes || '-'}</TableCell>
+                        <TableCell>
+                          {payout.payment_proof_path ? (
+                            <Button variant="outline" size="sm" onClick={() => openPaymentProof(payout)} className="gap-1">
+                              <FileText className="h-3 w-3" /> Lihat
+                            </Button>
+                          ) : '-'}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -259,7 +288,7 @@ export default function Payouts() {
           <DialogHeader>
             <DialogTitle>Request Payout</DialogTitle>
             <DialogDescription>
-              Ajukan penarikan dana. Saldo Anda: Rp {balance.toLocaleString('id-ID')}
+              {isLabel || isWhitelabel ? 'Ajukan pencairan dana artis melalui rekening label. Saldo agregat:' : 'Ajukan penarikan dana. Saldo Anda:'} Rp {balance.toLocaleString('id-ID')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -300,3 +329,4 @@ export default function Payouts() {
     </DashboardLayout>
   );
 }
+

@@ -167,7 +167,7 @@ Deno.serve(async (req) => {
 
     const { data: release, error: releaseError } = await supabase
       .from('releases')
-      .select('id, title, artist_name, label_id, created_by, status, release_type')
+      .select('id, title, artist_name, label_id, created_by, status, release_type, distribution_service, custom_label_name, custom_record_name')
       .eq('id', releaseId)
       .single()
 
@@ -195,6 +195,46 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'User tidak berhak membuat invoice untuk release ini' }, 403)
     }
 
+    const isArtist = roleRows?.some((row: { role: string }) => row.role === 'artist')
+    const isCustomLabelService = release.distribution_service === 'custom_label'
+    let isSoundpubArtist = false
+    if (isArtist) {
+      const { data: artistProfile } = await supabase
+        .from('profiles')
+        .select('parent_label_id, status')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      if (artistProfile?.parent_label_id === release.label_id && !['suspended', 'deleted'].includes(String(artistProfile.status || '').toLowerCase())) {
+        const { data: parentRole } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .eq('user_id', artistProfile.parent_label_id)
+          .eq('role', 'label')
+          .maybeSingle()
+
+        if (parentRole) {
+          const { data: parentProfile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', artistProfile.parent_label_id)
+            .maybeSingle()
+
+          const normalizedLabelName = String(parentProfile?.full_name || '').trim().toLowerCase().replace(/\s+/g, ' ')
+          isSoundpubArtist = ['soundpub', 'soundpub music', 'soundpub music ecosystem'].includes(normalizedLabelName)
+        }
+      }
+    }
+
+    if (isCustomLabelService && (
+      !isSoundpubArtist ||
+      release.created_by !== user.id ||
+      !release.custom_label_name?.trim() ||
+      !release.custom_record_name?.trim()
+    )) {
+      return jsonResponse({ error: 'Custom Label hanya dapat dibayar oleh artis aktif di bawah label Soundpub dengan metadata lengkap' }, 403)
+    }
+
     const { count: trackCount, error: trackError } = await supabase
       .from('tracks')
       .select('id', { count: 'exact', head: true })
@@ -209,7 +249,7 @@ Deno.serve(async (req) => {
     const { data: settingsData, error: settingsError } = await supabase
       .from('app_settings')
       .select('key, value')
-      .in('key', ['release_pricing_mode', 'release_price_per_track', 'release_price_single', 'release_price_ep', 'release_price_album'])
+      .in('key', ['release_pricing_mode', 'release_price_per_track', 'release_price_single', 'release_price_ep', 'release_price_album', 'release_price_custom_label'])
 
     if (settingsError) {
       return jsonResponse({ error: 'Gagal membaca pengaturan harga', details: settingsError.message }, 500)
@@ -225,7 +265,12 @@ Deno.serve(async (req) => {
     let pricePerTrack: number
     let description: string
 
-    if (pricingMode === 'per_category') {
+    const customLabelPrice = Number.parseInt(settings.release_price_custom_label || '0', 10)
+    if (isCustomLabelService && Number.isFinite(customLabelPrice) && customLabelPrice > 0) {
+      pricePerTrack = customLabelPrice
+      totalAmount = pricePerTrack * totalTracks
+      description = `Pembayaran Release Custom Label Soundpub: ${release.title} (${totalTracks} track)`
+    } else if (pricingMode === 'per_category') {
       const releaseType = (release.release_type || 'single').toLowerCase()
       const priceMap: Record<string, number> = {
         single: Number.parseInt(settings.release_price_single || '50000', 10),
@@ -243,6 +288,18 @@ Deno.serve(async (req) => {
 
     if (!Number.isFinite(totalAmount) || totalAmount <= 0 || !Number.isInteger(totalAmount)) {
       return jsonResponse({ error: 'Harga release tidak valid', details: `Amount: ${totalAmount}` }, 400)
+    }
+
+    const { error: snapshotError } = await supabase
+      .from('releases')
+      .update({
+        price_per_track_snapshot: pricePerTrack,
+        total_payment_snapshot: totalAmount,
+      })
+      .eq('id', releaseId)
+
+    if (snapshotError) {
+      return jsonResponse({ error: 'Gagal menyimpan snapshot harga release', details: snapshotError.message }, 500)
     }
 
     const { data: profile } = await supabase

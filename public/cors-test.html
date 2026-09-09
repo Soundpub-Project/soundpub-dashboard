@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CORS Test</title>
+</head>
+<body>
+    <h1>Testing CORS to Supabase Edge Function</h1>
+    <button id="testBtn">Test Edge Function</button>
+    <pre id="result"></pre>
+    
+    <script>
+        document.getElementById('testBtn').addEventListener('click', async () => {
+            const resultEl = document.getElementById('result');
+            resultEl.textContent = 'Testing...';
+            
+            try {
+                const response = await fetch('https://supabase.carubra.com/functions/v1/create-xendit-invoice', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzgyMDU3ODE2LCJleHAiOjE5Mzk3Mzc4MTZ9.0tKWKzz1Y9Dr3H4fvae_KPv7dd6Io-5Tql46WPx0Y9U',
+                        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzgyMDU3ODE2LCJleHAiOjE5Mzk3Mzc4MTZ9.0tKWKzz1Y9Dr3H4fvae_KPv7dd6Io-5Tql46WPx0Y9U'
+                    },
+                    body: JSON.stringify({ release_id: 'test' })
+                });
+                
+                const data = await response.json();
+                resultEl.textContent = JSON.stringify({
+                    status: response.status,
+                    headers: Object.fromEntries(response.headers.entries()),
+                    data: data
+                }, null, 2);
+            } catch (error) {
+                resultEl.textContent = 'Error: ' + error.message;
+            }
+        });
+    </script>
+</body>
+</html>

@@ -16,6 +16,7 @@ import {
   clearSsoActive,
   wasSsoActive,
 } from '@/lib/keycloak';
+import { clearSessionLimit, isSessionExpired } from '@/lib/sessionLimit';
 
 interface SsoAuthContextType {
   ssoLoading: boolean;
@@ -72,6 +73,8 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
 
       if (error) throw error;
 
+      void (supabase as any).rpc('record_auth_audit', { p_action: 'auth.sso_login' });
+
       setSsoAuthenticated(true);
       exchangedRef.current = true;
       markSsoActive();
@@ -91,6 +94,11 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     const run = async () => {
+      if (isSessionExpired()) {
+        setSsoLoading(false);
+        setSsoChecking(false);
+        return;
+      }
       if (location.pathname === '/iccn/iframe') return;
 
       // Guard against React StrictMode double-invocation reusing the same code
@@ -226,6 +234,7 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
   }, [exchangeToken, navigate, location.pathname]);
 
   const triggerSsoLogin = useCallback(async () => {
+    clearSessionLimit();
     setSsoLoading(true);
     setSsoError(null);
     try {

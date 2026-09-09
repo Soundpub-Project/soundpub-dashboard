@@ -15,6 +15,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -97,8 +98,8 @@ const trackSchema = z.object({
   isrc: z.string().optional(),
   title: z.string().min(1, 'Judul wajib diisi'),
   artists: z.array(artistSchema).min(1, 'Minimal 1 artist wajib ditambahkan'),
-  composer: z.string().optional(),
-  lyricist: z.string().optional(),
+  composer: z.string().trim().refine((value) => value.split(/\s+/).length >= 2, 'Composer wajib menggunakan nama lengkap, minimal 2 kata'),
+  lyricist: z.string().trim().refine((value) => value.split(/\s+/).length >= 2, 'Lyricist wajib menggunakan nama lengkap, minimal 2 kata'),
   genre: z.string().optional(),
   lyrics: z.string().optional(),
   explicit_lyrics: z.boolean().default(false),
@@ -1421,10 +1422,11 @@ export function ReleaseFormDialog({
                               name={`tracks.${trackIndex}.composer`}
                               render={({ field }) => (
                                 <FormItem>
-                                  <FormLabel>Composer</FormLabel>
+                                  <FormLabel>Composer (Nama Lengkap) *</FormLabel>
                                   <FormControl>
-                                    <Input placeholder="Composer" {...field} />
+                                    <Input placeholder="Nama Lengkap" {...field} />
                                   </FormControl>
+                                  <FormDescription>Minimal 2 kata. Contoh: Bobby S ❌, Bobby Sinaga ✅</FormDescription>
                                   <FormMessage />
                                 </FormItem>
                               )}
@@ -1435,10 +1437,11 @@ export function ReleaseFormDialog({
                               name={`tracks.${trackIndex}.lyricist`}
                               render={({ field }) => (
                                 <FormItem>
-                                  <FormLabel>Lyricist</FormLabel>
+                                  <FormLabel>Lyricist (Nama Lengkap) *</FormLabel>
                                   <FormControl>
-                                    <Input placeholder="Lyricist" {...field} />
+                                    <Input placeholder="Nama Lengkap" {...field} />
                                   </FormControl>
+                                  <FormDescription>Minimal 2 kata. Contoh: Bobby S ❌, Bobby Sinaga ✅</FormDescription>
                                   <FormMessage />
                                 </FormItem>
                               )}

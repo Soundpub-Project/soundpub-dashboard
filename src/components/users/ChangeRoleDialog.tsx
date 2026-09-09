@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -87,6 +88,7 @@ export function ChangeRoleDialog({
   currentRole,
   onSuccess 
 }: ChangeRoleDialogProps) {
+  const { isSuperadmin } = useAuth();
   const [selectedRole, setSelectedRole] = useState<AppRole>(currentRole);
   const [selectedLabelId, setSelectedLabelId] = useState<string>('');
   const [labels, setLabels] = useState<LabelOption[]>([]);
@@ -173,14 +175,30 @@ export function ChangeRoleDialog({
 
     setLoading(true);
     try {
-      // Update the user's role in user_roles table if changed
+      // Update role through server-side authorization checks.
       if (roleChanged) {
-        const { error: roleError } = await supabase
-          .from('user_roles')
-          .update({ role: selectedRole })
-          .eq('user_id', user.id);
+        const { data: { session } } = await supabase.auth.getSession();
 
-        if (roleError) throw roleError;
+        if (!session?.access_token) {
+          throw new Error('Sesi login sudah habis. Silakan login ulang lalu coba kembali.');
+        }
+
+        const { data, error: roleError } = await supabase.functions.invoke('update-user-role', {
+          body: {
+            user_id: user.id,
+            new_role: selectedRole,
+          },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+
+        if (roleError) {
+          const response = roleError.context instanceof Response ? roleError.context : null;
+          const errorBody = response ? await response.clone().json().catch(() => null) : null;
+          throw new Error(errorBody?.error || roleError.message || 'Gagal mengubah role user');
+        }
+        if (!data?.success) throw new Error(data?.error || 'Gagal mengubah role user');
       }
 
       // Update parent_label_id safely. Artist label transfer must go through
@@ -241,7 +259,7 @@ export function ChangeRoleDialog({
       onOpenChange(false);
     } catch (error) {
       console.error('Error updating role:', error);
-      toast.error('Gagal mengubah role user');
+      toast.error(error instanceof Error ? error.message : 'Gagal mengubah role user');
     } finally {
       setLoading(false);
     }
@@ -291,7 +309,11 @@ export function ChangeRoleDialog({
               </SelectTrigger>
               <SelectContent>
                 {ROLE_OPTIONS.map((role) => (
-                  <SelectItem key={role.value} value={role.value}>
+                  <SelectItem
+                    key={role.value}
+                    value={role.value}
+                    disabled={role.value === 'superadmin' && !isSuperadmin}
+                  >
                     <div className="flex items-center gap-2">
                       {role.icon}
                       <div>

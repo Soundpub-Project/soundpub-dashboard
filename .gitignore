@@ -74,3 +74,4 @@ debug_*
 # npm cache logs
 npm-cache/
 .npm/
+.codegraphy/*

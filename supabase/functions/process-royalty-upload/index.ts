@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
 
-// Fixed schema configuration - always use 'Soundpub' schema
-const DATABASE_SCHEMA = 'Soundpub'
+// PostgREST exposes schemas in lowercase on self-hosted Supabase.
+const DATABASE_SCHEMA = 'soundpub'
 
 const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
   const existingDb = options.db || {}
@@ -42,7 +42,10 @@ Deno.serve(async (req) => {
     if (!user) return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
     const { data: isAdmin, error: adminError } = await supabaseAdmin.rpc('is_admin', { user_id: user.id })
-    if (adminError) console.error('Admin check failed:', adminError)
+    if (adminError) {
+      console.error('Admin check failed:', adminError)
+      throw new Error(`Admin check failed: ${adminError.message}`)
+    }
     if (!isAdmin) return new Response(JSON.stringify({ success: false, error: 'Admin only' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
     const { rows, filename, originalFilename, replaceExisting = false, replaceMode = 'filename_period' } = await req.json()
@@ -353,10 +356,10 @@ Deno.serve(async (req) => {
           unit_penjualan: r.sales_unit,
           pendapatan_kotor_dsp: r.net_revenue,
           pendapatan_label_artis: r.net_revenue,
-          pendapatan_bersih_Soundpub: adminShare,
+          pendapatan_bersih_soundpub: adminShare,
           artist_revenue: artistShare,
           label_revenue: labelShare,
-          Soundpub_revenue: adminShare,
+          soundpub_revenue: adminShare,
           net_revenue: r.net_revenue,
           artist_user_id: artistUserId,
           label_user_id: labelUserId,

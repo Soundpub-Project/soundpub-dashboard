@@ -1,13 +1,16 @@
-﻿import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import JSZip from 'jszip';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { ReleaseStatusBadge } from '@/components/releases/ReleaseStatusBadge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Slider } from '@/components/ui/slider';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
   Table, 
   TableBody, 
@@ -35,15 +38,51 @@ import {
   SkipBack,
   SkipForward,
   Download,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  FileText,
+  Users,
+  History
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
+import { toast } from 'sonner';
+
+const sanitizeDownloadName = (name: string) =>
+  name.replace(/[<>:\"/\\|?*\u0000-\u001F]/g, '').trim() || 'track';
+
+const getFileExtension = (url: string, contentType: string, fallback = 'bin') => {
+  try {
+    const extension = new URL(url).pathname.match(/\.([a-z0-9]{2,5})$/i)?.[1];
+    if (extension) return extension.toLowerCase();
+  } catch {
+  }
+
+  const extensionsByContentType: Record<string, string> = {
+    'audio/flac': 'flac',
+    'audio/mpeg': 'mp3',
+    'audio/mp4': 'm4a',
+    'audio/ogg': 'ogg',
+    'audio/wav': 'wav',
+    'audio/x-wav': 'wav',
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+  };
+
+  return extensionsByContentType[contentType.split(';')[0].toLowerCase()] || fallback;
+};
 
 interface LabelInfo {
   id: string;
   full_name: string;
   email: string;
+}
+
+interface ReleaseCreatorInfo {
+  full_name: string;
+  email: string;
+  phone: string | null;
 }
 
 interface Release {
@@ -58,8 +97,10 @@ interface Release {
   release_type: string;
   status: string;
   created_at: string;
+  created_by: string | null;
   label_id: string;
   rejection_reason: string | null;
+  updated_at?: string | null;
 }
 
 interface Track {
@@ -75,16 +116,28 @@ interface Track {
   created_at: string;
   audio_url: string | null;
   clip_url: string | null;
+  contributors: unknown;
+  explicit_lyrics: boolean | null;
+  duration: number | null;
+}
+
+interface Contributor {
+  name: string;
+  type: string;
+  role: string;
 }
 
 export default function ReleaseDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAdmin, isLabel, isWhitelabel, isArtist, user } = useAuth();
+  const { isAdmin, isLabel, isWhitelabel, isArtist, isSuperadmin, user } = useAuth();
   const [release, setRelease] = useState<Release | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [labelInfo, setLabelInfo] = useState<LabelInfo | null>(null);
+  const [releaseCreatorInfo, setReleaseCreatorInfo] = useState<ReleaseCreatorInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(false);
   
   // Audio player state
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -94,22 +147,24 @@ export default function ReleaseDetail() {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
+  const [downloadingTrackId, setDownloadingTrackId] = useState<string | null>(null);
+  const [downloadingReleasePackage, setDownloadingReleasePackage] = useState(false);
 
   const canManageReleases = isAdmin || isLabel || isWhitelabel;
   
   // Determine edit capability based on status
   // - Admin: can always fully edit
   // - Label/Whitelabel: 
-  //   - pending/draft status: can fully edit
+  //   - pending/draft/rejected status: can fully edit
   //   - active status: can only edit lyrics
-  // - Artist: can edit their own pending/draft releases
-  const isPendingOrDraft = release?.status === 'pending' || release?.status === 'draft';
+  // - Artist: can edit their own pending/draft/rejected releases
+  const isEditableResubmissionStatus = release?.status === 'pending' || release?.status === 'draft' || release?.status === 'rejected';
   const isOwnRelease = isArtist && release && (
     release.artist_user_id === user?.id || 
     (!release.artist_user_id && release.artist_name === user?.user_metadata?.full_name)
   );
   const isLocked = release?.status === 'pending_paid' || release?.status === 'active';
-  const canFullyEdit = isAdmin || ((isLabel || isWhitelabel) && isPendingOrDraft) || (isOwnRelease && isPendingOrDraft);
+  const canFullyEdit = isAdmin || ((isLabel || isWhitelabel) && isEditableResubmissionStatus) || (isOwnRelease && isEditableResubmissionStatus);
   const canEditLyricsOnly = (isLabel || isWhitelabel) && release?.status === 'active';
   
   // Get tracks with audio
@@ -119,7 +174,7 @@ export default function ReleaseDetail() {
     if (id) {
       fetchReleaseData();
     }
-  }, [id]);
+  }, [id, isAdmin]);
 
   // Audio event handlers
   useEffect(() => {
@@ -169,6 +224,18 @@ export default function ReleaseDetail() {
       }
 
       setRelease(releaseData);
+
+      setReleaseCreatorInfo(null);
+      if (isAdmin && releaseData.created_by) {
+        const { data: creatorData, error: creatorError } = await supabase
+          .from('profiles')
+          .select('full_name, email, phone')
+          .eq('id', releaseData.created_by)
+          .maybeSingle();
+
+        if (creatorError) throw creatorError;
+        setReleaseCreatorInfo(creatorData);
+      }
 
       // Fetch label info - use royalties table to get label name if artist can't see profiles
       // First try to fetch from profiles
@@ -272,6 +339,136 @@ export default function ReleaseDetail() {
     }
   };
 
+  const downloadAudio = async (track: Track, url: string, suffix = '') => {
+    try {
+      setDownloadingTrackId(track.id);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const extension = getFileExtension(url, blob.type, 'mp3');
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = `${sanitizeDownloadName(track.title)}${suffix}.${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      console.error('Error downloading audio:', error);
+      toast.error('Gagal mengunduh audio');
+    } finally {
+      setDownloadingTrackId(null);
+    }
+  };
+
+  const downloadReleasePackage = async () => {
+    if (!release) return;
+
+    try {
+      setDownloadingReleasePackage(true);
+      const zip = new JSZip();
+      const safeReleaseTitle = sanitizeDownloadName((release.upc || 'NO-UPC') + ' - ' + release.title);
+      const metadata = {
+        release: {
+          id: release.id,
+          upc: release.upc,
+          title: release.title,
+          artist_name: release.artist_name,
+          release_date: release.release_date,
+          genre: release.genre,
+          release_type: release.release_type,
+          status: release.status,
+          created_at: release.created_at,
+          updated_at: release.updated_at,
+          label: labelInfo,
+        },
+        tracks: tracks.map((track, index) => ({
+          number: index + 1,
+          id: track.id,
+          isrc: track.isrc,
+          title: track.title,
+          artist_name: track.artist_name,
+          composer: track.composer,
+          lyricist: track.lyricist,
+          genre: track.genre,
+          duration: track.duration,
+          explicit_lyrics: track.explicit_lyrics,
+          lyrics: track.lyrics,
+          contributors: getContributors(track.contributors),
+        })),
+        exported_at: new Date().toISOString(),
+      };
+
+      zip.file('metadata.json', JSON.stringify(metadata, null, 2));
+
+      let failedCover = false;
+      const failedTracks: string[] = [];
+
+      if (release.cover_url) {
+        try {
+          const coverResponse = await fetch(release.cover_url);
+          if (!coverResponse.ok) throw new Error(`HTTP ${coverResponse.status}`);
+          const coverBlob = await coverResponse.blob();
+          const coverExtension = getFileExtension(release.cover_url, coverBlob.type, 'jpg');
+          zip.file(`cover.${coverExtension}`, coverBlob);
+        } catch (error) {
+          failedCover = true;
+          console.error('Error adding cover to release package:', error);
+        }
+      }
+
+      await Promise.all(tracks.map(async (track, index) => {
+        if (!track.audio_url) return;
+
+        try {
+          const audioResponse = await fetch(track.audio_url);
+          if (!audioResponse.ok) throw new Error(`HTTP ${audioResponse.status}`);
+          const audioBlob = await audioResponse.blob();
+          const audioExtension = getFileExtension(track.audio_url, audioBlob.type, 'mp3');
+          const trackNumber = String(index + 1).padStart(2, '0');
+          zip.file(`tracks/${trackNumber} - ${sanitizeDownloadName(track.title)}.${audioExtension}`, audioBlob);
+        } catch (error) {
+          failedTracks.push(track.title);
+          console.error(`Error adding ${track.title} to release package:`, error);
+        }
+      }));
+
+      if (failedCover || failedTracks.length > 0) {
+        zip.file('download-warnings.json', JSON.stringify({
+          failed_cover: failedCover,
+          failed_tracks: failedTracks,
+        }, null, 2));
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const objectUrl = URL.createObjectURL(zipBlob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = `${safeReleaseTitle}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+
+      if (failedCover || failedTracks.length > 0) {
+        const skippedParts = [
+          failedCover ? 'cover' : null,
+          failedTracks.length > 0 ? `${failedTracks.length} track` : null,
+        ].filter(Boolean).join(' dan ');
+        toast.warning(`ZIP berhasil dibuat tanpa ${skippedParts}`);
+      } else {
+        toast.success('Paket release berhasil diunduh');
+      }
+    } catch (error) {
+      console.error('Error downloading release package:', error);
+      toast.error('Gagal mengunduh paket release');
+    } finally {
+      setDownloadingReleasePackage(false);
+    }
+  };
+
   const handleSeek = (value: number[]) => {
     if (audioRef.current) {
       audioRef.current.currentTime = value[0];
@@ -331,6 +528,15 @@ export default function ReleaseDetail() {
     }
   };
 
+  const getContributors = (contributors: unknown): Contributor[] => {
+    if (!Array.isArray(contributors)) return [];
+    return contributors.filter((contributor): contributor is Contributor => {
+      if (!contributor || typeof contributor !== 'object') return false;
+      const item = contributor as Record<string, unknown>;
+      return typeof item.name === 'string' && typeof item.type === 'string' && typeof item.role === 'string';
+    });
+  };
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -377,12 +583,27 @@ export default function ReleaseDetail() {
               <p className="text-muted-foreground">oleh {release.artist_name}</p>
             </div>
           </div>
-          {(canManageReleases || isArtist) && (canFullyEdit || canEditLyricsOnly) && (
-            <Button className="gradient-primary" onClick={() => navigate(`/dashboard/releases/${release.id}/edit`)}>
-              <Pencil className="h-4 w-4 mr-2" />
-              {canEditLyricsOnly ? 'Edit Lyrics' : 'Edit Release'}
+          <div className="flex flex-wrap gap-2">
+                        {isSuperadmin && (
+              <Button variant="outline" onClick={downloadReleasePackage} disabled={downloadingReleasePackage}>
+                {downloadingReleasePackage ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 mr-2" />
+                )}
+                Download ZIP
+              </Button>
+            )}            <Button variant="outline" onClick={() => setTimelineOpen(true)}>
+              <History className="h-4 w-4 mr-2" />
+              Timeline Progres
             </Button>
-          )}
+            {(canManageReleases || isArtist) && (canFullyEdit || canEditLyricsOnly) && (
+              <Button className="gradient-primary" onClick={() => navigate(`/dashboard/releases/${release.id}/edit`)}>
+                <Pencil className="h-4 w-4 mr-2" />
+                {canEditLyricsOnly ? 'Edit Lyrics' : release.status === 'rejected' ? 'Edit & Upload Ulang' : 'Edit Release'}
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Release Info */}
@@ -404,9 +625,7 @@ export default function ReleaseDetail() {
               
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <Badge variant={getStatusBadge(release.status)} className="capitalize">
-                    {release.status}
-                  </Badge>
+                  <ReleaseStatusBadge status={release.status} />
                   <Badge variant="outline" className="capitalize">
                     {release.release_type}
                   </Badge>
@@ -465,6 +684,11 @@ export default function ReleaseDetail() {
                     <span>{formatDate(release.created_at)}</span>
                   </div>
                 </div>
+
+                <Button variant="outline" className="w-full" onClick={() => setDetailsOpen(true)}>
+                  <Eye className="h-4 w-4 mr-2" />
+                  View All Metadata
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -556,16 +780,15 @@ export default function ReleaseDetail() {
                                       variant="ghost"
                                       size="icon"
                                       className="h-8 w-8"
-                                      onClick={() => {
-                                        const link = document.createElement('a');
-                                        link.href = track.audio_url!;
-                                        link.download = `${track.title} - ${track.artist_name}.mp3`;
-                                        link.target = '_blank';
-                                        link.click();
-                                      }}
+                                      onClick={() => downloadAudio(track, track.audio_url!)}
+                                      disabled={downloadingTrackId === track.id}
                                       title="Download full audio"
                                     >
-                                      <Download className="h-4 w-4" />
+                                      {downloadingTrackId === track.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Download className="h-4 w-4" />
+                                      )}
                                     </Button>
                                   ) : (
                                     <span className="text-xs text-muted-foreground">-</span>
@@ -579,16 +802,15 @@ export default function ReleaseDetail() {
                                       variant="ghost"
                                       size="icon"
                                       className="h-8 w-8"
-                                      onClick={() => {
-                                        const link = document.createElement('a');
-                                        link.href = track.clip_url!;
-                                        link.download = `${track.title} - ${track.artist_name} (clip).mp3`;
-                                        link.target = '_blank';
-                                        link.click();
-                                      }}
+                                      onClick={() => downloadAudio(track, track.clip_url!, ' (clip)')}
+                                      disabled={downloadingTrackId === track.id}
                                       title="Download audio clip"
                                     >
-                                      <Download className="h-4 w-4 text-muted-foreground" />
+                                      {downloadingTrackId === track.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Download className="h-4 w-4 text-muted-foreground" />
+                                      )}
                                     </Button>
                                   ) : (
                                     <span className="text-xs text-muted-foreground">-</span>
@@ -719,6 +941,57 @@ export default function ReleaseDetail() {
             </CardContent>
           </Card>
         )}
+
+        <Dialog open={timelineOpen} onOpenChange={setTimelineOpen}>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><History className="h-5 w-5 text-primary" />Timeline Progres Rilisan</DialogTitle>
+              <DialogDescription>Ringkasan perjalanan rilisan dan status revisinya.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 border-l-2 border-primary/30 pl-5">
+              <div className="relative"><span className="absolute -left-[26px] top-1 h-3 w-3 rounded-full bg-primary" /><p className="font-medium">Rilisan dibuat</p><p className="text-sm text-muted-foreground">{formatDate(release.created_at)}</p></div>
+              {release.rejection_reason && <div className="relative"><span className="absolute -left-[26px] top-1 h-3 w-3 rounded-full bg-destructive" /><p className="font-medium">Rilisan ditolak</p><p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{release.rejection_reason}</p><p className="mt-1 text-xs text-muted-foreground">Menunggu perbaikan dari artist/label</p></div>}
+              {release.rejection_reason && release.status !== 'rejected' && <div className="relative"><span className="absolute -left-[26px] top-1 h-3 w-3 rounded-full bg-amber-500" /><p className="font-medium">Revisi dikirim ulang</p><p className="text-sm text-muted-foreground">Status kembali ke pending untuk review admin</p></div>}
+              <div className="relative"><span className="absolute -left-[26px] top-1 h-3 w-3 rounded-full bg-primary" /><p className="font-medium">Status saat ini: <span className="capitalize">{release.status}</span></p><p className="text-sm text-muted-foreground">Terakhir diperbarui: {formatDate(release.updated_at || release.created_at)}</p></div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-primary" />Metadata Rilisan</DialogTitle>
+              <DialogDescription>Data rilisan dan kredit track dari database.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-6">
+              <section className="rounded-lg border bg-muted/20 p-4">
+                <h3 className="mb-4 font-semibold">Informasi Rilisan</h3>
+                <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+                  {[["Judul", release.title], ["UPC", release.upc || "-"], ["Artist", release.artist_name], ["Label", labelInfo?.full_name || "Unknown Label"], ["Tipe Rilisan", release.release_type || "-"], ["Genre", release.genre || "-"], ["Status", release.status], ["Tanggal Rilis", formatDate(release.release_date)], ["Dibuat", formatDate(release.created_at)]].map(([label, value]) => <div key={label}><dt className="text-muted-foreground">{label}</dt><dd className="mt-1 break-words font-medium">{value}</dd></div>)}
+                  {isAdmin && <>
+                    <div><dt className="text-muted-foreground">Dibuat Oleh</dt><dd className="mt-1 break-words font-medium">{releaseCreatorInfo?.full_name || '-'}</dd></div>
+                    <div><dt className="text-muted-foreground">Email Pembuat</dt><dd className="mt-1 break-words font-medium">{releaseCreatorInfo?.email || '-'}</dd></div>
+                    <div><dt className="text-muted-foreground">Nomor Telepon Pembuat</dt><dd className="mt-1 break-words font-medium">{releaseCreatorInfo?.phone || '-'}</dd></div>
+                  </>}
+                </dl>
+              </section>
+              <section className="space-y-4">
+                <div className="flex items-center gap-2"><Users className="h-5 w-5 text-primary" /><h3 className="font-semibold">Kredit dan Metadata Track</h3></div>
+                {tracks.length === 0 ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Belum ada track.</div> : tracks.map((track, index) => {
+                  const contributors = getContributors(track.contributors);
+                  return <article key={track.id} className="space-y-4 rounded-lg border p-4">
+                    <div><p className="text-xs font-medium text-primary">Track {index + 1}</p><h4 className="font-semibold">{track.title}</h4></div>
+                    <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                      {[["ISRC", track.isrc || "-"], ["Artist", track.artist_name || "-"], ["Composer", track.composer || "-"], ["Penulis Lirik", track.lyricist || "-"], ["Genre", track.genre || "-"], ["Durasi", track.duration ? formatTime(track.duration) : "-"], ["Lirik Eksplisit", track.explicit_lyrics ? "Ya" : "Tidak"]].map(([label, value]) => <div key={label}><dt className="text-muted-foreground">{label}</dt><dd className="mt-1 break-words font-medium">{value}</dd></div>)}
+                    </dl>
+                    {contributors.length > 0 && <div><p className="mb-2 text-sm font-medium">Contributor Tambahan</p><div className="grid grid-cols-1 gap-2 sm:grid-cols-2">{contributors.map((contributor, contributorIndex) => <div key={track.id + '-' + contributorIndex} className="rounded-md bg-muted/50 px-3 py-2 text-sm"><p className="font-medium">{contributor.name}</p><p className="text-xs text-muted-foreground">{contributor.type} · {contributor.role}</p></div>)}</div></div>}
+                    <div><p className="mb-2 text-sm font-medium">Lirik</p><div className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">{track.lyrics || "Lirik belum diisi."}</div></div>
+                  </article>;
+                })}
+              </section>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

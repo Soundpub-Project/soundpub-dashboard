@@ -42,6 +42,7 @@ import {
 import { Disc3, Search, Plus, Loader2, Pencil, Eye, MoreHorizontal, Trash2, Archive, ArchiveRestore, CheckSquare, Beaker, Filter, X, CheckCircle, DollarSign } from 'lucide-react';
 import { ActivateReleaseModal } from '@/components/releases/ActivateReleaseModal';
 import { RejectReleaseModal } from '@/components/releases/RejectReleaseModal';
+import { ReleaseStatusBadge } from '@/components/releases/ReleaseStatusBadge';
 
 import { DeleteReleaseDialog } from '@/components/releases/DeleteReleaseDialog';
 import { ArchiveReleaseDialog } from '@/components/releases/ArchiveReleaseDialog';
@@ -485,7 +486,7 @@ export default function Releases() {
                     {filteredReleases.length} {showArchived ? 'archived' : 'total'} releases
                   </CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                   <Button
                     variant={showArchived ? 'default' : 'outline'}
                     size="sm"
@@ -510,11 +511,11 @@ export default function Releases() {
               </div>
 
               {/* Filters Row */}
-              <div className="flex flex-wrap items-center gap-2">
-                <Filter className="h-4 w-4 text-muted-foreground" />
+              <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
+                <Filter className="hidden h-4 w-4 text-muted-foreground sm:block" />
                 
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[130px] h-9">
+                  <SelectTrigger className="h-9 w-full sm:w-[130px]">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -528,7 +529,7 @@ export default function Releases() {
                 </Select>
 
                 <Select value={labelFilter} onValueChange={setLabelFilter}>
-                  <SelectTrigger className="w-[180px] h-9">
+                  <SelectTrigger className="h-9 w-full sm:w-[180px]">
                     <SelectValue placeholder="Label" />
                   </SelectTrigger>
                   <SelectContent>
@@ -542,7 +543,7 @@ export default function Releases() {
                 </Select>
 
                 <Select value={artistFilter} onValueChange={setArtistFilter}>
-                  <SelectTrigger className="w-[180px] h-9">
+                  <SelectTrigger className="h-9 w-full sm:w-[180px]">
                     <SelectValue placeholder="Artist" />
                   </SelectTrigger>
                   <SelectContent>
@@ -560,16 +561,16 @@ export default function Releases() {
                     variant="ghost"
                     size="sm"
                     onClick={clearFilters}
-                    className="h-9 px-2 text-muted-foreground"
+                    className="h-9 justify-start px-2 text-muted-foreground sm:justify-center"
                   >
                     <X className="h-4 w-4 mr-1" />
                     Clear
                   </Button>
                 )}
 
-                <div className="flex-1" />
+                <div className="hidden flex-1 sm:block" />
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-2 sm:justify-start">
                   <span className="text-sm text-muted-foreground">Tampilkan:</span>
                   <Select value={pageSize} onValueChange={setPageSize}>
                     <SelectTrigger className="w-[80px] h-9">
@@ -719,7 +720,7 @@ export default function Releases() {
                                 <Eye className="h-4 w-4 mr-1" /> Detail
                               </Link>
                             </Button>
-                            {(release.status === 'pending' || release.status === 'draft' || (release.status === 'active' && isAdmin)) && (
+                            {(release.status === 'pending' || release.status === 'draft' || release.status === 'rejected' || (release.status === 'active' && isAdmin)) && (
                               <Button variant="outline" size="sm" onClick={() => handleEditRelease(release)}>
                                 <Pencil className="h-4 w-4 mr-1" /> Edit
                               </Button>
@@ -820,14 +821,7 @@ export default function Releases() {
                               {release.release_type}
                             </Badge>
                           </TableCell>
-                          <TableCell>
-                            <Badge 
-                              variant={getStatusBadge(release.status)} 
-                              className={`capitalize ${release.status === 'pending_paid' ? 'bg-green-600 text-white border-green-600' : ''}`}
-                            >
-                              {getStatusLabel(release.status)}
-                            </Badge>
-                          </TableCell>
+                          <TableCell><ReleaseStatusBadge status={release.status} /></TableCell>
                           <TableCell>
                             {release.release_date
                               ? new Date(release.release_date).toLocaleDateString('id-ID')
@@ -894,6 +888,15 @@ export default function Releases() {
                                         <DropdownMenuItem onClick={() => handleContinuePayment(release)}>
                                           <DollarSign className="h-4 w-4 mr-2" />
                                           Lanjutkan Pembayaran
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                      </>
+                                    )}
+                                    {release.status === 'rejected' && (
+                                      <>
+                                        <DropdownMenuItem onClick={() => handleEditRelease(release)}>
+                                          <Pencil className="h-4 w-4 mr-2" />
+                                          Edit & Upload Ulang
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator />
                                       </>
