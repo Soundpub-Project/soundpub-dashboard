@@ -1,5 +1,7 @@
 ﻿# 🔐 Password Reset & Email Verification System
 
+- [Dokumentasi integrasi Xendit](integrations/xendit/README.md)
+
 **Project:** Soundpub Dashboard  
 **Status:** ✅ Ready for Implementation  
 **Date:** 2026-08-14

@@ -132,7 +132,7 @@ START: Webhook not received
 ├─ Test endpoint accessible?
 │  │
 │  ├─ NO → Fix firewall/DNS/SSL
-│  │       Run: .\test-webhook-endpoint.ps1
+│  │       Run: .\scripts/xendit/test-webhook-endpoint.ps1
 │  │
 │  └─ YES
 │     │
@@ -165,13 +165,13 @@ START: Webhook not received
    │
    ├─ Check database for pending payments (SQL query)
    ├─ Get xendit_invoice_id from stuck payments
-   └─ Verify invoice status in Xendit (check-xendit-invoice.ps1)
+   └─ Verify invoice status in Xendit (scripts/xendit/check-invoice.ps1)
 
 ┌──────────────────────────────────────────────────────┐
 │ STEP 2: Fix Webhook Registration (if needed)        │
 └──────────────────────────────────────────────────────┘
    │
-   ├─ Test endpoint: .\test-webhook-endpoint.ps1
+   ├─ Test endpoint: .\scripts/xendit/test-webhook-endpoint.ps1
    ├─ Login to Xendit Dashboard → Settings → Webhooks
    ├─ Add webhook URL with custom header
    └─ Test webhook from Xendit Dashboard
@@ -190,7 +190,7 @@ START: Webhook not received
 └──────────────────────────────────────────────────────┘
    │
    ├─ For each PAID invoice that's stuck:
-   │  └─ .\trigger-xendit-webhook.ps1 -InvoiceId "..."
+   │  └─ .\scripts/xendit/trigger-webhook.ps1 -InvoiceId "..."
    │
    └─ Verify database updated after each trigger
 
@@ -209,7 +209,7 @@ START: Webhook not received
 
 ```
 PRE-FIX VERIFICATION:
-□ Run: .\test-webhook-endpoint.ps1
+□ Run: .\scripts/xendit/test-webhook-endpoint.ps1
 □ Check Xendit Dashboard webhook registration
 □ Verify XENDIT_WEBHOOK_TOKEN in server .env
 □ Check Edge Function is running (docker compose ps)
@@ -226,7 +226,7 @@ POST-FIX VERIFICATION:
 □ Check Edge Function logs for "Xendit webhook received"
 □ Verify test returns 404 (payment not found) - this is OK
 □ Create real test payment and verify it updates database
-□ Manual trigger stuck payments: .\trigger-xendit-webhook.ps1
+□ Manual trigger stuck payments: .\scripts/xendit/trigger-webhook.ps1
 □ Verify all stuck payments now show status = 'paid'
 
 ONGOING MONITORING:
@@ -242,10 +242,10 @@ ONGOING MONITORING:
 | File | Purpose | When to Use |
 |------|---------|-------------|
 | 	est-webhook-endpoint.ps1 | Test if webhook URL accessible | **First step** - verify infrastructure |
-| check-xendit-invoice.ps1 | Get invoice status from Xendit | Before manual trigger - verify PAID status |
+| scripts/xendit/check-invoice.ps1 | Get invoice status from Xendit | Before manual trigger - verify PAID status |
 | 	rigger-xendit-webhook.ps1 | Manual webhook trigger | Fix stuck payments after Xendit confirms PAID |
-| WEBHOOK_TROUBLESHOOTING_GUIDE.md | Complete step-by-step guide | Full troubleshooting reference |
-| README_WEBHOOK_FIX.md | Quick start guide | **Start here** for overview |
+| webhook-troubleshooting.md | Complete step-by-step guide | Full troubleshooting reference |
+| README.md | Quick start guide | **Start here** for overview |
 
 ---
 

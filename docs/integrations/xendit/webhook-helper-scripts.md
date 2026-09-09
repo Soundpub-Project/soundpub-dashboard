@@ -181,7 +181,7 @@ Full Response:" -ForegroundColor Gray
 
 **Cara pakai**:
 ```powershell
-.\check-xendit-invoice.ps1 -InvoiceId "64f2b8d59f2d4c0017123abc" -XenditSecretKey "xnd_..."
+.\scripts/xendit/check-invoice.ps1 -InvoiceId "64f2b8d59f2d4c0017123abc" -XenditSecretKey "xnd_..."
 ```
 
 ## 6. Batch Process untuk Multiple Invoices

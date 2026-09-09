@@ -3,14 +3,14 @@
 ## 📦 File yang Tersedia
 
 ### 📚 Dokumentasi
-- **WEBHOOK_TROUBLESHOOTING_GUIDE.md** - Panduan lengkap step-by-step troubleshooting
-- **WEBHOOK_DIAGNOSIS.md** - Analisis kemungkinan penyebab masalah
-- **WEBHOOK_HELPER_SCRIPTS.md** - Contoh script dan command tambahan
+- **webhook-troubleshooting.md** - Panduan lengkap step-by-step troubleshooting
+- **webhook-diagnosis.md** - Analisis kemungkinan penyebab masalah
+- **webhook-helper-scripts.md** - Contoh script dan command tambahan
 
 ### 🛠️ PowerShell Scripts
-- **trigger-xendit-webhook.ps1** - Manual trigger webhook untuk invoice tertentu
-- **check-xendit-invoice.ps1** - Cek status invoice di Xendit API
-- **test-webhook-endpoint.ps1** - Test apakah webhook endpoint accessible
+- **scripts/xendit/trigger-webhook.ps1** - Manual trigger webhook untuk invoice tertentu
+- **scripts/xendit/check-invoice.ps1** - Cek status invoice di Xendit API
+- **scripts/xendit/test-webhook-endpoint.ps1** - Test apakah webhook endpoint accessible
 
 ---
 
@@ -19,7 +19,7 @@
 ### 1. Test Webhook Endpoint (Wajib Pertama Kali)
 
 ```powershell
-.\test-webhook-endpoint.ps1
+.\scripts/xendit/test-webhook-endpoint.ps1
 ```
 
 **Output yang diharapkan**:
@@ -31,7 +31,7 @@
 ### 2. Cek Status Invoice di Xendit
 
 ```powershell
-.\check-xendit-invoice.ps1 -InvoiceId "64f2b8d59f2d4c0017123abc" -SecretKey "xnd_..."
+.\scripts/xendit/check-invoice.ps1 -InvoiceId "64f2b8d59f2d4c0017123abc" -SecretKey "xnd_..."
 ```
 
 **Ganti**:
@@ -43,7 +43,7 @@
 Jika pembayaran sudah PAID tapi status di database masih pending:
 
 ```powershell
-.\trigger-xendit-webhook.ps1 -InvoiceId "64f2b8d59f2d4c0017123abc"
+.\scripts/xendit/trigger-webhook.ps1 -InvoiceId "64f2b8d59f2d4c0017123abc"
 ```
 
 **Output yang diharapkan**:
@@ -90,7 +90,7 @@ docker compose up -d --force-recreate functions
 
 **Test**:
 ```powershell
-.\test-webhook-endpoint.ps1
+.\scripts/xendit/test-webhook-endpoint.ps1
 ```
 
 Jika gagal, cek:
@@ -127,12 +127,12 @@ ORDER BY rp.created_at DESC;
 
 1. **Verify di Xendit** apakah benar sudah PAID:
    ```powershell
-   .\check-xendit-invoice.ps1 -InvoiceId "INVOICE_ID" -SecretKey "xnd_..."
+   .\scripts/xendit/check-invoice.ps1 -InvoiceId "INVOICE_ID" -SecretKey "xnd_..."
    ```
 
 2. **Jika status = PAID**, trigger manual:
    ```powershell
-   .\trigger-xendit-webhook.ps1 -InvoiceId "INVOICE_ID"
+   .\scripts/xendit/trigger-webhook.ps1 -InvoiceId "INVOICE_ID"
    ```
 
 3. **Verify database updated**:
@@ -190,14 +190,14 @@ docker compose logs -f functions | grep -i xendit
 
 ## 📞 Jika Masih Bermasalah
 
-Baca panduan lengkap: **WEBHOOK_TROUBLESHOOTING_GUIDE.md**
+Baca panduan lengkap: **webhook-troubleshooting.md**
 
 Atau collect informasi berikut:
 - Screenshot Xendit webhook settings
 - Screenshot Xendit webhook delivery logs
 - Edge Function logs (last 100 lines with grep xendit)
 - Database query result untuk invoice yang bermasalah
-- Output dari .\test-webhook-endpoint.ps1
+- Output dari .\scripts/xendit/test-webhook-endpoint.ps1
 
 ---
 

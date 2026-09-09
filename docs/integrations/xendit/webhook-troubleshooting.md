@@ -15,7 +15,7 @@
 Jalankan script test:
 
 ```powershell
-.\test-webhook-endpoint.ps1
+.\scripts/xendit/test-webhook-endpoint.ps1
 ```
 
 **Expected Result**:
@@ -202,7 +202,7 @@ LIMIT 10;
 ### 2. (Optional) Verify Invoice Status di Xendit
 
 ```powershell
-.\check-xendit-invoice.ps1 -InvoiceId "64f2b8d59f2d4c0017123abc" -SecretKey "xnd_..."
+.\scripts/xendit/check-invoice.ps1 -InvoiceId "64f2b8d59f2d4c0017123abc" -SecretKey "xnd_..."
 ```
 
 Pastikan status = PAID
@@ -210,7 +210,7 @@ Pastikan status = PAID
 ### 3. Trigger Webhook Manual
 
 ```powershell
-.\trigger-xendit-webhook.ps1 -InvoiceId "64f2b8d59f2d4c0017123abc"
+.\scripts/xendit/trigger-webhook.ps1 -InvoiceId "64f2b8d59f2d4c0017123abc"
 ```
 
 **Expected output**:
@@ -273,7 +273,7 @@ $secretKey = "xnd_..."
 
 foreach ($inv in $invoices) {
     Write-Host "Checking: $($inv.xendit_invoice_id)"
-    .\check-xendit-invoice.ps1 -InvoiceId $inv.xendit_invoice_id -SecretKey $secretKey
+    .\scripts/xendit/check-invoice.ps1 -InvoiceId $inv.xendit_invoice_id -SecretKey $secretKey
     Write-Host ""
 }
 ```
@@ -282,15 +282,15 @@ foreach ($inv in $invoices) {
 
 ```powershell
 # Manual: trigger satu-satu
-.\trigger-xendit-webhook.ps1 -InvoiceId "invoice-1"
-.\trigger-xendit-webhook.ps1 -InvoiceId "invoice-2"
+.\scripts/xendit/trigger-webhook.ps1 -InvoiceId "invoice-1"
+.\scripts/xendit/trigger-webhook.ps1 -InvoiceId "invoice-2"
 
 # Or create batch script
 $paidInvoices = @("invoice-1", "invoice-2", "invoice-3")
 
 foreach ($inv in $paidInvoices) {
     Write-Host "Processing: $inv"
-    .\trigger-xendit-webhook.ps1 -InvoiceId $inv
+    .\scripts/xendit/trigger-webhook.ps1 -InvoiceId $inv
     Start-Sleep -Seconds 2
 }
 ```

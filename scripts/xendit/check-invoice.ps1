@@ -1,5 +1,5 @@
 # Check Xendit Invoice Status
-# Usage: .\check-xendit-invoice.ps1 -InvoiceId "your-invoice-id" -SecretKey "xnd_..."
+# Usage: .\scripts\xendit\check-invoice.ps1 -InvoiceId "your-invoice-id" -SecretKey "xnd_..."
 
 param(
     [Parameter(Mandatory=$true)]

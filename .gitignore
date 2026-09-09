@@ -75,3 +75,5 @@ debug_*
 npm-cache/
 .npm/
 .codegraphy/*
+/.codegraph/
+/%SystemDrive%/

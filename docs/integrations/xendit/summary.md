@@ -38,20 +38,20 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 📚 DOKUMENTASI:
-   1. README_WEBHOOK_FIX.md               - Quick start (MULAI DI SINI)
-   2. XENDIT_DASHBOARD_GUIDE.md           - Visual guide Xendit Dashboard
-   3. WEBHOOK_TROUBLESHOOTING_GUIDE.md    - Complete troubleshooting
-   4. WEBHOOK_FLOW_DIAGRAM.md             - Flow diagram & decision tree
-   5. WEBHOOK_DIAGNOSIS.md                - Analisis kemungkinan penyebab
-   6. WEBHOOK_HELPER_SCRIPTS.md           - Command reference
+   1. README.md               - Quick start (MULAI DI SINI)
+   2. dashboard-guide.md           - Visual guide Xendit Dashboard
+   3. webhook-troubleshooting.md    - Complete troubleshooting
+   4. webhook-flow-diagram.md             - Flow diagram & decision tree
+   5. webhook-diagnosis.md                - Analisis kemungkinan penyebab
+   6. webhook-helper-scripts.md           - Command reference
 
 🔧 SCRIPTS:
-   7. test-webhook-endpoint.ps1           - Test endpoint accessibility
-   8. check-xendit-invoice.ps1            - Check invoice status di Xendit
-   9. trigger-xendit-webhook.ps1          - Manual trigger webhook
+   7. scripts/xendit/test-webhook-endpoint.ps1           - Test endpoint accessibility
+   8. scripts/xendit/check-invoice.ps1            - Check invoice status di Xendit
+   9. scripts/xendit/trigger-webhook.ps1          - Manual trigger webhook
 
 🗄️ DATABASE:
-   10. payment_monitoring_queries.sql     - 12 SQL queries monitoring
+   10. supabase/sql/payment-monitoring-queries.sql     - 12 SQL queries monitoring
 
 📞 JAWABAN PERTANYAAN:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -70,8 +70,8 @@ A: HANYA 1 yang perlu didaftarkan:
 
 🚀 NEXT STEPS:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Baca: XENDIT_DASHBOARD_GUIDE.md
-2. Jalankan: .\test-webhook-endpoint.ps1
+1. Baca: dashboard-guide.md
+2. Jalankan: .\scripts/xendit/test-webhook-endpoint.ps1
 3. Daftar webhook di Xendit Dashboard
 4. Cek environment variable di server (SSH)
 5. Manual trigger stuck payments

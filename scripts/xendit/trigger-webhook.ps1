@@ -1,5 +1,5 @@
 # Xendit Webhook Manual Trigger Script
-# Usage: .\trigger-xendit-webhook.ps1 -InvoiceId "your-invoice-id"
+# Usage: .\scripts\xendit\trigger-webhook.ps1 -InvoiceId "your-invoice-id"
 
 param(
     [Parameter(Mandatory=$true, HelpMessage="Xendit Invoice ID")]

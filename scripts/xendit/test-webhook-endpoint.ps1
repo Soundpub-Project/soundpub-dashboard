@@ -1,5 +1,5 @@
 # Test Webhook Endpoint Accessibility
-# Usage: .\test-webhook-endpoint.ps1 -WebhookUrl "https://api.yourdomain.com/functions/v1/xendit-webhook"
+# Usage: .\scripts\xendit\test-webhook-endpoint.ps1 -WebhookUrl "https://api.yourdomain.com/functions/v1/xendit-webhook"
 
 param(
     [Parameter(Mandatory=$false)]
