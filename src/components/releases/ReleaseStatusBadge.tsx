@@ -6,6 +6,7 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   pending_paid: { label: 'Sudah Dibayar', className: 'border-sky-500/40 bg-sky-500/15 text-sky-400' },
   processing: { label: 'Diproses', className: 'border-violet-500/40 bg-violet-500/15 text-violet-400' },
   rejected: { label: 'Ditolak', className: 'border-red-500/40 bg-red-500/15 text-red-400' },
+  revision_submitted: { label: 'Revisi Diajukan', className: 'border-blue-500/40 bg-blue-500/15 text-blue-400' },
   draft: { label: 'Draft', className: 'border-slate-500/40 bg-slate-500/15 text-slate-300' },
   inactive: { label: 'Nonaktif', className: 'border-zinc-500/40 bg-zinc-500/15 text-zinc-400' },
 };

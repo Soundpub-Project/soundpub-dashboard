@@ -39,6 +39,13 @@ export async function createXenditInvoice(releaseId: string): Promise<XenditInvo
   return data as XenditInvoiceResult;
 }
 
+export async function createCopyrightInvoice(registrationId: string): Promise<XenditInvoiceResult> {
+  const { data, error } = await supabase.functions.invoke('create-copyright-invoice', { body: { registration_id: registrationId } });
+  if (error) throw new Error(await readFunctionError(error));
+  if (!data?.invoice_url) throw new Error(data?.error || 'Invoice URL tidak ditemukan');
+  return data as XenditInvoiceResult;
+}
+
 export function openXenditInvoice(invoiceUrl: string) {
   const paymentWindow = window.open(invoiceUrl, '_blank', 'noopener,noreferrer');
   if (!paymentWindow) {

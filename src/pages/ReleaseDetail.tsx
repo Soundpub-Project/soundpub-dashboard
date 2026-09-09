@@ -42,7 +42,8 @@ import {
   Eye,
   FileText,
   Users,
-  History
+  History,
+  Sparkles
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
@@ -100,6 +101,9 @@ interface Release {
   created_by: string | null;
   label_id: string;
   rejection_reason: string | null;
+  distribution_service?: 'standard' | 'custom_label';
+  custom_label_name?: string | null;
+  custom_record_name?: string | null;
   updated_at?: string | null;
 }
 
@@ -169,6 +173,7 @@ export default function ReleaseDetail() {
   
   // Get tracks with audio
   const tracksWithAudio = tracks.filter(t => t.audio_url);
+  const isCustomLabelRelease = release?.distribution_service === 'custom_label';
 
   useEffect(() => {
     if (id) {
@@ -579,7 +584,15 @@ export default function ReleaseDetail() {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold">{release.title}</h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl md:text-3xl font-bold">{release.title}</h1>
+                {isCustomLabelRelease && (
+                  <Badge className="border-amber-400/50 bg-amber-500/15 text-amber-300">
+                    <Sparkles className="mr-1 h-3.5 w-3.5" />
+                    Custom Label
+                  </Badge>
+                )}
+              </div>
               <p className="text-muted-foreground">oleh {release.artist_name}</p>
             </div>
           </div>
@@ -672,6 +685,16 @@ export default function ReleaseDetail() {
                     </div>
                   )}
                   
+                  {isCustomLabelRelease && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <Sparkles className="h-4 w-4 text-amber-300" />
+                      <span className="text-muted-foreground">Custom Label:</span>
+                      <span className="font-medium text-amber-300">
+                        {release.custom_label_name || release.custom_record_name || '-'}
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-3 text-sm">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                     <span className="text-muted-foreground">Release Date:</span>
@@ -967,7 +990,24 @@ export default function ReleaseDetail() {
               <section className="rounded-lg border bg-muted/20 p-4">
                 <h3 className="mb-4 font-semibold">Informasi Rilisan</h3>
                 <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
-                  {[["Judul", release.title], ["UPC", release.upc || "-"], ["Artist", release.artist_name], ["Label", labelInfo?.full_name || "Unknown Label"], ["Tipe Rilisan", release.release_type || "-"], ["Genre", release.genre || "-"], ["Status", release.status], ["Tanggal Rilis", formatDate(release.release_date)], ["Dibuat", formatDate(release.created_at)]].map(([label, value]) => <div key={label}><dt className="text-muted-foreground">{label}</dt><dd className="mt-1 break-words font-medium">{value}</dd></div>)}
+                  {[
+                    ['Judul', release.title],
+                    ['UPC', release.upc || '-'],
+                    ['Artist', release.artist_name],
+                    ['Label', labelInfo?.full_name || 'Unknown Label'],
+                    ['Tipe Rilisan', release.release_type || '-'],
+                    ['Genre', release.genre || '-'],
+                    ['Status', release.status],
+                    ['Tanggal Rilis', formatDate(release.release_date)],
+                    ['Dibuat', formatDate(release.created_at)],
+                    ...(isCustomLabelRelease
+                      ? [
+                          ['Layanan Distribusi', 'Custom Label'],
+                          ['Nama Label DSP', release.custom_label_name || '-'],
+                          ['Nama Record / Pemegang Hak', release.custom_record_name || release.custom_label_name || '-'],
+                        ]
+                      : []),
+                  ].map(([label, value]) => <div key={label}><dt className="text-muted-foreground">{label}</dt><dd className="mt-1 break-words font-medium">{value}</dd></div>)}
                   {isAdmin && <>
                     <div><dt className="text-muted-foreground">Dibuat Oleh</dt><dd className="mt-1 break-words font-medium">{releaseCreatorInfo?.full_name || '-'}</dd></div>
                     <div><dt className="text-muted-foreground">Email Pembuat</dt><dd className="mt-1 break-words font-medium">{releaseCreatorInfo?.email || '-'}</dd></div>

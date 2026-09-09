@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { CheckCircle2, Clock3, Download, FileText, Loader2, Search, Shield, Sparkles, Upload, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Clock3, Download, FileText, Loader2, Search, Shield, Sparkles, Upload, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface CopyrightRegistration {
@@ -128,6 +129,9 @@ const statusStyles: Record<string, string> = {
 };
 
 export default function CopyrightRegistrationReview() {
+  const { registrationId } = useParams<{ registrationId?: string }>();
+  const navigate = useNavigate();
+  const isDetailPage = Boolean(registrationId);
   const { isAdmin } = useAuth();
   const [registrations, setRegistrations] = useState<CopyrightRegistration[]>([]);
   const [loading, setLoading] = useState(true);
@@ -154,12 +158,12 @@ export default function CopyrightRegistrationReview() {
       }
 
       setRegistrations((data ?? []) as CopyrightRegistration[]);
-      setSelectedId((data?.[0] as CopyrightRegistration | undefined)?.id ?? null);
+      setSelectedId(registrationId ?? (data?.[0] as CopyrightRegistration | undefined)?.id ?? null);
       setLoading(false);
     };
 
     if (isAdmin) load();
-  }, [isAdmin]);
+  }, [isAdmin, registrationId]);
 
   const filtered = useMemo(() => {
     return registrations.filter((item) => {
@@ -404,11 +408,11 @@ export default function CopyrightRegistrationReview() {
 
   return (
     <DashboardLayout>
-      <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-7xl space-y-4 px-3 py-4 sm:space-y-6 sm:px-6 sm:py-6 lg:px-8">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <Badge variant="outline" className="mb-2 border-cyan-500/30 bg-cyan-500/10 text-cyan-500">Admin Review</Badge>
-            <h1 className="text-3xl font-bold tracking-tight">Review Registrasi Hak Cipta</h1>
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Review Registrasi Hak Cipta</h1>
             <p className="text-muted-foreground">Pantau pendaftaran, nomor kontrak, composer code, dan aksi review.</p>
           </div>
           <Alert className="max-w-xl">
@@ -418,14 +422,16 @@ export default function CopyrightRegistrationReview() {
           </Alert>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        {!isDetailPage && <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
           <Card><CardHeader><CardDescription>Total</CardDescription><CardTitle>{registrations.length}</CardTitle></CardHeader></Card>
           <Card><CardHeader><CardDescription>Approved</CardDescription><CardTitle>{registrations.filter((r) => r.status === 'approved' || r.status === 'active').length}</CardTitle></CardHeader></Card>
           <Card><CardHeader><CardDescription>Need Review</CardDescription><CardTitle>{registrations.filter((r) => ['paid_pending_review','in_review','revision_requested'].includes(r.status)).length}</CardTitle></CardHeader></Card>
-        </div>
+        </div>}
 
-        <div className="grid gap-6 xl:grid-cols-[1.25fr_0.9fr]">
-          <Card>
+        {isDetailPage && <Button variant="outline" className="w-fit" onClick={() => navigate('/dashboard/copyright-registration/review')}><ArrowLeft className="mr-2 h-4 w-4" />Kembali ke Daftar</Button>}
+
+        <div className="mx-auto w-full max-w-5xl">
+          {!isDetailPage && <Card>
             <CardHeader>
               <CardTitle>Daftar Pendaftaran</CardTitle>
               <CardDescription>Filter dan pilih satu item untuk detail review.</CardDescription>
@@ -465,7 +471,7 @@ export default function CopyrightRegistrationReview() {
                     ) : filtered.length === 0 ? (
                       <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground">Tidak ada data.</TableCell></TableRow>
                     ) : filtered.map((item) => (
-                      <TableRow key={item.id} className="cursor-pointer" onClick={() => setSelectedId(item.id)}>
+                      <TableRow key={item.id} className="cursor-pointer" onClick={() => navigate('/dashboard/copyright-registration/review/' + item.id)}>
                         <TableCell className="font-medium">{item.legal_name}</TableCell>
                         <TableCell><Badge className={statusStyles[item.status] ?? ''}>{item.status}</Badge></TableCell>
                         <TableCell className="font-mono text-xs">{item.contract_number ?? '-'}</TableCell>
@@ -477,9 +483,9 @@ export default function CopyrightRegistrationReview() {
                 </Table>
               </div>
             </CardContent>
-          </Card>
+          </Card>}
 
-          <Card>
+          {isDetailPage && <Card className="w-full">
             <CardHeader>
               <CardTitle>Detail Review</CardTitle>
               <CardDescription>{selected ? 'Siap review status dan nomor kontrak.' : 'Pilih satu data.'}</CardDescription>
@@ -487,8 +493,8 @@ export default function CopyrightRegistrationReview() {
             <CardContent className="space-y-4">
               {selected ? (
                 <>
-                  <div className="grid gap-3 text-sm">
-                    <div className="rounded-lg border p-3"><p className="text-muted-foreground">Nama</p><p className="font-medium">{selected.legal_name}</p></div>
+                  <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
+                    <div className="col-span-2 rounded-lg border bg-muted/20 p-3 sm:col-span-3"><p className="text-muted-foreground">Nama</p><p className="font-medium">{selected.legal_name}</p></div>
                     <div className="rounded-lg border p-3"><p className="text-muted-foreground">Email</p><p className="font-medium">{selected.email}</p></div>
                     <div className="rounded-lg border p-3"><p className="text-muted-foreground">Status</p><p className="font-medium">{selected.status}</p></div>
                     <div className="rounded-lg border p-3"><p className="text-muted-foreground">Nomor Surat</p><p className="font-mono text-xs">{contractLabel}</p></div>
@@ -535,15 +541,15 @@ export default function CopyrightRegistrationReview() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button disabled={savingId === selected.id} onClick={() => updateStatus('in_review')}><Clock3 className="mr-2 h-4 w-4" />In Review</Button>
-                    <Button variant="outline" disabled={savingId === selected.id} onClick={() => updateStatus('revision_requested')}><FileText className="mr-2 h-4 w-4" />Request Revision</Button>
-                    <Button variant="secondary" disabled={savingId === selected.id} onClick={() => updateStatus('approved')}><CheckCircle2 className="mr-2 h-4 w-4" />Approve</Button>
-                    <Button variant="destructive" disabled={savingId === selected.id} onClick={() => updateStatus('rejected')}><XCircle className="mr-2 h-4 w-4" />Reject</Button>
+                    <Button className="w-full" variant="outline" disabled={savingId === selected.id} onClick={() => updateStatus('revision_requested')}><FileText className="mr-2 h-4 w-4" />Request Revision</Button>
+                    <Button className="w-full" variant="secondary" disabled={savingId === selected.id} onClick={() => updateStatus('approved')}><CheckCircle2 className="mr-2 h-4 w-4" />Approve</Button>
+                    <Button className="w-full" variant="destructive" disabled={savingId === selected.id} onClick={() => updateStatus('rejected')}><XCircle className="mr-2 h-4 w-4" />Reject</Button>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {contractStageButtons.map((button) => (
                       <Button
                         key={button.status}
-                        variant={selectedContract?.status === button.status ? 'secondary' : 'outline'}
+                        className="w-full sm:w-auto" variant={selectedContract?.status === button.status ? 'secondary' : 'outline'}
                         disabled={savingId === selected.id || (selectedContractStatusIndex >= 0 && getContractStatusIndex(button.status) < selectedContractStatusIndex)}
                         onClick={() => updateContractStatus(button.status)}
                       >
@@ -583,7 +589,7 @@ export default function CopyrightRegistrationReview() {
                 <div className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">Belum ada data terpilih.</div>
               )}
             </CardContent>
-          </Card>
+          </Card>}
         </div>
       </div>
     </DashboardLayout>

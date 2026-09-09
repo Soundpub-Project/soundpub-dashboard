@@ -402,7 +402,7 @@ export function AppSidebar() {
         )}
 
         {/* Dasbor Hak Cipta */}
-        {(isAdmin || isCopyright) && filterByRole(copyrightDashboardItems).length > 0 && (
+        {user && filterByRole(copyrightDashboardItems).length > 0 && (
           <SidebarGroup>
             <SidebarGroupLabel>Dasbor Hak Cipta</SidebarGroupLabel>
             <SidebarGroupContent>

@@ -69,6 +69,29 @@ Deno.serve(async (req) => {
 
     const supabase = createSoundpubClient(supabaseUrl, supabaseServiceKey)
 
+    const { data: copyrightPayment, error: copyrightPaymentError } = await supabase
+      .from('copyright_registration_payments')
+      .select('id, registration_id, amount, currency, payment_status')
+      .eq('xendit_invoice_id', invoiceId)
+      .maybeSingle()
+    if (copyrightPaymentError) return jsonResponse({ error: 'Failed to read copyright payment' }, 500)
+    if (copyrightPayment) {
+      const mappedStatus = statusMap[String(status).toUpperCase()]
+      if (!mappedStatus) return jsonResponse({ success: true, ignored: true, reason: 'unsupported_status' })
+      if (!amountsMatch(copyrightPayment.amount, amount) || (currency && String(currency).toUpperCase() !== copyrightPayment.currency.toUpperCase())) return jsonResponse({ error: 'Webhook payment data does not match invoice' }, 409)
+      if (copyrightPayment.payment_status === 'paid') return jsonResponse({ success: true, duplicate: true })
+      const update: Record<string, unknown> = { payment_status: mappedStatus, updated_at: new Date().toISOString() }
+      if (mappedStatus === 'paid') update.paid_at = new Date().toISOString()
+      const { data: updated, error: updateError } = await supabase.from('copyright_registration_payments').update(update).eq('id', copyrightPayment.id).eq('payment_status', copyrightPayment.payment_status).select('id').maybeSingle()
+      if (updateError) return jsonResponse({ error: 'Failed to update copyright payment' }, 500)
+      if (!updated) return jsonResponse({ success: true, duplicate: true })
+      if (mappedStatus === 'paid') {
+        const { error: registrationUpdateError } = await supabase.from('copyright_registrations').update({ status: 'paid_pending_review' }).eq('id', copyrightPayment.registration_id).eq('status', 'awaiting_payment')
+        if (registrationUpdateError) return jsonResponse({ error: 'Failed to update copyright registration' }, 500)
+      }
+      return jsonResponse({ success: true })
+    }
+
     const { data: payment, error: paymentError } = await supabase
       .from('release_payments')
       .select('*, releases:release_id(id, title, artist_name, label_id)')

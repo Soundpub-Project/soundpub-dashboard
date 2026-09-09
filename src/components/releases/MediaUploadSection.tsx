@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { AudioClipCutterDialog } from './AudioClipCutterDialog';
 import { buildTrackStoragePath } from '@/lib/storagePaths';
+import * as tus from 'tus-js-client';
 
 interface MediaUploadSectionProps {
   trackIndex: number;
@@ -48,7 +49,7 @@ const ACCEPT_MAP: Record<MediaType, string> = {
 };
 
 const MAX_SIZE_MAP: Record<MediaType, number> = {
-  audio: 2 * 1024 * 1024 * 1024, // 2GB for full audio
+  audio: 500 * 1024 * 1024, // Matches the self-hosted Storage TUS limit
   clip: 20 * 1024 * 1024, // 20MB for clips
 };
 
@@ -78,6 +79,8 @@ export function MediaUploadSection({
 }: MediaUploadSectionProps) {
   const [uploading, setUploading] = useState<MediaType | null>(null);
   const [progress, setProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState<'processing' | 'uploading' | null>(null);
+  const [uploadStats, setUploadStats] = useState({ uploadedBytes: 0, totalBytes: 0, bytesPerSecond: 0 });
   const [playingClip, setPlayingClip] = useState(false);
   const [clipDuration, setClipDuration] = useState<number | null>(null);
   const [clipError, setClipError] = useState<string | null>(null);
@@ -96,6 +99,16 @@ export function MediaUploadSection({
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
   };
 
+  const formatTransferRate = (bytesPerSecond: number) => {
+    if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return 'Menghitung kecepatan...';
+    return `${formatFileSize(bytesPerSecond)}/dtk`;
+  };
+
+  const formatRemainingTime = (seconds: number) => {
+    if (!Number.isFinite(seconds) || seconds <= 0) return 'kurang dari 1 detik';
+    if (seconds < 60) return `sekitar ${Math.ceil(seconds)} detik`;
+    return `sekitar ${Math.ceil(seconds / 60)} menit`;
+  };
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -116,83 +129,92 @@ export function MediaUploadSection({
     return mimeTypes[ext || ''] || 'audio/mpeg';
   };
 
-  // Upload to Supabase Storage
+  // Upload to Supabase Storage with TUS resumable uploads and real byte progress
   const uploadToSupabaseStorage = async (file: File, type: MediaType): Promise<string> => {
     const fileExt = file.name.split('.').pop()?.toLowerCase();
     const bucket = BUCKET_MAP[type];
-
-    // Get the session from Supabase
     const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData?.session?.access_token) {
-      throw new Error('Not authenticated');
+    const accessToken = sessionData?.session?.access_token;
+    const userId = sessionData?.session?.user.id;
+
+    if (!accessToken || !userId) {
+      throw new Error('Anda harus login sebelum upload file');
     }
-    const userId = sessionData.session.user.id;
-    const fileName = buildTrackStoragePath({
-      userId,
-      releaseTitle,
-      releaseId,
-      trackIndex,
-      trackTitle,
-      trackId,
-      extension: fileExt,
-      type,
-      uploadId: crypto.randomUUID(),
+
+    const uploadSessionKey = [
+      'soundpub-tus', userId, bucket, type,
+      trackId || releaseId || `track-${trackIndex}`,
+      file.name, file.size, file.lastModified,
+    ].join(':');
+    const savedPath = sessionStorage.getItem(uploadSessionKey);
+    const fileName = savedPath || buildTrackStoragePath({
+      userId, releaseTitle, releaseId, trackIndex, trackTitle, trackId,
+      extension: fileExt, type, uploadId: crypto.randomUUID(),
     });
 
-    console.log(`Uploading to Supabase Storage bucket: ${bucket}, file: ${fileName}`);
+    if (!savedPath) sessionStorage.setItem(uploadSessionKey, fileName);
 
-    // Upload file to Supabase Storage
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: false,
+    const endpoint = `${import.meta.env.VITE_SUPABASE_URL.replace(/\/$/, '')}/storage/v1/upload/resumable`;
+    let lastBytesSent = 0;
+    let lastUpdatedAt = performance.now();
+
+    await new Promise<void>((resolve, reject) => {
+      const upload = new tus.Upload(file, {
+        endpoint,
+        chunkSize: 6 * 1024 * 1024,
+        retryDelays: [0, 1000, 3000, 5000, 10000, 20000],
+        uploadDataDuringCreation: true,
+        removeFingerprintOnSuccess: true,
+        fingerprint: async () => uploadSessionKey,
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          'x-upsert': 'false',
+        },
+        metadata: {
+          bucketName: bucket,
+          objectName: fileName,
+          contentType: getAudioMimeType(file.name),
+          cacheControl: '3600',
+        },
+        onError: (error) => reject(new Error(error.message || 'Upload terputus. Coba pilih file yang sama untuk melanjutkan.')),
+        onProgress: (bytesSent, bytesTotal) => {
+          const now = performance.now();
+          const elapsed = now - lastUpdatedAt;
+          setProgress(bytesTotal > 0 ? Math.round((bytesSent / bytesTotal) * 100) : 0);
+          if (elapsed >= 250 || bytesSent === bytesTotal) {
+            const bytesPerSecond = elapsed > 0 ? ((bytesSent - lastBytesSent) / elapsed) * 1000 : 0;
+            setUploadStats({ uploadedBytes: bytesSent, totalBytes: bytesTotal, bytesPerSecond });
+            lastBytesSent = bytesSent;
+            lastUpdatedAt = now;
+          }
+        },
+        onSuccess: () => resolve(),
       });
 
-    if (error) {
-      console.error('Supabase Storage upload error:', error);
-      
-      // Handle specific error codes
-      if (error.message?.includes('row-level security')) {
-        throw new Error('Anda tidak memiliki izin untuk upload. Hubungi admin.');
-      }
-      if (error.message?.includes('duplicate')) {
-        throw new Error('File dengan nama yang sama sudah ada.');
-      }
-      if (error.message?.includes('maximum allowed size')) {
-        throw new Error(`File terlalu besar untuk Storage. Ukuran file ${formatFileSize(file.size)}. Naikkan limit bucket track-audio di Supabase.`);
-      }
-      throw new Error(error.message || 'Gagal mengupload file');
-    }
+      upload.findPreviousUploads()
+        .then((previousUploads) => {
+          const previousUpload = previousUploads[previousUploads.length - 1];
+          if (previousUpload) upload.resumeFromPreviousUpload(previousUpload);
+          upload.start();
+        })
+        .catch(reject);
+    });
 
-    console.log('Upload successful:', data.path);
+    sessionStorage.removeItem(uploadSessionKey);
 
-    // Get public URL for public buckets (audio-clips)
-    // For private buckets (track-audio), we'll use signed URL
     if (bucket === 'audio-clips') {
-      const { data: urlData } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(data.path);
-      return urlData.publicUrl;
-    } else {
-      // For private buckets, create a signed URL with long expiry
-      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-        .from(bucket)
-        .createSignedUrl(data.path, 60 * 60 * 24 * 365); // 1 year expiry
-
-      if (signedUrlError) {
-        console.error('Error creating signed URL:', signedUrlError);
-        // Fallback to public URL format (won't work for private buckets without signed URL)
-        const { data: urlData } = supabase.storage
-          .from(bucket)
-          .getPublicUrl(data.path);
-        return urlData.publicUrl;
-      }
-
-      return signedUrlData.signedUrl;
+      return supabase.storage.from(bucket).getPublicUrl(fileName).data.publicUrl;
     }
-  };
 
+    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(fileName, 60 * 60 * 24 * 365);
+    if (signedUrlError) {
+      throw new Error('Audio sudah terupload, tetapi URL akses gagal dibuat. Coba upload ulang.');
+    }
+    return signedUrlData.signedUrl;
+  };
   // Get audio duration from file
   const getAudioDuration = (file: File): Promise<number> => {
     return new Promise((resolve, reject) => {
@@ -241,63 +263,49 @@ export function MediaUploadSection({
     }
 
     setClipError(null);
-
-    // Validate clip duration (30-60 seconds)
-    if (type === 'clip') {
-      try {
-        const clipDur = await validateClipDuration(file);
-        setClipDuration(clipDur);
-      } catch (error: any) {
-        setClipError(error.message);
-        toast.error(error.message);
-        return;
-      }
-    }
-
-    // Auto-detect duration for full audio
-    if (type === 'audio') {
-      try {
-        const audioDuration = await getAudioDuration(file);
-        const durationInSeconds = Math.round(audioDuration);
-        onDurationChange(durationInSeconds);
-        toast.success(`Durasi terdeteksi: ${formatDuration(durationInSeconds)}`);
-      } catch (error) {
-        console.error('Could not detect audio duration:', error);
-        // Don't block upload if duration detection fails
-      }
-    }
-
     setUploading(type);
+    setUploadStage('processing');
     setProgress(0);
+    setUploadStats({ uploadedBytes: 0, totalBytes: file.size, bytesPerSecond: 0 });
 
     try {
-      // Simulate progress for better UX
-      const progressInterval = setInterval(() => {
-        setProgress((prev) => Math.min(prev + 10, 90));
-      }, 200);
-
-      // Upload to Supabase Storage
-      const url = await uploadToSupabaseStorage(file, type);
-
-      clearInterval(progressInterval);
-      setProgress(100);
-
-      if (type === 'audio') {
-        onAudioChange(url);
-      } else {
-        onClipChange(url);
+      if (type === 'clip') {
+        const clipDur = await validateClipDuration(file);
+        setClipDuration(clipDur);
       }
 
+      if (type === 'audio') {
+        try {
+          const audioDuration = await getAudioDuration(file);
+          const durationInSeconds = Math.round(audioDuration);
+          onDurationChange(durationInSeconds);
+          toast.success(`Durasi terdeteksi: ${formatDuration(durationInSeconds)}`);
+        } catch (error) {
+          console.error('Could not detect audio duration:', error);
+        }
+      }
+
+      setUploadStage('uploading');
+      const url = await uploadToSupabaseStorage(file, type);
+      setProgress(100);
+      setUploadStats((current) => ({ ...current, uploadedBytes: file.size, totalBytes: file.size }));
+
+      if (type === 'audio') onAudioChange(url);
+      else onClipChange(url);
       toast.success(`${LABEL_MAP[type]} berhasil diupload`);
     } catch (error: any) {
       console.error('Error uploading:', error);
+      if (type === 'clip') {
+        setClipError(error.message || 'Gagal memproses audio clip');
+      }
       toast.error(error.message || `Gagal mengupload ${LABEL_MAP[type]}`);
     } finally {
       setUploading(null);
+      setUploadStage(null);
       setProgress(0);
+      setUploadStats({ uploadedBytes: 0, totalBytes: 0, bytesPerSecond: 0 });
     }
   };
-
   const handleRemove = (type: MediaType) => {
     if (type === 'audio') {
       onAudioChange(null);
@@ -462,9 +470,26 @@ export function MediaUploadSection({
                 <div className="space-y-2 p-3 rounded-lg border bg-muted/50">
                   <div className="flex items-center gap-2 text-sm">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Uploading... {progress}%</span>
+                    <span>
+                      {uploadStage === 'processing'
+                        ? 'Menyiapkan file audio...'
+                        : `Mengunggah... ${progress}%`}
+                    </span>
                   </div>
                   <Progress value={progress} className="h-2" />
+                  {uploadStage === 'uploading' && uploadStats.totalBytes > 0 && (
+                    <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                      <span>{formatFileSize(uploadStats.uploadedBytes)} / {formatFileSize(uploadStats.totalBytes)}</span>
+                      <span>•</span>
+                      <span>{formatTransferRate(uploadStats.bytesPerSecond)}</span>
+                      {uploadStats.bytesPerSecond > 0 && uploadStats.uploadedBytes < uploadStats.totalBytes && (
+                        <>
+                          <span>•</span>
+                          <span>Sisa {formatRemainingTime((uploadStats.totalBytes - uploadStats.uploadedBytes) / uploadStats.bytesPerSecond)}</span>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div

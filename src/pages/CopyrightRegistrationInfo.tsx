@@ -42,11 +42,11 @@ export default function CopyrightRegistrationInfo() {
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Button size="lg" onClick={() => navigate('/dashboard/copyright-registration/new')}>
+              <Button size="lg" onClick={() => navigate('/dashboard/copyright/onboarding')}>
                 Mulai Pendaftaran
               </Button>
-              <Button size="lg" variant="outline" onClick={() => navigate('/dashboard/copyright')}>
-                Lihat Dasbor Hak Cipta
+              <Button size="lg" variant="outline" onClick={() => navigate('/dashboard/copyright-registration/status')}>
+                Lihat Status Pendaftaran
               </Button>
             </div>
           </div>

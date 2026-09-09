@@ -39,6 +39,8 @@ import CopyrightRoyaltySummary from "./pages/CopyrightRoyaltySummary";
 import CopyrightRoyaltyUpload from "./pages/CopyrightRoyaltyUpload";
 import CopyrightRoyaltyUploadHistory from "./pages/CopyrightRoyaltyUploadHistory";
 import CopyrightRegistrationInfo from "./pages/CopyrightRegistrationInfo";
+import CopyrightRegistrationStatus from "./pages/CopyrightRegistrationStatus";
+import CopyrightOnboarding from "./pages/CopyrightOnboarding";
 import CopyrightRegistrationForm from "./pages/CopyrightRegistrationForm";
 import CopyrightRegistrationReview from "./pages/CopyrightRegistrationReview";
 import MediaLibrary from "./pages/MediaLibrary";
@@ -267,6 +269,14 @@ const App = () => (
 
                 {/* Copyright-specific routes */}
                 <Route
+                  path="/dashboard/copyright/onboarding"
+                  element={
+                    <ProtectedRoute allowedRoles={["superadmin", "admin", "copyright", "user", "label", "artist", "whitelabel"]}>
+                      <CopyrightOnboarding />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/dashboard/copyright"
                   element={
                     <ProtectedRoute requireCopyright>
@@ -329,6 +339,14 @@ const App = () => (
                   }
                 />
                 <Route
+                  path="/dashboard/copyright-registration/status"
+                  element={
+                    <ProtectedRoute allowedRoles={["superadmin", "admin", "copyright", "user", "label", "artist", "whitelabel"]}>
+                      <CopyrightRegistrationStatus />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/dashboard/copyright-registration/new"
                   element={
                     <ProtectedRoute
@@ -348,6 +366,14 @@ const App = () => (
                 />
                 <Route
                   path="/dashboard/copyright-registration/review"
+                  element={
+                    <ProtectedRoute requireAdmin>
+                      <CopyrightRegistrationReview />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/copyright-registration/review/:registrationId"
                   element={
                     <ProtectedRoute requireAdmin>
                       <CopyrightRegistrationReview />

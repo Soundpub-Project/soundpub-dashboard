@@ -147,17 +147,63 @@ export default function CopyrightRegistrationForm() {
   };
 
   const buildDraftPreviewUrl = () => {
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Draft Kontrak</title><style>body{font-family:Arial,sans-serif;padding:40px;line-height:1.6}h1{font-size:24px}h2{font-size:18px;margin-top:24px}.watermark{position:fixed;top:45%;left:15%;right:15%;transform:rotate(-25deg);font-size:48px;opacity:.12;font-weight:700;text-align:center}</style></head><body><div class="watermark">DRAFT - BELUM DIBAYAR</div><h1>Draft Kontrak Soundpub Publishing</h1><p><strong>Nomor Surat:</strong> P00001/Soundpub/I/PBLSR/2026 <em>(format contoh, final setelah approve)</em></p><p><strong>Pihak Pertama:</strong> PT UTERO KREATIF INDONESIA (Soundpub)</p><p><strong>Pihak Kedua:</strong> ${legalName || '-'}</p><p><strong>Wilayah:</strong> Seluruh Dunia</p><p><strong>Masa Kontrak:</strong> 3 Tahun + perpanjangan otomatis</p><p><strong>Biaya Registrasi:</strong> Rp100.000</p><h2>Daftar Karya</h2><ul>${works.filter((work) => work.title.trim()).map((work) => `<li>${work.title}</li>`).join('')}</ul></body></html>`;
+    const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character] || character));
+    const workItems = works.filter((work) => work.title.trim()).map((work) => '<li>' + escapeHtml(work.title.trim()) + '</li>').join('') || '<li>-</li>';
+    const html = '<!doctype html><html><head><meta charset="utf-8"><title>Draft Kontrak Hak Cipta Soundpub</title><style>@page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0;background:#e5e7eb;font-family:Arial,sans-serif;color:#0d1424}.page{width:210mm;min-height:297mm;margin:0 auto;background:#fff;position:relative;padding:0 19mm 22mm}.header{height:84px;background:#0d1424;margin:0 -19mm 34px;padding:22px 19mm;color:#fff;position:relative}.brand{font-size:25px;font-weight:700;letter-spacing:-1px}.subtitle{color:#d1d8e4;font-size:9px;letter-spacing:.8px;margin-top:3px}.badge{position:absolute;right:19mm;top:24px;background:#f5630c;padding:8px 18px;color:#fff;font-size:10px;font-weight:700}.watermark{position:absolute;top:44%;left:10%;right:10%;transform:rotate(-25deg);font-size:42px;opacity:.08;font-weight:700;text-align:center;pointer-events:none}.eyebrow{font-size:10px;color:#f5630c;font-weight:700;letter-spacing:.8px}.title{font-size:22px;font-weight:700;margin:8px 0 5px}.number{font-size:11px;font-weight:700;color:#f5630c;margin-bottom:28px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 38px;border:1px solid #d9dee8;padding:18px;margin-bottom:25px}.label{font-size:10px;font-weight:700;margin-bottom:4px}.value{font-size:10px;line-height:1.45}.section-title{font-size:13px;font-weight:700;margin:26px 0 10px}.works{border:1px solid #d9dee8;padding:14px 18px;font-size:10px;line-height:1.7}.footer{position:absolute;bottom:14mm;left:19mm;right:19mm;font-size:8px;color:#656d7a;border-top:1px solid #d9dee8;padding-top:8px}@media print{body{background:#fff}.page{margin:0}.no-print{display:none}}</style></head><body><main class="page"><header class="header"><div class="brand">soundpub</div><div class="subtitle">DRAFT KONTRAK PUBLISHING HAK CIPTA</div><div class="badge">DRAFT / BELUM DIBAYAR</div></header><div class="watermark">DRAFT KONTRAK</div><div class="eyebrow">SOUNDPUB PUBLISHING</div><h1 class="title">Draft Kontrak Hak Cipta</h1><p class="number">P00001/Soundpub/I/PBLSR/2026 · Format final setelah persetujuan</p><section class="grid"><div><div class="label">PIHAK PERTAMA</div><div class="value">PT UTERO KREATIF INDONESIA (Soundpub)</div></div><div><div class="label">PIHAK KEDUA</div><div class="value">' + escapeHtml(legalName || '-') + '</div></div><div><div class="label">WILAYAH</div><div class="value">Seluruh Dunia</div></div><div><div class="label">MASA KONTRAK</div><div class="value">3 Tahun + perpanjangan otomatis</div></div><div><div class="label">BIAYA REGISTRASI</div><div class="value">Rp100.000</div></div><div><div class="label">EMAIL PEMOHON</div><div class="value">' + escapeHtml(email || '-') + '</div></div></section><h2 class="section-title">Daftar Karya</h2><ol class="works">' + workItems + '</ol><p class="footer">Dokumen draft ini dibuat otomatis oleh Soundpub. Gunakan fitur cetak browser untuk menyimpan sebagai PDF.</p></main></body></html>';
     return URL.createObjectURL(new Blob([html], { type: 'text/html' }));
   };
 
-  const downloadDraftPreview = () => {
-    const url = buildDraftPreviewUrl();
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Soundpub-copyright-draft-${legalName || 'registration'}.html`;
-    link.click();
-    URL.revokeObjectURL(url);
+  const downloadDraftPreview = async () => {
+    try {
+      const pdf = await PDFDocument.create();
+      const page = pdf.addPage([595, 842]);
+      const regular = await pdf.embedFont(StandardFonts.Helvetica);
+      const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+      const navy = rgb(0.05, 0.08, 0.14);
+      const orange = rgb(0.96, 0.39, 0.05);
+      const gray = rgb(0.35, 0.39, 0.46);
+      const clean = (value: string) => value.replace(/[\r\n]+/g, ' ').trim() || '-';
+      const row = (label: string, value: string, y: number) => {
+        page.drawText(label, { x: 54, y, size: 10, font: bold, color: navy });
+        page.drawText(clean(value), { x: 210, y, size: 10, font: regular, color: navy, maxWidth: 320 });
+      };
+      page.drawRectangle({ x: 0, y: 758, width: 595, height: 84, color: navy });
+      page.drawText('soundpub', { x: 54, y: 793, size: 25, font: bold, color: rgb(1, 1, 1) });
+      page.drawText('DRAFT KONTRAK PUBLISHING HAK CIPTA', { x: 54, y: 775, size: 9, font: regular, color: rgb(0.82, 0.86, 0.91) });
+      page.drawRectangle({ x: 385, y: 779, width: 156, height: 26, color: orange });
+      page.drawText('DRAFT / BELUM DIBAYAR', { x: 397, y: 788, size: 9, font: bold, color: rgb(1, 1, 1) });
+      page.drawText('Draft Kontrak Hak Cipta', { x: 54, y: 710, size: 20, font: bold, color: navy });
+      page.drawText('P00001/Soundpub/I/PBLSR/2026', { x: 54, y: 688, size: 11, font: bold, color: orange });
+      page.drawText('Format final setelah persetujuan admin', { x: 54, y: 671, size: 9, font: regular, color: gray });
+      page.drawRectangle({ x: 54, y: 565, width: 487, height: 82, borderColor: rgb(0.85, 0.87, 0.91), borderWidth: 1 });
+      row('Pihak Pertama', 'PT UTERO KREATIF INDONESIA (Soundpub)', 625);
+      row('Pihak Kedua', legalName, 604);
+      row('Email', email, 583);
+      page.drawText('Detail Kontrak', { x: 54, y: 526, size: 13, font: bold, color: navy });
+      page.drawRectangle({ x: 54, y: 402, width: 487, height: 100, borderColor: rgb(0.85, 0.87, 0.91), borderWidth: 1 });
+      row('Wilayah', 'Seluruh Dunia', 478);
+      row('Masa Kontrak', '3 Tahun + perpanjangan otomatis', 457);
+      row('Biaya Registrasi', 'Rp100.000', 436);
+      row('Jumlah Karya', String(works.filter((work) => work.title.trim()).length), 415);
+      page.drawRectangle({ x: 54, y: 322, width: 487, height: 55, color: rgb(0.96, 0.97, 0.99) });
+      page.drawText('STATUS DOKUMEN', { x: 72, y: 350, size: 10, font: bold, color: navy });
+      page.drawText('DRAFT - WATERMARK SEBELUM BAYAR', { x: 295, y: 343, size: 11, font: bold, color: orange });
+      page.drawText('Daftar Karya', { x: 54, y: 280, size: 13, font: bold, color: navy });
+      works.filter((work) => work.title.trim()).slice(0, 12).forEach((work, index) => {
+        page.drawText((index + 1) + '. ' + clean(work.title), { x: 72, y: 258 - index * 18, size: 10, font: regular, color: navy, maxWidth: 450 });
+      });
+      page.drawText('Dokumen draft ini dibuat otomatis oleh Soundpub dan belum menjadi kontrak aktif.', { x: 54, y: 90, size: 8, font: regular, color: gray });
+      const bytes = await pdf.save();
+      const blobUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = 'Soundpub-copyright-draft-' + (legalName || 'registration') + '.pdf';
+      link.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Failed to generate copyright draft PDF:', error);
+      toast.error('PDF draft gagal dibuat.');
+    }
   };
 
   const setFile = (key: keyof PendingFileGroup, file: File | null) => {
@@ -185,7 +231,7 @@ export default function CopyrightRegistrationForm() {
     const loadExistingDraft = async () => {
       if (!user) return;
       try {
-        const Soundpub = (supabase as any).schema('Soundpub');
+        const Soundpub = (supabase as any).schema('soundpub');
         const { data: registration } = await Soundpub
           .from('copyright_registrations')
           .select('*')
@@ -194,7 +240,12 @@ export default function CopyrightRegistrationForm() {
           .limit(1)
           .maybeSingle();
 
-        if (!mounted || !registration) return;
+        if (!mounted) return;
+
+        if (!registration) {
+          navigate('/dashboard/copyright/onboarding', { replace: true });
+          return;
+        }
 
         if (registration.status !== 'draft' && registration.status !== 'revision_requested' && registration.status !== 'awaiting_payment') {
           return;
@@ -257,7 +308,7 @@ export default function CopyrightRegistrationForm() {
 
     loadExistingDraft();
     return () => { mounted = false; };
-  }, [user]);
+  }, [navigate, user]);
 
   const validateDraft = () => {
     if (!user) return 'User belum login.';
@@ -278,7 +329,7 @@ export default function CopyrightRegistrationForm() {
 
     setSaving(true);
     try {
-      const Soundpub = (supabase as any).schema('Soundpub');
+      const Soundpub = (supabase as any).schema('soundpub');
       const payload = {
         user_id: user!.id,
         status: 'draft',
@@ -391,7 +442,7 @@ export default function CopyrightRegistrationForm() {
 
     setSaving(true);
     try {
-      const Soundpub = (supabase as any).schema('Soundpub');
+      const Soundpub = (supabase as any).schema('soundpub');
       const { error: registrationError } = await Soundpub
         .from('copyright_registrations')
         .update({ status: 'awaiting_payment', submitted_at: new Date().toISOString() })
@@ -412,7 +463,7 @@ export default function CopyrightRegistrationForm() {
       if (paymentError) throw paymentError;
 
       toast.success('Pendaftaran siap dibayar. Integrasi pembayaran akan disambungkan pada tahap berikutnya.');
-      navigate('/dashboard/copyright-registration');
+      navigate('/dashboard/copyright-registration/status');
     } catch (error: any) {
       console.error('Error submitting copyright registration:', error);
       toast.error(error?.message || 'Gagal menyiapkan pembayaran registrasi.');
@@ -712,11 +763,11 @@ export default function CopyrightRegistrationForm() {
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Button variant="outline" onClick={downloadDraftPreview}>
                   <Download className="mr-2 h-4 w-4" />
-                  Download Draft Preview
+                  Download Draft PDF
                 </Button>
                 <Button variant="outline" onClick={() => window.open(buildDraftPreviewUrl(), '_blank')}>
                   <FileText className="mr-2 h-4 w-4" />
-                  Buka Preview
+                  Buka Preview PDF
                 </Button>
               </div>
               <Card className="border-dashed">

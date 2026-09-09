@@ -171,6 +171,7 @@ export default function Releases() {
       pending_paid: 'default',
       processing: 'secondary',
       rejected: 'destructive',
+      revision_submitted: 'secondary',
       draft: 'secondary',
       inactive: 'outline',
     };
@@ -185,6 +186,7 @@ export default function Releases() {
       processing: 'Proses',
       draft: 'Draft',
       rejected: 'Rejected',
+      revision_submitted: 'Revisi Diajukan',
       inactive: 'Inactive',
     };
     return labels[status] || status;
@@ -601,7 +603,7 @@ export default function Releases() {
                     <SelectValue placeholder="Ubah status..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {['active', 'pending', 'pending_paid', 'processing', 'draft', 'rejected', 'inactive'].map((status) => (
+                    {['active', 'pending', 'pending_paid', 'processing', 'revision_submitted', 'draft', 'rejected', 'inactive'].map((status) => (
                       <SelectItem key={status} value={status}>
                         {getStatusLabel(status)}
                       </SelectItem>
@@ -842,11 +844,11 @@ export default function Releases() {
                                     </Button>
                                   </DropdownMenuTrigger>
                                    <DropdownMenuContent align="end">
-                                    {release.status === 'pending_paid' && isAdmin && (
+                                    {(release.status === 'pending_paid' || release.status === 'revision_submitted') && isAdmin && (
                                       <>
                                         <DropdownMenuItem onClick={() => handleConfirmRelease(release)}>
                                           <CheckCircle className="h-4 w-4 mr-2" />
-                                          Konfirmasi
+                                          {release.status === 'revision_submitted' ? 'Tinjau Revisi' : 'Konfirmasi'}
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator />
                                       </>

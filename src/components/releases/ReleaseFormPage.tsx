@@ -921,9 +921,9 @@ export function ReleaseFormPage({
             distribution_service: values.distribution_service,
             custom_label_name: values.distribution_service === "custom_label" ? values.custom_label_name?.trim() || null : null,
             custom_record_name: values.distribution_service === "custom_label" ? values.custom_label_name?.trim() || null : null,
-            // Editing a rejected release resubmits it for review.
+            // Editing a rejected release resubmits it for review without requiring payment again.
             ...(release.status === "rejected"
-              ? { status: "pending" }
+              ? { status: "revision_submitted", rejection_reason: null }
               : isAdmin && values.status
                 ? { status: values.status }
                 : {}),
@@ -1171,7 +1171,8 @@ export function ReleaseFormPage({
             distribution_service: values.distribution_service,
             custom_label_name: values.distribution_service === "custom_label" ? values.custom_label_name?.trim() || null : null,
             custom_record_name: values.distribution_service === "custom_label" ? values.custom_label_name?.trim() || null : null,
-            status: "pending",
+            status: release.status === "rejected" ? "revision_submitted" : "pending",
+            ...(release.status === "rejected" ? { rejection_reason: null } : {}),
             ...(coverUrl ? { cover_url: coverUrl } : {}),
           })
           .eq("id", release.id);
