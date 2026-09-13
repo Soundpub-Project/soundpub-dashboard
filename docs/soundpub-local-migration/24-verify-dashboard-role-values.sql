@@ -1,4 +1,4 @@
-﻿-- Verify dashboard role revenue/balance directly from soundpub.royalties.
+﻿-- Verify dashboard role revenue/balance directly from Soundpub.royalties.
 -- This mirrors the frontend rule:
 -- Artist: Total Revenue = SUM(net_revenue), Balance = SUM(artist_revenue)
 -- Label:  Total Revenue = SUM(net_revenue), Balance = SUM(label_revenue)
@@ -16,8 +16,8 @@ SELECT
   SUM(r.artist_revenue)::numeric(14,2) AS balance,
   COUNT(*) AS royalty_rows,
   COUNT(DISTINCT r.isrc) AS tracks
-FROM soundpub.profiles p
-JOIN soundpub.royalties r ON r.artist_user_id = p.id
+FROM Soundpub.profiles p
+JOIN Soundpub.royalties r ON r.artist_user_id = p.id
 GROUP BY p.id, p.full_name
 ORDER BY balance DESC NULLS LAST
 LIMIT 50;
@@ -31,8 +31,8 @@ SELECT
   SUM(r.label_revenue)::numeric(14,2) AS balance,
   COUNT(*) AS royalty_rows,
   COUNT(DISTINCT r.isrc) AS tracks
-FROM soundpub.profiles p
-JOIN soundpub.royalties r ON r.label_user_id = p.id
+FROM Soundpub.profiles p
+JOIN Soundpub.royalties r ON r.label_user_id = p.id
 GROUP BY p.id, p.full_name
 ORDER BY balance DESC NULLS LAST
 LIMIT 50;
@@ -46,10 +46,10 @@ WITH role_totals AS (
     ur.role::text AS role,
     COALESCE(SUM(r_artist.artist_revenue), 0) AS artist_balance,
     COALESCE(SUM(r_label.label_revenue), 0) AS label_balance
-  FROM soundpub.profiles p
-  JOIN soundpub.user_roles ur ON ur.user_id = p.id
-  LEFT JOIN soundpub.royalties r_artist ON r_artist.artist_user_id = p.id
-  LEFT JOIN soundpub.royalties r_label ON r_label.label_user_id = p.id
+  FROM Soundpub.profiles p
+  JOIN Soundpub.user_roles ur ON ur.user_id = p.id
+  LEFT JOIN Soundpub.royalties r_artist ON r_artist.artist_user_id = p.id
+  LEFT JOIN Soundpub.royalties r_label ON r_label.label_user_id = p.id
   WHERE ur.role IN ('artist', 'label', 'whitelabel')
   GROUP BY p.id, p.full_name, ur.role
 )
@@ -65,7 +65,7 @@ SELECT
   END::numeric(14,2) AS royalty_derived_balance,
   (p.balance - CASE WHEN rt.role = 'artist' THEN rt.artist_balance ELSE rt.label_balance END)::numeric(14,2) AS diff
 FROM role_totals rt
-JOIN soundpub.profiles p ON p.id = rt.id
+JOIN Soundpub.profiles p ON p.id = rt.id
 WHERE ABS(p.balance - CASE WHEN rt.role = 'artist' THEN rt.artist_balance ELSE rt.label_balance END) > 0.01
 ORDER BY ABS(p.balance - CASE WHEN rt.role = 'artist' THEN rt.artist_balance ELSE rt.label_balance END) DESC
 LIMIT 50;

@@ -21,6 +21,7 @@ interface PricingConfig {
   release_price_single: string;
   release_price_ep: string;
   release_price_album: string;
+  release_price_custom_label: string;
 }
 
 export function PricingSettings() {
@@ -33,6 +34,7 @@ export function PricingSettings() {
     release_price_single: '50000',
     release_price_ep: '150000',
     release_price_album: '300000',
+    release_price_custom_label: '75000',
   });
 
   useEffect(() => {
@@ -58,6 +60,7 @@ export function PricingSettings() {
         release_price_single: settingsMap.release_price_single || '50000',
         release_price_ep: settingsMap.release_price_ep || '150000',
         release_price_album: settingsMap.release_price_album || '300000',
+        release_price_custom_label: settingsMap.release_price_custom_label || '75000',
       });
     } catch (error) {
       console.error('Error fetching pricing settings:', error);
@@ -190,6 +193,19 @@ export function PricingSettings() {
             </div>
           </div>
         )}
+
+        <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-4">
+          <Label>Harga Custom Label Soundpub per Track (IDR)</Label>
+          <Input
+            type="number"
+            value={config.release_price_custom_label}
+            onChange={(e) => setConfig(prev => ({ ...prev, release_price_custom_label: e.target.value }))}
+            min="0"
+          />
+          <p className="text-xs text-muted-foreground">
+            Khusus artis yang login dan terdaftar di bawah label Soundpub. Contoh: 3 track = {formatCurrency(String(parseInt(config.release_price_custom_label || '0') * 3))}
+          </p>
+        </div>
 
         <Button onClick={handleSave} disabled={saving}>
           {saving ? (

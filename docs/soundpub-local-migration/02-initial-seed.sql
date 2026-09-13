@@ -1,10 +1,10 @@
 -- =============================================
--- SOUNDPUB INITIAL SEED
--- Execute after SOUNDPUB_RESET_AND_RECREATE.sql
+-- Soundpub INITIAL SEED
+-- Execute after Soundpub_RESET_AND_RECREATE.sql
 -- =============================================
 
 -- Default application settings
-INSERT INTO soundpub.app_settings (key, value) VALUES
+INSERT INTO Soundpub.app_settings (key, value) VALUES
 ('dashboard_logo', null),
 ('ga4_enabled', 'false'),
 ('gcs_enabled', 'false'),
@@ -31,8 +31,8 @@ ON CONFLICT (key) DO UPDATE SET
 --   WHERE email = 'admin@example.com'
 --   LIMIT 1
 -- ), upsert_profile AS (
---   INSERT INTO soundpub.profiles (id, email, full_name, status)
---   SELECT id, email, 'SoundPub Admin', 'active'
+--   INSERT INTO Soundpub.profiles (id, email, full_name, status)
+--   SELECT id, email, 'Soundpub Admin', 'active'
 --   FROM target_user
 --   ON CONFLICT (id) DO UPDATE SET
 --     email = EXCLUDED.email,
@@ -41,7 +41,7 @@ ON CONFLICT (key) DO UPDATE SET
 --     updated_at = now()
 --   RETURNING id
 -- )
--- INSERT INTO soundpub.user_roles (user_id, role)
--- SELECT id, 'superadmin'::soundpub.app_role
+-- INSERT INTO Soundpub.user_roles (user_id, role)
+-- SELECT id, 'superadmin'::Soundpub.app_role
 -- FROM upsert_profile
 -- ON CONFLICT (user_id, role) DO NOTHING;

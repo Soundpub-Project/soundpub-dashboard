@@ -1,20 +1,20 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useSsoAuth } from '@/context/SsoAuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { lovable } from '@/integrations/lovable/index';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Music2, Loader2, Moon, Sun, Eye, EyeOff, Shield } from 'lucide-react';
+import { Music2, Loader2, Moon, Sun, Eye, EyeOff, Shield, Mail } from 'lucide-react';
 import { z } from 'zod';
 import { useTheme } from '@/hooks/useTheme';
 import { Separator } from '@/components/ui/separator';
-
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AuthEnvironmentNotice } from '@/components/auth/AuthEnvironmentNotice';
 
 const loginSchema = z.object({
   email: z.string().email('Email tidak valid'),
@@ -52,6 +52,8 @@ export default function Auth() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [signupSuccess, setSignupSuccess] = useState(false);
+  const [signupEmail, setSignupEmail] = useState('');
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -151,45 +153,120 @@ export default function Auth() {
     setIsLoading(false);
 
     if (error) {
-      if (error.message.includes('already registered')) {
-        toast({
-          title: 'Registrasi Gagal',
-          description: 'Email sudah terdaftar. Silakan login.',
-          variant: 'destructive',
-        });
-      } else {
-        toast({
-          title: 'Registrasi Gagal',
-          description: error.message,
-          variant: 'destructive',
-        });
-      }
-    } else {
       toast({
-        title: 'Registrasi Berhasil',
-        description: 'Akun berhasil dibuat!',
+        title: 'Pendaftaran Gagal',
+        description: error.message,
+        variant: 'destructive',
       });
-      navigate('/dashboard');
+    } else {
+      setSignupSuccess(true);
+      setSignupEmail(signupData.email);
+      toast({
+        title: 'Pendaftaran Berhasil',
+        description: 'Silakan cek email Anda untuk verifikasi akun',
+      });
     }
   };
 
-  if (authLoading) {
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/dashboard`,
+        },
+      });
+
+      if (error) throw error;
+    } catch (error: any) {
+      toast({
+        title: 'Gagal Login dengan Google',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleSsoLogin = async () => {
+    await triggerSsoLogin();
+  };
+
+  if (authLoading || ssoChecking) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
+  if (signupSuccess) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-1 text-center">
+            <div className="flex justify-center mb-4">
+              <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
+                <Mail className="w-8 h-8 text-green-600 dark:text-green-400" />
+              </div>
+            </div>
+            <CardTitle className="text-2xl font-bold">Cek Email Anda</CardTitle>
+            <CardDescription className="text-base">
+              Kami telah mengirim link verifikasi ke
+              <br />
+              <span className="font-medium text-foreground">{signupEmail}</span>
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert>
+              <Mail className="h-4 w-4" />
+              <AlertDescription>
+                Silakan cek inbox email Anda dan klik link verifikasi untuk mengaktifkan akun.
+                Link berlaku selama <strong>7 hari</strong>.
+              </AlertDescription>
+            </Alert>
+
+            <div className="bg-muted p-4 rounded-lg space-y-2 text-sm">
+              <p className="font-medium">Langkah selanjutnya:</p>
+              <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                <li>Buka inbox email Anda</li>
+                <li>Cari email dari Soundpub</li>
+                <li>Klik link verifikasi</li>
+                <li>Login dan mulai menggunakan dashboard</li>
+              </ol>
+            </div>
+
+            <div className="text-sm text-muted-foreground text-center">
+              <p>Tidak menerima email? Cek folder spam Anda</p>
+            </div>
+
+            <Button 
+              variant="outline" 
+              className="w-full" 
+              onClick={() => {
+                setSignupSuccess(false);
+                setSignupData({ fullName: '', email: '', password: '', confirmPassword: '' });
+              }}
+            >
+              Kembali ke Login
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4 relative">
-      {/* Theme Toggle */}
+    <>
+      <AuthEnvironmentNotice />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4 relative">
       <Button
         variant="ghost"
         size="icon"
-        onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
         className="absolute top-4 right-4"
+        onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
       >
         {resolvedTheme === 'dark' ? (
           <Sun className="h-5 w-5" />
@@ -199,60 +276,60 @@ export default function Auth() {
       </Button>
 
       <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center mb-2">
+        <Card className="shadow-xl">
+          <CardHeader className="space-y-4 text-center">
             {logoUrl ? (
-              <img 
-                src={logoUrl} 
-                alt="Logo" 
-                className="h-16 w-auto max-w-[200px] object-contain"
-              />
+              <div className="flex justify-center">
+                <img 
+                  src={logoUrl} 
+                  alt="Logo" 
+                  className="h-16 w-auto object-contain"
+                />
+              </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl gradient-primary">
-                  <Music2 className="h-8 w-8 text-primary-foreground" />
-                </div>
-                <h1 className="text-3xl font-bold text-gradient">SoundPub</h1>
+              <div className="flex justify-center">
+                <Music2 className="h-16 w-16 text-primary" />
               </div>
             )}
-          </div>
-          {!logoUrl && (
-            <p className="text-muted-foreground">Music Distribution Platform</p>
-          )}
-        </div>
+            {/* <div>
+              <CardTitle className="text-2xl font-bold">Selamat Datang</CardTitle>
+              <CardDescription>Soundpub Dashboard</CardDescription>
+            </div> */}
 
-        <Card className="border-border bg-card">
+            {ssoError && (
+              <Alert variant="destructive">
+                <AlertDescription>{ssoError}</AlertDescription>
+              </Alert>
+            )}
+
+            {ssoLoading && (
+              <Alert>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <AlertDescription>Authenticating with SSO...</AlertDescription>
+              </Alert>
+            )}
+          </CardHeader>
+
           <Tabs defaultValue="login" className="w-full">
-            <CardHeader className="pb-4">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="login">Login</TabsTrigger>
-                <TabsTrigger value="signup">Daftar</TabsTrigger>
-              </TabsList>
-            </CardHeader>
+            <TabsList className="grid grid-cols-2 gap-2 mx-auto" style={{ maxWidth: "280px" }}>
+              <TabsTrigger value="login" className="flex-1">Login</TabsTrigger>
+              <TabsTrigger value="signup" className="flex-1">Daftar</TabsTrigger>
+            </TabsList>
 
-            <CardContent>
-              {/* Login Tab */}
-              <TabsContent value="login" className="mt-0">
-                <CardTitle className="text-center text-xl mb-3">Selamat Datang</CardTitle>
-                <CardDescription className="text-center mb-6">
-                  Masuk ke akun SoundPub Anda
-                </CardDescription>
-
+            <CardContent className="mt-6">
+              <TabsContent value="login" className="space-y-4">
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="login-email">Email</Label>
                     <Input
                       id="login-email"
                       type="email"
-                      placeholder="email@example.com"
+                      placeholder="nama@example.com"
                       value={loginData.email}
                       onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
                       className={errors.email ? 'border-destructive' : ''}
                     />
-                    {errors.email && (
-                      <p className="text-xs text-destructive">{errors.email}</p>
-                    )}
+                    {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -261,7 +338,7 @@ export default function Auth() {
                       <Input
                         id="login-password"
                         type={showLoginPassword ? 'text' : 'password'}
-                        placeholder="••••••••"
+                        placeholder="********"
                         value={loginData.password}
                         onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
                         className={`pr-10 ${errors.password ? 'border-destructive' : ''}`}
@@ -280,9 +357,16 @@ export default function Auth() {
                         )}
                       </Button>
                     </div>
-                    {errors.password && (
-                      <p className="text-xs text-destructive">{errors.password}</p>
-                    )}
+                    {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Link 
+                      to="/forgot-password" 
+                      className="text-sm text-primary hover:underline"
+                    >
+                      Lupa Password?
+                    </Link>
                   </div>
 
                   <Button type="submit" className="w-full gradient-primary" disabled={isLoading}>
@@ -292,56 +376,24 @@ export default function Auth() {
                         Memproses...
                       </>
                     ) : (
-                      'Masuk'
+                      'Login'
                     )}
                   </Button>
-
-                  {/* <div className="relative my-2">
-                    <div className="absolute inset-0 flex items-center">
-                      <Separator className="w-full" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-card px-2 text-muted-foreground">atau</span>
-                    </div>
-                  </div> */}
 
                   <div className="relative my-2">
                     <div className="absolute inset-0 flex items-center">
                       <Separator className="w-full" />
                     </div>
                     <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-card px-2 text-muted-foreground">Google Login Maintenance</span>
+                      <span className="bg-card px-2 text-muted-foreground">atau</span>
                     </div>
                   </div>
 
-                  {/* <Button
+                  <Button
                     type="button"
                     variant="outline"
                     className="w-full"
-                    onClick={async () => {
-                      setGoogleLoading(true);
-                      try {
-                        const result = await lovable.auth.signInWithOAuth("google", {
-                          redirect_uri: window.location.origin,
-                        });
-                        if (result.error) {
-                          toast({
-                            title: 'Login Gagal',
-                            description: result.error instanceof Error ? result.error.message : 'Login Google gagal',
-                            variant: 'destructive',
-                          });
-                        }
-                        if (result.redirected) return;
-                      } catch {
-                        toast({
-                          title: 'Login Gagal',
-                          description: 'Terjadi kesalahan saat login dengan Google',
-                          variant: 'destructive',
-                        });
-                      } finally {
-                        setGoogleLoading(false);
-                      }
-                    }}
+                    onClick={handleGoogleSignIn}
                     disabled={googleLoading}
                   >
                     {googleLoading ? (
@@ -355,54 +407,38 @@ export default function Auth() {
                       </svg>
                     )}
                     Login dengan Google
-                  </Button> */}
+                  </Button>
 
-                   {/* <Button
+                  <Button
                     type="button"
                     variant="outline"
                     className="w-full"
-                    onClick={triggerSsoLogin}
-                    disabled={ssoLoading || ssoChecking}
+                    onClick={handleSsoLogin}
+                    disabled={ssoLoading}
                   >
-                    {(ssoLoading || ssoChecking) ? (
+                    {ssoLoading ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
                       <Shield className="mr-2 h-4 w-4" />
                     )}
-                    {ssoChecking
-                      ? 'Memeriksa sesi ICCN...'
-                      : ssoLoading
-                        ? 'Menghubungkan ke SSO...'
-                        : 'Login via SSO'}
-                  </Button> */}
-
-                  {ssoError && (
-                    <p className="text-xs text-destructive text-center">{ssoError}</p>
-                  )}
+                    Login dengan SSO (Label)
+                  </Button>
                 </form>
               </TabsContent>
 
-              {/* Signup Tab */}
-              <TabsContent value="signup" className="mt-0">
-                <CardTitle className="text-xl mb-1">Buat Akun</CardTitle>
-                <CardDescription className="mb-6">
-                  Daftar untuk menggunakan SoundPub
-                </CardDescription>
-
+              <TabsContent value="signup" className="space-y-4">
                 <form onSubmit={handleSignup} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="signup-name">Nama Lengkap</Label>
                     <Input
                       id="signup-name"
                       type="text"
-                      placeholder="Nama Anda"
+                      placeholder="John Doe"
                       value={signupData.fullName}
                       onChange={(e) => setSignupData({ ...signupData, fullName: e.target.value })}
                       className={errors.fullName ? 'border-destructive' : ''}
                     />
-                    {errors.fullName && (
-                      <p className="text-xs text-destructive">{errors.fullName}</p>
-                    )}
+                    {errors.fullName && <p className="text-xs text-destructive">{errors.fullName}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -410,14 +446,12 @@ export default function Auth() {
                     <Input
                       id="signup-email"
                       type="email"
-                      placeholder="email@example.com"
+                      placeholder="nama@example.com"
                       value={signupData.email}
                       onChange={(e) => setSignupData({ ...signupData, email: e.target.value })}
                       className={errors.email ? 'border-destructive' : ''}
                     />
-                    {errors.email && (
-                      <p className="text-xs text-destructive">{errors.email}</p>
-                    )}
+                    {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -426,7 +460,7 @@ export default function Auth() {
                       <Input
                         id="signup-password"
                         type={showSignupPassword ? 'text' : 'password'}
-                        placeholder="••••••••"
+                        placeholder="********"
                         value={signupData.password}
                         onChange={(e) => setSignupData({ ...signupData, password: e.target.value })}
                         className={`pr-10 ${errors.password ? 'border-destructive' : ''}`}
@@ -445,9 +479,7 @@ export default function Auth() {
                         )}
                       </Button>
                     </div>
-                    {errors.password && (
-                      <p className="text-xs text-destructive">{errors.password}</p>
-                    )}
+                    {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -456,7 +488,7 @@ export default function Auth() {
                       <Input
                         id="signup-confirm"
                         type={showConfirmPassword ? 'text' : 'password'}
-                        placeholder="••••••••"
+                        placeholder="********"
                         value={signupData.confirmPassword}
                         onChange={(e) => setSignupData({ ...signupData, confirmPassword: e.target.value })}
                         className={`pr-10 ${errors.confirmPassword ? 'border-destructive' : ''}`}
@@ -491,43 +523,20 @@ export default function Auth() {
                     )}
                   </Button>
 
-                  {/* <div className="relative my-2">
+                  <div className="relative my-2">
                     <div className="absolute inset-0 flex items-center">
                       <Separator className="w-full" />
                     </div>
                     <div className="relative flex justify-center text-xs uppercase">
                       <span className="bg-card px-2 text-muted-foreground">atau</span>
                     </div>
-                  </div> */}
+                  </div>
 
-                  {/* <Button
+                  <Button
                     type="button"
                     variant="outline"
                     className="w-full"
-                    onClick={async () => {
-                      setGoogleLoading(true);
-                      try {
-                        const result = await lovable.auth.signInWithOAuth("google", {
-                          redirect_uri: window.location.origin,
-                        });
-                        if (result.error) {
-                          toast({
-                            title: 'Registrasi Gagal',
-                            description: result.error instanceof Error ? result.error.message : 'Daftar dengan Google gagal',
-                            variant: 'destructive',
-                          });
-                        }
-                        if (result.redirected) return;
-                      } catch {
-                        toast({
-                          title: 'Registrasi Gagal',
-                          description: 'Terjadi kesalahan saat daftar dengan Google',
-                          variant: 'destructive',
-                        });
-                      } finally {
-                        setGoogleLoading(false);
-                      }
-                    }}
+                    onClick={handleGoogleSignIn}
                     disabled={googleLoading}
                   >
                     {googleLoading ? (
@@ -541,7 +550,7 @@ export default function Auth() {
                       </svg>
                     )}
                     Daftar dengan Google
-                  </Button> */}
+                  </Button>
 
                 </form>
               </TabsContent>
@@ -549,6 +558,11 @@ export default function Auth() {
           </Tabs>
         </Card>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
+
+
+
+

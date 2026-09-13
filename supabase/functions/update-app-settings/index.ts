@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'Soundpub'
 
 const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
   const existingDb = options.db || {}
@@ -61,7 +61,7 @@ serve(async (req) => {
     }
 
     // Whitelist allowed setting keys
-    const ALLOWED_KEYS = ['dashboard_logo', 'dashboard_logo_light', 'dashboard_logo_dark', 'favicon', 'ga4_enabled', 'gcs_enabled', 'ga4_measurement_id', 'gcs_bucket_name', 'gcs_project_id', 'storage_provider', 'release_pricing_mode', 'release_price_per_track', 'release_price_single', 'release_price_ep', 'release_price_album', 'min_payout_amount', 'iccn_service_desc', 'iccn_service_photos'];
+    const ALLOWED_KEYS = ['dashboard_logo', 'dashboard_logo_light', 'dashboard_logo_dark', 'favicon', 'ga4_enabled', 'gcs_enabled', 'ga4_measurement_id', 'gcs_bucket_name', 'gcs_project_id', 'storage_provider', 'release_pricing_mode', 'release_price_per_track', 'release_price_single', 'release_price_ep', 'release_price_album', 'release_price_custom_label', 'min_payout_amount', 'iccn_service_desc', 'iccn_service_photos', 'auth_notice_config'];
 
     for (const setting of settings) {
       if (!setting.key || !ALLOWED_KEYS.includes(setting.key)) {

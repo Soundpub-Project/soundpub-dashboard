@@ -1,36 +1,36 @@
 ﻿-- =============================================
--- SOUNDPUB MANAGED ARTIST SUPPORT FOR LABELS
+-- Soundpub MANAGED ARTIST SUPPORT FOR LABELS
 -- Purpose:
 --   - Mark label-created artists as managed-only dummy auth accounts.
 --   - Keep existing auth/profile/role FK flow stable.
 --   - Prepare whitelabel users to be treated as labels for now.
 -- =============================================
 
-ALTER TYPE soundpub.app_role ADD VALUE IF NOT EXISTS 'copyright';
-ALTER TYPE soundpub.app_role ADD VALUE IF NOT EXISTS 'whitelabel';
+ALTER TYPE Soundpub.app_role ADD VALUE IF NOT EXISTS 'copyright';
+ALTER TYPE Soundpub.app_role ADD VALUE IF NOT EXISTS 'whitelabel';
 
 BEGIN;
 
-ALTER TABLE soundpub.profiles
+ALTER TABLE Soundpub.profiles
   ADD COLUMN IF NOT EXISTS is_managed_artist boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS auth_user_status text NOT NULL DEFAULT 'linked';
 
-ALTER TABLE soundpub.profiles
+ALTER TABLE Soundpub.profiles
   DROP CONSTRAINT IF EXISTS profiles_auth_user_status_check;
 
-ALTER TABLE soundpub.profiles
+ALTER TABLE Soundpub.profiles
   ADD CONSTRAINT profiles_auth_user_status_check
   CHECK (auth_user_status IN ('linked', 'managed_only', 'missing_auth', 'invited'));
 
-CREATE OR REPLACE FUNCTION soundpub.is_managed_artist_email(_email text)
+CREATE OR REPLACE FUNCTION Soundpub.is_managed_artist_email(_email text)
 RETURNS boolean
 LANGUAGE sql
 STABLE
 AS $$
-  SELECT lower(coalesce(_email, '')) LIKE '%@managed.soundpub.local'
+  SELECT lower(coalesce(_email, '')) LIKE '%@managed.Soundpub.local'
 $$;
 
-CREATE OR REPLACE FUNCTION soundpub.generate_managed_artist_email(_artist_name text DEFAULT 'artist')
+CREATE OR REPLACE FUNCTION Soundpub.generate_managed_artist_email(_artist_name text DEFAULT 'artist')
 RETURNS text
 LANGUAGE plpgsql
 VOLATILE
@@ -44,18 +44,18 @@ BEGIN
     slug := 'artist';
   END IF;
 
-  RETURN slug || '-' || replace(gen_random_uuid()::text, '-', '') || '@managed.soundpub.local';
+  RETURN slug || '-' || replace(gen_random_uuid()::text, '-', '') || '@managed.Soundpub.local';
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION soundpub.sync_managed_artist_markers()
+CREATE OR REPLACE FUNCTION Soundpub.sync_managed_artist_markers()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = soundpub, public
+SET search_path = Soundpub, public
 AS $$
 BEGIN
-  IF NEW.email IS NOT NULL AND soundpub.is_managed_artist_email(NEW.email) THEN
+  IF NEW.email IS NOT NULL AND Soundpub.is_managed_artist_email(NEW.email) THEN
     NEW.is_managed_artist := true;
     NEW.auth_user_status := 'managed_only';
     NEW.password_set := false;
@@ -68,17 +68,17 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS sync_managed_artist_markers_on_profiles ON soundpub.profiles;
+DROP TRIGGER IF EXISTS sync_managed_artist_markers_on_profiles ON Soundpub.profiles;
 CREATE TRIGGER sync_managed_artist_markers_on_profiles
 BEFORE INSERT OR UPDATE OF email, is_managed_artist, auth_user_status, password_set
-ON soundpub.profiles
-FOR EACH ROW EXECUTE FUNCTION soundpub.sync_managed_artist_markers();
+ON Soundpub.profiles
+FOR EACH ROW EXECUTE FUNCTION Soundpub.sync_managed_artist_markers();
 
-CREATE OR REPLACE FUNCTION soundpub.handle_new_user()
+CREATE OR REPLACE FUNCTION Soundpub.handle_new_user()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = soundpub, public
+SET search_path = Soundpub, public
 AS $$
 DECLARE
   provider text;
@@ -86,9 +86,9 @@ DECLARE
 BEGIN
   provider := NEW.raw_app_meta_data ->> 'provider';
   managed_artist := COALESCE((NEW.raw_user_meta_data ->> 'managed_artist')::boolean, false)
-    OR soundpub.is_managed_artist_email(NEW.email);
+    OR Soundpub.is_managed_artist_email(NEW.email);
 
-  INSERT INTO soundpub.profiles (
+  INSERT INTO Soundpub.profiles (
     id,
     email,
     full_name,
@@ -112,14 +112,14 @@ BEGIN
   )
   ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
-    full_name = COALESCE(EXCLUDED.full_name, soundpub.profiles.full_name),
+    full_name = COALESCE(EXCLUDED.full_name, Soundpub.profiles.full_name),
     password_set = EXCLUDED.password_set,
     is_managed_artist = EXCLUDED.is_managed_artist,
     auth_user_status = EXCLUDED.auth_user_status,
     updated_at = now();
 
-  INSERT INTO soundpub.user_roles (user_id, role)
-  VALUES (NEW.id, CASE WHEN managed_artist THEN 'artist'::soundpub.app_role ELSE 'user'::soundpub.app_role END)
+  INSERT INTO Soundpub.user_roles (user_id, role)
+  VALUES (NEW.id, CASE WHEN managed_artist THEN 'artist'::Soundpub.app_role ELSE 'user'::Soundpub.app_role END)
   ON CONFLICT (user_id, role) DO NOTHING;
 
   RETURN NEW;
@@ -129,43 +129,43 @@ $$;
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
 AFTER INSERT ON auth.users
-FOR EACH ROW EXECUTE FUNCTION soundpub.handle_new_user();
+FOR EACH ROW EXECUTE FUNCTION Soundpub.handle_new_user();
 
 -- Existing dummy managed accounts are marked managed-only.
-UPDATE soundpub.profiles
+UPDATE Soundpub.profiles
 SET is_managed_artist = true,
     auth_user_status = 'managed_only',
     password_set = false,
     updated_at = now()
-WHERE soundpub.is_managed_artist_email(email);
+WHERE Soundpub.is_managed_artist_email(email);
 
 -- Existing profiles missing auth users are explicitly marked for audit.
-UPDATE soundpub.profiles p
+UPDATE Soundpub.profiles p
 SET auth_user_status = 'missing_auth',
     updated_at = now()
 WHERE NOT EXISTS (SELECT 1 FROM auth.users au WHERE au.id = p.id)
   AND NOT p.is_managed_artist;
 
 -- Temporary product decision: treat existing whitelabel roles as label roles.
-INSERT INTO soundpub.user_roles (user_id, role, created_at)
-SELECT user_id, 'label'::soundpub.app_role, COALESCE(created_at, now())
-FROM soundpub.user_roles
-WHERE role = 'whitelabel'::soundpub.app_role
+INSERT INTO Soundpub.user_roles (user_id, role, created_at)
+SELECT user_id, 'label'::Soundpub.app_role, COALESCE(created_at, now())
+FROM Soundpub.user_roles
+WHERE role = 'whitelabel'::Soundpub.app_role
 ON CONFLICT (user_id, role) DO NOTHING;
 
-DELETE FROM soundpub.user_roles
-WHERE role = 'whitelabel'::soundpub.app_role;
+DELETE FROM Soundpub.user_roles
+WHERE role = 'whitelabel'::Soundpub.app_role;
 
 COMMIT;
 
 -- Verification
 SELECT auth_user_status, is_managed_artist, count(*) AS total
-FROM soundpub.profiles
+FROM Soundpub.profiles
 GROUP BY auth_user_status, is_managed_artist
 ORDER BY auth_user_status, is_managed_artist;
 
 SELECT role::text AS role, count(*) AS total
-FROM soundpub.user_roles
+FROM Soundpub.user_roles
 GROUP BY role
 ORDER BY role::text;
 

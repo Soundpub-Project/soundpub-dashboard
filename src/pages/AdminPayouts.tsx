@@ -43,6 +43,7 @@ import {
   User,
   Calendar,
   AlertTriangle,
+  FileUp,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -60,6 +61,8 @@ interface PayoutRequest {
   created_at: string;
   processed_at: string | null;
   processed_by: string | null;
+  payment_proof_path: string | null;
+  payment_proof_name: string | null;
   user_profile?: {
     full_name: string;
     email: string;
@@ -81,6 +84,7 @@ export default function AdminPayouts() {
   const [actionType, setActionType] = useState<'approve' | 'reject' | 'pay' | null>(null);
   const [actionNotes, setActionNotes] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [proofFile, setProofFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (user && isAdmin) {
@@ -131,88 +135,33 @@ export default function AdminPayouts() {
 
   const handleAction = async () => {
     if (!selectedPayout || !actionType) return;
-
     setProcessing(true);
     try {
-      let newStatus = '';
-      switch (actionType) {
-        case 'approve':
-          newStatus = 'approved';
-          break;
-        case 'reject':
-          newStatus = 'rejected';
-          break;
-        case 'pay':
-          newStatus = 'paid';
-          break;
+      const newStatus = actionType === 'approve' ? 'approved' : actionType === 'reject' ? 'rejected' : 'paid';
+      if (actionType === 'pay' && !proofFile) throw new Error('Upload bukti pembayaran terlebih dahulu');
+      let proofPath: string | null = null;
+      if (actionType === 'pay' && proofFile) {
+        const extension = proofFile.name.split('.').pop()?.toLowerCase() || 'bin';
+        proofPath = `${selectedPayout.user_id}/${selectedPayout.id}/${crypto.randomUUID()}.${extension}`;
+        const { error } = await supabase.storage.from('payout-proofs').upload(proofPath, proofFile, { upsert: false });
+        if (error) throw error;
       }
-
-      const { error } = await supabase
-        .from('payout_requests')
-        .update({
-          status: newStatus,
-          notes: actionNotes || null,
-          processed_by: user?.id,
-          processed_at: new Date().toISOString(),
-        })
-        .eq('id', selectedPayout.id);
-
+      const { error } = await supabase.rpc('update_payout_status' as never, { _payout_id: selectedPayout.id, _status: newStatus, _notes: actionNotes || null, _proof_path: proofPath, _proof_name: proofFile?.name || null });
       if (error) throw error;
-
-      // Send notification to the user
-      const statusLabel = actionType === 'approve' ? 'Disetujui' : actionType === 'reject' ? 'Ditolak' : 'Dibayarkan';
-      const notifType = actionType === 'reject' ? 'error' : 'success';
-      const notifMsg = actionType === 'approve'
-        ? `Pengajuan payout Rp ${Number(selectedPayout.amount).toLocaleString('id-ID')} telah disetujui. Dana akan segera ditransfer.`
-        : actionType === 'reject'
-        ? `Pengajuan payout Rp ${Number(selectedPayout.amount).toLocaleString('id-ID')} ditolak.${actionNotes ? ' Alasan: ' + actionNotes : ''}`
-        : `Dana sebesar Rp ${Number(selectedPayout.amount).toLocaleString('id-ID')} telah ditransfer ke rekening ${selectedPayout.bank_name} Anda.`;
-
-      await supabase.from('notifications').insert({
-        user_id: selectedPayout.user_id,
-        type: notifType,
-        title: `Payout ${statusLabel}`,
-        message: notifMsg,
-        metadata: { payout_id: selectedPayout.id, amount: selectedPayout.amount },
-      });
-
-      // Email notifikasi ke user terkait (opt-in)
-      const tplMap = {
-        approve: 'payout-approved',
-        reject: 'payout-rejected',
-        pay: 'payout-paid',
-      } as const;
-      supabase.functions.invoke('send-app-email', {
-        body: {
-          templateName: tplMap[actionType],
-          recipientUserId: selectedPayout.user_id,
-          templateData: {
-            amount: selectedPayout.amount,
-            notes: actionNotes || null,
-            bankName: selectedPayout.bank_name,
-            accountNumber: selectedPayout.account_number,
-          },
-          idempotencyKey: `payout-${selectedPayout.id}-${newStatus}`,
-        },
-      }).catch((e) => console.error('payout email failed', e));
-
-      const actionLabel = actionType === 'approve' ? 'disetujui' : actionType === 'reject' ? 'ditolak' : 'dibayarkan';
-      toast.success(`Payout berhasil ${actionLabel}`);
-      
-      fetchPayouts();
+      toast.success(`Payout berhasil ${actionType === 'approve' ? 'disetujui' : actionType === 'reject' ? 'ditolak' : 'dibayarkan'}`);
+      await fetchPayouts();
       closeDialog();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error processing payout:', error);
-      toast.error(error.message || 'Gagal memproses payout');
-    } finally {
-      setProcessing(false);
-    }
+      toast.error(error instanceof Error ? error.message : 'Gagal memproses payout');
+    } finally { setProcessing(false); }
   };
 
   const closeDialog = () => {
     setSelectedPayout(null);
     setActionType(null);
     setActionNotes('');
+    setProofFile(null);
   };
 
   const openActionDialog = (payout: PayoutRequest, action: 'approve' | 'reject' | 'pay') => {
@@ -586,8 +535,16 @@ export default function AdminPayouts() {
                 <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
                   <Banknote className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
                   <p className="text-sm text-blue-700 dark:text-blue-400">
-                    Balance user akan dikurangi sebesar {formatCurrency(selectedPayout.amount)} setelah status diubah ke Paid.
+                    Saldo sudah ditahan sejak request. Status Paid hanya mencatat pembayaran.
                   </p>
+                </div>
+              )}
+
+              {actionType === 'pay' && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-2"><FileUp className="h-4 w-4" />Bukti Pembayaran (wajib)</label>
+                  <Input type="file" accept="image/*,.pdf" onChange={(event) => setProofFile(event.target.files?.[0] || null)} />
+                  <p className="text-xs text-muted-foreground">Upload bukti transfer berupa gambar atau PDF.</p>
                 </div>
               )}
 
@@ -612,7 +569,7 @@ export default function AdminPayouts() {
             </Button>
             <Button
               onClick={handleAction}
-              disabled={processing || (actionType === 'reject' && !actionNotes.trim())}
+              disabled={processing || (actionType === 'reject' && !actionNotes.trim()) || (actionType === 'pay' && !proofFile)}
               className={
                 actionType === 'approve'
                   ? 'bg-green-600 hover:bg-green-700'
@@ -632,3 +589,4 @@ export default function AdminPayouts() {
     </DashboardLayout>
   );
 }
+

@@ -1,7 +1,7 @@
 {
-  "name": "soundpub-migration",
+  "name": "Soundpub-migration",
   "version": "1.0.0",
-  "description": "Data migration script for SoundPub Dashboard",
+  "description": "Data migration script for Soundpub Dashboard",
   "main": "migrate.js",
   "scripts": {
     "migrate": "node migrate.js"

@@ -29,10 +29,9 @@ README.md
 # Lovable specific
 .lovable
 
-# Lock files
+# Alternative package-manager lock files
 bun.lock
 bun.lockb
-package-lock.json
 pnpm-lock.yaml
 
 # Docker files
@@ -52,11 +51,6 @@ migrations-complete
 # Documentation
 docs/
 
-# Configuration files that should not be in container
-tsconfig.json
-tsconfig.*.json
-vite.config.ts
-tailwind.config.ts
-postcss.config.js
+# Configuration files not required by production build
 eslint.config.js
 components.json

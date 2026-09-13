@@ -138,7 +138,7 @@ export default function LandingPage() {
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Disc3 className="h-8 w-8 text-primary" />
-            <span className="text-xl font-bold">SoundPub</span>
+            <span className="text-xl font-bold">Soundpub</span>
           </div>
           
           <div className="flex items-center gap-4">
@@ -160,7 +160,7 @@ export default function LandingPage() {
       <section className="py-16 md:py-24 bg-gradient-to-b from-primary/5 to-background">
         <div className="container mx-auto px-4 text-center">
           <h1 className="text-4xl md:text-6xl font-bold mb-6">
-            Katalog Musik <span className="text-primary">SoundPub</span>
+            Katalog Musik <span className="text-primary">Soundpub</span>
           </h1>
           <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
             Jelajahi koleksi musik terbaru dari artis-artis terbaik kami
@@ -291,7 +291,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t py-8 mt-auto">
         <div className="container mx-auto px-4 text-center text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} SoundPub. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} Soundpub. All rights reserved.</p>
         </div>
       </footer>
     </div>

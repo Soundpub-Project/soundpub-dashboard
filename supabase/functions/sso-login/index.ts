@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'Soundpub'
 
 const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
   const existingDb = options.db || {}
@@ -96,7 +96,8 @@ async function exchangeAuthorizationCode(
   clientId: string,
   code: string,
   redirectUri: string,
-  codeVerifier?: string | null
+  codeVerifier?: string | null,
+  clientSecret?: string | null
 ): Promise<string> {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
@@ -104,6 +105,10 @@ async function exchangeAuthorizationCode(
     redirect_uri: redirectUri,
     code,
   });
+
+  if (clientSecret) {
+    body.set("client_secret", clientSecret);
+  }
 
   if (codeVerifier) {
     body.set("code_verifier", codeVerifier);
@@ -129,9 +134,9 @@ function resolveSsoClientId(configuredClientId: string | undefined, realm: strin
 
   if (!clientId || clientId === realm || clientId === "playground" || clientId === "PORTALICCN") {
     console.warn(
-      "SSO_CLIENT_ID is missing or points to a realm name; falling back to SoundPub ICCN client"
+      "SSO_CLIENT_ID is missing or points to a realm name; falling back to Soundpub ICCN client"
     );
-    return "soundpub";
+    return "Soundpub";
   }
 
   return clientId;
@@ -308,7 +313,8 @@ Deno.serve(async (req) => {
       clientId,
       code,
       redirect_uri,
-      code_verifier ?? null
+      code_verifier ?? null,
+      Deno.env.get("SSO_CLIENT_SECRET")
     );
 
     const payload = await verifyJwt(accessToken, realmUrl);

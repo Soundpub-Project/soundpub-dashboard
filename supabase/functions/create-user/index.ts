@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts'
-const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'Soundpub'
 
 const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
   const existingDb = options.db || {}
@@ -29,7 +29,7 @@ const CreateUserSchema = z.object({
     .max(200, 'Nama terlalu panjang')
     .regex(/^[\p{L}\p{M}\s'.-]+$/u, 'Nama mengandung karakter tidak valid'),
   phone: z.string()
-    .regex(/^(\+?[1-9]\d{1,14})?$/, 'Format nomor telepon tidak valid')
+    .regex(/^(\+?[0-9][0-9\s().-]{1,19})?$/, 'Format nomor telepon tidak valid')
     .max(20, 'Nomor telepon terlalu panjang')
     .optional()
     .nullable()
@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
     if (isManagedArtistCreation) {
       if (!email || email.trim() === '') {
         const dummyUuid = crypto.randomUUID()
-        email = `artist_${dummyUuid}@managed.soundpub.local`
+        email = `artist_${dummyUuid}@managed.Soundpub.local`
       }
       if (!password || password.trim() === '') {
         password = crypto.randomUUID() + crypto.randomUUID()

@@ -1,4 +1,4 @@
-# SoundPub Dashboard - Migration Scripts
+# Soundpub Dashboard - Migration Scripts
 
 Script untuk import data dari CSV (hasil export Lovable Cloud) ke Supabase target.
 

@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'Soundpub'
 
 const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
   const existingDb = options.db || {}
@@ -17,7 +17,7 @@ const corsHeaders = {
 
 const GMAIL_GATEWAY = 'https://connector-gateway.lovable.dev/google_mail/gmail/v1'
 const FROM_NAME = 'Soundpub'
-const FROM_EMAIL = 'publishersoundpub@gmail.com'
+const FROM_EMAIL = 'publisherSoundpub@gmail.com'
 
 function base64UrlEncode(str: string): string {
   // Encode UTF-8 string to base64url

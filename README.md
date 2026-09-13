@@ -1,6 +1,6 @@
 ﻿<div align="center">
 
-# 🎵 SoundPub Dashboard
+# 🎵 Soundpub Dashboard
 
 ### Platform Distribusi Musik Digital Terpadu
 
@@ -21,7 +21,7 @@ Manajemen artis • Label • Konten • Distribusi • Analitik
 
 ## 📖 Tentang Project
 
-**SoundPub Dashboard** adalah aplikasi web modern yang dibangun untuk mengelola ekosistem distribusi musik digital secara komprehensif. Platform ini menyediakan interface yang intuitif untuk mengelola artis, label, konten musik, transaksi, dan analitik bisnis.
+**Soundpub Dashboard** adalah aplikasi web modern yang dibangun untuk mengelola ekosistem distribusi musik digital secara komprehensif. Platform ini menyediakan interface yang intuitif untuk mengelola artis, label, konten musik, transaksi, dan analitik bisnis.
 
 Project ini dimulai dengan [**Lovable**](https://lovable.dev) - AI-powered app builder, dan dikembangkan lebih lanjut menjadi platform enterprise-grade dengan integrasi backend Supabase, autentikasi Keycloak SSO, payment gateway Midtrans, dan sistem notifikasi email otomatis.
 
@@ -252,7 +252,7 @@ Pastikan sistem Anda memiliki:
 
 ```bash
 git clone <YOUR_GIT_URL>
-cd soundpub-dashboard
+cd Soundpub-dashboard
 ```
 
 ### 2. Install Dependencies
@@ -353,10 +353,10 @@ docker-compose down
 
 ```bash
 # Build image
-docker build -t soundpub-dashboard:latest .
+docker build -t Soundpub-dashboard:latest .
 
 # Run container
-docker run -p 80:80 -d soundpub-dashboard:latest
+docker run -p 80:80 -d Soundpub-dashboard:latest
 ```
 
 > Panduan lengkap: [MANUAL_DEPLOY_GUIDE.md](docs/deployment/MANUAL_DEPLOY_GUIDE.md)
@@ -424,7 +424,7 @@ docs/
 ## 🗂️ Struktur Project
 
 ```
-soundpub-dashboard/
+Soundpub-dashboard/
 │
 ├── src/                     # Source code
 │   ├── components/          # React components
