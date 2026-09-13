@@ -1,13 +1,13 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+import { useState, useCallback, useRef, useEffect } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from "@/components/ui/select";
 import {
   Command,
   CommandEmpty,
@@ -15,16 +15,16 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from '@/components/ui/command';
+} from "@/components/ui/command";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@/components/ui/popover';
-import { Check, ChevronsUpDown, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
+} from "@/components/ui/popover";
+import { Check, ChevronsUpDown, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-const ARTIST_TYPES = ['Main Artist', 'Featured Artist'] as const;
+const ARTIST_TYPES = ["Main Artist", "Featured Artist"] as const;
 
 interface Artist {
   id: string;
@@ -35,12 +35,13 @@ interface Artist {
 
 interface ArtistSelectorProps {
   artistName: string;
-  artistType: 'Main Artist' | 'Featured Artist';
+  artistType: "Main Artist" | "Featured Artist";
   onNameChange: (name: string, userId?: string) => void;
-  onTypeChange: (type: 'Main Artist' | 'Featured Artist') => void;
+  onTypeChange: (type: "Main Artist" | "Featured Artist") => void;
   onRemove: () => void;
   canRemove: boolean;
   isLabelMode: boolean;
+  locked?: boolean;
   labelArtists: Artist[];
 }
 
@@ -52,6 +53,7 @@ export function ArtistSelector({
   onRemove,
   canRemove,
   isLabelMode,
+  locked = false,
   labelArtists,
 }: ArtistSelectorProps) {
   const [artistOpen, setArtistOpen] = useState(false);
@@ -66,19 +68,22 @@ export function ArtistSelector({
   }, [artistName]);
 
   // Debounced update to parent
-  const handleNameInputChange = useCallback((value: string, userId?: string) => {
-    setLocalName(value);
-    
-    // Clear existing timeout
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-    
-    // Debounce the parent update to prevent re-render issues
-    debounceRef.current = setTimeout(() => {
-      onNameChange(value, userId);
-    }, 150);
-  }, [onNameChange]);
+  const handleNameInputChange = useCallback(
+    (value: string, userId?: string) => {
+      setLocalName(value);
+
+      // Clear existing timeout
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+
+      // Debounce the parent update to prevent re-render issues
+      debounceRef.current = setTimeout(() => {
+        onNameChange(value, userId);
+      }, 150);
+    },
+    [onNameChange],
+  );
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -101,7 +106,7 @@ export function ArtistSelector({
     <div className="flex items-center gap-2 p-2 rounded-lg border bg-background">
       <div className="flex-1 grid grid-cols-2 gap-2">
         {/* Artist Name - Dropdown for Label, Input for Admin */}
-        {isLabelMode && labelArtists.length > 0 ? (
+        {isLabelMode ? (
           <Popover open={artistOpen} onOpenChange={setArtistOpen}>
             <PopoverTrigger asChild>
               <Button
@@ -109,8 +114,9 @@ export function ArtistSelector({
                 role="combobox"
                 aria-expanded={artistOpen}
                 className="justify-between h-9 text-sm"
+                disabled={locked || labelArtists.length === 0}
               >
-                {artistName || "Pilih artist..."}
+                {artistName || (labelArtists.length > 0 ? "Pilih artist..." : "Belum ada artist")}
                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
@@ -134,7 +140,9 @@ export function ArtistSelector({
                         <Check
                           className={cn(
                             "mr-2 h-4 w-4",
-                            artistName === artist.name ? "opacity-100" : "opacity-0"
+                            artistName === artist.name
+                              ? "opacity-100"
+                              : "opacity-0",
                           )}
                         />
                         {artist.name}
@@ -149,6 +157,7 @@ export function ArtistSelector({
           <Input
             ref={inputRef}
             placeholder="Nama artist"
+            disabled={locked}
             value={localName}
             onChange={(e) => handleNameInputChange(e.target.value)}
             onBlur={handleBlur}
@@ -159,19 +168,24 @@ export function ArtistSelector({
         {/* Artist Type */}
         <Select
           value={artistType}
-          onValueChange={(value) => onTypeChange(value as 'Main Artist' | 'Featured Artist')}
+          onValueChange={(value) =>
+            onTypeChange(value as "Main Artist" | "Featured Artist")
+          }
+          disabled={locked}
         >
           <SelectTrigger className="h-9">
             <SelectValue placeholder="Tipe" />
           </SelectTrigger>
           <SelectContent className="z-50">
             {ARTIST_TYPES.map((type) => (
-              <SelectItem key={type} value={type}>{type}</SelectItem>
+              <SelectItem key={type} value={type}>
+                {type}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
-      
+
       {canRemove && (
         <Button
           type="button"

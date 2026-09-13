@@ -1,19 +1,19 @@
-﻿# SoundPub Local Migration
+﻿# Soundpub Local Migration
 
 ## Overview
-Migration files untuk local development environment SoundPub Dashboard. File-file ini digunakan untuk setup dan maintenance database lokal.
+Migration files untuk local development environment Soundpub Dashboard. File-file ini digunakan untuk setup dan maintenance database lokal.
 
 ## ⚠️ WARNING
 **PERHATIAN:** Migration files dalam folder ini bersifat **DESTRUCTIVE** dan hanya untuk **local development**. Jangan jalankan di production!
 
 ## Migration Files
 
-### 00-HARDRESET-SOUNDPUB-LOCAL.sql
+### 00-HARDRESET-Soundpub-LOCAL.sql
 **Purpose:** Complete database reset untuk development
 
 **What it does:**
 - Drop semua trigger
-- Drop schema soundpub CASCADE
+- Drop schema Soundpub CASCADE
 - Reset auth.users
 - Clean slate untuk fresh start
 
@@ -26,11 +26,11 @@ Migration files untuk local development environment SoundPub Dashboard. File-fil
 
 ---
 
-### 01-reset-and-recreate-soundpub.sql
-**Purpose:** Create complete SoundPub schema dari awal
+### 01-reset-and-recreate-Soundpub.sql
+**Purpose:** Create complete Soundpub schema dari awal
 
 **What it does:**
-- Drop dan recreate soundpub schema
+- Drop dan recreate Soundpub schema
 - Create semua tables:
   - user_roles
   - profiles
@@ -38,7 +38,7 @@ Migration files untuk local development environment SoundPub Dashboard. File-fil
   - tracks
   - royalties
   - payout_requests
-  - notifications (dalam soundpub schema)
+  - notifications (dalam Soundpub schema)
   - dan 20+ tables lainnya
 - Setup RLS policies
 - Create indexes
@@ -146,8 +146,8 @@ Migration files untuk local development environment SoundPub Dashboard. File-fil
 
 ---
 
-### 11-signup-default-artist-under-soundpub.sql
-**Purpose:** Auto-assign new artists ke SoundPub label
+### 11-signup-default-artist-under-Soundpub.sql
+**Purpose:** Auto-assign new artists ke Soundpub label
 
 **What it does:**
 - Create trigger
@@ -190,24 +190,24 @@ Migration files untuk local development environment SoundPub Dashboard. File-fil
 ### Fresh Setup (Recommended)
 \\\ash
 # 1. Hard reset (optional, hanya jika perlu clean slate)
-psql -U postgres -d soundpub -f 00-HARDRESET-SOUNDPUB-LOCAL.sql
+psql -U postgres -d Soundpub -f 00-HARDRESET-Soundpub-LOCAL.sql
 
 # 2. Create schema
-psql -U postgres -d soundpub -f 01-reset-and-recreate-soundpub.sql
+psql -U postgres -d Soundpub -f 01-reset-and-recreate-Soundpub.sql
 
 # 3. Seed initial data
-psql -U postgres -d soundpub -f 02-initial-seed.sql
+psql -U postgres -d Soundpub -f 02-initial-seed.sql
 
 # 4. Apply incremental migrations (03 onwards)
-psql -U postgres -d soundpub -f 03-align-schema-to-csv.sql
-psql -U postgres -d soundpub -f 04-runtime-permissions-and-rpc.sql
+psql -U postgres -d Soundpub -f 03-align-schema-to-csv.sql
+psql -U postgres -d Soundpub -f 04-runtime-permissions-and-rpc.sql
 # ... dan seterusnya
 \\\
 
 ### Incremental Updates
 \\\ash
 # Jalankan hanya migration baru yang belum applied
-psql -U postgres -d soundpub -f [XX-new-migration.sql]
+psql -U postgres -d Soundpub -f [XX-new-migration.sql]
 \\\
 
 ## Using Supabase CLI
@@ -220,12 +220,12 @@ supabase start
 supabase db reset
 
 # Apply single migration
-supabase db execute --file docs/soundpub-local-migration/[migration-file].sql
+supabase db execute --file docs/Soundpub-local-migration/[migration-file].sql
 \\\
 
 ## Schema Comparison
 
-### soundpub schema
+### Soundpub schema
 Primary schema untuk business logic:
 - User management
 - Release management
@@ -242,7 +242,7 @@ Untuk shared utilities:
 ### Notifications Table
 **BREAKING CHANGE:** Notifications table ada di **DUA** schema:
 
-1. **soundpub.notifications** (old - dari 01-reset-and-recreate-soundpub.sql)
+1. **Soundpub.notifications** (old - dari 01-reset-and-recreate-Soundpub.sql)
 2. **public.notifications** (new - recommended)
 
 **Solution:** 
@@ -262,37 +262,37 @@ Jika terjadi error "relation does not exist":
 **Solution:**
 \\\ash
 # Run notifications migration
-psql -U postgres -d soundpub -f docs/migrations/notifications/20260722_create_notifications_table.sql
+psql -U postgres -d Soundpub -f docs/migrations/notifications/20260722_create_notifications_table.sql
 \\\
 
-### Error: schema "soundpub" does not exist
+### Error: schema "Soundpub" does not exist
 **Solution:**
 \\\ash
 # Run schema creation
-psql -U postgres -d soundpub -f 01-reset-and-recreate-soundpub.sql
+psql -U postgres -d Soundpub -f 01-reset-and-recreate-Soundpub.sql
 \\\
 
 ### Error: permission denied
 **Solution:**
 \\\ash
 # Run permissions setup
-psql -U postgres -d soundpub -f 04-runtime-permissions-and-rpc.sql
+psql -U postgres -d Soundpub -f 04-runtime-permissions-and-rpc.sql
 \\\
 
 ### Data inconsistency after migration
 **Solution:**
 \\\ash
 # Recalculate balances
-psql -U postgres -d soundpub -f 13-recalculate-royalty-balances.sql
+psql -U postgres -d Soundpub -f 13-recalculate-royalty-balances.sql
 \\\
 
 ## Verification Queries
 
-### Check all tables in soundpub schema
+### Check all tables in Soundpub schema
 \\\sql
 SELECT table_name 
 FROM information_schema.tables 
-WHERE table_schema = 'soundpub'
+WHERE table_schema = 'Soundpub'
 ORDER BY table_name;
 \\\
 
@@ -300,7 +300,7 @@ ORDER BY table_name;
 \\\sql
 SELECT schemaname, tablename, rowsecurity
 FROM pg_tables
-WHERE schemaname = 'soundpub'
+WHERE schemaname = 'Soundpub'
 ORDER BY tablename;
 \\\
 
@@ -308,7 +308,7 @@ ORDER BY tablename;
 \\\sql
 SELECT schemaname, tablename, policyname, permissive, roles, cmd
 FROM pg_policies
-WHERE schemaname = 'soundpub'
+WHERE schemaname = 'Soundpub'
 ORDER BY tablename, policyname;
 \\\
 
@@ -316,7 +316,7 @@ ORDER BY tablename, policyname;
 \\\sql
 SELECT routine_name, routine_type
 FROM information_schema.routines
-WHERE routine_schema = 'soundpub'
+WHERE routine_schema = 'Soundpub'
 ORDER BY routine_name;
 \\\
 
@@ -335,7 +335,7 @@ FROM (
                             schemaname, tablename), 
                      false, true, '') as xml_count
     FROM pg_tables
-    WHERE schemaname = 'soundpub'
+    WHERE schemaname = 'Soundpub'
 ) t
 ORDER BY row_count DESC;
 \\\
@@ -352,22 +352,22 @@ ORDER BY row_count DESC;
 ### Testing Schema Changes
 \\\ash
 # 1. Save current state (if needed)
-pg_dump soundpub > backup.sql
+pg_dump Soundpub > backup.sql
 
 # 2. Apply new migration
-psql -U postgres -d soundpub -f XX-new-feature.sql
+psql -U postgres -d Soundpub -f XX-new-feature.sql
 
 # 3. Test application
 
 # 4. If issues, restore
-psql -U postgres -d soundpub < backup.sql
+psql -U postgres -d Soundpub < backup.sql
 \\\
 
 ## Best Practices
 
 1. **Always backup before major changes**
    \\\ash
-   pg_dump soundpub > backup.sql
+   pg_dump Soundpub > backup.sql
    \\\
 
 2. **Test migrations in isolation**
@@ -404,7 +404,7 @@ psql -U postgres -d soundpub < backup.sql
 | 2026-07-12 | 14 | Reset profile balances |
 | 2026-07-11 | 13 | Recalculate royalty balances |
 | 2026-07-11 | 12 | Add missing royalties columns |
-| 2026-07-11 | 11 | Default artist under soundpub |
+| 2026-07-11 | 11 | Default artist under Soundpub |
 | 2026-07-12 | 10 | Reconcile user roles from CSV |
 | 2026-07-11 | 09 | Storage buckets and policies |
 | 2026-07-11 | 08 | User profile role support |
@@ -414,6 +414,6 @@ psql -U postgres -d soundpub < backup.sql
 | 2026-07-11 | 04 | Runtime permissions and RPC |
 | 2026-07-11 | 03 | Align schema to CSV |
 | 2026-07-10 | 02 | Initial seed |
-| 2026-07-11 | 01 | Reset and recreate soundpub |
+| 2026-07-11 | 01 | Reset and recreate Soundpub |
 | 2026-07-12 | 00 | Hard reset script |
 

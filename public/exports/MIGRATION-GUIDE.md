@@ -1,4 +1,4 @@
-# SoundPub Dashboard — Migration Guide (Lovable Cloud → Self-Hosted Supabase)
+# Soundpub Dashboard — Migration Guide (Lovable Cloud → Self-Hosted Supabase)
 
 Panduan lengkap migrasi data + aplikasi dari **Lovable Cloud** ke
 **Supabase self-hosted** (Docker) di VPS sendiri.
@@ -97,10 +97,10 @@ pg_dump "$SOURCE_DB_URL" \
   --exclude-schema=supabase_functions \
   --exclude-schema=vault \
   --schema=public \
-  --file=soundpub-data.sql
+  --file=Soundpub-data.sql
 
 # Restore ke target
-psql "$TARGET_DB_URL" -f soundpub-data.sql
+psql "$TARGET_DB_URL" -f Soundpub-data.sql
 ```
 
 `auth.users` di-migrasi terpisah pakai Auth Admin API (lihat Opsi B) —
@@ -194,7 +194,7 @@ Policy storage sudah include di skema. Pattern path:
 
 ### Opsi A — Restore dari backup Google Drive
 
-Backup harian ke `SoundPub-Backup/YYYY-MM-DD/{bucket}/...`. Download →
+Backup harian ke `Soundpub-Backup/YYYY-MM-DD/{bucket}/...`. Download →
 upload ke bucket target via `rclone` atau `supabase storage cp`:
 
 ```bash
@@ -238,7 +238,7 @@ supabase functions deploy \
   gcs-upload \
   get-catalog-tracks \
   get-ga4-config \
-  info-soundpub \
+  info-Soundpub \
   process-royalty-upload \
   remove-artist-from-label \
   send-app-email \
@@ -261,7 +261,7 @@ yang butuh custom auth (Xendit webhook, SSO, dsb) — jangan diubah.
 ```bash
 supabase secrets set \
   SSO_REALM_URL="https://sso.iccn.or.id/realms/PORTALICCN" \
-  SSO_CLIENT_ID="soundpub" \
+  SSO_CLIENT_ID="Soundpub" \
   ICCN_MEDIA_LABEL_ID="<uuid>" \
   XENDIT_SECRET_KEY="xnd_..." \
   XENDIT_WEBHOOK_TOKEN="..." \
@@ -333,12 +333,12 @@ VITE_SUPABASE_PUBLISHABLE_KEY="<ANON_KEY>" \
 VITE_SUPABASE_PROJECT_ID="self" \
 VITE_SSO_BASE_URL="https://sso.iccn.or.id" \
 VITE_SSO_REALM="PORTALICCN" \
-VITE_SSO_CLIENT_ID="soundpub" \
+VITE_SSO_CLIENT_ID="Soundpub" \
 VITE_SSO_AUTO_REDIRECT="false" \
 bun install && bun run build
 
 # Copy dist ke server (Nginx serve)
-rsync -avz dist/ user@vps:/var/www/soundpub-dashboard/
+rsync -avz dist/ user@vps:/var/www/Soundpub-dashboard/
 ```
 
 Smoke test wajib:

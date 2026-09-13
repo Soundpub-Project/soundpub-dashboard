@@ -15,6 +15,7 @@ import { SuperAdminSettings } from '@/components/settings/SuperAdminSettings';
 import { LabelLogoSettings } from '@/components/settings/LabelLogoSettings';
 import { IccnIntegrationSettings } from '@/components/settings/IccnIntegrationSettings';
 import { EmailNotificationSettings } from '@/components/settings/EmailNotificationSettings';
+import { AuthNoticeSettings } from '@/components/settings/AuthNoticeSettings';
 
 export default function Settings() {
   const { profile, user, role, isLabel, isWhitelabel, isSsoUser, refreshProfile } = useAuth();
@@ -205,6 +206,8 @@ export default function Settings() {
               <h2 className="text-xl font-semibold mb-4">Super Admin Settings</h2>
               <SuperAdminSettings />
             </div>
+            <Separator className="my-6" />
+            <AuthNoticeSettings />
             <Separator className="my-6" />
             <div>
               <h2 className="text-xl font-semibold mb-4">Integrasi ICCN</h2>

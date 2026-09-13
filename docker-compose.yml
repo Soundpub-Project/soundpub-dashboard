@@ -6,10 +6,15 @@ services:
       args:
         - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
         - VITE_SUPABASE_PUBLISHABLE_KEY=${VITE_SUPABASE_PUBLISHABLE_KEY}
+        - VITE_DATABASE_SCHEMA=${VITE_DATABASE_SCHEMA}
         - VITE_SSO_BASE_URL=${VITE_SSO_BASE_URL}
         - VITE_SSO_REALM=${VITE_SSO_REALM}
         - VITE_SSO_CLIENT_ID=${VITE_SSO_CLIENT_ID}
+        - VITE_PDF_SERVICE_URL=${VITE_PDF_SERVICE_URL:-}
+        - VITE_CONTRACT_BUCKET=${VITE_CONTRACT_BUCKET:-}
     container_name: soundpub-dashboard
+    networks:
+      - soundpub-network
     ports:
       - "8181:80"
     restart: always
@@ -20,3 +25,6 @@ services:
     #   args:
     #     - VITE_API_URL=${VITE_API_URL}
 
+networks:
+  soundpub-network:
+    external: true

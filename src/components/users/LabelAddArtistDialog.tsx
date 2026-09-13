@@ -17,6 +17,17 @@ import { Loader2, Music, Upload, AlertCircle, User } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 
+const GENRE_OPTIONS = [
+  ['pop', 'Pop'], ['rock', 'Rock'], ['indie', 'Indie'], ['alternative', 'Alternative'],
+  ['hiphop', 'Hip Hop'], ['rap', 'Rap'], ['rnb', 'R&B / Soul'], ['electronic', 'Electronic / EDM'],
+  ['house', 'House'], ['techno', 'Techno'], ['dubstep', 'Dubstep'], ['drum-and-bass', 'Drum & Bass'],
+  ['jazz', 'Jazz'], ['blues', 'Blues'], ['classical', 'Classical'], ['folk', 'Folk'],
+  ['acoustic', 'Acoustic'], ['country', 'Country'], ['reggae', 'Reggae'], ['ska', 'Ska'],
+  ['latin', 'Latin'], ['reggaeton', 'Reggaeton'], ['dangdut', 'Dangdut'], ['keroncong', 'Keroncong'],
+  ['metal', 'Metal'], ['punk', 'Punk'], ['hardcore', 'Hardcore'], ['gospel', 'Gospel'],
+  ['soundtrack', 'Soundtrack'], ['lofi', 'Lo-fi'], ['ambient', 'Ambient'], ['podcast', 'Podcast / Audio Spoken'],
+] as const;
+
 interface LabelAddArtistDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -27,6 +38,7 @@ export function LabelAddArtistDialog({ open, onOpenChange, onSuccess }: LabelAdd
   const { user: currentUser } = useAuth();
   const [fullName, setFullName] = useState('');
   const [genre, setGenre] = useState('');
+  const [customGenre, setCustomGenre] = useState('');
   const [artistType, setArtistType] = useState('');
   const [hasSpotify, setHasSpotify] = useState(false);
   const [hasAppleMusic, setHasAppleMusic] = useState(false);
@@ -58,8 +70,13 @@ export function LabelAddArtistDialog({ open, onOpenChange, onSuccess }: LabelAdd
       toast.error('Nama artist harus diisi');
       return;
     }
-    if (!genre) {
+    const selectedGenre = genre === 'custom' ? customGenre.trim() : genre;
+    if (!selectedGenre) {
       toast.error('Pilih genre utama');
+      return;
+    }
+    if (selectedGenre.length > 100) {
+      toast.error('Genre maksimal 100 karakter');
       return;
     }
     if (!artistType) {
@@ -82,7 +99,7 @@ export function LabelAddArtistDialog({ open, onOpenChange, onSuccess }: LabelAdd
           role: 'artist',
           parent_label_id: currentUser?.id,
           artist_type: artistType,
-          genre,
+          genre: selectedGenre,
           social_links: {
             spotify: hasSpotify,
             apple_music: hasAppleMusic,
@@ -136,6 +153,7 @@ export function LabelAddArtistDialog({ open, onOpenChange, onSuccess }: LabelAdd
   const resetForm = () => {
     setFullName('');
     setGenre('');
+    setCustomGenre('');
     setArtistType('');
     setHasSpotify(false);
     setHasAppleMusic(false);
@@ -185,19 +203,21 @@ export function LabelAddArtistDialog({ open, onOpenChange, onSuccess }: LabelAdd
                 <SelectValue placeholder="Pilih Genre Utama" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="pop">Pop</SelectItem>
-                <SelectItem value="rock">Rock</SelectItem>
-                <SelectItem value="indie">Indie</SelectItem>
-                <SelectItem value="hiphop">Hip Hop</SelectItem>
-                <SelectItem value="electronic">Electronic / EDM</SelectItem>
-                <SelectItem value="rnb">R&B / Soul</SelectItem>
-                <SelectItem value="jazz">Jazz</SelectItem>
-                <SelectItem value="acoustic">Acoustic</SelectItem>
-                <SelectItem value="dangdut">Dangdut</SelectItem>
-                <SelectItem value="metal">Metal</SelectItem>
-                <SelectItem value="classical">Classical</SelectItem>
+                {GENRE_OPTIONS.map(([value, label]) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+                <SelectItem value="custom">Lainnya / Genre custom</SelectItem>
               </SelectContent>
             </Select>
+            {genre === 'custom' && (
+              <Input
+                value={customGenre}
+                onChange={(event) => setCustomGenre(event.target.value)}
+                placeholder="Tulis genre sendiri, contoh: City Pop"
+                maxLength={100}
+              />
+            )}
+            <p className="text-xs text-muted-foreground">Pilih genre sesuai atau tulis genre sendiri melalui Lainnya.</p>
           </div>
 
           <div className="space-y-2">

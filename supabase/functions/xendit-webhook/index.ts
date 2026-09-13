@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
-const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'Soundpub'
 
 const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
   const existingDb = options.db || {}
@@ -16,6 +16,22 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-callback-token',
 }
 
+const jsonResponse = (body: Record<string, unknown>, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+
+const statusMap: Record<string, 'paid' | 'expired' | 'failed'> = {
+  PAID: 'paid',
+  SETTLED: 'paid',
+  EXPIRED: 'expired',
+  FAILED: 'failed',
+}
+
+const amountsMatch = (expected: unknown, received: unknown) =>
+  received === undefined || received === null || Number(expected) === Number(received)
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -25,23 +41,56 @@ Deno.serve(async (req) => {
     const webhookToken = Deno.env.get('XENDIT_WEBHOOK_TOKEN')
     const callbackToken = req.headers.get('x-callback-token')
 
-    if (webhookToken && callbackToken !== webhookToken) {
+    if (!webhookToken) {
+      console.error('XENDIT_WEBHOOK_TOKEN is not configured')
+      return jsonResponse({ error: 'Webhook authentication is not configured' }, 503)
+    }
+
+    if (callbackToken !== webhookToken) {
       console.error('Invalid webhook token')
-      return new Response(JSON.stringify({ error: 'Invalid callback token' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return jsonResponse({ error: 'Invalid callback token' }, 403)
     }
 
     const body = await req.json()
     console.log('Xendit webhook received:', JSON.stringify(body))
 
-    const { id: invoiceId, status } = body
+    const { id: invoiceId, status, amount, currency } = body
 
     if (!invoiceId || !status) {
-      return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return jsonResponse({ error: 'Missing required fields' }, 400)
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return jsonResponse({ error: 'Supabase function environment is incomplete' }, 500)
+    }
+
     const supabase = createSoundpubClient(supabaseUrl, supabaseServiceKey)
+
+    const { data: copyrightPayment, error: copyrightPaymentError } = await supabase
+      .from('copyright_registration_payments')
+      .select('id, registration_id, amount, currency, payment_status')
+      .eq('xendit_invoice_id', invoiceId)
+      .maybeSingle()
+    if (copyrightPaymentError) return jsonResponse({ error: 'Failed to read copyright payment' }, 500)
+    if (copyrightPayment) {
+      const mappedStatus = statusMap[String(status).toUpperCase()]
+      if (!mappedStatus) return jsonResponse({ success: true, ignored: true, reason: 'unsupported_status' })
+      if (!amountsMatch(copyrightPayment.amount, amount) || (currency && String(currency).toUpperCase() !== copyrightPayment.currency.toUpperCase())) return jsonResponse({ error: 'Webhook payment data does not match invoice' }, 409)
+      if (copyrightPayment.payment_status === 'paid') return jsonResponse({ success: true, duplicate: true })
+      const update: Record<string, unknown> = { payment_status: mappedStatus, updated_at: new Date().toISOString() }
+      if (mappedStatus === 'paid') update.paid_at = new Date().toISOString()
+      const { data: updated, error: updateError } = await supabase.from('copyright_registration_payments').update(update).eq('id', copyrightPayment.id).eq('payment_status', copyrightPayment.payment_status).select('id').maybeSingle()
+      if (updateError) return jsonResponse({ error: 'Failed to update copyright payment' }, 500)
+      if (!updated) return jsonResponse({ success: true, duplicate: true })
+      if (mappedStatus === 'paid') {
+        const { error: registrationUpdateError } = await supabase.from('copyright_registrations').update({ status: 'paid_pending_review' }).eq('id', copyrightPayment.registration_id).eq('status', 'awaiting_payment')
+        if (registrationUpdateError) return jsonResponse({ error: 'Failed to update copyright registration' }, 500)
+      }
+      return jsonResponse({ success: true })
+    }
 
     const { data: payment, error: paymentError } = await supabase
       .from('release_payments')
@@ -51,33 +100,61 @@ Deno.serve(async (req) => {
 
     if (paymentError || !payment) {
       console.error('Payment not found for invoice:', invoiceId)
-      return new Response(JSON.stringify({ error: 'Payment record not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return jsonResponse({ error: 'Payment record not found' }, 404)
     }
 
-    const statusMap: Record<string, string> = {
-      'PAID': 'paid',
-      'SETTLED': 'paid',
-      'EXPIRED': 'expired',
-      'FAILED': 'failed',
+    const mappedStatus = statusMap[String(status).toUpperCase()]
+    if (!mappedStatus) {
+      console.warn('Ignoring unsupported Xendit invoice status:', status)
+      return jsonResponse({ success: true, ignored: true, reason: 'unsupported_status' })
     }
 
-    const mappedStatus = statusMap[status.toUpperCase()] || 'pending'
+    if (!amountsMatch(payment.amount, amount) || (currency && String(currency).toUpperCase() !== payment.currency.toUpperCase())) {
+      console.error('Webhook payment amount or currency mismatch:', invoiceId)
+      return jsonResponse({ error: 'Webhook payment data does not match invoice' }, 409)
+    }
+
+    if (payment.status === 'paid') {
+      return jsonResponse({ success: true, duplicate: true })
+    }
+
+    if ((mappedStatus === 'expired' || mappedStatus === 'failed') && payment.status !== 'pending') {
+      return jsonResponse({ success: true, ignored: true, reason: 'terminal_payment_status' })
+    }
 
     const updateData: Record<string, any> = { status: mappedStatus }
     if (mappedStatus === 'paid') {
       updateData.paid_at = new Date().toISOString()
     }
 
-    await supabase
+    const { data: updatedPayment, error: paymentUpdateError } = await supabase
       .from('release_payments')
       .update(updateData)
       .eq('id', payment.id)
+      .eq('status', payment.status)
+      .select('id')
+      .maybeSingle()
+
+    if (paymentUpdateError) {
+      console.error('Payment update error:', paymentUpdateError)
+      return jsonResponse({ error: 'Failed to update payment record', details: paymentUpdateError.message }, 500)
+    }
+
+    if (!updatedPayment) {
+      return jsonResponse({ success: true, duplicate: true })
+    }
 
     if (mappedStatus === 'paid') {
-      await supabase
+      const { error: releaseUpdateError } = await supabase
         .from('releases')
         .update({ status: 'pending_paid' })
         .eq('id', payment.release_id)
+        .neq('status', 'active')
+
+      if (releaseUpdateError) {
+        console.error('Release update error:', releaseUpdateError)
+        return jsonResponse({ error: 'Failed to update release status', details: releaseUpdateError.message }, 500)
+      }
 
       const releaseInfo = payment.releases as any
 
@@ -132,11 +209,6 @@ Deno.serve(async (req) => {
         console.error('Email notification failed:', emailError)
       }
     } else if (mappedStatus === 'expired' || mappedStatus === 'failed') {
-      await supabase
-        .from('releases')
-        .update({ status: 'draft' })
-        .eq('id', payment.release_id)
-
       const releaseInfo = payment.releases as any
       await supabase.from('notifications').insert({
         user_id: payment.user_id,
@@ -147,19 +219,16 @@ Deno.serve(async (req) => {
       })
     }
 
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ success: true })
 
   } catch (error) {
     console.error('Webhook error:', error)
-    return new Response(JSON.stringify({ error: 'Internal server error' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    return jsonResponse({ error: error?.message || 'Internal server error' }, 500)
   }
 })
 
 async function sendEmailNotification(payment: any, supabase: any) {
-  const notificationEmail = Deno.env.get('NOTIFICATION_EMAIL') || 'publisher@soundpub.xyz'
+  const notificationEmail = Deno.env.get('NOTIFICATION_EMAIL') || 'publisher@Soundpub.xyz'
   const resendApiKey = Deno.env.get('RESEND_API_KEY')
   
   if (!resendApiKey) {
@@ -196,9 +265,9 @@ async function sendEmailNotification(payment: any, supabase: any) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'SoundPub <noreply@soundpub.xyz>',
+      from: 'Soundpub <noreply@Soundpub.xyz>',
       to: [notificationEmail],
-      subject: `[SoundPub] Release Baru Dibayar: ${release.title}`,
+      subject: `[Soundpub] Release Baru Dibayar: ${release.title}`,
       html: emailHtml,
     }),
   })

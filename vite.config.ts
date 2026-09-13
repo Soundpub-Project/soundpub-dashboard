@@ -10,22 +10,23 @@ export default defineConfig(({ mode }) => ({
     port: 8181,
     allowedHosts: [
       "all",
-      // "dev-dashboard.soundpub.xyz",
-      "dashboard.soundpub.xyz",
-      "https://dashboard.soundpub.xyz",
-      "dev.soundpub.xyz",
-      "https://dev.soundpub.xyz",
+      // "dev-dashboard.Soundpub.xyz",
+      "dashboard.Soundpub.xyz",
+      "https://dashboard.Soundpub.xyz",
+      "dev.Soundpub.xyz",
+      "https://dev.Soundpub.xyz",
       "localhost:8181",
       "localhost",
       "127.0.0.1",
-      "dev-soundpub.maskhar.com",
-      "web.maskhar.com"
+      "dev-Soundpub.maskhar.com",
+      "web.maskhar.com",
+      "dev-dashboard.Soundpub.xyz"
     ]
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(import.meta.dirname, "./src"),
     },
   },
 }));

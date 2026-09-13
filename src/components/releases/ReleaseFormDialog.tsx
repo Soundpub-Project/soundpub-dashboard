@@ -15,6 +15,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -61,6 +62,8 @@ import { cn } from '@/lib/utils';
 import { MediaUploadSection } from './MediaUploadSection';
 import { ArtistSelector } from './ArtistSelector';
 import { ContributorSelector } from './ContributorSelector';
+import { createXenditInvoice, openXenditInvoice } from '@/lib/xendit';
+import { buildCoverStoragePath } from '@/lib/storagePaths';
 
 // Genre list
 const GENRE_LIST = [
@@ -95,8 +98,8 @@ const trackSchema = z.object({
   isrc: z.string().optional(),
   title: z.string().min(1, 'Judul wajib diisi'),
   artists: z.array(artistSchema).min(1, 'Minimal 1 artist wajib ditambahkan'),
-  composer: z.string().optional(),
-  lyricist: z.string().optional(),
+  composer: z.string().trim().refine((value) => value.split(/\s+/).length >= 2, 'Composer wajib menggunakan nama lengkap, minimal 2 kata'),
+  lyricist: z.string().trim().refine((value) => value.split(/\s+/).length >= 2, 'Lyricist wajib menggunakan nama lengkap, minimal 2 kata'),
   genre: z.string().optional(),
   lyrics: z.string().optional(),
   explicit_lyrics: z.boolean().default(false),
@@ -511,7 +514,13 @@ export function ReleaseFormDialog({
         throw new Error('Anda harus login terlebih dahulu');
       }
       const userId = sessionData.session.user.id;
-      const fileName = `${userId}/cover-${Date.now()}.${fileExt}`;
+      const fileName = buildCoverStoragePath({
+        userId,
+        releaseTitle: form.getValues('title'),
+        releaseId: release?.id,
+        extension: fileExt,
+        uploadId: crypto.randomUUID(),
+      });
 
       console.log(`Uploading cover to Supabase Storage bucket: ${bucket}, file: ${fileName}`);
 
@@ -863,19 +872,9 @@ export function ReleaseFormDialog({
         await supabase.from('tracks').insert(tracksToInsert);
       }
 
-      // Call create-xendit-invoice
-      const { data: invoiceData, error: invoiceError } = await supabase.functions.invoke('create-xendit-invoice', {
-        body: { release_id: releaseId },
-      });
-
-      if (invoiceError) throw new Error(invoiceError.message || 'Gagal membuat invoice pembayaran');
-      
-      if (invoiceData?.invoice_url) {
-        toast.success(`Mengarahkan ke halaman pembayaran...`);
-        window.location.href = invoiceData.invoice_url;
-      } else {
-        throw new Error('Invoice URL tidak ditemukan');
-      }
+      const invoiceData = await createXenditInvoice(releaseId);
+      toast.success('Mengarahkan ke halaman pembayaran...');
+      openXenditInvoice(invoiceData.invoice_url);
 
     } catch (error: any) {
       console.error('Payment error:', error);
@@ -1423,10 +1422,11 @@ export function ReleaseFormDialog({
                               name={`tracks.${trackIndex}.composer`}
                               render={({ field }) => (
                                 <FormItem>
-                                  <FormLabel>Composer</FormLabel>
+                                  <FormLabel>Composer (Nama Lengkap) *</FormLabel>
                                   <FormControl>
-                                    <Input placeholder="Composer" {...field} />
+                                    <Input placeholder="Nama Lengkap" {...field} />
                                   </FormControl>
+                                  <FormDescription>Minimal 2 kata. Contoh: Bobby S ❌, Bobby Sinaga ✅</FormDescription>
                                   <FormMessage />
                                 </FormItem>
                               )}
@@ -1437,10 +1437,11 @@ export function ReleaseFormDialog({
                               name={`tracks.${trackIndex}.lyricist`}
                               render={({ field }) => (
                                 <FormItem>
-                                  <FormLabel>Lyricist</FormLabel>
+                                  <FormLabel>Lyricist (Nama Lengkap) *</FormLabel>
                                   <FormControl>
-                                    <Input placeholder="Lyricist" {...field} />
+                                    <Input placeholder="Nama Lengkap" {...field} />
                                   </FormControl>
+                                  <FormDescription>Minimal 2 kata. Contoh: Bobby S ❌, Bobby Sinaga ✅</FormDescription>
                                   <FormMessage />
                                 </FormItem>
                               )}
@@ -1596,6 +1597,10 @@ export function ReleaseFormDialog({
                         {!lyricsOnlyMode && (
                           <MediaUploadSection
                             trackIndex={trackIndex}
+                            releaseTitle={form.watch('title')}
+                            releaseId={release?.id}
+                            trackTitle={form.watch(`tracks.${trackIndex}.title`)}
+                            trackId={form.watch(`tracks.${trackIndex}.id`)}
                             audioUrl={form.watch(`tracks.${trackIndex}.audio_url`) || undefined}
                             clipUrl={form.watch(`tracks.${trackIndex}.clip_url`) || undefined}
                             duration={form.watch(`tracks.${trackIndex}.duration`) || undefined}
@@ -1686,9 +1691,3 @@ export function ReleaseFormDialog({
     </Dialog>
   );
 }
-
-
-
-
-
-

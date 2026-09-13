@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
-const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'Soundpub'
 
 const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
   const existingDb = options.db || {}
@@ -153,8 +153,10 @@ Deno.serve(async (req) => {
     console.error('Error deleting user:', error)
     const SAFE_MESSAGES = ['Unauthorized', 'Only admins', 'Only superadmins', 'Missing required', 'Cannot delete your own']
     let safeMessage = 'Failed to delete user'
+    let status = 500
     if (error instanceof Error && SAFE_MESSAGES.some(m => error.message.startsWith(m) || error.message.includes(m))) {
       safeMessage = error.message
+      status = 400
     }
     return new Response(
       JSON.stringify({ 
@@ -163,7 +165,7 @@ Deno.serve(async (req) => {
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400
+        status
       }
     )
   }

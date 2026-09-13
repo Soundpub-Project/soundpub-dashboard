@@ -1,5 +1,5 @@
-﻿import { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { ArtistOnboardingDialog } from '@/components/onboarding/ArtistOnboardingDialog';
@@ -40,13 +40,14 @@ import {
   PaginationPrevious,
 } from '@/components/ui/pagination';
 import { Disc3, Search, Plus, Loader2, Pencil, Eye, MoreHorizontal, Trash2, Archive, ArchiveRestore, CheckSquare, Beaker, Filter, X, CheckCircle, DollarSign } from 'lucide-react';
-import { ReleaseFormDialog } from '@/components/releases/ReleaseFormDialog';
 import { ActivateReleaseModal } from '@/components/releases/ActivateReleaseModal';
 import { RejectReleaseModal } from '@/components/releases/RejectReleaseModal';
+import { ReleaseStatusBadge } from '@/components/releases/ReleaseStatusBadge';
 
 import { DeleteReleaseDialog } from '@/components/releases/DeleteReleaseDialog';
 import { ArchiveReleaseDialog } from '@/components/releases/ArchiveReleaseDialog';
 import { toast } from 'sonner';
+import { createXenditInvoice, openXenditInvoice } from '@/lib/xendit';
 
 interface Release {
   id: string;
@@ -85,7 +86,6 @@ export default function Releases() {
   const [labels, setLabels] = useState<LabelInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [formOpen, setFormOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
@@ -96,7 +96,7 @@ export default function Releases() {
   const [showArchived, setShowArchived] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkLoading, setBulkLoading] = useState(false);
-  const [lyricsOnlyMode, setLyricsOnlyMode] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState('');
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -171,6 +171,7 @@ export default function Releases() {
       pending_paid: 'default',
       processing: 'secondary',
       rejected: 'destructive',
+      revision_submitted: 'secondary',
       draft: 'secondary',
       inactive: 'outline',
     };
@@ -185,6 +186,7 @@ export default function Releases() {
       processing: 'Proses',
       draft: 'Draft',
       rejected: 'Rejected',
+      revision_submitted: 'Revisi Diajukan',
       inactive: 'Inactive',
     };
     return labels[status] || status;
@@ -290,34 +292,18 @@ export default function Releases() {
       return;
     }
     setSelectedRelease(null);
-    setLyricsOnlyMode(false);
     navigate('/dashboard/releases/new');
   };
 
   const handleEditRelease = (release: Release) => {
-    setSelectedRelease(release);
-    if (isWhitelabel && !isAdmin && release.status === 'active') {
-      setLyricsOnlyMode(true);
-    } else {
-      setLyricsOnlyMode(false);
-    }
-    setFormOpen(true);
+    navigate(`/dashboard/releases/${release.id}/edit`);
   };
 
   const handleContinuePayment = async (release: Release) => {
     try {
-      const { data: invoiceData, error: invoiceError } = await supabase.functions.invoke('create-xendit-invoice', {
-        body: { release_id: release.id },
-      });
-
-      if (invoiceError) throw new Error(invoiceError.message || 'Gagal membuat invoice');
-
-      if (invoiceData?.invoice_url) {
-        toast.success('Mengarahkan ke halaman pembayaran...');
-        window.location.href = invoiceData.invoice_url;
-      } else {
-        throw new Error('Invoice URL tidak ditemukan');
-      }
+      const invoiceData = await createXenditInvoice(release.id);
+      toast.success('Mengarahkan ke halaman pembayaran...');
+      openXenditInvoice(invoiceData.invoice_url);
     } catch (error: any) {
       console.error('Payment error:', error);
       toast.error(error.message || 'Gagal memproses pembayaran');
@@ -337,11 +323,13 @@ export default function Releases() {
   const handleFormSuccess = () => {
     fetchReleases();
     setSelectedIds([]);
+    setBulkStatus('');
   };
 
   const toggleSelectAll = () => {
     if (selectedIds.length === paginatedReleases.length) {
       setSelectedIds([]);
+      setBulkStatus('');
     } else {
       setSelectedIds(paginatedReleases.map((r) => r.id));
     }
@@ -383,6 +371,30 @@ export default function Releases() {
     }
   };
 
+  const handleBulkStatusChange = async () => {
+    if (selectedIds.length === 0 || !bulkStatus) return;
+
+    setBulkLoading(true);
+    try {
+      const { error } = await supabase
+        .from('releases')
+        .update({ status: bulkStatus, updated_at: new Date().toISOString() })
+        .in('id', selectedIds);
+
+      if (error) throw error;
+
+      toast.success(`${selectedIds.length} release berhasil diubah ke status ${getStatusLabel(bulkStatus)}`);
+      fetchReleases();
+      setSelectedIds([]);
+      setBulkStatus('');
+    } catch (error: any) {
+      console.error('Error bulk status change:', error);
+      toast.error(error.message || 'Gagal mengubah status releases');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
 
@@ -418,7 +430,7 @@ export default function Releases() {
     const items = [];
     const maxVisible = 5;
     let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    const endPage = Math.min(totalPages, startPage + maxVisible - 1);
 
     if (endPage - startPage + 1 < maxVisible) {
       startPage = Math.max(1, endPage - maxVisible + 1);
@@ -476,7 +488,7 @@ export default function Releases() {
                     {filteredReleases.length} {showArchived ? 'archived' : 'total'} releases
                   </CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                   <Button
                     variant={showArchived ? 'default' : 'outline'}
                     size="sm"
@@ -501,11 +513,11 @@ export default function Releases() {
               </div>
 
               {/* Filters Row */}
-              <div className="flex flex-wrap items-center gap-2">
-                <Filter className="h-4 w-4 text-muted-foreground" />
+              <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
+                <Filter className="hidden h-4 w-4 text-muted-foreground sm:block" />
                 
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[130px] h-9">
+                  <SelectTrigger className="h-9 w-full sm:w-[130px]">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -519,7 +531,7 @@ export default function Releases() {
                 </Select>
 
                 <Select value={labelFilter} onValueChange={setLabelFilter}>
-                  <SelectTrigger className="w-[180px] h-9">
+                  <SelectTrigger className="h-9 w-full sm:w-[180px]">
                     <SelectValue placeholder="Label" />
                   </SelectTrigger>
                   <SelectContent>
@@ -533,7 +545,7 @@ export default function Releases() {
                 </Select>
 
                 <Select value={artistFilter} onValueChange={setArtistFilter}>
-                  <SelectTrigger className="w-[180px] h-9">
+                  <SelectTrigger className="h-9 w-full sm:w-[180px]">
                     <SelectValue placeholder="Artist" />
                   </SelectTrigger>
                   <SelectContent>
@@ -551,16 +563,16 @@ export default function Releases() {
                     variant="ghost"
                     size="sm"
                     onClick={clearFilters}
-                    className="h-9 px-2 text-muted-foreground"
+                    className="h-9 justify-start px-2 text-muted-foreground sm:justify-center"
                   >
                     <X className="h-4 w-4 mr-1" />
                     Clear
                   </Button>
                 )}
 
-                <div className="flex-1" />
+                <div className="hidden flex-1 sm:block" />
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-2 sm:justify-start">
                   <span className="text-sm text-muted-foreground">Tampilkan:</span>
                   <Select value={pageSize} onValueChange={setPageSize}>
                     <SelectTrigger className="w-[80px] h-9">
@@ -586,6 +598,27 @@ export default function Releases() {
                   {selectedIds.length} release dipilih
                 </span>
                 <div className="flex-1" />
+                <Select value={bulkStatus} onValueChange={setBulkStatus} disabled={bulkLoading}>
+                  <SelectTrigger className="h-9 w-[180px]">
+                    <SelectValue placeholder="Ubah status..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {['active', 'pending', 'pending_paid', 'processing', 'revision_submitted', 'draft', 'rejected', 'inactive'].map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {getStatusLabel(status)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBulkStatusChange}
+                  disabled={bulkLoading || !bulkStatus}
+                >
+                  {bulkLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Ubah Status
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -684,10 +717,12 @@ export default function Releases() {
                             </div>
                           </div>
                           <div className="flex flex-wrap gap-2 pt-1">
-                            <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/releases/${release.id}`)}>
-                              <Eye className="h-4 w-4 mr-1" /> Detail
+                            <Button variant="outline" size="sm" asChild>
+                              <Link to={`/dashboard/releases/${release.id}`}>
+                                <Eye className="h-4 w-4 mr-1" /> Detail
+                              </Link>
                             </Button>
-                            {(release.status === 'pending' || release.status === 'draft' || (release.status === 'active' && isAdmin)) && (
+                            {(release.status === 'pending' || release.status === 'draft' || release.status === 'rejected' || (release.status === 'active' && isAdmin)) && (
                               <Button variant="outline" size="sm" onClick={() => handleEditRelease(release)}>
                                 <Pencil className="h-4 w-4 mr-1" /> Edit
                               </Button>
@@ -788,14 +823,7 @@ export default function Releases() {
                               {release.release_type}
                             </Badge>
                           </TableCell>
-                          <TableCell>
-                            <Badge 
-                              variant={getStatusBadge(release.status)} 
-                              className={`capitalize ${release.status === 'pending_paid' ? 'bg-green-600 text-white border-green-600' : ''}`}
-                            >
-                              {getStatusLabel(release.status)}
-                            </Badge>
-                          </TableCell>
+                          <TableCell><ReleaseStatusBadge status={release.status} /></TableCell>
                           <TableCell>
                             {release.release_date
                               ? new Date(release.release_date).toLocaleDateString('id-ID')
@@ -803,12 +831,10 @@ export default function Releases() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => navigate(`/dashboard/releases/${release.id}`)}
-                              >
-                                <Eye className="h-4 w-4" />
+                              <Button variant="ghost" size="sm" asChild>
+                                <Link to={`/dashboard/releases/${release.id}`} aria-label={`Lihat detail ${release.title}`}>
+                                  <Eye className="h-4 w-4" />
+                                </Link>
                               </Button>
                               {(canManageReleases || isArtist) && (
                                 <DropdownMenu>
@@ -818,11 +844,11 @@ export default function Releases() {
                                     </Button>
                                   </DropdownMenuTrigger>
                                    <DropdownMenuContent align="end">
-                                    {release.status === 'pending_paid' && isAdmin && (
+                                    {(release.status === 'pending_paid' || release.status === 'revision_submitted') && isAdmin && (
                                       <>
                                         <DropdownMenuItem onClick={() => handleConfirmRelease(release)}>
                                           <CheckCircle className="h-4 w-4 mr-2" />
-                                          Konfirmasi
+                                          {release.status === 'revision_submitted' ? 'Tinjau Revisi' : 'Konfirmasi'}
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator />
                                       </>
@@ -864,6 +890,15 @@ export default function Releases() {
                                         <DropdownMenuItem onClick={() => handleContinuePayment(release)}>
                                           <DollarSign className="h-4 w-4 mr-2" />
                                           Lanjutkan Pembayaran
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                      </>
+                                    )}
+                                    {release.status === 'rejected' && (
+                                      <>
+                                        <DropdownMenuItem onClick={() => handleEditRelease(release)}>
+                                          <Pencil className="h-4 w-4 mr-2" />
+                                          Edit & Upload Ulang
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator />
                                       </>
@@ -949,14 +984,6 @@ export default function Releases() {
         </Card>
 
         {/* Dialogs */}
-        <ReleaseFormDialog
-          open={formOpen}
-          onOpenChange={setFormOpen}
-          release={selectedRelease}
-          onSuccess={handleFormSuccess}
-          lyricsOnlyMode={lyricsOnlyMode}
-        />
-
 
         <DeleteReleaseDialog
           open={deleteDialogOpen}
@@ -999,5 +1026,3 @@ export default function Releases() {
     </DashboardLayout>
   );
 }
-
-

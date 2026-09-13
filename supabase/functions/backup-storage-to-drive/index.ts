@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
-const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'Soundpub'
 
 const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
   const existingDb = options.db || {}
@@ -16,7 +16,7 @@ const corsHeaders = {
 }
 
 const DRIVE_GATEWAY = 'https://connector-gateway.lovable.dev/google_drive'
-const ROOT_FOLDER_NAME = 'SoundPub-Backup'
+const ROOT_FOLDER_NAME = 'Soundpub-Backup'
 const BUCKETS = [
   'track-audio',
   'track-video',

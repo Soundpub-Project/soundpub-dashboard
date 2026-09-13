@@ -28,11 +28,16 @@ interface AuditLogDetails {
 interface AuditLog {
   id: string;
   action: string;
-  actor_id: string;
+  actor_id: string | null;
+  actor_role?: string | null;
   target_id: string | null;
   target_type: string | null;
   details: AuditLogDetails | null;
   ip_address: string | null;
+  user_agent?: string | null;
+  before_data?: Record<string, unknown> | null;
+  after_data?: Record<string, unknown> | null;
+  changed_fields?: string[] | null;
   created_at: string;
 }
 
@@ -126,6 +131,7 @@ export default function AuditLogs() {
       log.details?.actor_email?.toLowerCase().includes(searchLower) ||
       log.details?.target_name?.toLowerCase().includes(searchLower) ||
       log.details?.target_email?.toLowerCase().includes(searchLower)
+      || log.ip_address?.toLowerCase().includes(searchLower)
     );
   });
 
@@ -192,6 +198,8 @@ export default function AuditLogs() {
                       <TableHead>Aksi</TableHead>
                       <TableHead>Dilakukan Oleh</TableHead>
                       <TableHead>Target</TableHead>
+                      <TableHead>Perubahan</TableHead>
+                      <TableHead>IP</TableHead>
                       <TableHead>Role</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -208,20 +216,33 @@ export default function AuditLogs() {
                         </TableCell>
                         <TableCell>{getActionBadge(log.action)}</TableCell>
                         <TableCell>
-                          <div className="font-medium">{log.details?.actor_name || '-'}</div>
+                          <div className="font-medium">{log.details?.actor_name || log.actor_id || 'System / tidak diketahui'}</div>
                           <div className="text-xs text-muted-foreground">
                             {log.details?.actor_email || '-'}
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="max-w-64">
                           <div className="font-medium">{log.details?.target_name || '-'}</div>
                           <div className="text-xs text-muted-foreground">
-                            {log.details?.target_email || '-'}
+                            {log.details?.target_email || log.target_type || '-'}
                           </div>
+                        </TableCell>
+                        <TableCell className="max-w-64">
+                          <div className="text-xs text-muted-foreground">{log.target_type || '-'}</div>
+                          {log.changed_fields && log.changed_fields.length > 0 ? (
+                            <div className="truncate" title={log.changed_fields.join(', ')}>
+                              {log.changed_fields.join(', ')}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap font-mono text-xs">
+                          {log.ip_address || '-'}
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="capitalize">
-                            {log.details?.actor_role || '-'}
+                            {log.actor_role || log.details?.actor_role || '-'}
                           </Badge>
                         </TableCell>
                       </TableRow>
