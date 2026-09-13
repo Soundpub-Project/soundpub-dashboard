@@ -159,12 +159,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .maybeSingle();
+        .limit(1);
 
       if (profileError) {
         console.error('Error fetching profile:', profileError);
       } else {
-        setProfile(profileData);
+        setProfile(profileData?.[0] ?? null);
       }
 
       // Fetch role
@@ -172,12 +172,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .from('user_roles')
         .select('role')
         .eq('user_id', userId)
-        .maybeSingle();
+        .limit(10);
 
       if (roleError) {
         console.error('Error fetching role:', roleError);
       } else {
-        setRole(roleData?.role as AppRole ?? 'user');
+        const rolePriority: AppRole[] = ['superadmin', 'admin', 'whitelabel', 'label', 'artist', 'copyright', 'user'];
+        const resolvedRole = rolePriority.find((candidate) => roleData?.some(({ role }) => role === candidate));
+        setRole(resolvedRole ?? 'user');
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
@@ -208,6 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         emailRedirectTo: redirectUrl,
         data: {
           full_name: fullName,
+          source_app: 'soundpub',
         },
       },
     });

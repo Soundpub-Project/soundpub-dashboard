@@ -248,6 +248,7 @@ export function ReleaseFormPage({
   const [customLabelPricePerTrack, setCustomLabelPricePerTrack] = useState(75000);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const artistFetchRequestRef = useRef(0);
+  const submissionLockRef = useRef(false);
   const [currentStep, setCurrentStep] = useState<1 | 2>(1);
   const [expandedTracks, setExpandedTracks] = useState<Record<number, boolean>>(
     { 0: true },
@@ -869,6 +870,11 @@ export function ReleaseFormPage({
       return;
     }
 
+    if (submissionLockRef.current) {
+      return;
+    }
+
+    submissionLockRef.current = true;
     setLoading(true);
     try {
       // In lyricsOnlyMode, only update lyrics for existing tracks
@@ -1022,6 +1028,24 @@ export function ReleaseFormPage({
           return;
         }
 
+        const { data: duplicateRelease, error: duplicateError } = await supabase
+          .from("releases")
+          .select("id, status")
+          .eq("label_id", labelId)
+          .eq("title", values.title.trim())
+          .eq("artist_name", values.artist_name.trim())
+          .eq("release_type", values.release_type)
+          .is("archived_at", null)
+          .in("status", ["draft", "pending", "pending_paid", "processing", "revision_submitted", "active"])
+          .limit(1)
+          .maybeSingle();
+
+        if (duplicateError) throw duplicateError;
+        if (duplicateRelease) {
+          toast.error("Release dengan judul, artist, dan tipe yang sama sudah ada. Edit release tersebut, jangan buat baru.");
+          return;
+        }
+
         // Find artist_user_id: for artist role use own ID, otherwise match from label artists
         const artistUserId = isArtist
           ? user.id
@@ -1090,6 +1114,7 @@ export function ReleaseFormPage({
       console.error("Error saving release:", error);
       toast.error(error.message || "Gagal menyimpan release");
     } finally {
+      submissionLockRef.current = false;
       setLoading(false);
     }
   };
@@ -1135,6 +1160,11 @@ export function ReleaseFormPage({
 
     if (!user) return;
 
+    if (submissionLockRef.current) {
+      return;
+    }
+
+    submissionLockRef.current = true;
     setPaymentLoading(true);
     try {
       // Save release first
@@ -1179,6 +1209,24 @@ export function ReleaseFormPage({
         releaseId = release.id;
       } else {
         // Create new release
+        const { data: duplicateRelease, error: duplicateError } = await supabase
+          .from("releases")
+          .select("id, status")
+          .eq("label_id", labelId)
+          .eq("title", values.title.trim())
+          .eq("artist_name", values.artist_name.trim())
+          .eq("release_type", values.release_type)
+          .is("archived_at", null)
+          .in("status", ["draft", "pending", "pending_paid", "processing", "revision_submitted", "active"])
+          .limit(1)
+          .maybeSingle();
+
+        if (duplicateError) throw duplicateError;
+        if (duplicateRelease) {
+          toast.error("Release dengan judul, artist, dan tipe yang sama sudah ada. Edit release tersebut, jangan buat baru.");
+          return;
+        }
+
         const { data: newRelease, error: releaseError } = await supabase
           .from("releases")
           .insert({
@@ -1242,6 +1290,7 @@ export function ReleaseFormPage({
       console.error("Payment error:", error);
       toast.error(error.message || "Gagal memproses pembayaran");
     } finally {
+      submissionLockRef.current = false;
       setPaymentLoading(false);
     }
   };
