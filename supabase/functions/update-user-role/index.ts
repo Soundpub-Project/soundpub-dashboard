@@ -1,7 +1,7 @@
 // Edge Function to update user role with server-side validation
 // Prevents privilege escalation by enforcing role change rules
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
-import { corsHeaders } from '../_shared/cors.ts'
+import { buildCorsHeaders } from '../_shared/cors.ts'
 
 const databaseSchema = Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'Soundpub'
 
@@ -11,6 +11,8 @@ interface UpdateRoleRequest {
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req)
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }

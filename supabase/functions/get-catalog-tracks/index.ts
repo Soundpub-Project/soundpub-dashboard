@@ -11,11 +11,23 @@ const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options:
 }
 
 
+// This endpoint is deliberately public (the landing-page catalog), so the
+// wildcard origin stays — but it must therefore never return anything that is
+// not already public. No credentials are accepted or echoed back.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+  "Access-Control-Allow-Methods": "GET,OPTIONS",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+/**
+ * PostgREST `.or()` takes a filter *string*, so an unescaped value can add its
+ * own conditions (`,` separates them, `)` closes the group). Strip the
+ * metacharacters and cap the length before it reaches the query.
+ */
+function sanitizeSearch(raw: string): string {
+  return raw.replace(/[,()\\%*"']/g, " ").trim().slice(0, 80);
+}
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -33,12 +45,18 @@ serve(async (req) => {
 
     // Parse query params from URL
     const url = new URL(req.url);
-    const limit = Math.min(parseInt(url.searchParams.get("limit") || "50"), 500); // Max 100
-    const offset = parseInt(url.searchParams.get("offset") || "0");
+    const rawLimit = parseInt(url.searchParams.get("limit") || "50", 10);
+    const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 50, 1), 100);
+    const rawOffset = parseInt(url.searchParams.get("offset") || "0", 10);
+    const offset = Math.max(Number.isFinite(rawOffset) ? rawOffset : 0, 0);
     const genre = url.searchParams.get("genre");
-    const search = url.searchParams.get("search");
+    const rawSearch = url.searchParams.get("search");
+    const search = rawSearch ? sanitizeSearch(rawSearch) : null;
 
-    // Build query for active releases with tracks
+    // Build query for active releases with tracks.
+    // `audio_url` (the full master) and the label's profile id are deliberately
+    // not selected: this response is served to anonymous visitors, who only get
+    // the preview `clip_url`.
     let query = supabaseAdmin
       .from("releases")
       .select(
@@ -52,7 +70,6 @@ serve(async (req) => {
         release_date,
         upc,
         label:profiles!releases_label_id_fkey (
-          id,
           full_name
         ),
         tracks (
@@ -61,7 +78,6 @@ serve(async (req) => {
           artist_name,
           isrc,
           genre,
-          audio_url,
           clip_url,
           duration,
           explicit_lyrics
