@@ -162,6 +162,24 @@ export function escapeHtml(value: unknown): string {
     .replace(/'/g, '&#39;');
 }
 
+/**
+ * SHA-256 hex digest.
+ *
+ * Used so password-reset tokens are stored hashed: a leaked database row (or a
+ * backup, or a read-only SQL bug) then no longer hands an attacker a working
+ * reset link. The token itself is high-entropy, so a plain digest is enough —
+ * there is nothing to brute-force.
+ */
+export async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(value),
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 

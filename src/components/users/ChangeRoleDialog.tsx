@@ -223,10 +223,13 @@ export function ChangeRoleDialog({
 
         if (transferError) throw transferError;
       } else {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({ parent_label_id: newParentLabelId })
-          .eq('id', user.id);
+        // `parent_label_id` is not writable from the browser — a user must not
+        // be able to re-parent themselves under another label and inherit its
+        // catalog. The RPC re-checks that the caller is an admin.
+        const { error: profileError } = await supabase.rpc('admin_set_parent_label' as never, {
+          p_user_id: user.id,
+          p_parent_label_id: newParentLabelId,
+        } as never);
 
         if (profileError) throw profileError;
       }

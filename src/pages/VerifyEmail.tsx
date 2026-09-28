@@ -24,10 +24,9 @@ export default function VerifyEmail() {
         return
       }
 
-      await supabase
-        .from('profiles')
-        .update({ email_verified: true })
-        .eq('id', user.id)
+      // The flag is derived server-side from auth.users.email_confirmed_at;
+      // the browser is not allowed to assert its own verification.
+      await supabase.rpc('sync_email_verified' as never)
 
       setIsSuccess(true)
       setIsVerifying(false)
