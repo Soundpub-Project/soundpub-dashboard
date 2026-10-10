@@ -1,4 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+import { buildCorsHeaders } from '../_shared/cors.ts'
+import { AuthError, requireRole, verifySharedSecret } from '../_shared/auth.ts'
 const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'Soundpub'
 
 const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
@@ -9,11 +11,6 @@ const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options:
   })
 }
 
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
 
 const DRIVE_GATEWAY = 'https://connector-gateway.lovable.dev/google_drive'
 const ROOT_FOLDER_NAME = 'Soundpub-Backup'
@@ -119,7 +116,28 @@ async function listAllFilesInBucket(supabase: any, bucket: string, prefix = ''):
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req)
+
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
+
+  // This function copies every storage bucket to Drive using the service role,
+  // so it must never be reachable anonymously. Two callers are legitimate:
+  // the scheduler (shared secret) and a superadmin triggering a manual run.
+  let triggeredBy: string
+  try {
+    if (verifySharedSecret(req, 'BACKUP_TRIGGER_SECRET')) {
+      triggeredBy = 'cron'
+    } else {
+      const caller = await requireRole(req, ['superadmin'])
+      triggeredBy = `manual:${caller.id}`
+    }
+  } catch (error) {
+    const status = error instanceof AuthError ? error.status : 401
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -128,7 +146,7 @@ Deno.serve(async (req) => {
   // Insert run record
   const { data: runRow } = await supabase
     .from('storage_backup_runs')
-    .insert({ status: 'running', triggered_by: req.headers.get('x-trigger') ?? 'cron' })
+    .insert({ status: 'running', triggered_by: triggeredBy })
     .select('id')
     .single()
   const runId = runRow?.id

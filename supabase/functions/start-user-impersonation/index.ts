@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { corsHeaders } from "../_shared/cors.ts";
+import { buildCorsHeaders, isAllowedOrigin } from "../_shared/cors.ts";
 
 const schema = () =>
   Deno.env.get("DATABASE_SCHEMA") ||
@@ -19,6 +19,8 @@ const client = (
   });
 
 Deno.serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req);
+
   if (req.method === "OPTIONS")
     return new Response("ok", { headers: corsHeaders });
 
@@ -60,13 +62,26 @@ Deno.serve(async (req) => {
     if (targetProfile.status !== "active")
       throw new Error("Target user is not active");
 
-    if (!redirectTo || !redirectTo.endsWith("/auth/impersonate"))
+    // `endsWith` would accept https://evil.example/auth/impersonate, so the
+    // origin has to be checked against the allowlist and the path matched exactly.
+    let parsedRedirect: URL;
+    try {
+      parsedRedirect = new URL(redirectTo ?? "");
+    } catch {
       throw new Error("Invalid impersonation redirect");
+    }
+    if (
+      !isAllowedOrigin(parsedRedirect.origin) ||
+      parsedRedirect.pathname !== "/auth/impersonate"
+    ) {
+      throw new Error("Invalid impersonation redirect");
+    }
+    const safeRedirectTo = `${parsedRedirect.origin}/auth/impersonate`;
     const { data: linkData, error: linkError } =
       await admin.auth.admin.generateLink({
         type: "magiclink",
         email: targetProfile.email,
-        options: { redirectTo },
+        options: { redirectTo: safeRedirectTo },
       });
     if (linkError || !linkData?.properties?.action_link)
       throw linkError || new Error("Failed to generate impersonation link");

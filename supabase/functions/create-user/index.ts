@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { corsHeaders } from '../_shared/cors.ts'
+import { buildCorsHeaders } from '../_shared/cors.ts'
 import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts'
 const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'Soundpub'
 
@@ -46,6 +46,7 @@ const CreateUserSchema = z.object({
 type CreateUserRequest = z.infer<typeof CreateUserSchema>
 
 Deno.serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req)
   // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })

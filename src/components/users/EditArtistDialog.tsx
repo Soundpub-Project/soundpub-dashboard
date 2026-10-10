@@ -74,11 +74,21 @@ export function EditArtistDialog({
           full_name: fullName.trim(),
           phone: phone.trim() || null,
           address: address.trim() || null,
-          status,
         })
         .eq('id', artist.id);
 
       if (error) throw error;
+
+      // `status` is not writable from the browser — an account must not be able
+      // to un-suspend itself. The RPC re-checks the caller server-side.
+      if (status !== artist.status) {
+        const { error: statusError } = await supabase.rpc('admin_set_profile_status' as never, {
+          p_user_id: artist.id,
+          p_status: status,
+        } as never);
+
+        if (statusError) throw statusError;
+      }
 
       toast.success('Data artist berhasil diupdate');
       onSuccess();

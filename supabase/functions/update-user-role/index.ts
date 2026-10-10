@@ -77,11 +77,23 @@ Deno.serve(async (req) => {
     )
 
     // Check target user's current role
-    const { data: targetRole } = await supabaseAdmin
+    const { data: targetRole, error: targetRoleError } = await supabaseAdmin
       .from('user_roles')
       .select('role')
       .eq('user_id', user_id)
-      .single()
+      .maybeSingle()
+
+    if (targetRoleError) throw targetRoleError
+
+    if (!targetRole) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'User not found' }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 404,
+        }
+      )
+    }
 
     // Non-superadmin admins cannot change superadmin roles
     if (targetRole?.role === 'superadmin' && !isSuperadmin) {

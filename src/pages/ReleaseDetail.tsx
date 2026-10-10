@@ -38,6 +38,7 @@ import {
   SkipBack,
   SkipForward,
   Download,
+  Copy,
   AlertCircle,
   Eye,
   FileText,
@@ -341,6 +342,30 @@ export default function ReleaseDetail() {
   const playNext = () => {
     if (currentTrackIndex !== null && currentTrackIndex < tracksWithAudio.length - 1) {
       playTrack(currentTrackIndex + 1);
+    }
+  };
+
+  const copyAudioLink = async (url: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = url;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+
+        const copied = document.execCommand('copy');
+        textArea.remove();
+        if (!copied) throw new Error('Copy command failed');
+      }
+
+      toast.success('Link audio berhasil disalin');
+    } catch (error) {
+      console.error('Error copying audio link:', error);
+      toast.error('Gagal menyalin link audio');
     }
   };
 
@@ -745,7 +770,7 @@ export default function ReleaseDetail() {
                           <TableHead>Artist</TableHead>
                           <TableHead>Composer</TableHead>
                           <TableHead>Genre</TableHead>
-                          <TableHead className="w-16">Audio</TableHead>
+                          <TableHead className="w-20">Audio</TableHead>
                           {isAdmin && <TableHead className="w-16">Full Audio</TableHead>}
                           {isAdmin && <TableHead className="w-16">Clip</TableHead>}
                         </TableRow>
@@ -774,24 +799,38 @@ export default function ReleaseDetail() {
                               <TableCell>{track.genre || '-'}</TableCell>
                               <TableCell>
                                 {track.audio_url ? (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => {
-                                      if (isCurrentTrack && isPlaying) {
-                                        togglePlayPause();
-                                      } else {
-                                        playTrack(audioIndex);
-                                      }
-                                    }}
-                                  >
-                                    {isCurrentTrack && isPlaying ? (
-                                      <Pause className="h-4 w-4" />
-                                    ) : (
-                                      <Play className="h-4 w-4" />
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => {
+                                        if (isCurrentTrack && isPlaying) {
+                                          togglePlayPause();
+                                        } else {
+                                          playTrack(audioIndex);
+                                        }
+                                      }}
+                                      title={isCurrentTrack && isPlaying ? 'Pause audio' : 'Putar audio'}
+                                    >
+                                      {isCurrentTrack && isPlaying ? (
+                                        <Pause className="h-4 w-4" />
+                                      ) : (
+                                        <Play className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                    {isAdmin && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => copyAudioLink(track.audio_url!)}
+                                        title="Salin link audio"
+                                      >
+                                        <Copy className="h-4 w-4 text-muted-foreground" />
+                                      </Button>
                                     )}
-                                  </Button>
+                                  </div>
                                 ) : (
                                   <span className="text-xs text-muted-foreground">-</span>
                                 )}

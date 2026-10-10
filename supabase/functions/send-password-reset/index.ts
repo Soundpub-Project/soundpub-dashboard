@@ -1,4 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+import { buildCorsHeaders } from '../_shared/cors.ts'
+import { sha256Hex } from '../_shared/auth.ts'
 
 const getDatabaseSchema = () =>
   Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'Soundpub'
@@ -9,12 +11,6 @@ const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options:
     ...options,
     db: { ...existingDb, schema: getDatabaseSchema() },
   })
-}
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
 async function measureStep<T>(requestId: string, name: string, action: () => Promise<T>): Promise<T> {
@@ -31,6 +27,8 @@ async function measureStep<T>(requestId: string, name: string, action: () => Pro
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req)
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders, status: 200 })
   }
@@ -56,29 +54,46 @@ Deno.serve(async (req) => {
       )
     }
 
-    const { data: rateLimitData, error: rateLimitError } = await measureStep(requestId, 'rpc_check_rate_limit', () =>
-      supabase.rpc('check_rate_limit', {
-        p_identifier: email,
-        p_action_type: 'password_reset',
-        p_max_attempts: 3,
-        p_window_minutes: 60,
-      })
-    )
+    // Rate limit on the email *and* the source IP. Email alone lets one host
+    // walk a list of addresses; IP alone lets a distributed caller grind a
+    // single mailbox.
+    const clientIp = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'unknown'
+    const limits: Array<{ identifier: string; maxAttempts: number }> = [
+      { identifier: `email:${email}`, maxAttempts: 3 },
+      { identifier: `ip:${clientIp}`, maxAttempts: 10 },
+    ]
 
-    if (rateLimitError) {
-      console.error(`[send-password-reset:${requestId}] rpc_check_rate_limit:supabase_error`, rateLimitError)
-    }
-
-    if (rateLimitData && !rateLimitData.allowed) {
-      console.log(`[send-password-reset:${requestId}] request:end rate_limited ${Math.round(performance.now() - startedAt)}ms`)
-      return new Response(
-        JSON.stringify({
-          error: 'Too many attempts. Try again later.',
-          code: 'RATE_LIMIT_EXCEEDED',
-          retry_after_seconds: rateLimitData.retry_after_seconds || 3600,
-        }),
-        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    for (const limit of limits) {
+      const { data: rateLimitData, error: rateLimitError } = await measureStep(requestId, 'rpc_check_rate_limit', () =>
+        supabase.rpc('check_rate_limit', {
+          p_identifier: limit.identifier,
+          p_action_type: 'password_reset',
+          p_max_attempts: limit.maxAttempts,
+          p_window_minutes: 60,
+        })
       )
+
+      // Fail closed: if the limiter itself is broken we must not fall back to
+      // unlimited password-reset mail.
+      if (rateLimitError) {
+        console.error(`[send-password-reset:${requestId}] rpc_check_rate_limit:supabase_error`, rateLimitError)
+        return new Response(
+          JSON.stringify({ error: 'Too many attempts. Try again later.', code: 'RATE_LIMIT_EXCEEDED', retry_after_seconds: 3600 }),
+          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (rateLimitData && !rateLimitData.allowed) {
+        console.log(`[send-password-reset:${requestId}] request:end rate_limited ${Math.round(performance.now() - startedAt)}ms`)
+        return new Response(
+          JSON.stringify({
+            error: 'Too many attempts. Try again later.',
+            code: 'RATE_LIMIT_EXCEEDED',
+            retry_after_seconds: rateLimitData.retry_after_seconds || 3600,
+          }),
+          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
     }
 
     const { data: profile, error: profileError } = await measureStep(requestId, 'profiles_select', () =>
@@ -101,19 +116,30 @@ Deno.serve(async (req) => {
       )
     }
 
-    const token = crypto.randomUUID()
+    // 256 bits of entropy, and only its hash is persisted — a leaked `profiles`
+    // row can no longer be turned into a working reset link.
+    const tokenBytes = new Uint8Array(32)
+    crypto.getRandomValues(tokenBytes)
+    const token = Array.from(tokenBytes).map((b) => b.toString(16).padStart(2, '0')).join('')
+    const tokenHash = await sha256Hex(token)
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
 
     const { error: updateError } = await measureStep(requestId, 'profiles_update_token', () =>
       supabase.from('profiles').update({
-        password_reset_token: token,
+        password_reset_token: tokenHash,
         password_reset_token_expires_at: expiresAt.toISOString(),
         password_reset_sent_at: new Date().toISOString(),
       }).eq('id', profile.id)
     )
 
+    // Without a stored token the link cannot work, so stop rather than mail a
+    // dead one.
     if (updateError) {
       console.error(`[send-password-reset:${requestId}] profiles_update_token:supabase_error`, updateError)
+      return new Response(
+        JSON.stringify({ error: 'Internal error', code: 'INTERNAL_ERROR' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
     const resetUrl = `${appUrl}/reset-password?token=${token}`
@@ -140,7 +166,7 @@ Deno.serve(async (req) => {
           templateName: 'password-reset',
           recipientUserId: profile.id,
           templateData: { resetUrl },
-          idempotencyKey: `password-reset-${token}`,
+          idempotencyKey: `password-reset-${tokenHash}`,
         },
       })
     )

@@ -1,6 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+import { buildCorsHeaders } from '../_shared/cors.ts'
+import { sha256Hex } from '../_shared/auth.ts'
 
-const getDatabaseSchema = () => 
+const getDatabaseSchema = () =>
   Deno.env.get('DATABASE_SCHEMA') || 'Soundpub'
 
 const createSoundpubClient = (url: string, key: string) => {
@@ -10,13 +12,9 @@ const createSoundpubClient = (url: string, key: string) => {
   })
 }
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
-
 Deno.serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req)
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders, status: 200 })
   }
@@ -45,11 +43,32 @@ Deno.serve(async (req) => {
       )
     }
     
-    // Get profile by token
+    // Rate limit by source IP: without it the token space can be ground
+    // through this endpoint, which both verifies and consumes a token.
+    const clientIp = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'unknown'
+    const { data: rateLimitData, error: rateLimitError } = await supabase.rpc('check_rate_limit', {
+      p_identifier: `ip:${clientIp}`,
+      p_action_type: 'password_reset_submit',
+      p_max_attempts: 10,
+      p_window_minutes: 60,
+    })
+
+    // Fail closed — a broken limiter must not mean unlimited guesses.
+    if (rateLimitError || (rateLimitData && !rateLimitData.allowed)) {
+      if (rateLimitError) console.error('check_rate_limit error:', rateLimitError)
+      return new Response(
+        JSON.stringify({ success: false, error: 'Too many attempts. Try again later.' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Tokens are stored hashed, so look up by the digest.
+    const tokenHash = await sha256Hex(token)
+
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id, email, full_name, password_reset_token_expires_at')
-      .eq('password_reset_token', token)
+      .eq('password_reset_token', tokenHash)
       .maybeSingle()
     
     if (profileError || !profile) {

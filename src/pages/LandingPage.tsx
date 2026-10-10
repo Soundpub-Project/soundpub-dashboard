@@ -23,7 +23,7 @@ interface CatalogTrack {
   artist_name: string;
   isrc: string | null;
   genre: string | null;
-  audio_url: string | null;
+  // The public catalog returns the preview clip only, never the full master.
   clip_url: string | null;
   duration: number | null;
 }

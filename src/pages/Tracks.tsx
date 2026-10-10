@@ -74,6 +74,7 @@ export default function Tracks() {
   // Filters
   const [artistFilter, setArtistFilter] = useState<string>('all');
   const [genreFilter, setGenreFilter] = useState<string>('all');
+  const [labelFilter, setLabelFilter] = useState<string>('all');
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -164,6 +165,10 @@ export default function Tracks() {
     return [...new Set(tracks.map(t => t.genre).filter(Boolean))] as string[];
   }, [tracks]);
 
+  const sortedLabels = useMemo(() => {
+    return [...labels].sort((a, b) => a.full_name.localeCompare(b.full_name));
+  }, [labels]);
+
   // Safe filtering with null checks
   const filteredTracks = useMemo(() => {
     return tracks.filter((track) => {
@@ -180,10 +185,12 @@ export default function Tracks() {
 
       const matchesArtist = artistFilter === 'all' || track.artist_name === artistFilter;
       const matchesGenre = genreFilter === 'all' || track.genre === genreFilter;
+      const release = releases.find(item => item.id === track.release_id);
+      const matchesLabel = labelFilter === 'all' || release?.label_id === labelFilter;
 
-      return matchesSearch && matchesArtist && matchesGenre;
+      return matchesSearch && matchesArtist && matchesGenre && matchesLabel;
     });
-  }, [tracks, searchTerm, artistFilter, genreFilter]);
+  }, [tracks, releases, searchTerm, artistFilter, genreFilter, labelFilter]);
 
   // Pagination logic
   const paginatedTracks = useMemo(() => {
@@ -201,13 +208,14 @@ export default function Tracks() {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, artistFilter, genreFilter, pageSize]);
+  }, [searchTerm, artistFilter, genreFilter, labelFilter, pageSize]);
 
-  const hasActiveFilters = artistFilter !== 'all' || genreFilter !== 'all';
+  const hasActiveFilters = artistFilter !== 'all' || genreFilter !== 'all' || labelFilter !== 'all';
 
   const clearFilters = () => {
     setArtistFilter('all');
     setGenreFilter('all');
+    setLabelFilter('all');
   };
 
   const renderPaginationItems = () => {
@@ -300,6 +308,20 @@ export default function Tracks() {
                     {uniqueGenres.map((genre) => (
                       <SelectItem key={genre} value={genre}>
                         {genre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={labelFilter} onValueChange={setLabelFilter}>
+                  <SelectTrigger className="w-[180px] h-9">
+                    <SelectValue placeholder="Label" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Semua Label</SelectItem>
+                    {sortedLabels.map((label) => (
+                      <SelectItem key={label.id} value={label.id}>
+                        {label.full_name}
                       </SelectItem>
                     ))}
                   </SelectContent>

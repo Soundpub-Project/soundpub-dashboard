@@ -42,19 +42,15 @@ export function DeleteReleaseDialog({ open, onOpenChange, release, onSuccess }: 
           .maybeSingle();
 
         if (payment) {
-          // Credit balance back
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('balance')
-            .eq('id', payment.user_id)
-            .single();
+          // Credit balance back. The RPC adds to the balance in a single
+          // statement and checks the caller's role server-side; the old
+          // read-then-write from the browser could lose a concurrent refund.
+          const { error: creditError } = await supabase.rpc('admin_credit_balance' as never, {
+            p_user_id: payment.user_id,
+            p_amount: payment.amount,
+          } as never);
 
-          if (profile) {
-            await supabase
-              .from('profiles')
-              .update({ balance: profile.balance + payment.amount })
-              .eq('id', payment.user_id);
-          }
+          if (creditError) throw creditError;
 
           // Update payment status to refunded
           await supabase
