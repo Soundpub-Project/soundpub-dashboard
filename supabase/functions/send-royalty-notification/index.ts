@@ -122,6 +122,21 @@ Deno.serve(async (req) => {
     }
 
     const payload: NotificationPayload = await req.json()
+
+    if (
+      !payload?.uploadId ||
+      !payload?.uploadedBy ||
+      typeof payload.totalRows !== 'number' ||
+      typeof payload.insertedCount !== 'number' ||
+      typeof payload.totalRevenue !== 'number' ||
+      !Array.isArray(payload.affectedLabels) ||
+      !Array.isArray(payload.balanceUpdates)
+    ) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Invalid notification payload' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
     
     console.log('Sending royalty notification:', payload)
 

@@ -1,5 +1,6 @@
 ﻿import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { ArrowLeft, Check, Disc3, ImageIcon, ListMusic } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -32,6 +33,12 @@ export default function ReleaseCreate() {
 
   const handleClose = () => navigate('/dashboard/releases');
   const handleSuccess = () => navigate('/dashboard/releases');
+
+  useEffect(() => {
+    if (isArtist && !isArtistProfileCompleted) {
+      setOnboardingOpen(true);
+    }
+  }, [isArtist, isArtistProfileCompleted]);
 
   return (
     <DashboardLayout>
@@ -104,7 +111,7 @@ export default function ReleaseCreate() {
 
           <Card className="border-border/60 bg-card/70 shadow-sm">
             <CardContent className="p-4 md:p-6">
-              <ReleaseFormPage
+              {(!isArtist || isArtistProfileCompleted) && <ReleaseFormPage
                 open
                 onOpenChange={(open) => {
                   if (!open) handleClose();
@@ -112,7 +119,7 @@ export default function ReleaseCreate() {
                 release={null}
                 onSuccess={handleSuccess}
                 onStepChange={setCurrentStep}
-              />
+              />}
             </CardContent>
           </Card>
         </div>
@@ -120,13 +127,14 @@ export default function ReleaseCreate() {
 
       <ArtistOnboardingDialog
         open={onboardingOpen}
+        allowSkip={false}
         onOpenChange={(open) => {
           setOnboardingOpen(open);
           if (!open && isArtist && !isArtistProfileCompleted) {
             handleClose();
           }
         }}
-        onSuccess={async () => {
+        onComplete={async () => {
           await refreshProfile();
           setOnboardingOpen(false);
         }}

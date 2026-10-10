@@ -637,7 +637,7 @@ export default function Dashboard() {
       <ArtistOnboardingDialog
         open={onboardingOpen}
         onOpenChange={setOnboardingOpen}
-        allowSkip={!(isArtist && isArtistProfileCompleted === false)}
+        allowSkip
         onComplete={() => {
           refreshProfile();
           setOnboardingOpen(false);

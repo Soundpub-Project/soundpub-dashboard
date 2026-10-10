@@ -1,7 +1,7 @@
 // Edge Function to update user role with server-side validation
 // Prevents privilege escalation by enforcing role change rules
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
-import { buildCorsHeaders } from '../_shared/cors.ts'
+import { corsHeaders } from '../_shared/cors.ts'
 
 const databaseSchema = Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'Soundpub'
 
@@ -11,8 +11,6 @@ interface UpdateRoleRequest {
 }
 
 Deno.serve(async (req) => {
-  const corsHeaders = buildCorsHeaders(req)
-
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -79,11 +77,23 @@ Deno.serve(async (req) => {
     )
 
     // Check target user's current role
-    const { data: targetRole } = await supabaseAdmin
+    const { data: targetRole, error: targetRoleError } = await supabaseAdmin
       .from('user_roles')
       .select('role')
       .eq('user_id', user_id)
-      .single()
+      .maybeSingle()
+
+    if (targetRoleError) throw targetRoleError
+
+    if (!targetRole) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'User not found' }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 404,
+        }
+      )
+    }
 
     // Non-superadmin admins cannot change superadmin roles
     if (targetRole?.role === 'superadmin' && !isSuperadmin) {
