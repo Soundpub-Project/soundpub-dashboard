@@ -102,6 +102,11 @@ export interface RoyaltyBatch {
   validation_result: Record<string, unknown>;
   checksum: string;
   status: 'UNRECONCILED' | 'VOIDED_WITH_OFFSET' | string;
+  replacement_batch_id: string | null;
+  replaces_batch_id: string | null;
+  change_reason: string | null;
+  change_actor_id: string | null;
+  changed_at: string | null;
   created_at: string;
 }
 
@@ -183,6 +188,10 @@ export const royaltiesApi = {
   correct: (id: string, reason: string) => apiRequest<{ id: string; replayed: boolean }>(`/api/v1/royalties/imports/${encodeURIComponent(id)}/correction`, {
     method: 'POST', body: { reason }, timeoutMs: 120000,
   }),
+  replaceCsv: (id: string, body: { csv: string; filename: string; expected_checksum: string; reason: string }) =>
+    apiRequest<{ id: string; replaced_id: string; replayed: boolean }>(`/api/v1/royalties/imports/${encodeURIComponent(id)}/replacement/csv`, {
+      method: 'POST', body, timeoutMs: 120000,
+    }),
   previewRoyaltyCsv: (csv: string, signal?: AbortSignal) => apiRequest<RoyaltyCsvPreview>('/api/v1/royalties/imports/csv/preview', {
     method: 'POST', body: { csv }, signal, timeoutMs: 120000,
   }),
