@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { customFinanceScope } from '../finance/custom.js';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
@@ -8,9 +9,16 @@ import { usersRepository } from '../users/repository.js';
 import { canonicalRow, decimal, fingerprint, importEnvelope, minor, parse, royaltyRow, type RoyaltyRow } from './contracts.js';
 import { MAX_MINOR } from '../finance/money.js';
 import { postEvent } from '../finance/index.js';
-import { previewLegacyRoyaltyCsv } from './legacy-preview.js';
+import { prepareLegacyRoyaltyCsv, previewLegacyRoyaltyCsv } from './legacy-preview.js';
+import { LEGACY_ROYALTY_POLICY } from './split.js';
 
 const allows = createAuthorizer();
+const csvCommitEnvelope = z.strictObject({
+  csv: z.string().min(1).max(1_000_000),
+  source: z.string().trim().min(1).max(200).regex(/^[^\x00-\x1f\x7f]+$/),
+  filename: z.string().trim().min(1).max(200).regex(/^[^\x00-\x1f\x7f\\/]+$/),
+  expected_checksum: z.string().regex(/^[0-9a-f]{64}$/),
+});
 export function createRoyaltiesService(pool: Pool) {
   async function authorized<T>(actor: Principal, admin: boolean, work: (db: PoolClient) => Promise<T>) {
     if (!allows(actor, admin ? 'admin' : 'authenticated')) throw new ApiError(403, 'FORBIDDEN');
@@ -22,7 +30,7 @@ export function createRoyaltiesService(pool: Pool) {
   }
   async function validate(db: PoolClient, input: unknown, lock = false) {
     const value = parse(importEnvelope, input);
-    const errors: { row: number; code: string }[] = [], rows: (RoyaltyRow & { beneficiary_id: string; artist_id: string })[] = [];
+    const errors: { row: number; code: string }[] = [], rows: (RoyaltyRow & { beneficiary_id: string; artist_id: string; label_owner_user_id: string })[] = [];
     const seen = new Set<string>(), ownerTotals = new Map<string, bigint>();
     let total = 0n, duplicates = 0, unknownMappings = 0;
     for (const [index, raw] of value.rows.entries()) {
@@ -34,7 +42,7 @@ export function createRoyaltiesService(pool: Pool) {
       }
       if (seen.has(row.source_row_id)) { duplicates++; errors.push({ row: index + 1, code: 'DUPLICATE_ROW' }); continue; }
       seen.add(row.source_row_id);
-      const mapping = await db.query<{ artist_id: string; financial_owner_user_id: string }>(`SELECT t.id, a.id AS artist_id,
+      const mapping = await db.query<{ artist_id: string; financial_owner_user_id: string; label_owner_user_id: string }>(`SELECT t.id, a.id AS artist_id,r.label_id AS label_owner_user_id,
         CASE WHEN a.management_mode='LABEL_CUSTOM_MANAGED' THEN unit.owner_user_id
           ELSE a.artist_user_id END AS financial_owner_user_id
         FROM soundpub.tracks t JOIN soundpub.releases r ON r.id=t.release_id
@@ -56,10 +64,12 @@ export function createRoyaltiesService(pool: Pool) {
       }
       row.beneficiary_id = resolved.financial_owner_user_id;
       row.artist_id = resolved.artist_id;
+      const resolvedRow = row as RoyaltyRow & { beneficiary_id: string; artist_id: string; label_owner_user_id: string };
+      resolvedRow.label_owner_user_id = resolved.label_owner_user_id;
       const ownerTotal = (ownerTotals.get(row.beneficiary_id) ?? 0n) + minor(row.net_amount);
       if (ownerTotal > MAX_MINOR) { errors.push({ row: index + 1, code: 'BENEFICIARY_AMOUNT_LIMIT' }); continue; }
       ownerTotals.set(row.beneficiary_id, ownerTotal);
-      rows.push(row as RoyaltyRow & { beneficiary_id: string; artist_id: string }); total += minor(row.net_amount);
+      rows.push(resolvedRow); total += minor(row.net_amount);
     }
     const checksum = errors.length ? null : fingerprint(value.source, value.period, value.currency, rows);
     const summary = { valid_rows: rows.length, invalid_rows: errors.length, total_amount: decimal(total),
@@ -96,10 +106,62 @@ export function createRoyaltiesService(pool: Pool) {
   return {
     async previewCsv(actor: Principal, input: unknown) {
       const value = parse(z.strictObject({ csv: z.string().min(1).max(1_000_000) }), input);
-      return authorized(actor, true, async () => previewLegacyRoyaltyCsv(value.csv));
+      return authorized(actor, true, async db => previewLegacyRoyaltyCsv(db, value.csv));
     },
     async preview(actor: Principal, input: unknown) {
       return authorized(actor, true, async db => (await validate(db, input)).summary);
+    },
+    async commitCsv(actor: Principal, input: unknown, requestId: string) {
+      const value = parse(csvCommitEnvelope, input);
+      return authorized(actor, true, async db => {
+        await db.query("SELECT pg_advisory_xact_lock(hashtextextended('royalty-csv-import',0))");
+        const prepared = await prepareLegacyRoyaltyCsv(db, value.csv);
+        if (prepared.issues.length || !prepared.checksum || !prepared.rows.length || prepared.rows.length > 1000)
+          throw new ApiError(400, 'ROYALTY_IMPORT_INVALID');
+        if (prepared.checksum !== value.expected_checksum) throw new ApiError(409, 'ROYALTY_PREVIEW_STALE');
+        const period = prepared.rows[0]!.period;
+        const batchChecksum = createHash('sha256').update(JSON.stringify({ source: value.source,
+          checksum: prepared.checksum })).digest('hex');
+        const existing = (await db.query<{ id: string }>(
+          'SELECT id FROM soundpub.royalty_import_batches WHERE checksum=$1', [batchChecksum])).rows[0];
+        if (existing) return { id: existing.id, replayed: true };
+        const conflict = await db.query(`SELECT batch.id FROM soundpub.royalty_import_batches batch
+          LEFT JOIN soundpub.royalty_import_corrections correction ON correction.batch_id=batch.id
+          WHERE batch.source=$1 AND batch.period=$2 AND correction.id IS NULL LIMIT 1`, [value.source,period]);
+        if (conflict.rowCount) throw new ApiError(409, 'ROYALTY_PERIOD_CONFLICT');
+        const total = decimal(prepared.totals.net);
+        const validation = { valid_rows: prepared.rows.length, invalid_rows: 0, period, currency: 'IDR',
+          policy_code: LEGACY_ROYALTY_POLICY.code, checksum: prepared.checksum,
+          total_net_amount: total, artist_amount: decimal(prepared.totals.artist),
+          label_amount: decimal(prepared.totals.label), soundpub_amount: decimal(prepared.totals.soundpub) };
+        const batch = (await db.query<{ id: string }>(`INSERT INTO soundpub.royalty_import_batches
+          (source,period,currency,checksum,filename,uploader_id,row_count,total_amount,validation_result)
+          VALUES ($1,$2,'IDR',$3,$4,$5,$6,$7,$8::jsonb) RETURNING id`,
+        [value.source,period,batchChecksum,value.filename,actor.id,prepared.rows.length,total,JSON.stringify(validation)])).rows[0]!;
+        for (const row of prepared.rows) {
+          const entry = (await db.query<{ id: string }>(`INSERT INTO soundpub.royalty_import_entries
+            (batch_id,source,period,source_row_id,beneficiary_id,release_id,track_id,platform,gross_amount,deduction_amount,
+              net_amount,artist_id,financial_owner_user_id,label_owner_user_id,calculation_policy_code,source_isrc,source_upc,
+              source_row_number,country,sales_type,sales_unit)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'0',$9,$10,$5,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id`,
+          [batch.id,value.source,period,value.filename + ':' + row.sourceRowNumber,row.artistOwnerUserId,row.releaseId,
+            row.trackId,row.platform,decimal(row.netMinor),row.artistId,row.labelOwnerUserId,LEGACY_ROYALTY_POLICY.code,
+            row.isrc,row.upc || row.catalogUpc || null,row.sourceRowNumber,row.country,row.salesType ?? null,row.salesUnit])).rows[0]!;
+          const allocations = [
+            ['ARTIST',row.artistOwnerUserId,row.split.artistMinor],
+            ['LABEL',row.labelOwnerUserId,row.split.labelMinor],
+            ['SOUNDPUB',null,row.split.soundpubMinor],
+          ] as const;
+          for (const [component, ownerId, amount] of allocations) if (amount > 0n) await db.query(`INSERT INTO soundpub.royalty_import_allocations
+            (entry_id,component,owner_id,amount,policy_code) VALUES($1,$2,$3,$4,$5)`,
+          [entry.id,component,ownerId,decimal(amount),LEGACY_ROYALTY_POLICY.code]);
+        }
+        await recordEarnings(db, actor, batch.id);
+        await audit(db, actor, batch.id, 'royalty.csv_imported', requestId, { amount: total, currency: 'IDR',
+          credited_amount: decimal(prepared.totals.artist + prepared.totals.label), soundpub_amount: decimal(prepared.totals.soundpub),
+          old_state: null, new_state: 'UNRECONCILED', idempotency_reference: batchChecksum });
+        return { id: batch.id, replayed: false };
+      });
     },
     async commit(actor: Principal, input: unknown, requestId: string) {
       return authorized(actor, true, async db => {
@@ -120,10 +182,10 @@ export function createRoyaltiesService(pool: Pool) {
         for (const row of rows) {
           const entry = (await db.query<{ id: string }>(`INSERT INTO soundpub.royalty_import_entries
             (batch_id,source,period,source_row_id,beneficiary_id,release_id,track_id,platform,gross_amount,deduction_amount,
-              net_amount,artist_id,financial_owner_user_id,calculation_policy_code)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$5,'BACKEND_SINGLE_OWNER_V1') RETURNING id`,
+              net_amount,artist_id,financial_owner_user_id,label_owner_user_id,calculation_policy_code)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$5,$13,'BACKEND_SINGLE_OWNER_V1') RETURNING id`,
           [batch.id,value.source,value.period,row.source_row_id,row.beneficiary_id,row.release_id,row.track_id,row.platform,
-            row.gross_amount,row.deduction_amount,row.net_amount,row.artist_id])).rows[0]!;
+            row.gross_amount,row.deduction_amount,row.net_amount,row.artist_id,row.label_owner_user_id])).rows[0]!;
           if (minor(row.net_amount) > 0n) await db.query(`INSERT INTO soundpub.royalty_import_allocations
             (entry_id,component,owner_id,amount,policy_code)
             VALUES ($1,'LEGACY_OWNER',$2,$3,'BACKEND_SINGLE_OWNER_V1')`, [entry.id,row.beneficiary_id,row.net_amount]);
@@ -145,9 +207,14 @@ export function createRoyaltiesService(pool: Pool) {
       return authorized(actor, true, async db => {
         const batch = (await db.query(`SELECT ${batchProjection} ${batchJoin} WHERE b.id=$1`, [id])).rows[0];
         if (!batch) throw new ApiError(404, 'NOT_FOUND');
-        const entries = (await db.query(`SELECT id,source_row_id,beneficiary_id,artist_id,financial_owner_user_id,release_id,track_id,
-          gross_amount::text,deduction_amount::text,net_amount::text FROM soundpub.royalty_import_entries
-          WHERE batch_id=$1 ORDER BY source_row_id`, [id])).rows;
+        const entries = (await db.query(`SELECT e.id,e.source_row_id,e.source_row_number,e.source_isrc,e.source_upc,
+          e.beneficiary_id,e.artist_id,e.financial_owner_user_id,e.label_owner_user_id,e.calculation_policy_code,
+          e.release_id,e.track_id,e.platform,e.country,e.sales_type,e.sales_unit,
+          e.gross_amount::text,e.deduction_amount::text,e.net_amount::text,
+          COALESCE((SELECT jsonb_agg(jsonb_build_object('id',a.id,'component',a.component,'owner_id',a.owner_id,
+            'amount',a.amount::text,'policy_code',a.policy_code) ORDER BY a.component,a.id)
+            FROM soundpub.royalty_import_allocations a WHERE a.entry_id=e.id),'[]'::jsonb) AS allocations
+          FROM soundpub.royalty_import_entries e WHERE e.batch_id=$1 ORDER BY e.source_row_id,e.id`, [id])).rows;
         return { ...batch, entries };
       });
     },
@@ -187,12 +254,13 @@ export function createRoyaltiesService(pool: Pool) {
           WHERE r.id=$1 AND r.label_id=$2 AND unit.owner_user_id=$2`, [query.release_id, actor.id])).rowCount)
           throw new ApiError(404, 'NOT_FOUND');
         const items = (await db.query(`SELECT e.artist_id,e.release_id,e.track_id,e.platform,e.period,
-          sum(e.gross_amount)::text AS gross_earnings,
-          sum(CASE WHEN c.id IS NULL THEN 0 ELSE -e.net_amount END)::text AS corrections,
-          sum(CASE WHEN c.id IS NULL THEN e.net_amount ELSE 0 END)::text AS net_earnings
-          FROM soundpub.royalty_import_entries e
+          sum(a.amount)::text AS gross_earnings,
+          sum(CASE WHEN c.id IS NULL THEN 0 ELSE -a.amount END)::text AS corrections,
+          sum(CASE WHEN c.id IS NULL THEN a.amount ELSE 0 END)::text AS net_earnings
+          FROM soundpub.royalty_import_allocations a
+          JOIN soundpub.royalty_import_entries e ON e.id=a.entry_id
           LEFT JOIN soundpub.royalty_import_corrections c ON c.batch_id=e.batch_id
-          WHERE e.financial_owner_user_id=$1 AND ($2::uuid IS NULL OR e.artist_id=$2)
+          WHERE a.owner_id=$1 AND ($2::uuid IS NULL OR e.artist_id=$2)
             AND ($3::uuid IS NULL OR e.release_id=$3) AND ($4::text IS NULL OR e.period=$4)
           GROUP BY e.artist_id,e.release_id,e.track_id,e.platform,e.period
           ORDER BY e.period DESC,e.artist_id,e.release_id,e.track_id,e.platform
@@ -208,16 +276,17 @@ export function createRoyaltiesService(pool: Pool) {
         await customFinanceScope(db, actor.id);
         const current = (await usersRepository(db).lock([actor.id], false)).get(actor.id);
         if (beneficiary !== actor.id && !allows(current ?? null, 'admin')) throw new ApiError(403, 'FORBIDDEN');
-        const row = (await db.query(`SELECT COALESCE(sum(e.gross_amount),0)::numeric(24,2)::text AS gross_earnings,
-          COALESCE(sum(CASE WHEN c.id IS NOT NULL THEN -e.net_amount ELSE 0 END),0)::numeric(24,2)::text AS corrections,
-          COALESCE(sum(CASE WHEN c.id IS NULL THEN e.net_amount ELSE 0 END),0)::numeric(24,2)::text AS net_earnings
-          FROM soundpub.royalty_import_entries e LEFT JOIN soundpub.royalty_import_corrections c ON c.batch_id=e.batch_id
-          WHERE e.financial_owner_user_id=$1`, [beneficiary])).rows[0];
+        const row = (await db.query(`SELECT COALESCE(sum(a.amount),0)::numeric(24,2)::text AS gross_earnings,
+          COALESCE(sum(CASE WHEN c.id IS NOT NULL THEN -a.amount ELSE 0 END),0)::numeric(24,2)::text AS corrections,
+          COALESCE(sum(CASE WHEN c.id IS NULL THEN a.amount ELSE 0 END),0)::numeric(24,2)::text AS net_earnings
+          FROM soundpub.royalty_import_allocations a
+          JOIN soundpub.royalty_import_entries e ON e.id=a.entry_id
+          LEFT JOIN soundpub.royalty_import_corrections c ON c.batch_id=e.batch_id
+          WHERE a.owner_id=$1`, [beneficiary])).rows[0];
         return { beneficiary_id: beneficiary, currency: 'IDR', ...row, status: 'UNRECONCILED', available_balance: null };
       });
     },
   };
 }
 export type RoyaltiesService = ReturnType<typeof createRoyaltiesService>;
-
 

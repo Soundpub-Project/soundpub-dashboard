@@ -46,9 +46,9 @@ test('royalty allocation PostgreSQL constraints preserve exact owner totals', {
     await runtime.query('BEGIN');
     await runtime.query(`INSERT INTO soundpub.royalty_import_entries
       (id,batch_id,source,period,source_row_id,beneficiary_id,release_id,track_id,gross_amount,deduction_amount,
-        net_amount,artist_id,financial_owner_user_id,calculation_policy_code)
-      VALUES($1,$2,'allocation-test','2026-10','row-1',$3,$4,$5,'100.00','0','100.00',$6,$3,'PRODUCTION_SPLIT_V1')`,
-    [ids.entry, ids.batch, ids.artistUser, ids.release, ids.track, ids.artist]);
+        net_amount,artist_id,financial_owner_user_id,label_owner_user_id,calculation_policy_code)
+      VALUES($1,$2,'allocation-test','2026-10','row-1',$3,$4,$5,'100.00','0','100.00',$6,$3,$7,'PRODUCTION_SPLIT_V1')`,
+    [ids.entry, ids.batch, ids.artistUser, ids.release, ids.track, ids.artist, ids.label]);
     await runtime.query(`INSERT INTO soundpub.royalty_import_allocations(entry_id,component,owner_id,amount,policy_code) VALUES
       ($1,'ARTIST',$2,'70.00','PRODUCTION_SPLIT_V1'),
       ($1,'LABEL',$3,'21.00','PRODUCTION_SPLIT_V1'),
@@ -71,9 +71,9 @@ test('royalty allocation PostgreSQL constraints preserve exact owner totals', {
     await runtime.query('BEGIN');
     await runtime.query(`INSERT INTO soundpub.royalty_import_entries
       (id,batch_id,source,period,source_row_id,beneficiary_id,release_id,track_id,gross_amount,deduction_amount,
-        net_amount,artist_id,financial_owner_user_id,calculation_policy_code)
-      VALUES($1,$2,'allocation-test','2026-10','row-2',$3,$4,$5,'10.00','0','10.00',$6,$3,'PRODUCTION_SPLIT_V1')`,
-    [mismatchEntry, ids.batch, ids.artistUser, ids.release, ids.track, ids.artist]);
+        net_amount,artist_id,financial_owner_user_id,label_owner_user_id,calculation_policy_code)
+      VALUES($1,$2,'allocation-test','2026-10','row-2',$3,$4,$5,'10.00','0','10.00',$6,$3,$7,'PRODUCTION_SPLIT_V1')`,
+    [mismatchEntry, ids.batch, ids.artistUser, ids.release, ids.track, ids.artist, ids.label]);
     await runtime.query(`INSERT INTO soundpub.royalty_import_allocations(entry_id,component,owner_id,amount,policy_code)
       VALUES($1,'ARTIST',$2,'9.99','PRODUCTION_SPLIT_V1')`, [mismatchEntry, ids.artistUser]);
     await assert.rejects(runtime.query('COMMIT'), /ROYALTY_ALLOCATION_SUM_MISMATCH/);

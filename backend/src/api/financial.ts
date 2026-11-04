@@ -33,6 +33,8 @@ export function registerFinancialRoutes(app: FastifyInstance, services: {
     app.get<{ Params: { id: string } }>('/api/v1/royalties/releases/:id', async request =>
       service.breakdown(await authenticate(request), { ...(request.query as object), release_id: request.params.id }));
     app.get('/api/v1/royalties/summary', async request => service.summary(await authenticate(request), request.query));
+    app.post('/api/v1/royalties/imports/csv/preview', async request => service.previewCsv(await authenticate(request), request.body));
+    app.post('/api/v1/royalties/imports/csv/commit', async request => service.commitCsv(await authenticate(request), request.body, request.id));
     app.post('/api/v1/royalties/imports/preview', async request => service.preview(await authenticate(request), request.body));
     app.post('/api/v1/royalties/imports/commit', async request => service.commit(await authenticate(request), request.body, request.id));
     app.get('/api/v1/royalties/imports', async request => service.history(await authenticate(request), request.query));
@@ -40,7 +42,7 @@ export function registerFinancialRoutes(app: FastifyInstance, services: {
     app.post('/api/v1/royalties/imports/:id/correction', async request => service.correct(await authenticate(request), (request.params as { id: string }).id, request.body, request.id));
     add('GET', '/api/v1/royalties/breakdown', 'getRoyaltyBreakdown');
     add('GET', '/api/v1/royalties/releases/:id', 'getReleaseRoyaltyBreakdown');
-    for (const [method,path,id] of [['GET','/api/v1/royalties/summary','getRoyaltySummary'],['POST','/api/v1/royalties/imports/preview','previewRoyaltyImport'],['POST','/api/v1/royalties/imports/commit','commitRoyaltyImport'],['GET','/api/v1/royalties/imports','listRoyaltyImports'],['GET','/api/v1/royalties/imports/:id','getRoyaltyImport'],['POST','/api/v1/royalties/imports/:id/correction','correctRoyaltyImport']]) add(method!,path!,id!);
+    for (const [method,path,id] of [['GET','/api/v1/royalties/summary','getRoyaltySummary'],['POST','/api/v1/royalties/imports/csv/preview','previewRoyaltyCsvImport'],['POST','/api/v1/royalties/imports/csv/commit','commitRoyaltyCsvImport'],['POST','/api/v1/royalties/imports/preview','previewRoyaltyImport'],['POST','/api/v1/royalties/imports/commit','commitRoyaltyImport'],['GET','/api/v1/royalties/imports','listRoyaltyImports'],['GET','/api/v1/royalties/imports/:id','getRoyaltyImport'],['POST','/api/v1/royalties/imports/:id/correction','correctRoyaltyImport']]) add(method!,path!,id!);
   }
   if (services.payouts) {
     const service = services.payouts;

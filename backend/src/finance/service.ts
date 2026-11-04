@@ -30,10 +30,11 @@ export function createBalanceService(pool: Pool) {
           WHERE p.id=$1 OR (p.parent_label_id=$1 AND EXISTS (SELECT 1 FROM soundpub.artists a
             WHERE a.artist_user_id=p.id AND a.label_id=$1 AND a.verified_at IS NOT NULL)) ORDER BY p.id`, [requested])).rows.map(row => row.id) : [requested];
         const accountIds = [...new Set(ids)];
-        const reconciliationRequired = custom ? !(await customReadiness(db, requested)).reconciled : Boolean((await db.query(`SELECT 1 FROM soundpub.royalty_import_entries entry
+        const reconciliationRequired = custom ? !(await customReadiness(db, requested)).reconciled : Boolean((await db.query(`SELECT 1 FROM soundpub.royalty_import_allocations allocation
+          JOIN soundpub.royalty_import_entries entry ON entry.id=allocation.entry_id
           JOIN soundpub.royalty_import_batches batch ON batch.id=entry.batch_id
           LEFT JOIN soundpub.royalty_import_corrections correction ON correction.batch_id=batch.id
-          WHERE entry.beneficiary_id=ANY($1::uuid[]) AND batch.status='UNRECONCILED' AND correction.id IS NULL LIMIT 1`, [accountIds])).rowCount);
+          WHERE allocation.owner_id=ANY($1::uuid[]) AND batch.status='UNRECONCILED' AND correction.id IS NULL LIMIT 1`, [accountIds])).rowCount);
         const total = empty();
         for (const id of accountIds) {
           const balance = await getBalance(db, id);

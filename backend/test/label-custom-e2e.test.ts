@@ -81,18 +81,30 @@ test('Label Custom Docker E2E: login-free artist, canonical royalties, admin rea
 
   const release = await releases.create(pic, {
     artist_id: artist.id, title: 'Synthetic Custom Release', artist_name: artist.name,
-    release_type: 'single', genre: 'Pop', release_date: '2026-12-01',
+    release_type: 'single', genre: 'Pop', release_date: '2026-12-01', upc: '1234567890123',
   }, 'label-custom-e2e-release');
   assert.equal(release.artist_id, artist.id);
   assert.equal(release.artist_user_id, null);
   assert.equal(release.label_id, pic.id);
   const { track } = await tracks.create(pic, release.id, {
-    release_version: release.version, title: 'Synthetic Custom Track', artist_name: artist.name,
+    release_version: release.version, title: 'Synthetic Custom Track', artist_name: artist.name, isrc: 'FRX762598330',
   }, 'label-custom-e2e-track');
   assert.equal(track.artist_id, artist.id);
   assert.equal(track.release_id, release.id);
   assert.deepEqual((await owner.query(`SELECT artist_id,artist_user_id FROM soundpub.tracks
     WHERE id=$1`, [track.id])).rows, [{ artist_id: artist.id, artist_user_id: null }]);
+  const csv = [
+    'period,isrc,upc,title,artist,label_name,platform,country,sales_type,sales_unit,net_revenue',
+    '2026-10,FRX762598330,1234567890123,Synthetic Custom Track,Synthetic Managed Artist,Synthetic PIC,Spotify,ID,stream,1,1000.00',
+  ].join('\n');
+  const csvPreview = await royalties.previewCsv(admin, { csv });
+  assert.equal(csvPreview.valid_rows, 1);
+  assert.equal(csvPreview.invalid_rows, 0);
+  assert.equal(csvPreview.sample_rows[0]?.track_id, track.id);
+  assert.equal(csvPreview.sample_rows[0]?.release_id, release.id);
+  assert.equal(csvPreview.sample_rows[0]?.artist_id, artist.id);
+  assert.equal(csvPreview.sample_rows[0]?.artist_owner_user_id, pic.id);
+  assert.equal(csvPreview.sample_rows[0]?.label_owner_user_id, pic.id);
 
   // Omit beneficiary_id and artist_id: import must derive both from canonical
   // track/release identity, despite the managed artist having no login account.
@@ -110,19 +122,26 @@ test('Label Custom Docker E2E: login-free artist, canonical royalties, admin rea
   assert.equal((await royalties.preview(admin, forged)).unknown_mappings, 1);
   await assert.rejects(royalties.commit(admin, forged, 'label-custom-e2e-forged-owner'),
     { code: 'ROYALTY_IMPORT_INVALID' });
-  const batch = await royalties.commit(admin, statement, 'label-custom-e2e-import');
+  assert.ok(csvPreview.checksum);
+  const csvCommit = { csv, source: 'synthetic-label-custom-csv', filename: 'synthetic.csv',
+    expected_checksum: csvPreview.checksum! };
+  const batch = await royalties.commitCsv(admin, csvCommit, 'label-custom-e2e-import');
   assert.equal(batch.replayed, false);
-  assert.deepEqual(await royalties.commit(admin, statement, 'label-custom-e2e-import-retry'),
+  assert.deepEqual(await royalties.commitCsv(admin, csvCommit, 'label-custom-e2e-import-retry'),
     { id: batch.id, replayed: true });
-  assert.deepEqual((await owner.query(`SELECT artist_id,financial_owner_user_id,beneficiary_id,
+  assert.deepEqual((await owner.query(`SELECT artist_id,financial_owner_user_id,label_owner_user_id,beneficiary_id,
     release_id,track_id,net_amount::text FROM soundpub.royalty_import_entries WHERE batch_id=$1`, [batch.id])).rows, [{
-    artist_id: artist.id, financial_owner_user_id: pic.id, beneficiary_id: pic.id,
+    artist_id: artist.id, financial_owner_user_id: pic.id, label_owner_user_id: pic.id, beneficiary_id: pic.id,
     release_id: release.id, track_id: track.id, net_amount: '1000.00',
   }]);
   assert.deepEqual((await owner.query(`SELECT a.component,a.owner_id,a.amount::text,a.policy_code
     FROM soundpub.royalty_import_allocations a JOIN soundpub.royalty_import_entries e ON e.id=a.entry_id
-    WHERE e.batch_id=$1`, [batch.id])).rows, [{
-    component: 'LEGACY_OWNER', owner_id: pic.id, amount: '1000.00', policy_code: 'BACKEND_SINGLE_OWNER_V1',
+    WHERE e.batch_id=$1 ORDER BY a.component`, [batch.id])).rows, [{
+    component: 'ARTIST', owner_id: pic.id, amount: '700.00', policy_code: 'SOUNDPUB_LEGACY_70_21_9',
+  }, {
+    component: 'LABEL', owner_id: pic.id, amount: '210.00', policy_code: 'SOUNDPUB_LEGACY_70_21_9',
+  }, {
+    component: 'SOUNDPUB', owner_id: null, amount: '90.00', policy_code: 'SOUNDPUB_LEGACY_70_21_9',
   }]);
   const breakdown = await royalties.breakdown(pic, {
     artist_id: artist.id, release_id: release.id, period: statement.period,
@@ -130,7 +149,7 @@ test('Label Custom Docker E2E: login-free artist, canonical royalties, admin rea
   assert.equal(breakdown.owner_id, pic.id);
   assert.equal(breakdown.currency, 'IDR');
   assert.deepEqual(breakdown.items, [{ artist_id: artist.id, release_id: release.id, track_id: track.id,
-    platform: 'UNKNOWN', period: statement.period, gross_earnings: '1250.00', corrections: '0', net_earnings: '1000.00' }]);
+    platform: 'Spotify', period: statement.period, gross_earnings: '910.00', corrections: '0', net_earnings: '910.00' }]);
   assert.equal((await balances.get(pic)).available, null);
 
   const bank = { bank_name: 'Synthetic Bank', account_number: '12345678', account_holder_name: 'Synthetic PIC' };
@@ -183,7 +202,7 @@ test('Label Custom Docker E2E: login-free artist, canonical royalties, admin rea
   assert.equal(approved.snapshot.batches[0][0], batch.id);
   assert.equal(approved.snapshot.events.length, 1);
   assert.deepEqual(await payouts.eligibility(pic), {
-    eligible: true, reasons: [], available: '1000.00', minimum: '100.00', currency: 'IDR',
+    eligible: true, reasons: [], available: '910.00', minimum: '100.00', currency: 'IDR',
   });
 
   // Every failed request above must leave both payout and reservation absent.
@@ -202,18 +221,18 @@ test('Label Custom Docker E2E: login-free artist, canonical royalties, admin rea
   assert.deepEqual((await owner.query(`SELECT owner_id,kind,amount_minor::text,business_reference
     FROM soundpub.finance_events ORDER BY kind`)).rows, [
     { owner_id: pic.id, kind: 'PAYOUT_RESERVATION', amount_minor: '60000', business_reference: payout.id },
-    { owner_id: pic.id, kind: 'ROYALTY_EARNING', amount_minor: '100000', business_reference: `royalty:${batch.id}` },
+    { owner_id: pic.id, kind: 'ROYALTY_EARNING', amount_minor: '91000', business_reference: `royalty:${batch.id}` },
   ]);
   const balance = await balances.get(pic);
   assert.equal(balance.owner_id, pic.id);
   assert.equal(balance.aggregate, false);
   assert.equal(balance.account_count, 1);
   assert.equal(balance.status, 'RECONCILED');
-  assert.equal(balance.available, '400.00');
+  assert.equal(balance.available, '310.00');
   assert.equal(balance.reserved, '600.00');
   const reserved = await payouts.eligibility(pic);
   assert.equal(reserved.eligible, false);
-  assert.equal(reserved.available, '400.00');
+  assert.equal(reserved.available, '310.00');
   assert.deepEqual(reserved.reasons, ['PENDING_PAYOUT']);
   assert.equal((await payouts.list(pic)).items.length, 1);
   await assert.rejects(payouts.request(pic, request, 'label-custom-e2e-second-payout'),

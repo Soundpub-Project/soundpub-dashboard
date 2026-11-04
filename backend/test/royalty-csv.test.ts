@@ -24,6 +24,12 @@ test('legacy CSV parser reports header and row errors without accepting invalid 
   assert.equal(invalid.rows.length, 0);
 });
 
+test('legacy CSV parser enforces production ISRC shape', () => {
+  const result = parseLegacyRoyaltyCsv(`period,isrc,platform,country,sales_unit,net_revenue\n2026-10,123456789012,Spotify,ID,1,1.00`);
+  assert.equal(result.rows.length, 0);
+  assert.equal(result.issues[0]?.code, 'INVALID_ISRC');
+});
+
 test('legacy CSV parser rejects multiple periods and malformed quoting', () => {
   const multiple = parseLegacyRoyaltyCsv(`${header}\n2026-09,FRX762598330,,,A,L,Spotify,ID,,1,1\n2026-10,FRX762598331,,,A,L,Spotify,ID,,1,2`);
   assert.equal(multiple.rows.length, 2);

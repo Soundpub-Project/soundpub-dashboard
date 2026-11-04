@@ -30,7 +30,7 @@ function fixture() {
       if (sql === 'ROLLBACK') { staged = []; inTransaction = false; return result(); }
       if (sql.includes('SELECT id, status FROM soundpub.backend_users')) return result([{ id: actor.id, status: 'active' }]);
       if (sql.includes('SELECT user_id, role')) return result([{ user_id: actor.id, role: options.staleAdmin ? 'user' : 'admin' }]);
-      if (sql.includes('SELECT t.id, a.id AS artist_id')) return result(options.missingMapping ? [] : [{ id: row.track_id, artist_id: '00000000-0000-4000-8000-000000000006', financial_owner_user_id: owner }]);
+      if (sql.includes('SELECT t.id, a.id AS artist_id')) return result(options.missingMapping ? [] : [{ id: row.track_id, artist_id: '00000000-0000-4000-8000-000000000006', financial_owner_user_id: owner, label_owner_user_id: owner }]);
       if (sql.includes('SELECT id FROM soundpub.royalty_import_batches')) return result(committed.includes('batch') ? [{ id: batchId }] : []);
       if (sql.includes('SELECT id FROM soundpub.royalty_import_entries')) return result(options.overlap ? [{ id: 'overlap' }] : []);
       if (sql.includes('INSERT INTO soundpub.royalty_import_batches')) { staged.push('batch'); return result([{ id: batchId }]); }
@@ -143,7 +143,7 @@ test('canonical artist and PIC owner assertions reject forged attribution', asyn
   const { beneficiary_id: _owner, ...serverResolved } = row;
   assert.equal((await f.service.preview(actor, { ...statement, rows: [serverResolved] })).valid_rows, 1);
   await f.service.commit(actor, statement, 'canonical');
-  assert.ok(f.calls.some(sql => sql.includes('net_amount,artist_id,financial_owner_user_id,calculation_policy_code)')));
+  assert.ok(f.calls.some(sql => sql.includes('net_amount,artist_id,financial_owner_user_id,label_owner_user_id,calculation_policy_code)')));
   assert.ok(f.calls.some(sql => sql.includes('GROUP BY allocation.owner_id')));
 });
 

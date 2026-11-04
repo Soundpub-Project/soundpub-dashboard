@@ -3,10 +3,11 @@ import type { PoolClient } from 'pg';
 /** Complete immutable batch set, correction state and non-payout ledger cutoff. */
 export async function reconciliationSnapshot(db: PoolClient, owner: string) {
   const row = (await db.query(`WITH batches AS (
-    SELECT e.batch_id, sum(e.net_amount)*100 AS amount, max(c.id::text) AS correction
-    FROM soundpub.royalty_import_entries e
+    SELECT e.batch_id, sum(a.amount)*100 AS amount, max(c.id::text) AS correction
+    FROM soundpub.royalty_import_allocations a
+    JOIN soundpub.royalty_import_entries e ON e.id=a.entry_id
     LEFT JOIN soundpub.royalty_import_corrections c ON c.batch_id=e.batch_id
-    WHERE e.financial_owner_user_id=$1 GROUP BY e.batch_id
+    WHERE a.owner_id=$1 GROUP BY e.batch_id
   ), expected AS (
     SELECT 'ROYALTY_EARNING' AS kind,'royalty:'||batch_id::text AS reference,amount FROM batches WHERE amount<>0
     UNION ALL SELECT 'ROYALTY_ADJUSTMENT','royalty:'||batch_id::text,-amount FROM batches WHERE correction IS NOT NULL AND amount<>0

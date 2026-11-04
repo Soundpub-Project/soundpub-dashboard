@@ -104,7 +104,7 @@ export function parseLegacyRoyaltyCsv(input: string): LegacyRoyaltyCsvResult {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) { fail('period', 'INVALID_PERIOD', 'Period wajib berformat YYYY-MM.'); continue; }
     const rawIsrc = values[index('isrc')]?.trim() ?? '';
     const isrc = rawIsrc.replace(/-/g, '').toUpperCase();
-    if (!/^[A-Z0-9]{12}$/.test(isrc)) { fail('isrc', 'INVALID_ISRC', 'ISRC harus 12 karakter alfanumerik setelah normalisasi.'); continue; }
+    if (!/^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(isrc)) { fail('isrc', 'INVALID_ISRC', 'ISRC harus 12 karakter alfanumerik setelah normalisasi.'); continue; }
     const upc = optional(values, index('upc')) ?? '';
     if (upc && !/^\d{12,13}$/.test(upc)) { fail('upc', 'INVALID_UPC', 'UPC harus 12 atau 13 digit.'); continue; }
     const platform = values[index('platform')]?.trim() ?? '';

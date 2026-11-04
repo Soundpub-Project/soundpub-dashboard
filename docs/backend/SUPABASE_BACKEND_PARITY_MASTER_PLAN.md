@@ -401,6 +401,14 @@ Gate: golden calculation fixtures lulus sampai minor unit; jumlah komponen sama 
 
 Gate: source total, accepted/rejected total, ledger posting, dan wallet balance konsisten; replay tidak mengubah hasil.
 
+### Implemented checkpoint - 2026-11-04
+
+- Phase 3 inline CSV parser, strict production ISRC shape, authoritative ISRC/UPC matcher, preview checksum, and API routes are verified.
+- Phase 4 snapshots stable artist, release label, ISRC, UPC, policy, and statement dimensions; historical artist drift fails closed while release-label ownership survives artist transfer.
+- Phase 5 production 70/21/9 row split writes immutable ARTIST, LABEL, and SOUNDPUB allocations. Label Custom artist+label components aggregate to PIC; SoundPub never enters user wallet.
+- Phase 6 inline CSV commit is atomic across batch, entries, allocations, ledger, audit, and outbox. Replay, stale preview, active source-period conflict, exact correction reversal, reporting, and readiness all use allocations.
+- Remaining Phase 3/6 scope: private uploaded file records, async worker parsing, large files, approval/replacement state machine, and reconciliation workflow beyond current readiness approval.
+
 ### Phase 7 - Reporting dan permission parity
 
 - Summary, period, release, track, dan artist breakdown.

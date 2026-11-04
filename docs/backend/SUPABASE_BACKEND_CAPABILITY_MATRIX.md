@@ -54,14 +54,14 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 
 | Capability | Supabase reference | Backend target/current | Frontend state | Status | Next evidence/work |
 | --- | --- | --- | --- | --- | --- |
-| CSV parsing | `UploadRoyalty.tsx` browser parser | backend streaming parser | Legacy UI parses browser-side | MAPPED | Pindahkan parser ke backend worker |
-| Required columns | period, isrc, platform, country, sales_unit, net_revenue | current backend requires canonical IDs and amount triplet | Kontrak berbeda | PARTIAL | Canonical CSV adapter compatibility |
+| CSV parsing | `UploadRoyalty.tsx` browser parser | strict server parser + authoritative matcher | Legacy UI still browser-side | VERIFIED | Move transport to private file/worker for large files |
+| Required columns | period, isrc, platform, country, sales_unit, net_revenue | legacy CSV adapter preserves required/optional columns | Legacy UI compatible | VERIFIED | Keep golden fixtures as format evolves |
 | Optional enrichment | UPC/title/artist/label/sales type | canonical lookup/matcher | Legacy browser DB lookups | MAPPED | Server-side matcher |
-| ISRC matching | tracks primary match | current import requires track UUID | Backend JSON UI manual | PARTIAL | ISRC lookup plus ambiguity handling |
-| UPC/release matching | releases lookup | current import requires release UUID | Backend JSON UI manual | PARTIAL | UPC lookup and release/track consistency |
-| Artist attribution | artist relation/history migration | beneficiary/artist validation | Backend supports explicit ID | PARTIAL | Historical resolver from period snapshot |
-| Label attribution | release/artist label snapshots | financial owner resolution | Label Custom supported | PARTIAL | Label/whitelabel production rule extraction |
-| Preview | browser validation and split preview | `/royalties/imports/preview` | Backend JSON preview | IMPLEMENTED | CSV errors/warnings compatibility |
+| ISRC matching | tracks primary match | normalized server lookup, ambiguity fail-closed, transfer-safe release ownership | Backend CSV API available | VERIFIED | Decide future recipient-pair versus exact-track ambiguity policy |
+| UPC/release matching | releases lookup | UPC assertion/narrowing plus release-track consistency | Backend CSV API available | VERIFIED | Add provider-specific UPC normalization only with evidence |
+| Artist attribution | artist relation/history migration | stable artist ID, historical ISRC conflict guard, allocation snapshot | Backend CSV API available | VERIFIED | Add manual review workflow for legacy unresolved identities |
+| Label attribution | release label snapshot | immutable `label_owner_user_id`; ordinary and Label Custom split verified | Label Custom supported | PARTIAL | Add explicit whitelabel E2E and reporting cutover |
+| Preview | browser validation and split preview | `/royalties/imports/csv/preview` with checksum, matching, split totals | Frontend not cut over | VERIFIED | Wire existing upload UI to backend DTO |
 | File upload | Edge Function receives parsed records | no private royalty file lifecycle | No backend file UI | MISSING | Import session + private upload intent |
 | Async parse | Edge Function synchronous | no parser worker | Tidak tersedia | MISSING | Worker job, progress, retry, resume |
 | Import history | `royalty_uploads` | import batches/history | Backend history tersedia | IMPLEMENTED | DTO and state compatibility |
@@ -75,16 +75,16 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Capability | Supabase reference | Backend target/current | Frontend state | Status | Next evidence/work |
 | --- | --- | --- | --- | --- | --- |
 | Net revenue source | CSV `net_revenue` | gross/deduction/net invariant | Kontrak berbeda | PARTIAL | Map source amount semantics |
-| SoundPub share | 9% dari `net_revenue`, dibulatkan per row ke 2 desimal | no generic policy engine | Legacy preview calculates | MAPPED | Versioned policy engine dan golden fixtures |
-| Label share | Sisa row setelah SoundPub 9% dan artist 70%; efektif sekitar 21% | Label Custom PIC posting only | Legacy preview calculates | PARTIAL | Versioned policy engine |
-| Artist share | 70% dari `net_revenue`, dibulatkan per row ke 2 desimal | owner posting, reporting attribution | Legacy preview calculates | PARTIAL | Contract-specific split policy |
+| SoundPub share | 9% dari `net_revenue`, dibulatkan per row ke 2 desimal | immutable SOUNDPUB allocation, excluded from user wallet | Frontend not cut over | VERIFIED | Add accounting destination/reporting for retained share |
+| Label share | Sisa row setelah SoundPub 9% dan artist 70%; efektif sekitar 21% | immutable LABEL allocation; ordinary label and Label Custom PIC verified | Frontend not cut over | VERIFIED | Add contract-specific policy variants later |
+| Artist share | 70% dari `net_revenue`, dibulatkan per row ke 2 desimal | immutable ARTIST allocation; managed artist aggregates to PIC | Frontend not cut over | VERIFIED | Add contract-specific policy variants later |
 | Composer share | composer royalty module | separate composer path | UI/module tersedia | PARTIAL | Integrate calculation and ledger attribution |
 | Rounding | SoundPub dan artist dibulatkan half-up per row; label menerima remainder row | integer minor units | Backend arithmetic safe | MAPPED | Golden production fixtures |
 | Policy effective date | implicit settings/current data | no generic versioned policy | Tidak terlihat | MISSING | Calculation policy schema |
-| Historical owner snapshot | royalty history guard migration | artist/beneficiary snapshot fields | Partial | PARTIAL | Label/contract snapshot migration |
+| Historical owner snapshot | royalty history guard migration | artist, label, ISRC, UPC, policy and component allocations snapshotted | Backend detail exposes trace | VERIFIED | Manual resolution for pre-snapshot unresolved rows |
 | Artist moves label | history guard/repair migrations | historical ownership tests | Backend tests tersedia | IMPLEMENTED | Compare exact production semantics |
 | Label Custom aggregation | new backend behavior | PIC financial owner | Backend UI/API tersedia | VERIFIED | Maintain artist-only reporting dimension |
-| Reversal/recalculation | replace/delete upload functions | immutable correction | Backend correction tersedia | IMPLEMENTED | Ledger reversal after reconciliation |
+| Reversal/recalculation | replace/delete upload functions | immutable correction reverses exact allocation-owner totals | Backend correction tersedia | VERIFIED | Replacement workflow remains separate |
 
 ## Ledger, balance, dan reconciliation
 
@@ -143,14 +143,15 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 - 2026-11-04: `npm run typecheck` PASS.
 - 2026-11-04: focused royalty and worker tests PASS.
 - 2026-11-04: isolated Docker `dashboard-sounpub-dev` rebuilt successfully.
-- 2026-11-04: `RUN_DOCKER_TESTS=1 npm test` produced 283 tests, 277 pass, 0 fail, 6 skipped.
+- 2026-11-04: `RUN_DOCKER_TESTS=1 npm test` produced 290 tests, 284 pass, 0 fail, 6 skipped.
 - Durable PASS includes PostgreSQL concurrency, finance ledger, payout, payment, historical ownership, release/track, RustFS media, Label Custom E2E, and deferred immutable royalty-allocation constraints.
-- Royalty entries now carry a calculation policy snapshot; immutable child allocations support ARTIST, LABEL, SOUNDPUB, COMPOSER, and LEGACY_OWNER components. Existing rows backfill exactly as one LEGACY_OWNER allocation. Ledger earnings and corrections aggregate allocation owners, not mutable current catalog ownership.
+- Royalty entries now carry calculation policy, artist, label, ISRC, UPC, and statement-dimension snapshots. Immutable child allocations support ARTIST, LABEL, SOUNDPUB, COMPOSER, and LEGACY_OWNER components. Existing rows backfill exactly as one LEGACY_OWNER allocation. Ledger, reporting, readiness, balance gates, earnings, and corrections aggregate allocation owners, not mutable current catalog ownership.
+- Inline CSV preview/commit now reparses and rematches server-side, verifies expected checksum, blocks active source-period conflicts, writes 70/21/9 allocations atomically, and proves ordinary-label plus Label Custom behavior on disposable PostgreSQL.
 
 ## Remaining blockers
 
-1. CSV upload commit still uses the canonical JSON path; file lifecycle, async parser, and large-file handling are not available.
-2. Allocation schema is complete; ordinary label and whitelabel still need server-side historical owner resolution and split-policy integration.
+1. Inline CSV preview/commit is complete for at most 1,000 matched rows; private file lifecycle, async parser, progress/retry, and large-file handling are not available.
+2. Ordinary label and Label Custom split are verified; whitelabel still needs explicit E2E and frontend reporting cutover.
 3. Whitelabel royalty dashboard remains direct Supabase.
 4. Track detail, period list, and generic export are missing.
 5. Payment provider, payout settlement provider, submission provider, and notification delivery remain partial or mock-oriented.
