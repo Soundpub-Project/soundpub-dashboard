@@ -1,6 +1,6 @@
 # Supabase to Backend Capability Matrix
 
-Snapshot: 2026-11-04. Baseline commit: `42dff07`.
+Snapshot: 2026-11-05. Baseline commit: `f275d74`.
 
 Dokumen ini adalah evidence tracker Phase 0. Status berubah hanya setelah source, contract, dan test evidence tersedia.
 
@@ -69,7 +69,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Delete upload | `delete-royalty-upload` + balance rebuild | immutable correction plus atomic CSV replacement; old batch retained and offset | Backend history uses requester-bound private replacement file sessions and immutable provenance | VERIFIED | Add superadmin takeover workflow for abandoned sessions |
 | Duplicate file | upload/source semantics | checksum replay protection | Backend checksum tersedia | IMPLEMENTED | Source-file checksum and provider-period key |
 | Duplicate row | source row key | source/period/source_row uniqueness | Backend tersedia | IMPLEMENTED | CSV row fingerprint compatibility |
-| Large file | browser memory + Edge Function | private upload and streaming preview accept up to 100 MB/100.000 rows; financial commit still uses legacy 1.000-row path | UI accepts private files up to 100 MB | PARTIAL | Set-based atomic commit from staged rows, browser streaming hash, detail pagination |
+| Large file | browser memory + Edge Function | private upload/preview accept up to 100 MB/100.000 rows; checksum-bound staging, current-owner revalidation, set-based entries/allocations, ledger, audit, outbox, and session finalization share one transaction | UI accepts private files up to 100 MB | VERIFIED | Browser streaming hash and detail pagination |
 
 ## Royalty calculation dan ownership
 
@@ -153,7 +153,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 
 ## Remaining blockers
 
-1. Private royalty files, streaming leased preview worker, durable row staging, heartbeat progress, retry state, authority revocation, checksum-bound session commit, and frontend signed-upload cutover are implemented; set-based large-file commit remains incomplete.
+1. Private royalty files, streaming leased preview worker, immutable checksum-bound staging, heartbeat progress, retry state, authority revocation, current-owner revalidation, set-based atomic session commit, and frontend signed-upload cutover are verified. Disposable PostgreSQL processes and commits 100.000 rows with 300.000 allocations in 110,5 seconds.
 2. Ordinary label, Whitelabel, artist, and Label Custom reporting scopes are verified; standalone WhitelabelDashboard roster/release widgets remain direct Supabase.
 3. Dedicated aggregate track endpoint remains optional; generic scoped report already supports `track_id`.
 5. Payment provider, payout settlement provider, submission provider, and notification delivery remain partial or mock-oriented.

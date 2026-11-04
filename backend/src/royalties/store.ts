@@ -31,7 +31,6 @@ export interface RoyaltyImportObjectStore {
   }>;
   verify(row: RoyaltyImportFileRow): Promise<void>;
   open(row: RoyaltyImportFileRow): Promise<AsyncIterable<Uint8Array>>;
-  read(row: RoyaltyImportFileRow): Promise<string>;
   download(row: RoyaltyImportFileRow): Promise<string>;
   remove(row: RoyaltyImportFileRow): Promise<void>;
   isReady(): Promise<boolean>;
@@ -123,11 +122,6 @@ export async function createRoyaltyImportObjectStore(pool: Pool, options: Royalt
         throw new ApiError(400, 'ROYALTY_FILE_METADATA_MISMATCH');
       }
       return object.Body as AsyncIterable<Uint8Array>;
-    },
-    async read(row) {
-      const object = await storage.download({ id: row.requester_id }, row.id);
-      try { return new TextDecoder('utf-8', { fatal: true }).decode(object.data); }
-      catch { throw new ApiError(400, 'ROYALTY_FILE_ENCODING_INVALID'); }
     },
     async remove(row) {
       await client.send(new DeleteObjectCommand({ Bucket: options.bucket, Key: key(row.id) }));

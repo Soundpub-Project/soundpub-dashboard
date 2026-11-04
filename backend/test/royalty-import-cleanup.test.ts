@@ -15,19 +15,23 @@ test('royalty cleanup deletes only expired transient files and preserves committ
     await database.owner.query("INSERT INTO soundpub.backend_users(id,status) VALUES($1,'active')", [requester]);
     await database.owner.query(`INSERT INTO soundpub.royalty_import_sessions
       (id,requester_id,source,filename,bucket,object_key,size_bytes,source_checksum,status,phase,
-       processed_rows,total_rows,preview_checksum,preview_result,upload_expires_at,cleanup_after)
-      VALUES ($1,$3,'provider','expired.csv','private',$4,10,$5,'FAILED','PARSE',0,NULL,NULL,NULL,now()-interval '2 days',now()-interval '1 day'),
-      ($2,$3,'provider','retained.csv','private',$6,10,$5,'PREVIEW_READY','PREVIEW',0,0,$5,'{}'::jsonb,now()-interval '2 days',now()-interval '1 day')`,
+       processed_rows,total_rows,preview_checksum,preview_result,upload_expires_at,cleanup_after,lease_owner,lease_expires_at)
+      VALUES ($1,$3,'provider','expired.csv','private',$4,10,$5,'PARSING','PARSE',0,NULL,NULL,NULL,
+        now()-interval '2 days',now()-interval '1 day','fixture',now()+interval '5 minutes'),
+      ($2,$3,'provider','retained.csv','private',$6,10,$5,'PREVIEW_READY','PREVIEW',0,0,$5,'{}'::jsonb,
+        now()-interval '2 days',now()-interval '1 day',NULL,NULL)`,
     [expired,retained,requester,`royalty-imports/objects/${expired}`,'a'.repeat(64),`royalty-imports/objects/${retained}`]);
     await database.owner.query(`INSERT INTO soundpub.royalty_import_session_rows
       (session_id,source_row_number,source_row_id,row_status,issue)
       VALUES ($1,2,$2,'INVALID',$3::jsonb)`,
     [expired,`${'a'.repeat(64)}:2`,JSON.stringify({ row: 2, field: 'period', code: 'INVALID_PERIOD', message: 'invalid' })]);
+    await database.owner.query(`UPDATE soundpub.royalty_import_sessions SET status='FAILED',lease_owner=NULL,
+      lease_expires_at=NULL WHERE id=$1`, [expired]);
     const store: RoyaltyImportObjectStore = {
       bucket: 'private', key: id => `royalty-imports/objects/${id}`,
       request: async () => { throw new Error('unused'); }, verify: async () => undefined,
       open: async () => (async function *() {})(),
-      read: async () => '', download: async () => '', remove: async row => { removed.push(row.id); },
+      download: async () => '', remove: async row => { removed.push(row.id); },
       isReady: async () => true, close: () => undefined,
     };
     const cleanup = createRoyaltyImportCleanupProcessor(database.runtime, store, 'cleanup-worker');
@@ -56,7 +60,7 @@ test('royalty cleanup retries idempotent object deletion after transient storage
       bucket: 'private', key: id => `royalty-imports/objects/${id}`,
       request: async () => { throw new Error('unused'); }, verify: async () => undefined,
       open: async () => (async function *() {})(),
-      read: async () => '', download: async () => '', remove: async () => { attempts++; throw new Error('temporary'); },
+      download: async () => '', remove: async () => { attempts++; throw new Error('temporary'); },
       isReady: async () => true, close: () => undefined,
     };
     const cleanup = createRoyaltyImportCleanupProcessor(database.runtime, store, 'cleanup-worker');

@@ -33,7 +33,6 @@ test('private replacement file session is idempotent, requester-bound and commit
     },
     verify: async row => { assert.equal(row.id, requestedId); },
     open: async row => { assert.equal(row.id, requestedId); return (async function *() { yield replacementCsv; })(); },
-    read: async row => { assert.equal(row.id, requestedId); return replacementCsv; },
     download: async row => `http://127.0.0.1:9100/download/${row.id}`,
     remove: async () => undefined,
     isReady: async () => true,

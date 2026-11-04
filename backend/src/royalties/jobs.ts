@@ -38,13 +38,13 @@ export function createRoyaltyImportJobProcessor(pool: Pool, store: RoyaltyImport
   }
 
   async function finish(id: string, preview: { parsed_rows: number; invalid_rows: number; checksum: string | null;
-    total_rows?: number; [key: string]: unknown }) {
+    staging_checksum?: string | null; total_rows?: number; [key: string]: unknown }) {
     const totalRows = preview.total_rows ?? preview.parsed_rows + preview.invalid_rows;
     const result = await pool.query(`UPDATE soundpub.royalty_import_sessions SET status='PREVIEW_READY',phase='PREVIEW',
-      processed_rows=$3,total_rows=$4,preview_checksum=$5,preview_result=$6::jsonb,error_code=NULL,
+      processed_rows=$3,total_rows=$4,preview_checksum=$5,staging_checksum=$6,preview_result=$7::jsonb,error_code=NULL,
       lease_owner=NULL,lease_expires_at=NULL,next_attempt_at=NULL,updated_at=clock_timestamp()
       WHERE id=$1 AND status='PARSING' AND lease_owner=$2`,
-    [id,workerId,totalRows,totalRows,preview.checksum,JSON.stringify(preview)]);
+    [id,workerId,totalRows,totalRows,preview.checksum,preview.staging_checksum ?? null,JSON.stringify(preview)]);
     if (!result.rowCount) throw new Error('ROYALTY_JOB_LEASE_LOST');
   }
 

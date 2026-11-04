@@ -28,7 +28,6 @@ test('royalty import file lifecycle persists private intent and refreshed admin 
       method: 'PUT', headers: { 'content-type': 'text/csv' } }),
       verify: async row => { assert.equal(row.id, objectId); verified++; },
       open: async () => (async function *() { yield new TextEncoder().encode('period,isrc,platform,country,sales_unit,net_revenue'); })(),
-      read: async () => 'period,isrc,platform,country,sales_unit,net_revenue',
       download: async row => `http://127.0.0.1:9100/download/${row.id}`,
       remove: async () => undefined,
       isReady: async () => true,

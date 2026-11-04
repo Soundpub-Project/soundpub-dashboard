@@ -5,6 +5,7 @@ import test from 'node:test';
 import { concurrencyPostgres } from './support/concurrency-postgres.js';
 
 const migration = readFileSync(new URL('../migrations/0028_royalty_allocations.sql', import.meta.url), 'utf8');
+const batchGuard = readFileSync(new URL('../migrations/0038_royalty_batch_allocation_guard.sql', import.meta.url), 'utf8');
 
 test('royalty allocation migration declares immutable deferred allocation invariants', () => {
   assert.match(migration, /CREATE TABLE soundpub\.royalty_import_allocations/);
@@ -14,6 +15,8 @@ test('royalty allocation migration declares immutable deferred allocation invari
   assert.match(migration, /component<>'SOUNDPUB' AND owner_id IS NOT NULL/);
   assert.match(migration, /royalty_allocations_immutable/);
   assert.match(migration, /'LEGACY_OWNER',financial_owner_user_id,net_amount,'BACKEND_SINGLE_OWNER_V1'/);
+  assert.match(batchGuard, /CREATE CONSTRAINT TRIGGER royalty_batch_allocation_sum/);
+  assert.match(batchGuard, /ROYALTY_BATCH_CLOSED/);
 });
 
 test('royalty allocation PostgreSQL constraints preserve exact owner totals', {
@@ -67,13 +70,17 @@ test('royalty allocation PostgreSQL constraints preserve exact owner totals', {
     await assert.rejects(owner.query('UPDATE soundpub.royalty_import_allocations SET amount=amount'), /FINANCE_IMMUTABLE/);
     await assert.rejects(owner.query('DELETE FROM soundpub.royalty_import_allocations'), /FINANCE_IMMUTABLE/);
 
-    const mismatchEntry = randomUUID();
+    const mismatchBatch = randomUUID(), mismatchEntry = randomUUID();
     await runtime.query('BEGIN');
+    await runtime.query(`INSERT INTO soundpub.royalty_import_batches
+      (id,source,period,currency,checksum,filename,uploader_id,row_count,total_amount,validation_result)
+      VALUES($1,'allocation-mismatch','2026-11','IDR',$2,'mismatch.csv',$3,1,'10.00','{}')`,
+    [mismatchBatch,'b'.repeat(64),ids.admin]);
     await runtime.query(`INSERT INTO soundpub.royalty_import_entries
       (id,batch_id,source,period,source_row_id,beneficiary_id,release_id,track_id,gross_amount,deduction_amount,
         net_amount,artist_id,financial_owner_user_id,label_owner_user_id,calculation_policy_code)
-      VALUES($1,$2,'allocation-test','2026-10','row-2',$3,$4,$5,'10.00','0','10.00',$6,$3,$7,'PRODUCTION_SPLIT_V1')`,
-    [mismatchEntry, ids.batch, ids.artistUser, ids.release, ids.track, ids.artist, ids.label]);
+      VALUES($1,$2,'allocation-mismatch','2026-11','row-2',$3,$4,$5,'10.00','0','10.00',$6,$3,$7,'PRODUCTION_SPLIT_V1')`,
+    [mismatchEntry, mismatchBatch, ids.artistUser, ids.release, ids.track, ids.artist, ids.label]);
     await runtime.query(`INSERT INTO soundpub.royalty_import_allocations(entry_id,component,owner_id,amount,policy_code)
       VALUES($1,'ARTIST',$2,'9.99','PRODUCTION_SPLIT_V1')`, [mismatchEntry, ids.artistUser]);
     await assert.rejects(runtime.query('COMMIT'), /ROYALTY_ALLOCATION_SUM_MISMATCH/);

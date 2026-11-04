@@ -35,6 +35,7 @@ interface StagedRow {
   label_amount: string | null;
   soundpub_amount: string | null;
   calculation_policy_code: string | null;
+  row_checksum: string | null;
 }
 
 const issueLimit = 500;
@@ -50,6 +51,7 @@ export async function stageLegacyRoyaltyCsvStream(db: PoolClient, session: Strea
   let soundpub = 0n;
   let firstHashRow = true;
   const hash = createHash('sha256');
+  const stagingHash = createHash('sha256');
   hash.update(JSON.stringify({ policy: LEGACY_ROYALTY_POLICY.code, rows: [] }).slice(0, -2));
   const issues: LegacyRoyaltyCsvIssue[] = [];
   let issuesTruncated = false;
@@ -64,22 +66,22 @@ export async function stageLegacyRoyaltyCsvStream(db: PoolClient, session: Strea
     source_upc: null, title: null, artist_name: null, label_name: null, platform: null, country: null,
     sales_type: null, sales_unit: null, net_amount: null, track_id: null, release_id: null, artist_id: null,
     financial_owner_user_id: null, label_owner_user_id: null, artist_amount: null, label_amount: null,
-    soundpub_amount: null, calculation_policy_code: null });
+    soundpub_amount: null, calculation_policy_code: null, row_checksum: null });
   const insertRows = async (rows: StagedRow[]) => {
     if (!rows.length) return;
     await db.query(`INSERT INTO soundpub.royalty_import_session_rows
       (session_id,source_row_number,source_row_id,row_status,issue,period,source_isrc,source_upc,title,artist_name,
        label_name,platform,country,sales_type,sales_unit,net_amount,track_id,release_id,artist_id,
-       financial_owner_user_id,label_owner_user_id,artist_amount,label_amount,soundpub_amount,calculation_policy_code)
+       financial_owner_user_id,label_owner_user_id,artist_amount,label_amount,soundpub_amount,calculation_policy_code,row_checksum)
       SELECT $1,x.source_row_number,x.source_row_id,x.row_status,x.issue,x.period,x.source_isrc,x.source_upc,
         x.title,x.artist_name,x.label_name,x.platform,x.country,x.sales_type,x.sales_unit,x.net_amount,x.track_id,
         x.release_id,x.artist_id,x.financial_owner_user_id,x.label_owner_user_id,x.artist_amount,x.label_amount,
-        x.soundpub_amount,x.calculation_policy_code
+        x.soundpub_amount,x.calculation_policy_code,x.row_checksum
       FROM jsonb_to_recordset($2::jsonb) AS x(source_row_number integer,source_row_id text,row_status text,issue jsonb,
         period text,source_isrc text,source_upc text,title text,artist_name text,label_name text,platform text,country text,
         sales_type text,sales_unit integer,net_amount numeric,track_id uuid,release_id uuid,artist_id uuid,
         financial_owner_user_id uuid,label_owner_user_id uuid,artist_amount numeric,label_amount numeric,
-        soundpub_amount numeric,calculation_policy_code text)`, [session.id,JSON.stringify(rows)]);
+        soundpub_amount numeric,calculation_policy_code text,row_checksum text)`, [session.id,JSON.stringify(rows)]);
   };
   const parsed = await parseLegacyRoyaltyCsvStream(input, { chunkSize: 1000, maxRows: 100_000, issueLimit,
     async onChunk(chunk) {
@@ -101,7 +103,10 @@ export async function stageLegacyRoyaltyCsvStream(db: PoolClient, session: Strea
             salesType: row.salesType ?? null, salesUnit: row.salesUnit, netMinor: row.netMinor.toString(),
             trackId: row.trackId, releaseId: row.releaseId, artistId: row.artistId,
             artistOwnerUserId: row.artistOwnerUserId, labelOwnerUserId: row.labelOwnerUserId };
-          hash.update(`${firstHashRow ? '' : ','}${JSON.stringify(canonical)}`);
+          const canonicalPayload = JSON.stringify(canonical);
+          const rowChecksum = createHash('sha256').update(canonicalPayload).digest('hex');
+          hash.update(`${firstHashRow ? '' : ','}${canonicalPayload}`);
+          stagingHash.update(rowChecksum);
           firstHashRow = false;
           const display = { source_row_number: row.sourceRowNumber, period: row.period, isrc: row.isrc,
             upc: row.upc || row.catalogUpc, title: row.title || row.catalogTitle,
@@ -120,7 +125,7 @@ export async function stageLegacyRoyaltyCsvStream(db: PoolClient, session: Strea
             release_id: row.releaseId, artist_id: row.artistId, financial_owner_user_id: row.artistOwnerUserId,
             label_owner_user_id: row.labelOwnerUserId, artist_amount: formatMoney(split.artistMinor),
             label_amount: formatMoney(split.labelMinor), soundpub_amount: formatMoney(split.soundpubMinor),
-            calculation_policy_code: LEGACY_ROYALTY_POLICY.code });
+            calculation_policy_code: LEGACY_ROYALTY_POLICY.code, row_checksum: rowChecksum });
         }
         processedRows += chunk.processedRows;
         await insertRows(staged);
@@ -145,5 +150,6 @@ export async function stageLegacyRoyaltyCsvStream(db: PoolClient, session: Strea
     currency: 'IDR' as const, policy_code: LEGACY_ROYALTY_POLICY.code,
     checksum: hasErrors || !validRows ? null : hash.digest('hex'), total_net_amount: formatMoney(net),
     artist_amount: formatMoney(artist), label_amount: formatMoney(label), soundpub_amount: formatMoney(soundpub),
-    issues, issues_truncated: issuesTruncated, sample_rows: sampleRows, total_rows: parsed.dataRows };
+    issues, issues_truncated: issuesTruncated, sample_rows: sampleRows, total_rows: parsed.dataRows,
+    staging_checksum: hasErrors || !validRows ? null : stagingHash.digest('hex') };
 }
