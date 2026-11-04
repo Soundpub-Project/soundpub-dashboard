@@ -62,7 +62,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Artist attribution | artist relation/history migration | stable artist ID, historical ISRC conflict guard, allocation snapshot | Backend CSV API available | VERIFIED | Add manual review workflow for legacy unresolved identities |
 | Label attribution | release label snapshot | immutable `label_owner_user_id`; ordinary and Label Custom split verified | Label Custom supported | PARTIAL | Add explicit whitelabel E2E and reporting cutover |
 | Preview | browser validation and split preview | `/royalties/imports/csv/preview` with checksum, matching, split totals | Backend-mode CSV preview cut over | VERIFIED | Add private-file progress and large-file diagnostics |
-| File upload | Edge Function receives parsed records | no private royalty file lifecycle | No backend file UI | MISSING | Import session + private upload intent |
+| File upload | Edge Function receives parsed records | private RustFS upload intent, verified UTF-8/checksum snapshot, admin status/download API | Frontend still uses inline CSV | IMPLEMENTED | Cut frontend to file session and add cleanup retention job |
 | Async parse | Edge Function synchronous | no parser worker | Tidak tersedia | MISSING | Worker job, progress, retry, resume |
 | Import history | `royalty_uploads` | import batches/history and immutable detail | Backend-mode history/detail cut over | VERIFIED | Add correction metadata and generic export |
 | Delete upload | `delete-royalty-upload` + balance rebuild | immutable correction endpoint | Legacy delete UI; backend correction API | PARTIAL | UI language and reversal/reconciliation parity |
@@ -151,7 +151,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 
 ## Remaining blockers
 
-1. Inline CSV preview/commit is complete for at most 1,000 matched rows; private file lifecycle, async parser, progress/retry, and large-file handling are not available.
+1. Private royalty file lifecycle and durable job-ready session schema are implemented; async parser, progress/retry worker, frontend file cutover, and large-file commit are not complete.
 2. Ordinary label and Label Custom split are verified; whitelabel still needs explicit E2E and frontend reporting cutover.
 3. Whitelabel royalty dashboard remains direct Supabase.
 4. Track detail, period list, and generic export are missing.
@@ -159,4 +159,3 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 6. Royalty upload is cut over when backend royalty/release domains are enabled, but frontend inventory still contains about 368 Supabase call chains in other domains; root production build does not enable backend domains.
 7. Production identity/Keycloak adapter is missing.
 8. Copyright, takedown, provider invoice/settlement, and several release actions remain direct or fail-closed.
-

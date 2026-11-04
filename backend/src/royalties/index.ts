@@ -11,6 +11,7 @@ import { MAX_MINOR } from '../finance/money.js';
 import { postEvent } from '../finance/index.js';
 import { prepareLegacyRoyaltyCsv, previewLegacyRoyaltyCsv } from './legacy-preview.js';
 import { LEGACY_ROYALTY_POLICY } from './split.js';
+import type { RoyaltyImportFileRow, RoyaltyImportObjectStore } from './store.js';
 
 const allows = createAuthorizer();
 const csvCommitEnvelope = z.strictObject({
@@ -19,7 +20,18 @@ const csvCommitEnvelope = z.strictObject({
   filename: z.string().trim().min(1).max(200).regex(/^[^\x00-\x1f\x7f\\/]+$/),
   expected_checksum: z.string().regex(/^[0-9a-f]{64}$/),
 });
-export function createRoyaltiesService(pool: Pool) {
+const fileUploadEnvelope = z.strictObject({
+  source: z.string().trim().min(1).max(200).regex(/^[^\x00-\x1f\x7f]+$/),
+  filename: z.string().trim().min(1).max(200).regex(/^[^\x00-\x1f\x7f\\/]+$/),
+  mime_type: z.literal('text/csv'),
+  size: z.number().int().min(1).max(100 * 1024 ** 2),
+  checksum: z.string().regex(/^[0-9a-fA-F]{64}$/).transform(value => value.toLowerCase()),
+});
+type ImportSessionRow = RoyaltyImportFileRow & { source: string; filename: string; status: string; phase: string;
+  processed_rows: number; total_rows: number | null; attempts: number; preview_checksum: string | null;
+  preview_result: unknown; error_code: string | null; batch_id: string | null; upload_expires_at: Date;
+  created_at: Date; updated_at: Date };
+export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectStore) {
   async function authorized<T>(actor: Principal, admin: boolean, work: (db: PoolClient) => Promise<T>) {
     if (!allows(actor, admin ? 'admin' : 'authenticated')) throw new ApiError(403, 'FORBIDDEN');
     return withTransaction(pool, async db => {
@@ -103,7 +115,77 @@ export function createRoyaltiesService(pool: Pool) {
     b.total_amount::text,b.validation_result,b.checksum,b.created_at,
     CASE WHEN c.id IS NULL THEN b.status ELSE 'VOIDED_WITH_OFFSET' END AS status`;
   const batchJoin = `FROM soundpub.royalty_import_batches b LEFT JOIN soundpub.royalty_import_corrections c ON c.batch_id=b.id`;
+  const sessionProjection = `id,requester_id,source,filename,mime_type,size_bytes::text,source_checksum,status,phase,
+    processed_rows,total_rows,attempts,preview_checksum,preview_result,error_code,batch_id,upload_expires_at,created_at,updated_at`;
+  const sessionDto = (row: ImportSessionRow) => ({ ...row, upload_expires_at: new Date(row.upload_expires_at).toISOString(),
+    created_at: new Date(row.created_at).toISOString(), updated_at: new Date(row.updated_at).toISOString() });
   return {
+    async requestFileUpload(actor: Principal, input: unknown, requestId: string) {
+      if (!files) throw new ApiError(503, 'NOT_READY');
+      const value = parse(fileUploadEnvelope, input);
+      return authorized(actor, true, async db => {
+        const upload = await files.request(actor.id, value);
+        const expiresAt = new Date(Date.now() + 300_000);
+        const row = (await db.query<ImportSessionRow>(`INSERT INTO soundpub.royalty_import_sessions
+          (id,requester_id,source,filename,bucket,object_key,mime_type,size_bytes,source_checksum,upload_expires_at,cleanup_after)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10::timestamptz+interval '24 hours') RETURNING *`,
+        [upload.metadata.id,actor.id,value.source,value.filename,files.bucket,files.key(upload.metadata.id),value.mime_type,
+          value.size,value.checksum,expiresAt])).rows[0]!;
+        await db.query(`INSERT INTO soundpub.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,metadata)
+          VALUES ($1,'royalty.file_upload_requested','royalty_import_session',$2,$3,$4::jsonb)`,
+        [actor.id,row.id,requestId,JSON.stringify({ source: row.source, filename: row.filename, size: value.size })]);
+        return { session: sessionDto(row), url: upload.url, method: upload.method, headers: upload.headers,
+          expires_at: expiresAt.toISOString() };
+      });
+    },
+    async completeFileUpload(actor: Principal, sessionId: string, requestId: string) {
+      if (!files) throw new ApiError(503, 'NOT_READY');
+      parse(z.uuid(), sessionId);
+      const result = await authorized(actor, true, async db => {
+        const row = (await db.query<ImportSessionRow>(`SELECT * FROM soundpub.royalty_import_sessions WHERE id=$1 FOR UPDATE`, [sessionId])).rows[0];
+        if (!row || row.requester_id !== actor.id) throw new ApiError(404, 'NOT_FOUND');
+        if (row.status === 'UPLOADED' || row.status === 'QUEUED' || row.status === 'PARSING' || row.status === 'PREVIEW_READY') return { session: sessionDto(row) };
+        if (row.status !== 'UPLOAD_PENDING' || new Date(row.upload_expires_at).getTime() <= Date.now()) throw new ApiError(409, 'ROYALTY_FILE_UPLOAD_EXPIRED');
+        try { await files.verify(row); }
+        catch (error) {
+          if (!(error instanceof ApiError) || error.statusCode !== 400) throw error;
+          const failed = (await db.query<ImportSessionRow>(`UPDATE soundpub.royalty_import_sessions SET status='FAILED',phase='UPLOAD',
+            error_code=$2,updated_at=now() WHERE id=$1 RETURNING *`, [row.id,error.code])).rows[0]!;
+          return { error, session: sessionDto(failed) };
+        }
+        const uploaded = (await db.query<ImportSessionRow>(`UPDATE soundpub.royalty_import_sessions SET status='UPLOADED',phase='QUEUED',
+          error_code=NULL,updated_at=now() WHERE id=$1 RETURNING *`, [row.id])).rows[0]!;
+        await db.query(`INSERT INTO soundpub.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,metadata)
+          VALUES ($1,'royalty.file_uploaded','royalty_import_session',$2,$3,$4::jsonb)`,
+        [actor.id,row.id,requestId,JSON.stringify({ checksum: row.source_checksum, size: Number(row.size_bytes) })]);
+        return { session: sessionDto(uploaded) };
+      });
+      if ('error' in result) throw result.error;
+      return result;
+    },
+    async fileSessions(actor: Principal, input: unknown = {}) {
+      const query = parse(z.strictObject({ limit: z.coerce.number().int().min(1).max(100).default(50),
+        offset: z.coerce.number().int().min(0).max(100000).default(0) }), input);
+      return authorized(actor, true, async db => ({ items: (await db.query<ImportSessionRow>(`SELECT ${sessionProjection}
+        FROM soundpub.royalty_import_sessions ORDER BY created_at DESC,id DESC LIMIT $1 OFFSET $2`, [query.limit,query.offset])).rows.map(sessionDto) }));
+    },
+    async fileSession(actor: Principal, sessionId: string) {
+      parse(z.uuid(), sessionId);
+      return authorized(actor, true, async db => {
+        const row = (await db.query<ImportSessionRow>(`SELECT ${sessionProjection} FROM soundpub.royalty_import_sessions WHERE id=$1`, [sessionId])).rows[0];
+        if (!row) throw new ApiError(404, 'NOT_FOUND');
+        return sessionDto(row);
+      });
+    },
+    async fileDownload(actor: Principal, sessionId: string) {
+      if (!files) throw new ApiError(503, 'NOT_READY');
+      parse(z.uuid(), sessionId);
+      return authorized(actor, true, async db => {
+        const row = (await db.query<ImportSessionRow>(`SELECT * FROM soundpub.royalty_import_sessions WHERE id=$1`, [sessionId])).rows[0];
+        if (!row || !['UPLOADED','QUEUED','PARSING','PREVIEW_READY','COMMITTING','COMMITTED'].includes(row.status)) throw new ApiError(404, 'NOT_FOUND');
+        return { url: await files.download(row), expires_in: 60 };
+      });
+    },
     async previewCsv(actor: Principal, input: unknown) {
       const value = parse(z.strictObject({ csv: z.string().min(1).max(1_000_000) }), input);
       return authorized(actor, true, async db => previewLegacyRoyaltyCsv(db, value.csv));

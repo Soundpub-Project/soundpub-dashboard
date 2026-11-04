@@ -6,6 +6,11 @@ export function registerRoyaltiesRoutes(app: FastifyInstance, service: Royalties
   authenticate: (request: FastifyRequest) => Promise<Principal>) {
   app.post('/api/v1/royalties/imports/csv/preview', async request => service.previewCsv(await authenticate(request), request.body));
   app.post('/api/v1/royalties/imports/csv/commit', async request => service.commitCsv(await authenticate(request), request.body, request.id));
+  app.post('/api/v1/royalties/import-files', async request => service.requestFileUpload(await authenticate(request), request.body, request.id));
+  app.post<{ Params: { id: string } }>('/api/v1/royalties/import-files/:id/complete', async request => service.completeFileUpload(await authenticate(request), request.params.id, request.id));
+  app.get('/api/v1/royalties/import-files', async request => service.fileSessions(await authenticate(request), request.query));
+  app.get<{ Params: { id: string } }>('/api/v1/royalties/import-files/:id', async request => service.fileSession(await authenticate(request), request.params.id));
+  app.get<{ Params: { id: string } }>('/api/v1/royalties/import-files/:id/download', async request => service.fileDownload(await authenticate(request), request.params.id));
   app.post('/api/v1/royalties/imports/preview', async request => service.preview(await authenticate(request), request.body));
   app.post('/api/v1/royalties/imports/commit', async request => service.commit(await authenticate(request), request.body, request.id));
   app.get('/api/v1/royalties/imports', async request => service.history(await authenticate(request), request.query));

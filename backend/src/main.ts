@@ -8,6 +8,7 @@ import { createPgPayoutFinance } from './payouts/finance.js';
 import { createPayoutsService } from './payouts/index.js';
 import { databasePayoutPolicy } from './payouts/policy.js';
 import { createRoyaltiesService } from './royalties/index.js';
+import { createRoyaltyImportObjectStore } from './royalties/store.js';
 import { createPaymentsService, paymentSubmissionDependency } from './payments/index.js';
 import { createUsersService } from './users/index.js';
 import { createArtistsService } from './artists/index.js';
@@ -34,6 +35,7 @@ const releaseMigration = await pool.query(`SELECT to_regclass('soundpub.releases
   to_regclass('soundpub.application_settings') AS settings,
   to_regclass('soundpub.finance_events') AS finance,
   to_regclass('soundpub.royalty_import_batches') AS royalties,
+  to_regclass('soundpub.royalty_import_sessions') AS royalty_files,
   to_regclass('soundpub.payout_requests') AS payouts,
   to_regclass('soundpub.payment_invoices') AS payments`);
 if (Object.values(releaseMigration.rows[0] ?? {}).some(value => !value)) throw new Error('Phase 3E database migration required before API boot');
@@ -56,6 +58,13 @@ const mediaStore = await createMediaObjectStore(pool, {
   allowedOrigins: config.OBJECT_STORAGE_BROWSER_ORIGINS,
 });
 const media = createMediaService(pool, mediaStore);
+const royaltyImportStore = await createRoyaltyImportObjectStore(pool, {
+  environment: config.NODE_ENV === 'test' ? 'test' : 'development',
+  endpoint: `${config.OBJECT_STORAGE_USE_SSL ? 'https' : 'http'}://${config.OBJECT_STORAGE_ENDPOINT}:${config.OBJECT_STORAGE_PORT}`,
+  publicEndpoint: config.OBJECT_STORAGE_PUBLIC_ENDPOINT,
+  credentials: { accessKeyId: config.OBJECT_STORAGE_ACCESS_KEY, secretAccessKey: config.OBJECT_STORAGE_SECRET_KEY },
+  bucket: config.OBJECT_STORAGE_BUCKET,
+});
 pool.on('error', () => { console.error(JSON.stringify({ level: 'error', message: 'database idle connection failed' })); });
 const windows = new Map<string, { count: number; resetAt: number }>();
 
@@ -63,13 +72,13 @@ const app = buildApp({
   publicCatalog: createPublicCatalogService(pool),
   localAuth,
   users, artists, labels, labelCustom, releases, tracks,
-  balance: createBalanceService(pool), royalties: createRoyaltiesService(pool), payouts, payments,
+  balance: createBalanceService(pool), royalties: createRoyaltiesService(pool, royaltyImportStore), payouts, payments,
   submissions: createSubmissionService(pool, { media: createMediaReadinessAdapter(), payment: paymentSubmissionDependency, provider: new MockSubmissionProvider() }),
   notifications: createNotificationsService(pool),
   media,
   auditSettings: createAuditSettingsService(pool),
   auth: createIdentityAuthenticator(identityProvider, repositories.principals),
-  readiness: { async check() { await pool.query('SELECT 1'); return mediaStore.isReady(); } },
+  readiness: { async check() { await pool.query('SELECT 1'); return (await mediaStore.isReady()) && (await royaltyImportStore.isReady()); } },
   rateLimiter: {
     async consume({ key, route }) {
       const limit = route === '/api/v1/auth/login' ? 10 : route.includes('/webhooks/') ? 120 : route.includes('/admin/') ? 30 :
@@ -122,26 +131,8 @@ const app = buildApp({
   },
 });
 
-const shutdown = async () => { await app.close(); mediaStore.close(); await pool.end(); process.exit(0); };
+const shutdown = async () => { await app.close(); mediaStore.close(); royaltyImportStore.close(); await pool.end(); process.exit(0); };
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 instrumentApi(app, pool);
 await app.listen({ host: config.HOST, port: config.PORT });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
