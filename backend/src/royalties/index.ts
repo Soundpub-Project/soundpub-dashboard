@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { customFinanceScope } from '../finance/custom.js';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
@@ -27,10 +27,14 @@ const fileUploadEnvelope = z.strictObject({
   size: z.number().int().min(1).max(100 * 1024 ** 2),
   checksum: z.string().regex(/^[0-9a-fA-F]{64}$/).transform(value => value.toLowerCase()),
 });
+const replacementFileUploadEnvelope = fileUploadEnvelope.omit({ source: true }).extend({
+  reason: z.string().trim().min(1).max(1000),
+});
 type ImportSessionRow = RoyaltyImportFileRow & { source: string; filename: string; status: string; phase: string;
   processed_rows: number; total_rows: number | null; attempts: number; preview_checksum: string | null;
   preview_result: unknown; error_code: string | null; batch_id: string | null; upload_expires_at: Date;
-  created_at: Date; updated_at: Date };
+  operation_kind: 'IMPORT' | 'REPLACEMENT'; replaces_batch_id: string | null; replacement_reason: string | null;
+  request_key: string | null; created_at: Date; updated_at: Date };
 export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectStore) {
   async function authorized<T>(actor: Principal, admin: boolean, work: (db: PoolClient) => Promise<T>) {
     if (!allows(actor, admin ? 'admin' : 'authenticated')) throw new ApiError(403, 'FORBIDDEN');
@@ -123,7 +127,8 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
     LEFT JOIN soundpub.royalty_import_corrections c ON c.batch_id=b.id
     LEFT JOIN soundpub.royalty_import_replacements old_replacement ON old_replacement.old_batch_id=b.id
     LEFT JOIN soundpub.royalty_import_replacements new_replacement ON new_replacement.new_batch_id=b.id`;
-  const sessionProjection = `id,requester_id,source,filename,mime_type,size_bytes::text,source_checksum,status,phase,
+  const sessionProjection = `id,requester_id,source,filename,mime_type,size_bytes::text,source_checksum,operation_kind,
+    replaces_batch_id,replacement_reason,request_key,status,phase,
     processed_rows,total_rows,attempts,preview_checksum,preview_result,error_code,batch_id,upload_expires_at,created_at,updated_at`;
   const sessionDto = (row: ImportSessionRow) => ({ ...row, upload_expires_at: new Date(row.upload_expires_at).toISOString(),
     created_at: new Date(row.created_at).toISOString(), updated_at: new Date(row.updated_at).toISOString() });
@@ -142,6 +147,51 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
         await db.query(`INSERT INTO soundpub.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,metadata)
           VALUES ($1,'royalty.file_upload_requested','royalty_import_session',$2,$3,$4::jsonb)`,
         [actor.id,row.id,requestId,JSON.stringify({ source: row.source, filename: row.filename, size: value.size })]);
+        return { session: sessionDto(row), url: upload.url, method: upload.method, headers: upload.headers,
+          expires_at: expiresAt.toISOString() };
+      });
+    },
+    async requestReplacementFileUpload(actor: Principal, oldBatchId: string, input: unknown, requestKey: string,
+      requestId: string) {
+      if (!files) throw new ApiError(503, 'NOT_READY');
+      parse(z.uuid(), oldBatchId);
+      const value = parse(replacementFileUploadEnvelope, input);
+      return authorized(actor, true, async db => {
+        const existing = (await db.query<ImportSessionRow>(`SELECT * FROM soundpub.royalty_import_sessions
+          WHERE requester_id=$1 AND request_key=$2 FOR UPDATE`, [actor.id,requestKey])).rows[0];
+        if (existing) {
+          if (existing.operation_kind !== 'REPLACEMENT' || existing.replaces_batch_id !== oldBatchId ||
+              existing.filename !== value.filename || existing.mime_type !== value.mime_type ||
+              Number(existing.size_bytes) !== value.size || existing.source_checksum !== value.checksum ||
+              existing.replacement_reason !== value.reason) throw new ApiError(409, 'ROYALTY_FILE_REQUEST_CONFLICT');
+          if (existing.status !== 'UPLOAD_PENDING') return { session: sessionDto(existing) };
+          const upload = await files.requestForId(actor.id, existing.id, value);
+          const expiresAt = new Date(Date.now() + 300_000);
+          const refreshed = (await db.query<ImportSessionRow>(`UPDATE soundpub.royalty_import_sessions
+            SET upload_expires_at=$2,cleanup_after=$2::timestamptz+interval '24 hours',updated_at=clock_timestamp()
+            WHERE id=$1 RETURNING *`, [existing.id,expiresAt])).rows[0]!;
+          return { session: sessionDto(refreshed), url: upload.url, method: upload.method, headers: upload.headers,
+            expires_at: expiresAt.toISOString() };
+        }
+        const oldBatch = (await db.query<{ source: string; policy_code: string | null }>(`SELECT source,
+          validation_result->>'policy_code' AS policy_code FROM soundpub.royalty_import_batches WHERE id=$1 FOR SHARE`,
+        [oldBatchId])).rows[0];
+        if (!oldBatch) throw new ApiError(404, 'NOT_FOUND');
+        if (oldBatch.policy_code !== LEGACY_ROYALTY_POLICY.code) throw new ApiError(409, 'ROYALTY_REPLACEMENT_POLICY_MISMATCH');
+        if ((await db.query(`SELECT 1 FROM soundpub.royalty_import_corrections correction
+          WHERE correction.batch_id=$1`, [oldBatchId])).rowCount) throw new ApiError(409, 'ROYALTY_REPLACEMENT_CONFLICT');
+        const sessionId = randomUUID();
+        const upload = await files.requestForId(actor.id, sessionId, value);
+        const expiresAt = new Date(Date.now() + 300_000);
+        const row = (await db.query<ImportSessionRow>(`INSERT INTO soundpub.royalty_import_sessions
+          (id,requester_id,source,filename,bucket,object_key,mime_type,size_bytes,source_checksum,operation_kind,
+            replaces_batch_id,replacement_reason,request_key,upload_expires_at,cleanup_after)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'REPLACEMENT',$10,$11,$12,$13,$13::timestamptz+interval '24 hours')
+          RETURNING *`, [sessionId,actor.id,oldBatch.source,value.filename,files.bucket,files.key(sessionId),value.mime_type,
+          value.size,value.checksum,oldBatchId,value.reason,requestKey,expiresAt])).rows[0]!;
+        await db.query(`INSERT INTO soundpub.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,metadata)
+          VALUES ($1,'royalty.replacement_file_upload_requested','royalty_import_session',$2,$3,$4::jsonb)`,
+        [actor.id,row.id,requestId,JSON.stringify({ replaces_batch_id: oldBatchId, filename: row.filename, size: value.size })]);
         return { session: sessionDto(row), url: upload.url, method: upload.method, headers: upload.headers,
           expires_at: expiresAt.toISOString() };
       });
@@ -190,7 +240,7 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
       parse(z.uuid(), sessionId);
       const session = await authorized(actor, true, async db => {
         const row = (await db.query<ImportSessionRow>(`SELECT * FROM soundpub.royalty_import_sessions WHERE id=$1 FOR UPDATE`, [sessionId])).rows[0];
-        if (!row) throw new ApiError(404, 'NOT_FOUND');
+        if (!row || row.requester_id !== actor.id) throw new ApiError(404, 'NOT_FOUND');
         if (row.status === 'COMMITTED' && row.batch_id) return row;
         if (!['PREVIEW_READY','COMMITTING'].includes(row.status) || !row.preview_checksum || !row.preview_result) {
           throw new ApiError(409, 'ROYALTY_IMPORT_NOT_READY');
@@ -201,6 +251,12 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
       if (session.status === 'COMMITTED' && session.batch_id) return { id: session.batch_id, replayed: true };
       try {
         const csv = await files.read(session);
+        if (session.operation_kind === 'REPLACEMENT') {
+          if (!session.replaces_batch_id || !session.replacement_reason || !session.preview_checksum)
+            throw new ApiError(409, 'ROYALTY_IMPORT_NOT_READY');
+          return await this.replaceCsv(actor, session.replaces_batch_id, { csv, filename: session.filename,
+            expected_checksum: session.preview_checksum, reason: session.replacement_reason }, requestId, sessionId);
+        }
         const result = await this.commitCsv(actor, { csv, source: session.source, filename: session.filename,
           expected_checksum: session.preview_checksum }, requestId);
         await authorized(actor, true, async db => {
@@ -222,7 +278,7 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
       parse(z.uuid(), sessionId);
       return authorized(actor, true, async db => {
         const row = (await db.query<ImportSessionRow>(`SELECT * FROM soundpub.royalty_import_sessions WHERE id=$1 FOR UPDATE`, [sessionId])).rows[0];
-        if (!row) throw new ApiError(404, 'NOT_FOUND');
+        if (!row || row.requester_id !== actor.id) throw new ApiError(404, 'NOT_FOUND');
         if (row.status !== 'FAILED' || !row.error_code?.startsWith('ROYALTY_PARSE_')) throw new ApiError(409, 'ROYALTY_IMPORT_RETRY_NOT_ALLOWED');
         const queued = (await db.query<ImportSessionRow>(`UPDATE soundpub.royalty_import_sessions SET status='QUEUED',phase='QUEUED',
           attempts=0,next_attempt_at=clock_timestamp(),error_code=NULL,lease_owner=NULL,lease_expires_at=NULL,updated_at=clock_timestamp()
@@ -235,7 +291,9 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
       parse(z.uuid(), sessionId);
       return authorized(actor, true, async db => {
         const row = (await db.query<ImportSessionRow>(`SELECT * FROM soundpub.royalty_import_sessions WHERE id=$1`, [sessionId])).rows[0];
-        if (!row || !['UPLOADED','QUEUED','PARSING','PREVIEW_READY','COMMITTING','COMMITTED'].includes(row.status)) throw new ApiError(404, 'NOT_FOUND');
+        if (!row || row.requester_id !== actor.id ||
+            !['UPLOADED','QUEUED','PARSING','PREVIEW_READY','COMMITTING','COMMITTED'].includes(row.status))
+          throw new ApiError(404, 'NOT_FOUND');
         return { url: await files.download(row), expires_in: 60 };
       });
     },
@@ -298,8 +356,9 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
         return { id: batch.id, replayed: false };
       });
     },
-    async replaceCsv(actor: Principal, oldBatchId: string, input: unknown, requestId: string) {
+    async replaceCsv(actor: Principal, oldBatchId: string, input: unknown, requestId: string, sessionId?: string) {
       parse(z.uuid(), oldBatchId);
+      if (sessionId) parse(z.uuid(), sessionId);
       const value = parse(z.strictObject({
         csv: z.string().min(1).max(1_000_000),
         filename: z.string().trim().min(1).max(200).regex(/^[^\x00-\x1f\x7f\\/]+$/),
@@ -308,6 +367,14 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
       }), input);
       return authorized(actor, true, async db => {
         await db.query("SELECT pg_advisory_xact_lock(hashtextextended('royalty-csv-import',0))");
+        if (sessionId) {
+          const session = (await db.query<ImportSessionRow>(`SELECT * FROM soundpub.royalty_import_sessions
+            WHERE id=$1 FOR UPDATE`, [sessionId])).rows[0];
+          if (!session || session.requester_id !== actor.id || session.operation_kind !== 'REPLACEMENT' ||
+              session.replaces_batch_id !== oldBatchId || session.replacement_reason !== value.reason ||
+              session.filename !== value.filename || session.preview_checksum !== value.expected_checksum ||
+              session.status !== 'COMMITTING') throw new ApiError(409, 'ROYALTY_IMPORT_NOT_READY');
+        }
         const oldBatch = (await db.query<{ id: string; source: string; period: string; total_amount: string; currency: string;
           checksum: string; policy_code: string | null }>(
           `SELECT id,source,period,total_amount::text,currency,checksum,validation_result->>'policy_code' AS policy_code
@@ -317,7 +384,8 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
         if (oldBatch.policy_code !== LEGACY_ROYALTY_POLICY.code) throw new ApiError(409, 'ROYALTY_REPLACEMENT_POLICY_MISMATCH');
         const sourceCsvChecksum = createHash('sha256').update(value.csv).digest('hex');
         const prior = (await db.query<{ new_batch_id: string; reason: string; checksum: string; filename: string;
-          source_csv_checksum: string | null }>(`SELECT replacement.new_batch_id,replacement.reason,batch.filename,
+          source_csv_checksum: string | null; session_id: string | null }>(`SELECT replacement.new_batch_id,
+          replacement.reason,replacement.session_id,batch.filename,
           batch.validation_result->>'checksum' AS checksum,
           batch.validation_result->>'source_csv_checksum' AS source_csv_checksum
           FROM soundpub.royalty_import_replacements replacement
@@ -325,7 +393,10 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
           WHERE replacement.old_batch_id=$1`, [oldBatchId])).rows[0];
         if (prior) {
           if (prior.reason !== value.reason || prior.filename !== value.filename || prior.checksum !== value.expected_checksum ||
+              prior.session_id !== (sessionId ?? null) ||
               prior.source_csv_checksum !== sourceCsvChecksum) throw new ApiError(409, 'ROYALTY_REPLACEMENT_CONFLICT');
+          if (sessionId) await db.query(`UPDATE soundpub.royalty_import_sessions SET status='COMMITTED',phase='DONE',
+            batch_id=$2,error_code=NULL,updated_at=clock_timestamp() WHERE id=$1`, [sessionId,prior.new_batch_id]);
           return { id: prior.new_batch_id, replaced_id: oldBatchId, replayed: true };
         }
         const prepared = await prepareLegacyRoyaltyCsv(db, value.csv);
@@ -389,12 +460,15 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
           [entry.id,component,ownerId,decimal(amount),LEGACY_ROYALTY_POLICY.code]);
         }
         await recordEarnings(db, actor, batch.id);
-        await db.query(`INSERT INTO soundpub.royalty_import_replacements(old_batch_id,new_batch_id,actor_id,reason)
-          VALUES ($1,$2,$3,$4)`, [oldBatchId,batch.id,actor.id,value.reason]);
+        await db.query(`INSERT INTO soundpub.royalty_import_replacements(old_batch_id,new_batch_id,actor_id,reason,session_id)
+          VALUES ($1,$2,$3,$4,$5)`, [oldBatchId,batch.id,actor.id,value.reason,sessionId ?? null]);
         await audit(db, actor, oldBatchId, 'royalty.replaced', requestId, { amount: `-${oldBatch.total_amount}`,
           currency: oldBatch.currency, old_state: 'UNRECONCILED', new_state: 'VOIDED_WITH_OFFSET', replacement_batch_id: batch.id });
         await audit(db, actor, batch.id, 'royalty.replacement_imported', requestId, { amount: total, currency: 'IDR',
           old_state: null, new_state: 'UNRECONCILED', replaced_batch_id: oldBatchId, idempotency_reference: batchChecksum });
+        if (sessionId) await db.query(`UPDATE soundpub.royalty_import_sessions SET status='COMMITTED',phase='DONE',
+          batch_id=$2,error_code=NULL,lease_owner=NULL,lease_expires_at=NULL,next_attempt_at=NULL,
+          updated_at=clock_timestamp() WHERE id=$1`, [sessionId,batch.id]);
         return { id: batch.id, replaced_id: oldBatchId, replayed: false };
       });
     },

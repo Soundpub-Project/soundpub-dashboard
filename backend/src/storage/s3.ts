@@ -30,6 +30,8 @@ export interface SignedUpload {
   headers: Record<string, string>;
 }
 
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function missing(error: unknown): boolean {
   const value = error as { name?: string; $metadata?: { httpStatusCode?: number } } | null;
   return value?.$metadata?.httpStatusCode === 404 || ['NoSuchKey', 'NoSuchBucket', 'NotFound'].includes(value?.name ?? '');
@@ -102,7 +104,8 @@ export class S3DevObjectStorage implements ObjectStorage {
   }
 
   private validate(input: { mimeType: string; size: number; checksum: string }): void {
-    if (!this.mimeTypes.has(input.mimeType) || !Number.isSafeInteger(input.size) || input.size < 0
+    if (!input || typeof input !== 'object' || !this.mimeTypes.has(input.mimeType)
+      || !Number.isSafeInteger(input.size) || input.size < 0
       || input.size > this.options.maxSizeBytes || typeof input.checksum !== 'string' || !/^[a-fA-F0-9]{64}$/.test(input.checksum)) {
       throw new StorageError('INVALID_INPUT', 'Invalid MIME, size or SHA-256 checksum');
     }
@@ -118,9 +121,15 @@ export class S3DevObjectStorage implements ObjectStorage {
   }
 
   private descriptor(actor: StorageActor, input: { mimeType: string; size: number; checksum: string }): ObjectMetadata {
+    return this.descriptorForId(actor, randomUUID(), input);
+  }
+
+  private descriptorForId(actor: StorageActor, id: string,
+    input: { mimeType: string; size: number; checksum: string }): ObjectMetadata {
     assertAuthenticated(actor);
+    if (typeof id !== 'string' || !uuid.test(id)) throw new StorageError('INVALID_INPUT', 'Valid object UUID required');
     this.validate(input);
-    return { id: randomUUID(), ownerId: actor.id, mimeType: input.mimeType, size: input.size,
+    return { id, ownerId: actor.id, mimeType: input.mimeType, size: input.size,
       checksum: input.checksum.toLowerCase(), visibility: 'private', createdAt: new Date().toISOString() };
   }
 
@@ -200,7 +209,13 @@ export class S3DevObjectStorage implements ObjectStorage {
 
   /** Upload intent is stored in injected repository so completion survives restart. */
   async signedUploadUrl(actor: StorageActor, input: { mimeType: string; size: number; checksum: string }, expiresInSeconds: number): Promise<SignedUpload> {
-    const metadata = this.descriptor(actor, input);
+    return this.signedUploadUrlForId(actor, randomUUID(), input, expiresInSeconds);
+  }
+
+  /** Fixed IDs let callers persist business rows and upload capabilities atomically. */
+  async signedUploadUrlForId(actor: StorageActor, id: string,
+    input: { mimeType: string; size: number; checksum: string }, expiresInSeconds: number): Promise<SignedUpload> {
+    const metadata = this.descriptorForId(actor, id, input);
     lifetime(expiresInSeconds);
     const headers = { 'content-type': metadata.mimeType, 'content-length': String(metadata.size),
       'x-amz-checksum-sha256': Buffer.from(metadata.checksum, 'hex').toString('base64') };

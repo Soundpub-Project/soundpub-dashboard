@@ -412,7 +412,7 @@ Gate: source total, accepted/rejected total, ledger posting, dan wallet balance 
 - Worker claims import sessions with expiring leases, rechecks requester authority, stores server preview diagnostics, retries transient failures, and session commit rereads the private file before checksum-bound atomic financial commit. Backend-mode frontend now uses this file-session flow.
 - Role-scoped royalty report and period APIs now enforce admin-global, label/Whitelabel roster, artist-owner, and Label Custom PIC boundaries. Backend Royalti UI uses these APIs for filtering, pagination, totals, and CSV export without Supabase fallback.
 - Expired pending/failed royalty objects now enter a leased CLEANING state, delete both staging and immutable object keys idempotently, retry transient storage failures, and preserve preview-ready/committed originals.
-- Remaining Phase 3/6 scope: streaming parser/progress, 50k-100k row chunked commit, optional approval gate, and reconciliation workflow beyond current readiness approval.
+- Remaining Phase 3/6 scope: streaming parser/progress, 50k-100k row chunked commit, optional approval gate, and reconciliation workflow beyond current readiness approval. Import and replacement now share private signed file sessions; inline replacement remains compatibility-only.
 
 ### Phase 7 - Reporting dan permission parity
 

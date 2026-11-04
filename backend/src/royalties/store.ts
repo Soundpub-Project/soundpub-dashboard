@@ -26,6 +26,9 @@ export interface RoyaltyImportObjectStore {
   request(ownerId: string, input: { mime_type: 'text/csv'; size: number; checksum: string }): Promise<{
     metadata: ObjectMetadata; url: string; method: 'PUT'; headers: Record<string, string>;
   }>;
+  requestForId(ownerId: string, id: string, input: { mime_type: 'text/csv'; size: number; checksum: string }): Promise<{
+    metadata: ObjectMetadata; url: string; method: 'PUT'; headers: Record<string, string>;
+  }>;
   verify(row: RoyaltyImportFileRow): Promise<void>;
   read(row: RoyaltyImportFileRow): Promise<string>;
   download(row: RoyaltyImportFileRow): Promise<string>;
@@ -65,6 +68,8 @@ export async function createRoyaltyImportObjectStore(pool: Pool, options: Royalt
     key,
     isReady: () => storage.isReady(),
     request: (ownerId, input) => storage.signedUploadUrl({ id: ownerId }, { mimeType: input.mime_type, size: input.size, checksum: input.checksum }, 300),
+    requestForId: (ownerId, id, input) => storage.signedUploadUrlForId({ id: ownerId }, id,
+      { mimeType: input.mime_type, size: input.size, checksum: input.checksum }, 300),
     async verify(row) {
       const dir = await mkdtemp(join(tmpdir(), 'soundpub-royalty-'));
       try {

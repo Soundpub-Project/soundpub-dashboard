@@ -64,6 +64,10 @@ export interface RoyaltyImportSession {
   mime_type: 'text/csv';
   size_bytes: string;
   source_checksum: string;
+  operation_kind: 'IMPORT' | 'REPLACEMENT';
+  replaces_batch_id: string | null;
+  replacement_reason: string | null;
+  request_key: string | null;
   status: RoyaltyImportSessionStatus;
   phase: 'UPLOAD' | 'QUEUED' | 'PARSE' | 'MATCH' | 'PREVIEW' | 'COMMIT' | 'DONE';
   processed_rows: number;
@@ -79,10 +83,10 @@ export interface RoyaltyImportSession {
 }
 export interface RoyaltyFileUploadIntent {
   session: RoyaltyImportSession;
-  url: string;
-  method: 'PUT';
-  headers: Record<string, string>;
-  expires_at: string;
+  url?: string;
+  method?: 'PUT';
+  headers?: Record<string, string>;
+  expires_at?: string;
 }
 export interface RoyaltyPreview {
   valid_rows: number; invalid_rows: number; total_amount: string; currency: 'IDR';
@@ -166,11 +170,15 @@ export interface RoyaltyReport {
 export const royaltiesApi = {
   requestFileUpload: (body: { source: string; filename: string; mime_type: 'text/csv'; size: number; checksum: string }) =>
     apiRequest<RoyaltyFileUploadIntent>('/api/v1/royalties/import-files', { method: 'POST', body }),
+  requestReplacementFileUpload: (id: string, body: { filename: string; mime_type: 'text/csv'; size: number;
+    checksum: string; reason: string }, idempotencyKey: string) =>
+    apiRequest<RoyaltyFileUploadIntent>(`/api/v1/royalties/imports/${encodeURIComponent(id)}/replacement-file-sessions`,
+      { method: 'POST', body, idempotencyKey }),
   completeFileUpload: (id: string) => apiRequest<{ session: RoyaltyImportSession }>(`/api/v1/royalties/import-files/${encodeURIComponent(id)}/complete`, { method: 'POST' }),
   fileSession: (id: string, signal?: AbortSignal) => apiRequest<RoyaltyImportSession>(`/api/v1/royalties/import-files/${encodeURIComponent(id)}`, { signal }),
   fileSessions: (offset = 0, signal?: AbortSignal) => apiRequest<{ items: RoyaltyImportSession[] }>(`/api/v1/royalties/import-files?limit=50&offset=${offset}`, { signal }),
   retryFileSession: (id: string) => apiRequest<{ session: RoyaltyImportSession }>(`/api/v1/royalties/import-files/${encodeURIComponent(id)}/retry`, { method: 'POST' }),
-  commitFileSession: (id: string) => apiRequest<{ id: string; replayed: boolean }>(`/api/v1/royalties/import-files/${encodeURIComponent(id)}/commit`, { method: 'POST', timeoutMs: 120000 }),
+  commitFileSession: (id: string) => apiRequest<{ id: string; replaced_id?: string; replayed: boolean }>(`/api/v1/royalties/import-files/${encodeURIComponent(id)}/commit`, { method: 'POST', timeoutMs: 120000 }),
   periods: (signal?: AbortSignal) => apiRequest<{ items: string[] }>('/api/v1/royalties/periods', { signal }),
   report: (query: RoyaltyReportQuery = {}, signal?: AbortSignal) => {
     const params = new URLSearchParams();
