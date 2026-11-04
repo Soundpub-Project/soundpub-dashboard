@@ -11,7 +11,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Capability | Supabase reference | Backend target/current | Frontend state | Status | Next evidence/work |
 | --- | --- | --- | --- | --- | --- |
 | Login utama | Supabase Auth session | local auth tersedia; generic bearer provider production belum tersedia | Backend auth aktif pada dev | PARTIAL | Production local-session verification dan lifecycle gate |
-| Partner SSO | `sso-login` | Keycloak/OIDC production adapter belum tersedia | Belum full cutover | MISSING | Bind `(issuer, subject)`, JWKS, issuer/audience, verified claims, E2E |
+| Partner SSO | `sso-login` | Keycloak-compatible OIDC/JWKS bearer adapter validates RS256, issuer, audience, expiry, nbf, and key rotation | Frontend partner login cutover belum penuh | IMPLEMENTED | Configure real realm/client and verify browser E2E |
 | Create user | `create-user` | `/api/v1/admin/users` | Backend adapter tersedia | IMPLEMENTED | Role matrix compatibility |
 | Update role | `update-user-role` | admin user role endpoint | Backend adapter tersedia | IMPLEMENTED | Superadmin hierarchy regression |
 | Update status | `update-user-status` | admin user status endpoint | Backend adapter tersedia | IMPLEMENTED | Suspension/session invalidation parity |
@@ -137,14 +137,14 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Audit log | table triggers/function logs | backend audit events | Partial admin visibility | PARTIAL | Unified viewer and retention |
 | Observability | container/function logs | structured logs/metrics | Dev only | PARTIAL | Import/payout SLO and alert design |
 | Outbox topic coverage | direct function side effects | explicit producer/consumer topic registry with startup assertion | Dev worker registered | VERIFIED | Add provider-specific delivery handlers as each provider becomes real |
-| Production identity provider | Supabase Auth/SSO | hanya mock dan legacy provider untuk generic bearer path | Production belum operasional | MISSING | Local session authority + Keycloak OIDC/JWKS adapter |
+| Production identity provider | Supabase Auth/SSO | local session remains primary; production OIDC/JWKS bearer adapter available for partner identity | Deployment config belum diaktifkan | IMPLEMENTED | Bind verified external identity and run realm E2E |
 
 ## Verification evidence
 
 - 2026-11-04: `npm run typecheck` PASS.
 - 2026-11-04: focused royalty and worker tests PASS.
 - 2026-11-04: isolated Docker `dashboard-sounpub-dev` rebuilt successfully.
-- 2026-11-04: `RUN_DOCKER_TESTS=1 npm test` produced 292 tests, 286 pass, 0 fail, 6 skipped before scoped-report checkpoint.
+- 2026-11-04: `RUN_DOCKER_TESTS=1 npm test` produced 295 tests, 289 pass, 0 fail, 6 skipped after reporting and retention checkpoints.
 - Durable PASS includes PostgreSQL concurrency, finance ledger, payout, payment, historical ownership, release/track, RustFS media, Label Custom E2E, and deferred immutable royalty-allocation constraints.
 - Royalty entries now carry calculation policy, artist, label, ISRC, UPC, and statement-dimension snapshots. Immutable child allocations support ARTIST, LABEL, SOUNDPUB, COMPOSER, and LEGACY_OWNER components. Existing rows backfill exactly as one LEGACY_OWNER allocation. Ledger, reporting, readiness, balance gates, earnings, and corrections aggregate allocation owners, not mutable current catalog ownership.
 - Inline CSV preview/commit now reparses and rematches server-side, verifies expected checksum, blocks active source-period conflicts, writes 70/21/9 allocations atomically, and proves ordinary-label plus Label Custom behavior on disposable PostgreSQL.
@@ -158,5 +158,5 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 3. Dedicated aggregate track endpoint remains optional; generic scoped report already supports `track_id`.
 5. Payment provider, payout settlement provider, submission provider, and notification delivery remain partial or mock-oriented.
 6. Royalty upload is cut over when backend royalty/release domains are enabled, but frontend inventory still contains about 368 Supabase call chains in other domains; root production build does not enable backend domains.
-7. Production identity/Keycloak adapter is missing.
+7. Keycloak adapter is implemented; production realm/client configuration and browser E2E remain.
 8. Copyright, takedown, provider invoice/settlement, and several release actions remain direct or fail-closed.

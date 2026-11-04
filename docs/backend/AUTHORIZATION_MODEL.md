@@ -47,3 +47,9 @@ Database least privilege and required RLS/forced RLS add defense in depth; a bro
 
 See [Auth](AUTH_DESIGN.md), [Storage](STORAGE_DESIGN.md), and [test strategy](PHASE2_TEST_STRATEGY.md).
 
+
+## Production partner identity
+
+Local username/password session remains primary application authentication. Partner SSO uses the optional `oidc` bearer provider. It accepts only RS256 JWTs whose signature resolves through the configured same-origin JWKS endpoint and whose `iss`, `aud`, `exp`, and optional `nbf` claims pass exact validation. JWKS keys cache for five minutes and refresh once when an unknown `kid` appears.
+
+A verified token yields only `(issuer, subject)`. Access still requires one pre-bound, verified `external_identities` row and current local user status/roles on every request. Token roles, email, username, tenant, and other claims never grant application authority. Configure `IDENTITY_PROVIDER=oidc`, `OIDC_ISSUER`, `OIDC_AUDIENCE`, and `OIDC_JWKS_URL`; production/staging require HTTPS. Local cookie authentication remains available and unchanged.
