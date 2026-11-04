@@ -30,6 +30,8 @@ export function registerFinancialRoutes(app: FastifyInstance, services: {
   if (services.royalties) {
     const service = services.royalties;
     app.get('/api/v1/royalties/breakdown', async request => service.breakdown(await authenticate(request), request.query));
+    app.get('/api/v1/royalties/periods', async request => service.periods(await authenticate(request)));
+    app.get('/api/v1/royalties/report', async request => service.report(await authenticate(request), request.query));
     app.get<{ Params: { id: string } }>('/api/v1/royalties/releases/:id', async request =>
       service.breakdown(await authenticate(request), { ...(request.query as object), release_id: request.params.id }));
     app.get('/api/v1/royalties/summary', async request => service.summary(await authenticate(request), request.query));
@@ -48,6 +50,8 @@ export function registerFinancialRoutes(app: FastifyInstance, services: {
     app.get('/api/v1/royalties/imports/:id', async request => service.detail(await authenticate(request), (request.params as { id: string }).id));
     app.post('/api/v1/royalties/imports/:id/correction', async request => service.correct(await authenticate(request), (request.params as { id: string }).id, request.body, request.id));
     add('GET', '/api/v1/royalties/breakdown', 'getRoyaltyBreakdown');
+    add('GET', '/api/v1/royalties/periods', 'listRoyaltyPeriods');
+    add('GET', '/api/v1/royalties/report', 'getRoyaltyReport');
     add('GET', '/api/v1/royalties/releases/:id', 'getReleaseRoyaltyBreakdown');
     for (const [method,path,id] of [['GET','/api/v1/royalties/summary','getRoyaltySummary'],['POST','/api/v1/royalties/imports/csv/preview','previewRoyaltyCsvImport'],['POST','/api/v1/royalties/imports/csv/commit','commitRoyaltyCsvImport'],['POST','/api/v1/royalties/import-files','requestRoyaltyFileUpload'],['POST','/api/v1/royalties/import-files/:id/complete','completeRoyaltyFileUpload'],['GET','/api/v1/royalties/import-files','listRoyaltyFileUploads'],['GET','/api/v1/royalties/import-files/:id','getRoyaltyFileUpload'],['POST','/api/v1/royalties/import-files/:id/retry','retryRoyaltyFileUpload'],['POST','/api/v1/royalties/import-files/:id/commit','commitRoyaltyFileUpload'],['GET','/api/v1/royalties/import-files/:id/download','downloadRoyaltyFileUpload'],['POST','/api/v1/royalties/imports/preview','previewRoyaltyImport'],['POST','/api/v1/royalties/imports/commit','commitRoyaltyImport'],['GET','/api/v1/royalties/imports','listRoyaltyImports'],['GET','/api/v1/royalties/imports/:id','getRoyaltyImport'],['POST','/api/v1/royalties/imports/:id/correction','correctRoyaltyImport']]) add(method!,path!,id!);
   }

@@ -20,6 +20,8 @@ export function registerRoyaltiesRoutes(app: FastifyInstance, service: Royalties
   app.post<{ Params: { id: string } }>('/api/v1/royalties/imports/:id/correction', async request =>
     service.correct(await authenticate(request), request.params.id, request.body, request.id));
   app.get('/api/v1/royalties/breakdown', async request => service.breakdown(await authenticate(request), request.query));
+  app.get('/api/v1/royalties/periods', async request => service.periods(await authenticate(request)));
+  app.get('/api/v1/royalties/report', async request => service.report(await authenticate(request), request.query));
   app.get<{ Params: { id: string } }>('/api/v1/royalties/releases/:id', async request =>
     service.breakdown(await authenticate(request), { ...(request.query as object), release_id: request.params.id }));
   app.get('/api/v1/royalties/summary', async request => service.summary(await authenticate(request), request.query));

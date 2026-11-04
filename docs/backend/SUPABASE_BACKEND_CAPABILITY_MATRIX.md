@@ -60,7 +60,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | ISRC matching | tracks primary match | normalized server lookup, ambiguity fail-closed, transfer-safe release ownership | Backend CSV API available | VERIFIED | Decide future recipient-pair versus exact-track ambiguity policy |
 | UPC/release matching | releases lookup | UPC assertion/narrowing plus release-track consistency | Backend CSV API available | VERIFIED | Add provider-specific UPC normalization only with evidence |
 | Artist attribution | artist relation/history migration | stable artist ID, historical ISRC conflict guard, allocation snapshot | Backend CSV API available | VERIFIED | Add manual review workflow for legacy unresolved identities |
-| Label attribution | release label snapshot | immutable `label_owner_user_id`; ordinary and Label Custom split verified | Label Custom supported | PARTIAL | Add explicit whitelabel E2E and reporting cutover |
+| Label attribution | release label snapshot | immutable `label_owner_user_id`; ordinary, Whitelabel, and Label Custom scope verified | Backend role-scoped report | VERIFIED | Preserve historical label snapshot during future tenant expansion |
 | Preview | browser validation and split preview | `/royalties/imports/csv/preview` with checksum, matching, split totals | Backend-mode CSV preview cut over | VERIFIED | Add private-file progress and large-file diagnostics |
 | File upload | Edge Function receives parsed records | private RustFS upload intent, verified UTF-8/checksum snapshot, admin status/download API | Backend-mode signed upload cut over | VERIFIED | Add cleanup retention job and streaming browser hash |
 | Async parse | Edge Function synchronous | durable leased worker, preview result, bounded retry and authority revocation | Frontend polls session status | IMPLEMENTED | Streaming parser, heartbeat progress and manual retry UI |
@@ -103,13 +103,13 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 
 | Capability | Supabase reference | Backend target/current | Frontend state | Status | Next evidence/work |
 | --- | --- | --- | --- | --- | --- |
-| Royalty summary | direct table queries/RPC | `/royalties/summary` | Backend adapter tersedia | IMPLEMENTED | Role totals parity |
-| Breakdown | direct royalties reads | `/royalties/breakdown` | Backend adapter tersedia | IMPLEMENTED | Filters and pagination parity |
+| Royalty summary | direct table queries/RPC | `/royalties/summary` plus scoped report summary | Backend report cards use current role scope | VERIFIED | Add retained SoundPub accounting report |
+| Breakdown | direct royalties reads | `/royalties/report` and `/royalties/breakdown` | Backend report UI supports period/search/artist/release pagination | VERIFIED | Add cursor pagination for very large history |
 | Release detail | release royalty views | `/royalties/releases/:id` | Backend adapter tersedia | IMPLEMENTED | Frontend cutover evidence |
-| Track detail | table query | target route not present | Tidak tersedia | MISSING | Add scoped track endpoint |
-| Period list | distinct query | target route not present | Tidak tersedia | MISSING | Add period endpoint |
-| CSV export | frontend/legacy export | Label Custom export exists | Partial | PARTIAL | Generic role-scoped export |
-| Whitelabel dashboard | direct royalties query | no complete tenant dashboard adapter | Direct Supabase remains | MISSING | Tenant summary endpoint and UI cutover |
+| Track detail | table query | `/royalties/report?track_id=` provides scoped rows | Generic report client supports track filter contract | IMPLEMENTED | Add dedicated aggregate track endpoint if product needs richer metadata |
+| Period list | distinct query | `/royalties/periods` role-scoped | Backend period selector cut over | VERIFIED | None |
+| CSV export | frontend/legacy export | generic role-scoped report pagination | Backend Royalti exports current filter for all supported roles | VERIFIED | Move very large export to async server file later |
+| Whitelabel dashboard | direct royalties query | whitelabel royalty scope verified through immutable label snapshot | Royalti page cut over; standalone WhitelabelDashboard still mixed | PARTIAL | Cut over roster/release widgets on standalone dashboard |
 
 ## Payout dan payment
 
@@ -143,18 +143,18 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 - 2026-11-04: `npm run typecheck` PASS.
 - 2026-11-04: focused royalty and worker tests PASS.
 - 2026-11-04: isolated Docker `dashboard-sounpub-dev` rebuilt successfully.
-- 2026-11-04: `RUN_DOCKER_TESTS=1 npm test` produced 290 tests, 284 pass, 0 fail, 6 skipped.
+- 2026-11-04: `RUN_DOCKER_TESTS=1 npm test` produced 292 tests, 286 pass, 0 fail, 6 skipped before scoped-report checkpoint.
 - Durable PASS includes PostgreSQL concurrency, finance ledger, payout, payment, historical ownership, release/track, RustFS media, Label Custom E2E, and deferred immutable royalty-allocation constraints.
 - Royalty entries now carry calculation policy, artist, label, ISRC, UPC, and statement-dimension snapshots. Immutable child allocations support ARTIST, LABEL, SOUNDPUB, COMPOSER, and LEGACY_OWNER components. Existing rows backfill exactly as one LEGACY_OWNER allocation. Ledger, reporting, readiness, balance gates, earnings, and corrections aggregate allocation owners, not mutable current catalog ownership.
 - Inline CSV preview/commit now reparses and rematches server-side, verifies expected checksum, blocks active source-period conflicts, writes 70/21/9 allocations atomically, and proves ordinary-label plus Label Custom behavior on disposable PostgreSQL.
 - Backend-mode frontend now uploads raw CSV to server preview, displays authoritative diagnostics and 70/21/9 totals, commits with the preview checksum, and reads immutable backend history/detail without Supabase fallback. Frontend TypeScript and production build pass.
+- Scoped royalty reporting now provides period discovery, filters, totals, pagination, and CSV export for admin, ordinary label, Whitelabel, artist, and Label Custom PIC. Disposable PostgreSQL proves no cross-owner leakage.
 
 ## Remaining blockers
 
 1. Private royalty files, leased async preview worker, retry state, authority revocation, checksum-bound session commit, and frontend signed-upload cutover are implemented; streaming progress and large-file commit remain incomplete.
-2. Ordinary label and Label Custom split are verified; whitelabel still needs explicit E2E and frontend reporting cutover.
-3. Whitelabel royalty dashboard remains direct Supabase.
-4. Track detail, period list, and generic export are missing.
+2. Ordinary label, Whitelabel, artist, and Label Custom reporting scopes are verified; standalone WhitelabelDashboard roster/release widgets remain direct Supabase.
+3. Dedicated aggregate track endpoint remains optional; generic scoped report already supports `track_id`.
 5. Payment provider, payout settlement provider, submission provider, and notification delivery remain partial or mock-oriented.
 6. Royalty upload is cut over when backend royalty/release domains are enabled, but frontend inventory still contains about 368 Supabase call chains in other domains; root production build does not enable backend domains.
 7. Production identity/Keycloak adapter is missing.

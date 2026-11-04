@@ -364,6 +364,83 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
         return { id, replayed: false };
       });
     },
+    async periods(actor: Principal) {
+      return authorized(actor, false, async db => {
+        const current = (await usersRepository(db).lock([actor.id], false)).get(actor.id);
+        if (!current) throw new ApiError(403, 'FORBIDDEN');
+        const admin = allows(current, 'admin');
+        const label = current.roles.includes('label') || current.roles.includes('whitelabel');
+        const owner = current.roles.includes('artist') || current.roles.includes('label_custom');
+        if (!admin && !label && !owner) throw new ApiError(403, 'FORBIDDEN');
+        const items = (await db.query<{ period: string }>(`SELECT DISTINCT e.period
+          FROM soundpub.royalty_import_entries e
+          WHERE $2::boolean OR ($3::boolean AND e.label_owner_user_id=$1)
+            OR ($4::boolean AND EXISTS (SELECT 1 FROM soundpub.royalty_import_allocations a
+              WHERE a.entry_id=e.id AND a.owner_id=$1))
+          ORDER BY e.period DESC`, [actor.id,admin,label,owner])).rows.map(row => row.period);
+        return { items };
+      });
+    },
+    async report(actor: Principal, input: unknown = {}) {
+      const query = parse(z.strictObject({
+        period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
+        artist_id: z.uuid().optional(), release_id: z.uuid().optional(), track_id: z.uuid().optional(),
+        search: z.string().trim().min(1).max(200).optional(),
+        limit: z.coerce.number().int().min(1).max(200).default(50),
+        offset: z.coerce.number().int().min(0).max(100000).default(0),
+      }), input);
+      return authorized(actor, false, async db => {
+        const current = (await usersRepository(db).lock([actor.id], false)).get(actor.id);
+        if (!current) throw new ApiError(403, 'FORBIDDEN');
+        const admin = allows(current, 'admin');
+        const label = current.roles.includes('label') || current.roles.includes('whitelabel');
+        const owner = current.roles.includes('artist') || current.roles.includes('label_custom');
+        if (!admin && !label && !owner) throw new ApiError(403, 'FORBIDDEN');
+        const parameters = [actor.id,admin,label,owner,query.period ?? null,query.artist_id ?? null,
+          query.release_id ?? null,query.track_id ?? null,query.search ?? null,query.limit,query.offset];
+        const scope = `$2::boolean OR ($3::boolean AND e.label_owner_user_id=$1)
+          OR ($4::boolean AND EXISTS (SELECT 1 FROM soundpub.royalty_import_allocations own
+            WHERE own.entry_id=e.id AND own.owner_id=$1))`;
+        const filters = `($5::text IS NULL OR e.period=$5) AND ($6::uuid IS NULL OR e.artist_id=$6)
+          AND ($7::uuid IS NULL OR e.release_id=$7) AND ($8::uuid IS NULL OR e.track_id=$8)
+          AND ($9::text IS NULL OR strpos(lower(concat_ws(' ',e.source_isrc,r.title,r.artist_name,t.title,e.platform,e.country)),lower($9))>0)`;
+        const items = (await db.query(`SELECT e.id,e.period,e.source_isrc AS isrc,e.source_upc AS upc,
+          e.artist_id,e.release_id,e.track_id,r.title AS release_title,t.title AS track_title,
+          r.artist_name,lp.full_name AS label_name,e.platform,e.country,e.sales_type,e.sales_unit,
+          e.net_amount::text AS net_revenue,
+          COALESCE((SELECT sum(own.amount)::numeric(24,2)::text FROM soundpub.royalty_import_allocations own
+            WHERE own.entry_id=e.id AND own.owner_id=$1),'0.00') AS owner_revenue,
+          (c.id IS NOT NULL) AS corrected,b.created_at
+          FROM soundpub.royalty_import_entries e
+          JOIN soundpub.royalty_import_batches b ON b.id=e.batch_id
+          JOIN soundpub.releases r ON r.id=e.release_id
+          JOIN soundpub.tracks t ON t.id=e.track_id
+          LEFT JOIN soundpub.profiles lp ON lp.id=e.label_owner_user_id
+          LEFT JOIN soundpub.royalty_import_corrections c ON c.batch_id=e.batch_id
+          WHERE (${scope}) AND ${filters}
+          ORDER BY e.period DESC,e.source_row_number NULLS LAST,e.id LIMIT $10 OFFSET $11`, parameters)).rows;
+        const total = Number((await db.query<{ count: string }>(`SELECT count(*)::text AS count
+          FROM soundpub.royalty_import_entries e
+          JOIN soundpub.releases r ON r.id=e.release_id JOIN soundpub.tracks t ON t.id=e.track_id
+          WHERE (${scope}) AND ${filters}`, parameters.slice(0,9))).rows[0]!.count);
+        const summary = (await db.query(`SELECT
+          COALESCE(sum(e.net_amount),0)::numeric(24,2)::text AS gross_revenue,
+          COALESCE(sum(CASE WHEN c.id IS NOT NULL THEN -e.net_amount ELSE 0 END),0)::numeric(24,2)::text AS corrections,
+          COALESCE(sum(CASE WHEN c.id IS NULL THEN e.net_amount ELSE 0 END),0)::numeric(24,2)::text AS net_revenue,
+          COALESCE(sum(CASE WHEN $2::boolean THEN e.net_amount ELSE owner.amount END),0)::numeric(24,2)::text AS owner_gross_revenue,
+          COALESCE(sum(CASE WHEN c.id IS NOT NULL THEN -(CASE WHEN $2::boolean THEN e.net_amount ELSE owner.amount END)
+            ELSE 0 END),0)::numeric(24,2)::text AS owner_corrections,
+          COALESCE(sum(CASE WHEN c.id IS NULL THEN CASE WHEN $2::boolean THEN e.net_amount ELSE owner.amount END
+            ELSE 0 END),0)::numeric(24,2)::text AS owner_revenue
+          FROM soundpub.royalty_import_entries e
+          JOIN soundpub.releases r ON r.id=e.release_id JOIN soundpub.tracks t ON t.id=e.track_id
+          LEFT JOIN soundpub.royalty_import_corrections c ON c.batch_id=e.batch_id
+          LEFT JOIN LATERAL (SELECT COALESCE(sum(own.amount),0) AS amount
+            FROM soundpub.royalty_import_allocations own WHERE own.entry_id=e.id AND own.owner_id=$1) owner ON true
+          WHERE (${scope}) AND ${filters}`, parameters.slice(0,9))).rows[0];
+        return { items, total, limit: query.limit, offset: query.offset, summary };
+      });
+    },
     async breakdown(actor: Principal, input: unknown = {}) {
       const query = parse(z.strictObject({ artist_id: z.uuid().optional(), release_id: z.uuid().optional(),
         period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),

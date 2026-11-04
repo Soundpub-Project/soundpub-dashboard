@@ -145,6 +145,18 @@ export interface RoyaltyBreakdown {
   owner_id: string; currency: 'IDR'; status: 'UNRECONCILED';
   items: { artist_id: string; release_id: string; track_id: string; platform: string; period: string; gross_earnings: string; corrections: string; net_earnings: string }[];
 }
+export interface RoyaltyReportQuery extends RoyaltyBreakdownQuery { track_id?: string; search?: string; limit?: number }
+export interface RoyaltyReportRow {
+  id: string; period: string; isrc: string | null; upc: string | null; artist_id: string | null;
+  release_id: string; track_id: string; release_title: string; track_title: string; artist_name: string;
+  label_name: string | null; platform: string | null; country: string | null; sales_type: string | null;
+  sales_unit: number | null; net_revenue: string; owner_revenue: string; corrected: boolean; created_at: string;
+}
+export interface RoyaltyReport {
+  items: RoyaltyReportRow[]; total: number; limit: number; offset: number;
+  summary: { gross_revenue: string; corrections: string; net_revenue: string;
+    owner_gross_revenue: string; owner_corrections: string; owner_revenue: string };
+}
 
 export const royaltiesApi = {
   requestFileUpload: (body: { source: string; filename: string; mime_type: 'text/csv'; size: number; checksum: string }) =>
@@ -153,7 +165,14 @@ export const royaltiesApi = {
   fileSession: (id: string, signal?: AbortSignal) => apiRequest<RoyaltyImportSession>(`/api/v1/royalties/import-files/${encodeURIComponent(id)}`, { signal }),
   fileSessions: (offset = 0, signal?: AbortSignal) => apiRequest<{ items: RoyaltyImportSession[] }>(`/api/v1/royalties/import-files?limit=50&offset=${offset}`, { signal }),
   retryFileSession: (id: string) => apiRequest<{ session: RoyaltyImportSession }>(`/api/v1/royalties/import-files/${encodeURIComponent(id)}/retry`, { method: 'POST' }),
-  commitFileSession: (id: string) => apiRequest<{ id: string; replayed: boolean }>(`/api/v1/royalties/import-files/${encodeURIComponent(id)}/commit`, { method: 'POST', timeoutMs: 120000 }),  breakdown: (query: RoyaltyBreakdownQuery = {}, signal?: AbortSignal) => {
+  commitFileSession: (id: string) => apiRequest<{ id: string; replayed: boolean }>(`/api/v1/royalties/import-files/${encodeURIComponent(id)}/commit`, { method: 'POST', timeoutMs: 120000 }),
+  periods: (signal?: AbortSignal) => apiRequest<{ items: string[] }>('/api/v1/royalties/periods', { signal }),
+  report: (query: RoyaltyReportQuery = {}, signal?: AbortSignal) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== '') params.set(key, String(value));
+    return apiRequest<RoyaltyReport>(`/api/v1/royalties/report?${params}`, { signal });
+  },
+  breakdown: (query: RoyaltyBreakdownQuery = {}, signal?: AbortSignal) => {
     const params = new URLSearchParams({ limit: '50' });
     for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== '') params.set(key, String(value));
     return apiRequest<RoyaltyBreakdown>(`/api/v1/royalties/breakdown?${params}`, { signal });
