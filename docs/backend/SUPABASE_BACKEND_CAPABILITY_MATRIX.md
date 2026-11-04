@@ -10,8 +10,8 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 
 | Capability | Supabase reference | Backend target/current | Frontend state | Status | Next evidence/work |
 | --- | --- | --- | --- | --- | --- |
-| Login utama | Supabase Auth session | local auth + provider abstraction | Backend auth aktif pada dev | IMPLEMENTED | Compatibility dan session lifecycle test |
-| Partner SSO | `sso-login` | auth provider/Keycloak adapter | Belum full cutover | PARTIAL | Bind `(issuer, subject)`, verified claims, E2E |
+| Login utama | Supabase Auth session | local auth tersedia; generic bearer provider production belum tersedia | Backend auth aktif pada dev | PARTIAL | Production local-session verification dan lifecycle gate |
+| Partner SSO | `sso-login` | Keycloak/OIDC production adapter belum tersedia | Belum full cutover | MISSING | Bind `(issuer, subject)`, JWKS, issuer/audience, verified claims, E2E |
 | Create user | `create-user` | `/api/v1/admin/users` | Backend adapter tersedia | IMPLEMENTED | Role matrix compatibility |
 | Update role | `update-user-role` | admin user role endpoint | Backend adapter tersedia | IMPLEMENTED | Superadmin hierarchy regression |
 | Update status | `update-user-status` | admin user status endpoint | Backend adapter tersedia | IMPLEMENTED | Suspension/session invalidation parity |
@@ -135,6 +135,8 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Storage backup | backup Edge Function | scoped worker | Tidak diperlukan frontend | DEFERRED | Recovery design after parity |
 | Audit log | table triggers/function logs | backend audit events | Partial admin visibility | PARTIAL | Unified viewer and retention |
 | Observability | container/function logs | structured logs/metrics | Dev only | PARTIAL | Import/payout SLO and alert design |
+| Outbox topic coverage | direct function side effects | producer topic melebihi worker consumer | Dev worker partial | PARTIAL | Registry topic, startup assertion, handler/no-op eksplisit, replay command |
+| Production identity provider | Supabase Auth/SSO | hanya mock dan legacy provider untuk generic bearer path | Production belum operasional | MISSING | Local session authority + Keycloak OIDC/JWKS adapter |
 
 ## Phase 0 exit blockers
 
@@ -144,5 +146,9 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 4. Whitelabel royalty dashboard masih direct Supabase.
 5. Track detail, period list, generic export, file upload lifecycle, async parser, dan large-file handling belum tersedia.
 6. Payment/provider dan notification delivery masih partial/dev-oriented.
-7. Full frontend direct-Supabase inventory masih harus ditutup sebelum Phase 0 dinyatakan selesai.
+7. Frontend inventory menemukan sekitar 368 call-chain Supabase; root production build belum mengaktifkan backend domains.
+8. Generic production identity provider dan full outbox topic coverage belum tersedia.
+9. Copyright, takedown, provider invoice/settlement, dan beberapa release action masih direct atau fail-closed.
+
+
 
