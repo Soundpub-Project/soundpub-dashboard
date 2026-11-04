@@ -40,10 +40,26 @@ test('catalog matcher checks optional CSV assertions without name-based identity
 });
 
 test('catalog matcher rejects historical artist drift', async () => {
-  const historical = [{ source_isrc: row.isrc, artist_ids: ['00000000-0000-4000-8000-000000000099'] }];
+  const historical = [{ source_isrc: row.isrc, artist_ids: ['00000000-0000-4000-8000-000000000099'],
+    financial_owner_user_ids: [candidate.artist_owner_user_id], label_owner_user_ids: [candidate.label_owner_user_id] }];
   const result = await matchLegacyRoyaltyRows(fixture([candidate], historical), [row]);
   assert.equal(result.rows.length, 0);
   assert.equal(result.issues[0]?.code, 'HISTORICAL_OWNER_CONFLICT');
+});
+
+test('catalog matcher rejects historical financial or label owner drift', async () => {
+  for (const historical of [
+    { source_isrc: row.isrc, artist_ids: [candidate.artist_id],
+      financial_owner_user_ids: ['00000000-0000-4000-8000-000000000099'],
+      label_owner_user_ids: [candidate.label_owner_user_id] },
+    { source_isrc: row.isrc, artist_ids: [candidate.artist_id],
+      financial_owner_user_ids: [candidate.artist_owner_user_id],
+      label_owner_user_ids: ['00000000-0000-4000-8000-000000000099'] },
+  ]) {
+    const result = await matchLegacyRoyaltyRows(fixture([candidate], [historical]), [row]);
+    assert.equal(result.rows.length, 0);
+    assert.equal(result.issues[0]?.code, 'HISTORICAL_OWNER_CONFLICT');
+  }
 });
 
 test('catalog matcher keeps historical release label after current artist transfer', async () => {

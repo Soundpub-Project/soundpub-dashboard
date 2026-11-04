@@ -59,8 +59,13 @@ export async function matchLegacyRoyaltyRows(db: PoolClient, rows: LegacyRoyalty
     matches.push(candidate);
     byIsrc.set(candidate.normalized_isrc, matches);
   }
-  const historical = (await db.query<{ source_isrc: string; artist_ids: string[] }>(`SELECT source_isrc,
-      COALESCE(array_agg(DISTINCT artist_id::text) FILTER (WHERE artist_id IS NOT NULL),'{}'::text[]) AS artist_ids
+  const historical = (await db.query<{ source_isrc: string; artist_ids: string[]; financial_owner_user_ids: string[];
+    label_owner_user_ids: string[] }>(`SELECT source_isrc,
+      COALESCE(array_agg(DISTINCT artist_id::text) FILTER (WHERE artist_id IS NOT NULL),'{}'::text[]) AS artist_ids,
+      COALESCE(array_agg(DISTINCT financial_owner_user_id::text)
+        FILTER (WHERE financial_owner_user_id IS NOT NULL),'{}'::text[]) AS financial_owner_user_ids,
+      COALESCE(array_agg(DISTINCT label_owner_user_id::text)
+        FILTER (WHERE label_owner_user_id IS NOT NULL),'{}'::text[]) AS label_owner_user_ids
     FROM soundpub.royalty_import_entries WHERE source_isrc=ANY($1::text[])
     GROUP BY source_isrc`, [isrcs])).rows;
   const historicalByIsrc = new Map(historical.map(item => [item.source_isrc, item]));
@@ -86,7 +91,9 @@ export async function matchLegacyRoyaltyRows(db: PoolClient, rows: LegacyRoyalty
     }
     const candidate = options[0]!;
     const prior = historicalByIsrc.get(row.isrc);
-    if (prior?.artist_ids.some(id => id !== candidate.artist_id)) {
+    if (prior && (prior.artist_ids.some(id => id !== candidate.artist_id) ||
+        prior.financial_owner_user_ids.some(id => id !== candidate.artist_owner_user_id) ||
+        prior.label_owner_user_ids.some(id => id !== candidate.label_owner_user_id))) {
       fail('isrc', 'HISTORICAL_OWNER_CONFLICT', 'Pemilik katalog berbeda dari snapshot royalti historis untuk ISRC ini.'); continue;
     }
     if (row.title && nameKey(row.title) !== nameKey(candidate.title)) {

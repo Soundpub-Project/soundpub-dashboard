@@ -12,15 +12,18 @@ test('CSV replacement atomically reverses old allocations and posts immutable re
   const { owner, runtime } = database;
   const admin: Principal = { id: randomUUID(), roles: ['admin'], status: 'active' };
   const label: Principal = { id: randomUUID(), roles: ['label'], status: 'active' };
+  const nextLabel: Principal = { id: randomUUID(), roles: ['label'], status: 'active' };
   const artist: Principal = { id: randomUUID(), roles: ['artist'], status: 'active' };
   const artistId = randomUUID(), releaseId = randomUUID(), trackId = randomUUID();
   try {
-    await owner.query(`INSERT INTO soundpub.backend_users(id,status) VALUES($1,'active'),($2,'active'),($3,'active')`,
-      [admin.id,label.id,artist.id]);
+    await owner.query(`INSERT INTO soundpub.backend_users(id,status) VALUES
+      ($1,'active'),($2,'active'),($3,'active'),($4,'active')`, [admin.id,label.id,artist.id,nextLabel.id]);
     await owner.query(`INSERT INTO soundpub.profiles(id,full_name,parent_label_id) VALUES
-      ($1,'Replacement Label',NULL),($2,'Replacement Artist',$1)`, [label.id,artist.id]);
+      ($1,'Replacement Label',NULL),($2,'Replacement Artist',$1),($3,'Replacement Label 2',NULL)`,
+    [label.id,artist.id,nextLabel.id]);
     await owner.query(`INSERT INTO soundpub.user_roles(user_id,role,verified_at) VALUES
-      ($1,'admin',now()),($2,'label',now()),($3,'artist',now())`, [admin.id,label.id,artist.id]);
+      ($1,'admin',now()),($2,'label',now()),($3,'artist',now()),($4,'label',now())`,
+    [admin.id,label.id,artist.id,nextLabel.id]);
     await owner.query(`INSERT INTO soundpub.artists(id,label_id,artist_user_id,name)
       VALUES($1,$2,$3,'Replacement Artist')`, [artistId,label.id,artist.id]);
     await owner.query(`INSERT INTO soundpub.releases(id,label_id,artist_user_id,created_by,artist_id,title,artist_name,upc,status)
@@ -50,6 +53,8 @@ test('CSV replacement atomically reverses old allocations and posts immutable re
     assert.equal(replacement.replayed, false);
     assert.equal(replacement.replaced_id, original.id);
     assert.deepEqual(await service.replaceCsv(admin, original.id, input, 'replay'), { ...replacement, replayed: true });
+    await assert.rejects(service.replaceCsv(admin, original.id, { ...input, csv: `${input.csv}\n` }, 'raw-conflict'),
+      { code: 'ROYALTY_REPLACEMENT_CONFLICT' });
     await assert.rejects(service.replaceCsv(admin, original.id, { ...input, reason: 'different reason' }, 'conflict'),
       { code: 'ROYALTY_REPLACEMENT_CONFLICT' });
     assert.deepEqual((await owner.query(`SELECT old_batch_id,new_batch_id,reason FROM soundpub.royalty_import_replacements
@@ -69,10 +74,52 @@ test('CSV replacement atomically reverses old allocations and posts immutable re
     assert.equal((await service.summary(label)).net_earnings, '31.50');
     assert.equal((await owner.query(`SELECT count(*)::int AS count FROM soundpub.royalty_import_batches
       WHERE source='replacement-dsp' AND period='2026-10'`)).rows[0].count, 2);
+    await assert.rejects(service.correct(admin, original.id, { reason: input.reason }, 'not-a-correction'),
+      { code: 'ROYALTY_CORRECTION_CONFLICT' });
+
+    await owner.query("UPDATE soundpub.artists SET name='Catalog Name Changed' WHERE id=$1", [artistId]);
+    assert.deepEqual(await service.replaceCsv(admin, original.id, input, 'replay-after-catalog-change'),
+      { ...replacement, replayed: true });
+    await owner.query("UPDATE soundpub.artists SET name='Replacement Artist' WHERE id=$1", [artistId]);
     const wrongPeriod = csv('2026-11', '200.00');
     const wrongPreview = await service.previewCsv(admin, { csv: wrongPeriod });
     await assert.rejects(service.replaceCsv(admin, replacement.id, { csv: wrongPeriod, filename: 'wrong.csv',
       expected_checksum: wrongPreview.checksum!, reason: 'wrong period' }, 'wrong-period'),
     { code: 'ROYALTY_REPLACEMENT_PERIOD_MISMATCH' });
+
+    const historicalBatchId = randomUUID(), historicalEntryId = randomUUID();
+    await owner.query(`INSERT INTO soundpub.royalty_import_batches
+      (id,source,period,currency,checksum,filename,uploader_id,row_count,total_amount,validation_result)
+      VALUES($1,'historical-owner','2026-09','IDR',$2,'historical.csv',$3,1,'1.00',
+        '{"policy_code":"SOUNDPUB_LEGACY_70_21_9"}'::jsonb)`, [historicalBatchId,'e'.repeat(64),admin.id]);
+    await owner.query('ALTER TABLE soundpub.royalty_import_entries DISABLE TRIGGER royalty_attribution_guard');
+    await owner.query('ALTER TABLE soundpub.royalty_import_entries DISABLE TRIGGER royalty_label_owner_guard');
+    await runtime.query('BEGIN');
+    await runtime.query(`INSERT INTO soundpub.royalty_import_entries
+      (id,batch_id,source,period,source_row_id,beneficiary_id,release_id,track_id,platform,gross_amount,deduction_amount,
+        net_amount,artist_id,financial_owner_user_id,label_owner_user_id,calculation_policy_code,source_isrc,country,sales_unit)
+      VALUES($1,$2,'historical-owner','2026-09','historical-row',$3,$4,$5,'Spotify','1.00','0','1.00',$6,$3,$3,
+        'SOUNDPUB_LEGACY_70_21_9','FRX762598330','ID',1)`,
+    [historicalEntryId,historicalBatchId,nextLabel.id,releaseId,trackId,artistId]);
+    await runtime.query(`INSERT INTO soundpub.royalty_import_allocations(entry_id,component,owner_id,amount,policy_code)
+      VALUES($1,'ARTIST',$2,'1.00','SOUNDPUB_LEGACY_70_21_9')`, [historicalEntryId,nextLabel.id]);
+    await runtime.query('COMMIT');
+    await owner.query('ALTER TABLE soundpub.royalty_import_entries ENABLE TRIGGER royalty_attribution_guard');
+    await owner.query('ALTER TABLE soundpub.royalty_import_entries ENABLE TRIGGER royalty_label_owner_guard');
+    const ownerDriftCsv = csv('2026-10', '175.00');
+    const ownerDriftPreview = await service.previewCsv(admin, { csv: ownerDriftCsv });
+    assert.equal(ownerDriftPreview.issues[0]?.code, 'HISTORICAL_OWNER_CONFLICT');
+    await assert.rejects(service.replaceCsv(admin, replacement.id, { csv: ownerDriftCsv, filename: 'owner-drift.csv',
+      expected_checksum: '0'.repeat(64), reason: 'owner drift' }, 'owner-drift'),
+    { code: 'ROYALTY_REPLACEMENT_OWNER_MISMATCH' });
+
+    const genericBatchId = randomUUID();
+    await owner.query(`INSERT INTO soundpub.royalty_import_batches
+      (id,source,period,currency,checksum,filename,uploader_id,row_count,total_amount,validation_result)
+      VALUES($1,'generic','2026-10','IDR',$2,'generic.json',$3,1,'0',
+        '{"policy_code":"BACKEND_SINGLE_OWNER_V1"}'::jsonb)`, [genericBatchId,'f'.repeat(64),admin.id]);
+    await assert.rejects(service.replaceCsv(admin, genericBatchId, input, 'wrong-policy'),
+      { code: 'ROYALTY_REPLACEMENT_POLICY_MISMATCH' });
+
   } finally { await database.close(); }
 });
