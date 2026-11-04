@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { once, pollOutbox, retryDelay, transaction, type SqlClient, type SqlPool } from '../src/worker/index.ts';
 import { createMockProviders, providerNames } from '../src/integrations/index.ts';
+import { assertOutboxHandlers, OUTBOX_TOPICS } from '../src/worker/topics.ts';
 
 function fixture(event: Record<string, unknown> | undefined = { id: '1', topic: 'email', payload: {}, idempotency_key: 'key', attempts: 0 }) {
   const statements: { sql: string; values?: unknown[] }[] = [];
@@ -92,4 +93,12 @@ test('connection with failed rollback is discarded', async () => {
   }) } as SqlPool;
   await assert.rejects(transaction(pool, async () => { throw new Error('original'); }), /original/);
   assert.equal(discarded, true);
+});
+
+test('outbox topic registry fails startup when a producer has no consumer', () => {
+  const complete = Object.fromEntries(OUTBOX_TOPICS.map(topic => [topic, async () => {}]));
+  assert.doesNotThrow(() => assertOutboxHandlers(complete));
+  const incomplete = { ...complete };
+  delete incomplete['royalty.changed'];
+  assert.throws(() => assertOutboxHandlers(incomplete), /royalty\.changed/);
 });

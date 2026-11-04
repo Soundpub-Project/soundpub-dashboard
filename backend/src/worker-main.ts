@@ -3,6 +3,7 @@ import { loadConfig } from './config/index.js';
 import { createPool } from './db/index.js';
 import { createMockProviders } from './integrations/index.js';
 import { pollOutbox, type OutboxHandler } from './worker/index.js';
+import { assertOutboxHandlers } from './worker/topics.js';
 import { createLogger, Metrics, poolMetrics, sampleQueue } from './observability/index.js';
 
 const config = loadConfig();
@@ -18,7 +19,12 @@ const handlers: Record<string, OutboxHandler> = {
   'notification.requested': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-notification', payload: event.payload }); },
   'audit.notification': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-audit-notification', payload: event.payload }); },
   'webhook.received': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-webhook', payload: event.payload }); },
+  'finance.event': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-finance-event', payload: event.payload }); },
+  'royalty.changed': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-royalty-change', payload: event.payload }); },
+  'payout.changed': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-payout-change', payload: event.payload }); },
+  'payout.readiness': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-payout-readiness', payload: event.payload }); },
 };
+assertOutboxHandlers(handlers);
 let stopping = false;
 await pool.query('SELECT 1');
 await writeFile('/tmp/worker-ready', new Date().toISOString(), 'utf8');
@@ -42,4 +48,5 @@ while (!stopping) {
   await new Promise(resolve => setTimeout(resolve, config.WORKER_POLL_MS));
 }
 await pool.end();
+
 
