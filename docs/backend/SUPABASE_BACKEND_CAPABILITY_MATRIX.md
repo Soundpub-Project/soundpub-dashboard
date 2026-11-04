@@ -54,22 +54,22 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 
 | Capability | Supabase reference | Backend target/current | Frontend state | Status | Next evidence/work |
 | --- | --- | --- | --- | --- | --- |
-| CSV parsing | `UploadRoyalty.tsx` browser parser | strict server parser + authoritative matcher | Backend-mode UI sends raw CSV to server | VERIFIED | Move transport to private file/worker for large files |
+| CSV parsing | `UploadRoyalty.tsx` browser parser | inline strict parser plus private-file streaming RFC-style parser and chunk matcher | Backend-mode UI uses private file sessions | VERIFIED | Preserve provider fixtures as parser formats expand |
 | Required columns | period, isrc, platform, country, sales_unit, net_revenue | legacy CSV adapter preserves required/optional columns | Legacy UI compatible | VERIFIED | Keep golden fixtures as format evolves |
 | Optional enrichment | UPC/title/artist/label/sales type | canonical lookup/matcher | Legacy browser DB lookups | MAPPED | Server-side matcher |
 | ISRC matching | tracks primary match | normalized server lookup, ambiguity fail-closed, transfer-safe release ownership | Backend CSV API available | VERIFIED | Decide future recipient-pair versus exact-track ambiguity policy |
 | UPC/release matching | releases lookup | UPC assertion/narrowing plus release-track consistency | Backend CSV API available | VERIFIED | Add provider-specific UPC normalization only with evidence |
 | Artist attribution | artist relation/history migration | stable artist ID, historical ISRC conflict guard, allocation snapshot | Backend CSV API available | VERIFIED | Add manual review workflow for legacy unresolved identities |
 | Label attribution | release label snapshot | immutable `label_owner_user_id`; ordinary, Whitelabel, and Label Custom scope verified | Backend role-scoped report | VERIFIED | Preserve historical label snapshot during future tenant expansion |
-| Preview | browser validation and split preview | `/royalties/imports/csv/preview` with checksum, matching, split totals | Backend-mode CSV preview cut over | VERIFIED | Add private-file progress and large-file diagnostics |
+| Preview | browser validation and split preview | inline preview plus durable chunk staging, capped diagnostics, exact progress, and compatible checksum | Backend-mode CSV preview cut over | VERIFIED | Add staged-row pagination and review UI |
 | File upload | Edge Function receives parsed records | private RustFS upload intent, verified UTF-8/checksum snapshot, admin status/download API | Backend-mode signed upload cut over | VERIFIED | Add streaming browser hash |
-| Async parse | Edge Function synchronous | durable leased worker, preview result, bounded retry and authority revocation | Frontend polls session status | IMPLEMENTED | Streaming parser, heartbeat progress and manual retry UI |
+| Async parse | Edge Function synchronous | streaming object reader, 1.000-row matcher/staging chunks, lease heartbeat, exact progress, bounded diagnostics/retry, and authority revocation | Frontend polls session status | VERIFIED | Add manual retry/takeover UI and long-running dual-worker QA |
 | File retention | implicit function/storage lifecycle | leased CLEANING state removes final and staging objects for expired pending/failed sessions; committed/preview originals retained | No destructive frontend action | VERIFIED | Add configurable long-term archive policy for committed statements |
 | Import history | `royalty_uploads` | import batches/history and immutable detail with correction/replacement provenance | Backend-mode history/detail cut over | VERIFIED | Add cursor pagination for large history |
 | Delete upload | `delete-royalty-upload` + balance rebuild | immutable correction plus atomic CSV replacement; old batch retained and offset | Backend history uses requester-bound private replacement file sessions and immutable provenance | VERIFIED | Add superadmin takeover workflow for abandoned sessions |
 | Duplicate file | upload/source semantics | checksum replay protection | Backend checksum tersedia | IMPLEMENTED | Source-file checksum and provider-period key |
 | Duplicate row | source row key | source/period/source_row uniqueness | Backend tersedia | IMPLEMENTED | CSV row fingerprint compatibility |
-| Large file | browser memory + Edge Function | private upload accepts 100 MB, but parser/commit remain capped at 1.000 rows | UI accepts private files up to 100 MB and reports row-limit issue | PARTIAL | Streaming 50k-100k row parser and chunked commit |
+| Large file | browser memory + Edge Function | private upload and streaming preview accept up to 100 MB/100.000 rows; financial commit still uses legacy 1.000-row path | UI accepts private files up to 100 MB | PARTIAL | Set-based atomic commit from staged rows, browser streaming hash, detail pagination |
 
 ## Royalty calculation dan ownership
 
@@ -153,7 +153,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 
 ## Remaining blockers
 
-1. Private royalty files, leased async preview worker, retry state, authority revocation, checksum-bound session commit, and frontend signed-upload cutover are implemented; streaming progress and large-file commit remain incomplete.
+1. Private royalty files, streaming leased preview worker, durable row staging, heartbeat progress, retry state, authority revocation, checksum-bound session commit, and frontend signed-upload cutover are implemented; set-based large-file commit remains incomplete.
 2. Ordinary label, Whitelabel, artist, and Label Custom reporting scopes are verified; standalone WhitelabelDashboard roster/release widgets remain direct Supabase.
 3. Dedicated aggregate track endpoint remains optional; generic scoped report already supports `track_id`.
 5. Payment provider, payout settlement provider, submission provider, and notification delivery remain partial or mock-oriented.

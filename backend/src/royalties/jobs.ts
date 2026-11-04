@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
-import { previewLegacyRoyaltyCsv } from './legacy-preview.js';
+import { stageLegacyRoyaltyCsvStream } from './streaming-preview.js';
 import type { RoyaltyImportFileRow, RoyaltyImportObjectStore } from './store.js';
 
 interface JobRow extends RoyaltyImportFileRow {
@@ -37,12 +37,14 @@ export function createRoyaltyImportJobProcessor(pool: Pool, store: RoyaltyImport
     } finally { db.release(discard); }
   }
 
-  async function finish(id: string, preview: Awaited<ReturnType<typeof previewLegacyRoyaltyCsv>>) {
+  async function finish(id: string, preview: { parsed_rows: number; invalid_rows: number; checksum: string | null;
+    total_rows?: number; [key: string]: unknown }) {
+    const totalRows = preview.total_rows ?? preview.parsed_rows + preview.invalid_rows;
     const result = await pool.query(`UPDATE soundpub.royalty_import_sessions SET status='PREVIEW_READY',phase='PREVIEW',
       processed_rows=$3,total_rows=$4,preview_checksum=$5,preview_result=$6::jsonb,error_code=NULL,
       lease_owner=NULL,lease_expires_at=NULL,next_attempt_at=NULL,updated_at=clock_timestamp()
       WHERE id=$1 AND status='PARSING' AND lease_owner=$2`,
-    [id,workerId,preview.parsed_rows,preview.parsed_rows+preview.invalid_rows,preview.checksum,JSON.stringify(preview)]);
+    [id,workerId,totalRows,totalRows,preview.checksum,JSON.stringify(preview)]);
     if (!result.rowCount) throw new Error('ROYALTY_JOB_LEASE_LOST');
   }
 
@@ -69,9 +71,12 @@ export function createRoyaltyImportJobProcessor(pool: Pool, store: RoyaltyImport
       const row = await claim();
       if (!row) return 'idle';
       try {
-        const csv = await store.read(row);
         const db = await pool.connect();
-        try { await finish(row.id, await previewLegacyRoyaltyCsv(db, csv)); }
+        try {
+          await db.query('DELETE FROM soundpub.royalty_import_session_rows WHERE session_id=$1', [row.id]);
+          const stream = await store.open(row);
+          await finish(row.id, await stageLegacyRoyaltyCsvStream(db, row, stream, workerId));
+        }
         finally { db.release(); }
         return 'processed';
       } catch (error) {
@@ -114,10 +119,19 @@ export function createRoyaltyImportCleanupProcessor(pool: Pool, store: RoyaltyIm
       if (!row) return 'idle';
       try {
         await store.remove(row);
-        const result = await pool.query(`UPDATE soundpub.royalty_import_sessions SET status='DELETED',phase='DONE',
-          error_code=NULL,lease_owner=NULL,lease_expires_at=NULL,next_attempt_at=NULL,updated_at=clock_timestamp()
-          WHERE id=$1 AND status='CLEANING' AND lease_owner=$2`, [row.id,workerId]);
-        if (!result.rowCount) throw new Error('ROYALTY_CLEANUP_LEASE_LOST');
+        const db = await pool.connect();
+        try {
+          await db.query('BEGIN');
+          await db.query('DELETE FROM soundpub.royalty_import_session_rows WHERE session_id=$1', [row.id]);
+          const result = await db.query(`UPDATE soundpub.royalty_import_sessions SET status='DELETED',phase='DONE',
+            error_code=NULL,lease_owner=NULL,lease_expires_at=NULL,next_attempt_at=NULL,updated_at=clock_timestamp()
+            WHERE id=$1 AND status='CLEANING' AND lease_owner=$2`, [row.id,workerId]);
+          if (!result.rowCount) throw new Error('ROYALTY_CLEANUP_LEASE_LOST');
+          await db.query('COMMIT');
+        } catch (error) {
+          await db.query('ROLLBACK');
+          throw error;
+        } finally { db.release(); }
         return 'processed';
       } catch {
         const delay = Math.min(3600, 2 ** Math.min(row.attempts, 11));

@@ -410,9 +410,10 @@ Gate: source total, accepted/rejected total, ledger posting, dan wallet balance 
 - Phase 9 royalty upload cutover is complete for backend mode: raw CSV preview, server diagnostics, checksum-bound commit, history, and allocation detail no longer write through Supabase. API errors preserve backend code, message, and request ID.
 - Private royalty upload records now use signed RustFS PUT, verified UTF-8/checksum promotion, durable status/progress/lease fields, admin history/detail, and short-lived download capabilities.
 - Worker claims import sessions with expiring leases, rechecks requester authority, stores server preview diagnostics, retries transient failures, and session commit rereads the private file before checksum-bound atomic financial commit. Backend-mode frontend now uses this file-session flow.
+- Private-file preview now reads object bytes as an async stream, parses quoted CSV across UTF-8/chunk boundaries, matches and stages immutable catalog/owner/split snapshots in 1.000-row transactions, heartbeats the lease per chunk, caps retained issues, and records exact progress through 100.000 rows.
 - Role-scoped royalty report and period APIs now enforce admin-global, label/Whitelabel roster, artist-owner, and Label Custom PIC boundaries. Backend Royalti UI uses these APIs for filtering, pagination, totals, and CSV export without Supabase fallback.
 - Expired pending/failed royalty objects now enter a leased CLEANING state, delete both staging and immutable object keys idempotently, retry transient storage failures, and preserve preview-ready/committed originals.
-- Remaining Phase 3/6 scope: streaming parser/progress, 50k-100k row chunked commit, optional approval gate, and reconciliation workflow beyond current readiness approval. Import and replacement now share private signed file sessions; inline replacement remains compatibility-only.
+- Remaining Phase 3/6 scope: set-based atomic commit from staged rows, staged detail pagination, browser streaming hash, optional approval gate, and reconciliation workflow beyond current readiness approval. Import and replacement share private signed file sessions; inline replacement remains compatibility-only.
 
 ### Phase 7 - Reporting dan permission parity
 

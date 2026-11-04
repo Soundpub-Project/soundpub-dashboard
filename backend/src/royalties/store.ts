@@ -30,6 +30,7 @@ export interface RoyaltyImportObjectStore {
     metadata: ObjectMetadata; url: string; method: 'PUT'; headers: Record<string, string>;
   }>;
   verify(row: RoyaltyImportFileRow): Promise<void>;
+  open(row: RoyaltyImportFileRow): Promise<AsyncIterable<Uint8Array>>;
   read(row: RoyaltyImportFileRow): Promise<string>;
   download(row: RoyaltyImportFileRow): Promise<string>;
   remove(row: RoyaltyImportFileRow): Promise<void>;
@@ -111,6 +112,17 @@ export async function createRoyaltyImportObjectStore(pool: Pool, options: Royalt
       try { await client.send(new HeadObjectCommand({ Bucket: options.bucket, Key: key(row.id) })); }
       catch (error) { if (missing(error)) throw new ApiError(404, 'NOT_FOUND'); throw error; }
       return storage.signedUrl({ id: row.requester_id }, row.id, 60);
+    },
+    async open(row) {
+      let object;
+      try { object = await client.send(new GetObjectCommand({ Bucket: options.bucket, Key: key(row.id) })); }
+      catch (error) { if (missing(error)) throw new ApiError(404, 'NOT_FOUND'); throw error; }
+      if (!object.Body) throw new ApiError(404, 'NOT_FOUND');
+      if (object.ContentLength !== Number(row.size_bytes) || object.ContentType !== row.mime_type) {
+        (object.Body as { destroy?: () => void }).destroy?.();
+        throw new ApiError(400, 'ROYALTY_FILE_METADATA_MISMATCH');
+      }
+      return object.Body as AsyncIterable<Uint8Array>;
     },
     async read(row) {
       const object = await storage.download({ id: row.requester_id }, row.id);
