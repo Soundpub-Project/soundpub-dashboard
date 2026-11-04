@@ -37,3 +37,13 @@ test('legacy CSV parser rejects multiple periods and malformed quoting', () => {
   const quoted = parseLegacyRoyaltyCsv(`${header}\n2026-10,FRX762598330,,"broken,A,L,Spotify,ID,,1,1`);
   assert.equal(quoted.issues[0]?.code, 'CSV_UNCLOSED_QUOTE');
 });
+
+test('legacy CSV parser rejects inputs that cannot be committed', () => {
+  const oversized = `${header}\n${Array.from({ length: 1001 }, (_, index) =>
+    `2026-10,FRX76${String(2598330 + index).padStart(7, '0')},,,A,L,Spotify,ID,stream,1,1`).join('\n')}`;
+  assert.equal(parseLegacyRoyaltyCsv(oversized).issues[0]?.code, 'ROW_LIMIT_EXCEEDED');
+
+  const longSalesType = parseLegacyRoyaltyCsv(`${header}\n2026-10,FRX762598330,,,A,L,Spotify,ID,${'x'.repeat(101)},1,1`);
+  assert.equal(longSalesType.rows.length, 0);
+  assert.equal(longSalesType.issues[0]?.code, 'INVALID_SALES_TYPE');
+});

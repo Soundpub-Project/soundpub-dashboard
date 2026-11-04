@@ -94,6 +94,9 @@ export function parseLegacyRoyaltyCsv(input: string): LegacyRoyaltyCsvResult {
   if (missing.length) {
     return { rows: [], headers, issues: [{ row: 1, field: 'header', code: 'MISSING_COLUMNS', message: `Kolom wajib tidak ditemukan: ${missing.join(', ')}` }] };
   }
+  if (document.length - 1 > 1000) {
+    return { rows: [], headers, issues: [{ row: 0, field: 'file', code: 'ROW_LIMIT_EXCEEDED', message: 'Satu impor maksimal memuat 1.000 baris data.' }] };
+  }
   const index = (name: string) => headers.indexOf(name);
   const rows: LegacyRoyaltyCsvRow[] = [];
   for (let offset = 1; offset < document.length; offset += 1) {
@@ -123,6 +126,7 @@ export function parseLegacyRoyaltyCsv(input: string): LegacyRoyaltyCsvResult {
     const artist = optional(values, index('artist'));
     const labelName = optional(values, index('label_name'));
     const salesType = optional(values, index('sales_type'));
+    if (salesType && salesType.length > 100) { fail('sales_type', 'INVALID_SALES_TYPE', 'Sales type maksimal 100 karakter.'); continue; }
     rows.push({
       sourceRowNumber: rowNumber, period, isrc, upc, platform, country, salesUnit, netMinor,
       ...(title ? { title } : {}), ...(artist ? { artist } : {}), ...(labelName ? { labelName } : {}),

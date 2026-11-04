@@ -7,8 +7,10 @@ export class SoundpubApiError extends Error {
     public readonly category: ApiErrorCategory,
     public readonly status: number,
     public readonly requestId?: string,
+    public readonly code: string = category,
+    public readonly serverMessage: string = code,
   ) {
-    super(category);
+    super(serverMessage);
     this.name = 'SoundpubApiError';
   }
 }
@@ -27,6 +29,7 @@ export function setApiCsrfToken(token: string | null) {
 const categories: Record<number, ApiErrorCategory> = {
   400: 'VALIDATION_ERROR', 401: 'UNAUTHENTICATED', 403: 'FORBIDDEN',
   404: 'NOT_FOUND', 409: 'CONFLICT', 429: 'RATE_LIMITED',
+  413: 'VALIDATION_ERROR', 415: 'VALIDATION_ERROR',
   503: 'TEMPORARY_FAILURE',
 };
 
@@ -56,7 +59,9 @@ export async function apiRequest<T>(
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
       const requestId = response.headers.get('x-request-id') ?? payload?.error?.requestId;
-      throw new SoundpubApiError(categories[response.status] ?? 'INTERNAL_ERROR', response.status, requestId);
+      const code = typeof payload?.error?.code === 'string' ? payload.error.code : categories[response.status] ?? 'INTERNAL_ERROR';
+      const message = typeof payload?.error?.message === 'string' ? payload.error.message : code;
+      throw new SoundpubApiError(categories[response.status] ?? 'INTERNAL_ERROR', response.status, requestId, code, message);
     }
     return payload as T;
   } catch (error) {
@@ -68,4 +73,3 @@ export async function apiRequest<T>(
     options.signal?.removeEventListener('abort', abort);
   }
 }
-
