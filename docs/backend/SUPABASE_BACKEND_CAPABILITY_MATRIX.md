@@ -138,17 +138,22 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Outbox topic coverage | direct function side effects | producer topic melebihi worker consumer | Dev worker partial | PARTIAL | Registry topic, startup assertion, handler/no-op eksplisit, replay command |
 | Production identity provider | Supabase Auth/SSO | hanya mock dan legacy provider untuk generic bearer path | Production belum operasional | MISSING | Local session authority + Keycloak OIDC/JWKS adapter |
 
-## Phase 0 exit blockers
+## Verification evidence
 
-1. Formula production sudah teridentifikasi (70% artist, 9% SoundPub, label menerima remainder), tetapi belum dikunci sebagai golden fixtures dan calculation engine backend.
-2. CSV upload contract masih berada di browser dan Edge Function; backend hanya menerima JSON canonical maksimum 1000 row.
-3. Historical owner untuk label/whitelabel belum lengkap; Label Custom sudah lebih matang.
-4. Whitelabel royalty dashboard masih direct Supabase.
-5. Track detail, period list, generic export, file upload lifecycle, async parser, dan large-file handling belum tersedia.
-6. Payment/provider dan notification delivery masih partial/dev-oriented.
-7. Frontend inventory menemukan sekitar 368 call-chain Supabase; root production build belum mengaktifkan backend domains.
-8. Generic production identity provider dan full outbox topic coverage belum tersedia.
-9. Copyright, takedown, provider invoice/settlement, dan beberapa release action masih direct atau fail-closed.
+- 2026-11-04: `npm run typecheck` PASS.
+- 2026-11-04: focused royalty and worker tests PASS.
+- 2026-11-04: isolated Docker `dashboard-sounpub-dev` rebuilt successfully.
+- 2026-11-04: `RUN_DOCKER_TESTS=1 npm test` produced 281 tests, 275 pass, 0 fail, 6 skipped.
+- Durable PASS includes PostgreSQL concurrency, finance ledger, payout, payment, historical ownership, release/track, RustFS media, and Label Custom E2E.
 
+## Remaining blockers
 
+1. CSV upload commit still uses the canonical JSON path; file lifecycle, async parser, and large-file handling are not available.
+2. Historical owner allocation for ordinary label and whitelabel still needs allocation-schema integration; Label Custom is already stronger.
+3. Whitelabel royalty dashboard remains direct Supabase.
+4. Track detail, period list, and generic export are missing.
+5. Payment provider, payout settlement provider, submission provider, and notification delivery remain partial or mock-oriented.
+6. Frontend inventory found about 368 Supabase call chains; root production build does not enable backend domains.
+7. Production identity/Keycloak adapter is missing.
+8. Copyright, takedown, provider invoice/settlement, and several release actions remain direct or fail-closed.
 
