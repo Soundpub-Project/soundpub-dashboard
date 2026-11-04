@@ -38,7 +38,8 @@ function fixture() {
       if (sql.includes('INSERT INTO soundpub.royalty_import_allocations')) { staged.push('allocation'); return result(); }
       if (sql.includes('GROUP BY allocation.owner_id')) return result([{ beneficiary_id: owner, amount: '0.20' }]);
       if (sql.includes('SELECT total_amount::text')) return result([{ total_amount: '0.20', currency: 'IDR', checksum: 'test' }]);
-      if (sql.includes('SELECT reason FROM')) return result(corrected ? [{ reason: 'synthetic correction' }] : []);
+      if (sql.includes('FROM soundpub.royalty_import_corrections correction'))
+        return result(corrected ? [{ reason: 'synthetic correction', is_replacement: false }] : []);
       if (sql.includes('INSERT INTO soundpub.royalty_import_corrections')) { staged.push('correction'); return result(); }
       if (sql.includes('COALESCE(sum(CASE')) return result([{ amount: options.available }]);
       if (sql.includes('INSERT INTO soundpub.finance_events')) {
