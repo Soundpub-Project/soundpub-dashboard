@@ -7,6 +7,7 @@ import { decimal, fingerprint, minor, type RoyaltyRow } from '../src/royalties/c
 const actor = { id: '00000000-0000-4000-8000-000000000001', status: 'active' as const, roles: ['admin' as const] };
 const owner = '00000000-0000-4000-8000-000000000002';
 const batchId = '00000000-0000-4000-8000-000000000005';
+const entryId = '00000000-0000-4000-8000-000000000007';
 const row: RoyaltyRow = { source_row_id: 'synthetic-1', beneficiary_id: owner,
   release_id: '00000000-0000-4000-8000-000000000003', track_id: '00000000-0000-4000-8000-000000000004',
   platform: 'Synthetic DSP', gross_amount: '0.30', deduction_amount: '0.10', net_amount: '0.20' };
@@ -33,8 +34,9 @@ function fixture() {
       if (sql.includes('SELECT id FROM soundpub.royalty_import_batches')) return result(committed.includes('batch') ? [{ id: batchId }] : []);
       if (sql.includes('SELECT id FROM soundpub.royalty_import_entries')) return result(options.overlap ? [{ id: 'overlap' }] : []);
       if (sql.includes('INSERT INTO soundpub.royalty_import_batches')) { staged.push('batch'); return result([{ id: batchId }]); }
-      if (sql.includes('INSERT INTO soundpub.royalty_import_entries')) { staged.push('entry'); return result(); }
-      if (sql.includes('GROUP BY financial_owner_user_id')) return result([{ beneficiary_id: owner, amount: '0.20' }]);
+      if (sql.includes('INSERT INTO soundpub.royalty_import_entries')) { staged.push('entry'); return result([{ id: entryId }]); }
+      if (sql.includes('INSERT INTO soundpub.royalty_import_allocations')) { staged.push('allocation'); return result(); }
+      if (sql.includes('GROUP BY allocation.owner_id')) return result([{ beneficiary_id: owner, amount: '0.20' }]);
       if (sql.includes('SELECT total_amount::text')) return result([{ total_amount: '0.20', currency: 'IDR', checksum: 'test' }]);
       if (sql.includes('SELECT reason FROM')) return result(corrected ? [{ reason: 'synthetic correction' }] : []);
       if (sql.includes('INSERT INTO soundpub.royalty_import_corrections')) { staged.push('correction'); return result(); }
@@ -82,7 +84,7 @@ test('commit exact replay credits once; ledger and audit share transaction', asy
   const f = fixture();
   assert.deepEqual(await f.service.commit(actor, statement, 'request-1'), { id: batchId, replayed: false });
   assert.deepEqual(await f.service.commit(actor, { ...statement, filename: 'renamed.json' }, 'request-2'), { id: batchId, replayed: true });
-  assert.deepEqual(f.committed(), ['batch','entry','ROYALTY_EARNING','audit']);
+  assert.deepEqual(f.committed(), ['batch','entry','allocation','ROYALTY_EARNING','audit']);
 });
 test('audit failure rolls back batch, entries and financial effect', async () => {
   const f = fixture(); f.options.auditFailure = true;
@@ -141,8 +143,8 @@ test('canonical artist and PIC owner assertions reject forged attribution', asyn
   const { beneficiary_id: _owner, ...serverResolved } = row;
   assert.equal((await f.service.preview(actor, { ...statement, rows: [serverResolved] })).valid_rows, 1);
   await f.service.commit(actor, statement, 'canonical');
-  assert.ok(f.calls.some(sql => sql.includes('net_amount,artist_id,financial_owner_user_id)')));
-  assert.ok(f.calls.some(sql => sql.includes('GROUP BY financial_owner_user_id')));
+  assert.ok(f.calls.some(sql => sql.includes('net_amount,artist_id,financial_owner_user_id,calculation_policy_code)')));
+  assert.ok(f.calls.some(sql => sql.includes('GROUP BY allocation.owner_id')));
 });
 
 test('royalty outbox failure rolls back earning and correction transaction', async () => {

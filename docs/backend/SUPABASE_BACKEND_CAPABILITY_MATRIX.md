@@ -135,7 +135,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Storage backup | backup Edge Function | scoped worker | Tidak diperlukan frontend | DEFERRED | Recovery design after parity |
 | Audit log | table triggers/function logs | backend audit events | Partial admin visibility | PARTIAL | Unified viewer and retention |
 | Observability | container/function logs | structured logs/metrics | Dev only | PARTIAL | Import/payout SLO and alert design |
-| Outbox topic coverage | direct function side effects | producer topic melebihi worker consumer | Dev worker partial | PARTIAL | Registry topic, startup assertion, handler/no-op eksplisit, replay command |
+| Outbox topic coverage | direct function side effects | explicit producer/consumer topic registry with startup assertion | Dev worker registered | VERIFIED | Add provider-specific delivery handlers as each provider becomes real |
 | Production identity provider | Supabase Auth/SSO | hanya mock dan legacy provider untuk generic bearer path | Production belum operasional | MISSING | Local session authority + Keycloak OIDC/JWKS adapter |
 
 ## Verification evidence
@@ -143,13 +143,14 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 - 2026-11-04: `npm run typecheck` PASS.
 - 2026-11-04: focused royalty and worker tests PASS.
 - 2026-11-04: isolated Docker `dashboard-sounpub-dev` rebuilt successfully.
-- 2026-11-04: `RUN_DOCKER_TESTS=1 npm test` produced 281 tests, 275 pass, 0 fail, 6 skipped.
-- Durable PASS includes PostgreSQL concurrency, finance ledger, payout, payment, historical ownership, release/track, RustFS media, and Label Custom E2E.
+- 2026-11-04: `RUN_DOCKER_TESTS=1 npm test` produced 283 tests, 277 pass, 0 fail, 6 skipped.
+- Durable PASS includes PostgreSQL concurrency, finance ledger, payout, payment, historical ownership, release/track, RustFS media, Label Custom E2E, and deferred immutable royalty-allocation constraints.
+- Royalty entries now carry a calculation policy snapshot; immutable child allocations support ARTIST, LABEL, SOUNDPUB, COMPOSER, and LEGACY_OWNER components. Existing rows backfill exactly as one LEGACY_OWNER allocation. Ledger earnings and corrections aggregate allocation owners, not mutable current catalog ownership.
 
 ## Remaining blockers
 
 1. CSV upload commit still uses the canonical JSON path; file lifecycle, async parser, and large-file handling are not available.
-2. Historical owner allocation for ordinary label and whitelabel still needs allocation-schema integration; Label Custom is already stronger.
+2. Allocation schema is complete; ordinary label and whitelabel still need server-side historical owner resolution and split-policy integration.
 3. Whitelabel royalty dashboard remains direct Supabase.
 4. Track detail, period list, and generic export are missing.
 5. Payment provider, payout settlement provider, submission provider, and notification delivery remain partial or mock-oriented.

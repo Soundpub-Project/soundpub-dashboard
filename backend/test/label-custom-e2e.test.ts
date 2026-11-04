@@ -119,6 +119,11 @@ test('Label Custom Docker E2E: login-free artist, canonical royalties, admin rea
     artist_id: artist.id, financial_owner_user_id: pic.id, beneficiary_id: pic.id,
     release_id: release.id, track_id: track.id, net_amount: '1000.00',
   }]);
+  assert.deepEqual((await owner.query(`SELECT a.component,a.owner_id,a.amount::text,a.policy_code
+    FROM soundpub.royalty_import_allocations a JOIN soundpub.royalty_import_entries e ON e.id=a.entry_id
+    WHERE e.batch_id=$1`, [batch.id])).rows, [{
+    component: 'LEGACY_OWNER', owner_id: pic.id, amount: '1000.00', policy_code: 'BACKEND_SINGLE_OWNER_V1',
+  }]);
   const breakdown = await royalties.breakdown(pic, {
     artist_id: artist.id, release_id: release.id, period: statement.period,
   });
