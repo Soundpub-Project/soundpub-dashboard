@@ -8,6 +8,7 @@ import { usersRepository } from '../users/repository.js';
 import { canonicalRow, decimal, fingerprint, importEnvelope, minor, parse, royaltyRow, type RoyaltyRow } from './contracts.js';
 import { MAX_MINOR } from '../finance/money.js';
 import { postEvent } from '../finance/index.js';
+import { previewLegacyRoyaltyCsv } from './legacy-preview.js';
 
 const allows = createAuthorizer();
 export function createRoyaltiesService(pool: Pool) {
@@ -91,6 +92,10 @@ export function createRoyaltiesService(pool: Pool) {
     CASE WHEN c.id IS NULL THEN b.status ELSE 'VOIDED_WITH_OFFSET' END AS status`;
   const batchJoin = `FROM soundpub.royalty_import_batches b LEFT JOIN soundpub.royalty_import_corrections c ON c.batch_id=b.id`;
   return {
+    async previewCsv(actor: Principal, input: unknown) {
+      const value = parse(z.strictObject({ csv: z.string().min(1).max(1_000_000) }), input);
+      return authorized(actor, true, async () => previewLegacyRoyaltyCsv(value.csv));
+    },
     async preview(actor: Principal, input: unknown) {
       return authorized(actor, true, async db => (await validate(db, input)).summary);
     },
@@ -205,4 +210,5 @@ export function createRoyaltiesService(pool: Pool) {
   };
 }
 export type RoyaltiesService = ReturnType<typeof createRoyaltiesService>;
+
 

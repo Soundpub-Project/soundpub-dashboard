@@ -4,6 +4,7 @@ import type { RoyaltiesService } from './index.js';
 
 export function registerRoyaltiesRoutes(app: FastifyInstance, service: RoyaltiesService,
   authenticate: (request: FastifyRequest) => Promise<Principal>) {
+  app.post('/api/v1/royalties/imports/csv/preview', async request => service.previewCsv(await authenticate(request), request.body));
   app.post('/api/v1/royalties/imports/preview', async request => service.preview(await authenticate(request), request.body));
   app.post('/api/v1/royalties/imports/commit', async request => service.commit(await authenticate(request), request.body, request.id));
   app.get('/api/v1/royalties/imports', async request => service.history(await authenticate(request), request.query));
@@ -15,3 +16,4 @@ export function registerRoyaltiesRoutes(app: FastifyInstance, service: Royalties
     service.breakdown(await authenticate(request), { ...(request.query as object), release_id: request.params.id }));
   app.get('/api/v1/royalties/summary', async request => service.summary(await authenticate(request), request.query));
 }
+
