@@ -1,0 +1,24 @@
+import { customReadiness } from '../finance/readiness.js';
+import { customFinanceScope } from '../finance/custom.js';
+import type { PoolClient } from 'pg';
+import type { PayoutPolicy } from './finance.js';
+
+export const databasePayoutPolicy: PayoutPolicy = async (db: PoolClient, ownerId: string) => {
+  const minimum = (await db.query<{ minimum: string | null }>(
+    "SELECT settings->>'min_payout_amount' AS minimum FROM soundpub.application_settings WHERE id=true")).rows[0]?.minimum;
+  const custom = await customFinanceScope(db, ownerId);
+  if (custom) {
+    const ready = await customReadiness(db, ownerId);
+    return { minimum: minimum ?? '0.00', destinationReady: ready.destinationReady, reconciled: ready.reconciled };
+  }
+  const scope = custom ? [ownerId] : (await db.query<{ id: string }>(`SELECT p.id FROM soundpub.profiles p
+    WHERE p.id=$1 OR (p.parent_label_id=$1 AND EXISTS (SELECT 1 FROM soundpub.artists a
+      WHERE a.artist_user_id=p.id AND a.label_id=$1 AND a.verified_at IS NOT NULL))`, [ownerId])).rows.map(row => row.id);
+  const unresolved = Boolean((await db.query(`SELECT 1 FROM soundpub.royalty_import_entries entry
+    JOIN soundpub.royalty_import_batches batch ON batch.id=entry.batch_id
+    LEFT JOIN soundpub.royalty_import_corrections correction ON correction.batch_id=batch.id
+    WHERE entry.beneficiary_id=ANY($1::uuid[]) AND batch.status='UNRECONCILED' AND correction.id IS NULL LIMIT 1`,
+  [[...new Set([ownerId, ...scope])]])).rowCount);
+  return { minimum: minimum ?? '0.00', destinationReady: true, reconciled: !custom && !unresolved };
+};
+

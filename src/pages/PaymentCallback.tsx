@@ -1,3 +1,5 @@
+import { BackendPaymentStatus } from '@/components/finance/BackendPaymentStatus';
+import { usesBackendFinance } from '@/components/finance/mode';
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -5,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
 
-export default function PaymentCallback() {
+function LegacyPaymentCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const status = searchParams.get('status');
@@ -95,4 +97,10 @@ export default function PaymentCallback() {
       </div>
     </DashboardLayout>
   );
+}
+
+
+export default function PaymentCallback() {
+  if (usesBackendFinance()) return <BackendPaymentStatus />;
+  return <LegacyPaymentCallback />;
 }

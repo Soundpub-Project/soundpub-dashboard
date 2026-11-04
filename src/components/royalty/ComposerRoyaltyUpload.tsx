@@ -1,3 +1,4 @@
+import { usesBackendFinance, financeUnavailable } from '@/components/finance/mode';
 import { useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -60,7 +61,7 @@ interface ComposerRoyaltyUploadProps {
   onSuccess?: () => void;
 }
 
-export function ComposerRoyaltyUpload({ onSuccess }: ComposerRoyaltyUploadProps) {
+function LegacyComposerRoyaltyUpload({ onSuccess }: ComposerRoyaltyUploadProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -630,4 +631,9 @@ export function ComposerRoyaltyUpload({ onSuccess }: ComposerRoyaltyUploadProps)
       </CardContent>
     </Card>
   );
+}
+
+export function ComposerRoyaltyUpload(props: ComposerRoyaltyUploadProps) {
+  if (usesBackendFinance()) return <p role="status">{financeUnavailable}</p>;
+  return <LegacyComposerRoyaltyUpload {...props} />;
 }

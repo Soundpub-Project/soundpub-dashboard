@@ -1,6 +1,6 @@
+import { getPublicSettingsRows } from '@/services/settings';
 import { useEffect, useState } from 'react';
 import { AlertCircle, Info } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -42,12 +42,10 @@ export function AuthEnvironmentNotice() {
 
   useEffect(() => {
     const fetchNotice = async () => {
-      const { data, error } = await supabase.from('app_settings').select('value').eq('key', 'auth_notice_config').maybeSingle();
-      if (error) {
-        console.error('Error fetching auth notice:', error);
-        return;
-      }
-      const config = parseNoticeConfig(data?.value ?? null);
+      let value: string | null;
+      try { value = (await getPublicSettingsRows(['auth_notice_config']))[0]?.value ?? null; }
+      catch { return; }
+      const config = parseNoticeConfig(value);
       setNotice(config);
       if (!config.enabled) return;
       setOpen(true);

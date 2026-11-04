@@ -1,4 +1,7 @@
-﻿import { useEffect, useState } from 'react';
+import { usesBackendDomain } from '@/api/routing';
+import { BackendNotificationInbox } from './BackendNotificationInbox';
+import { useEffect, useState } from 'react';
+import type { Json } from '@/integrations/supabase/types';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -13,11 +16,16 @@ interface Notification {
   title: string;
   message: string;
   is_read: boolean;
-  metadata: Record<string, any>;
+  metadata: Json;
   created_at: string;
 }
 
 export function NotificationCenter() {
+  if (usesBackendDomain('notifications')) return <BackendNotificationInbox />;
+  return <LegacyNotificationCenter />;
+}
+
+function LegacyNotificationCenter() {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);

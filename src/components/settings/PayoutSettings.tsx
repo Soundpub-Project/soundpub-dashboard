@@ -1,3 +1,5 @@
+import { usesBackendFinance } from '@/components/finance/mode';
+import { usesBackendDomain } from '@/api/routing';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +10,11 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save, Banknote } from 'lucide-react';
 
 export function PayoutSettings() {
+  if (usesBackendFinance() || usesBackendDomain('settings')) return <p role="status">Pengaturan ini belum tersedia.</p>;
+  return <LegacyPayoutSettings />;
+}
+
+function LegacyPayoutSettings() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

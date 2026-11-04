@@ -1,3 +1,6 @@
+import { FinanceUnavailable } from '@/components/finance/FinanceUnavailable';
+import { usesBackendFinance } from '@/components/finance/mode';
+import { BackendRoyalties } from '@/components/finance/BackendRoyalties';
 import { useEffect, useState, useMemo } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { fetchAllRoyalties, type RoyaltyRecord } from '@/lib/fetchAllRoyalties';
@@ -556,6 +559,9 @@ function AllRoyaltiesContent() {
 }
 
 export default function AllRoyalties() {
+  const { role } = useAuth();
+  if (role === 'label_custom' && !usesBackendFinance()) return <FinanceUnavailable />;
+  if (usesBackendFinance()) return <BackendRoyalties />;
   return (
     <ErrorBoundary fallbackTitle="Gagal memuat halaman Semua Royalti">
       <AllRoyaltiesContent />

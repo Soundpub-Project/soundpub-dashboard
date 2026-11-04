@@ -15,6 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
+import { usesBackendArtistLabels } from '@/services/labels';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
@@ -131,9 +132,10 @@ export default function UserOrphanAudit() {
   }, [isAdmin]);
 
   const scanOrphanUsers = async () => {
+    if (usesBackendArtistLabels()) { setLoading(false); return; }
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc('scan_orphan_artist_links');
+      const { data, error } = await (supabase as any).rpc('scan_orphan_artist_links');
 
       if (error) throw error;
 
@@ -181,6 +183,7 @@ export default function UserOrphanAudit() {
     issue.issue_type === 'RELEASE_WITHOUT_ARTIST_USER_ID' || issue.issue_type === 'ARTIST_WITHOUT_PARENT_LABEL';
 
   const handleRepairIssue = async (issue: OrphanArtistLink, index: number) => {
+    if (usesBackendArtistLabels()) return;
     const confirmed = window.confirm(
       `Repair aman untuk "${issue.full_name || issue.issue_type}"?\n\nHistori royalty lama tidak akan dipindahkan.`
     );
@@ -241,6 +244,10 @@ export default function UserOrphanAudit() {
       { releases: 0, tracks: 0, royalties: 0 }
     );
   }, [issues]);
+
+  if (usesBackendArtistLabels()) return (
+    <DashboardLayout><p role="status">Audit dan perbaikan relasi artis belum tersedia melalui backend.</p></DashboardLayout>
+  );
 
   if (!isAdmin) {
     return (

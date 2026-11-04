@@ -1,4 +1,5 @@
-﻿import { useEffect, useState } from 'react';
+import { usesBackendFinance, financeUnavailable } from '@/components/finance/mode';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,9 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { formatCurrency } from '@/lib/utils';
+import { toast } from 'sonner';
+
+const contractBucket = (import.meta as { env?: Record<string, string> }).env?.VITE_CONTRACT_BUCKET || 'contracts';
 
 interface ComposerRoyalty {
   id: string;
@@ -73,6 +77,15 @@ export default function CopyrightDashboard() {
   const [works, setWorks] = useState<CopyrightWork[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  async function openStampedContract(path: string) {
+    const { data, error: signedUrlError } = await supabase.storage.from(contractBucket).createSignedUrl(path, 300);
+    if (signedUrlError) {
+      toast.error(signedUrlError.message);
+      return;
+    }
+    window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+  }
+
   useEffect(() => {
     loadDashboardData();
   }, [user]);
@@ -88,8 +101,9 @@ export default function CopyrightDashboard() {
       setError(null);
 
       // Load royalties using RPC
-      const { data: royaltyData, error: royaltyError } = await supabase
-        .rpc('get_my_composer_royalties', { _period: null });
+      const { data: royaltyData, error: royaltyError } = usesBackendFinance()
+        ? { data: null, error: null }
+        : await supabase.rpc('get_my_composer_royalties', { _period: null });
 
       if (royaltyError) throw royaltyError;
       setRoyalties(royaltyData || []);
@@ -127,9 +141,9 @@ export default function CopyrightDashboard() {
         if (worksError) throw worksError;
         setWorks(worksData || []);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error loading dashboard data:', err);
-      setError(err.message || 'Gagal memuat data dashboard');
+      setError(err instanceof Error ? err.message : 'Gagal memuat data dashboard');
     } finally {
       setLoading(false);
     }
@@ -176,6 +190,7 @@ export default function CopyrightDashboard() {
   if (loading) {
     return (
       <DashboardLayout>
+      {usesBackendFinance() && <p role="status">{financeUnavailable}</p>}
         <div className="space-y-6">
           <div>
             <h1 className="text-3xl font-bold">Dashboard Hak Cipta</h1>
@@ -199,6 +214,7 @@ export default function CopyrightDashboard() {
   if (error) {
     return (
       <DashboardLayout>
+      {usesBackendFinance() && <p role="status">{financeUnavailable}</p>}
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
@@ -210,6 +226,7 @@ export default function CopyrightDashboard() {
 
   return (
     <DashboardLayout>
+      {usesBackendFinance() && <p role="status">{financeUnavailable}</p>}
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -236,9 +253,9 @@ export default function CopyrightDashboard() {
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(totalRoyalties)}</div>
+              <div className="text-2xl font-bold">{usesBackendFinance() ? "—" : formatCurrency(totalRoyalties)}</div>
               <p className="text-xs text-muted-foreground mt-1">
-                {royalties.length} periode
+                {usesBackendFinance() ? "Belum tersedia" : `${royalties.length} periode`}
               </p>
             </CardContent>
           </Card>
@@ -254,7 +271,7 @@ export default function CopyrightDashboard() {
                 {latestRoyalty ? formatCurrency(Number(latestRoyalty.total_net_royalti)) : '-'}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                {latestRoyalty ? `Periode ${latestRoyalty.period}` : 'Belum ada data'}
+                {usesBackendFinance() ? 'Belum tersedia' : latestRoyalty ? `Periode ${latestRoyalty.period}` : 'Belum ada data'}
               </p>
             </CardContent>
           </Card>
@@ -352,7 +369,7 @@ export default function CopyrightDashboard() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => window.open(contract.stamped_pdf_url!, '_blank')}
+                          onClick={() => openStampedContract(contract.stamped_pdf_url!)}
                         >
                           <Download className="mr-2 h-4 w-4" />
                           Download Kontrak

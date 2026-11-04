@@ -1,4 +1,5 @@
-﻿import { useState, useEffect, useRef } from 'react';
+import { usesBackendDomain } from '@/api/routing';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +9,11 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Upload, Trash2, Copy, Eye, GripVertical, ExternalLink } from 'lucide-react';
 
 export function IccnIntegrationSettings() {
+  if (usesBackendDomain('settings')) return <p role="status">Pengaturan ini belum tersedia.</p>;
+  return <LegacyIccnIntegrationSettings />;
+}
+
+function LegacyIccnIntegrationSettings() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -19,7 +25,7 @@ export function IccnIntegrationSettings() {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const endpointUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/info-Soundpub`;
+  const endpointUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/info-soundpub`;
 
   useEffect(() => { fetchSettings(); }, []);
 

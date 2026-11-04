@@ -1,7 +1,11 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { listUsers, type AppRole } from "@/services/users";
+import { usesBackendDomain } from "@/api/routing";
+import { usesBackendArtistLabels } from "@/services/labels";
+import { SoundpubApiError } from "@/api/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import {
   Card,
@@ -63,14 +67,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-type AppRole =
-  | "superadmin"
-  | "admin"
-  | "label"
-  | "artist"
-  | "user"
-  | "copyright"
-  | "whitelabel";
 type UserStatus = "active" | "inactive" | "suspended";
 
 type LoginMethod = "email" | "iccn" | "google";
@@ -84,6 +80,7 @@ interface UserProfile {
   balance: number;
   created_at: string;
   role?: AppRole;
+  roles?: string[];
   parent_label_id?: string | null;
   parent_label_name?: string | null;
   composer_code?: string | null;
@@ -94,6 +91,7 @@ const ROLE_ICONS: Record<AppRole, React.ReactNode> = {
   superadmin: <Shield className="h-3 w-3" />,
   admin: <Shield className="h-3 w-3" />,
   label: <Building2 className="h-3 w-3" />,
+  label_custom: <Building2 className="h-3 w-3" />,
   artist: <Music className="h-3 w-3" />,
   user: <User className="h-3 w-3" />,
   copyright: <Shield className="h-3 w-3" />,
@@ -104,6 +102,7 @@ const ROLE_COLORS: Record<AppRole, string> = {
   superadmin: "bg-red-500/20 text-red-400 border-red-500/30",
   admin: "bg-orange-500/20 text-orange-400 border-orange-500/30",
   label: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+  label_custom: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   artist: "bg-green-500/20 text-green-400 border-green-500/30",
   user: "bg-gray-500/20 text-gray-400 border-gray-500/30",
   copyright: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
@@ -114,6 +113,7 @@ const ALL_ROLES: AppRole[] = [
   "superadmin",
   "admin",
   "label",
+  "label_custom",
   "whitelabel",
   "artist",
   "user",
@@ -122,10 +122,13 @@ const ALL_ROLES: AppRole[] = [
 const ALL_STATUSES: UserStatus[] = ["active", "inactive", "suspended"];
 
 export default function Users() {
+  const backendUsers = usesBackendDomain('users');
   const { isAdmin, isSuperadmin, loading: authLoading, user } = useAuth();
   const navigate = useNavigate();
+  const currentUserId = user?.id ?? null;
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<AppRole | "all">("all");
   const [statusFilter, setStatusFilter] = useState<UserStatus | "all">("all");
@@ -148,43 +151,22 @@ export default function Users() {
   }, [isAdmin, user]);
 
   const fetchUsers = async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
-      // Fetch profiles
-      const { data: profiles, error: profilesError } = await supabase
-        .from("profiles")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (profilesError) throw profilesError;
-
-      // Fetch user roles
-      const { data: roles, error: rolesError } = await supabase
-        .from("user_roles")
-        .select("user_id, role");
-
-      if (rolesError) throw rolesError;
-
-      // Map roles to users
-      const rolesMap = new Map(
-        roles?.map((r) => [r.user_id, r.role as AppRole]) || [],
-      );
-
-      // Create a map of user IDs to their names for label lookup
-      const profilesMap = new Map(
-        profiles?.map((p) => [p.id, p.full_name]) || [],
-      );
-
-      const usersWithRoles = (profiles || []).map((profile) => ({
-        ...profile,
-        role: rolesMap.get(profile.id) || ("user" as AppRole),
-        parent_label_name: profile.parent_label_id
-          ? profilesMap.get(profile.parent_label_id) || null
-          : null,
-        composer_code: profile.composer_code || null,
-      }));
-
-      setUsers(usersWithRoles);
+      const items = await listUsers();
+      setUsers(items.map(item => ({
+        ...item, email: item.email ?? '', full_name: item.full_name ?? '',
+        phone: item.phone ?? null, balance: Number(item.balance ?? 0),
+        composer_code: item.composer_code ?? null,
+      })));
     } catch (error) {
+      setUsers([]);
+      setLoadError(error instanceof SoundpubApiError && error.status === 401
+        ? 'Sesi tidak valid. Silakan login kembali.'
+        : error instanceof SoundpubApiError && error.status === 403
+          ? 'Anda tidak memiliki akses ke daftar user.'
+          : 'Gagal memuat daftar user. Silakan coba lagi.');
       console.error("Error fetching users:", error);
     } finally {
       setLoading(false);
@@ -201,6 +183,7 @@ export default function Users() {
   };
 
   const handleImpersonate = async (target: UserProfile) => {
+    if (backendUsers) return;
     if (!isSuperadmin || !user) return;
     if (
       !window.confirm(
@@ -331,7 +314,7 @@ export default function Users() {
       user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesRole = roleFilter === "all" || user.role === roleFilter;
+    const matchesRole = roleFilter === "all" || user.roles?.includes(roleFilter) || user.role === roleFilter;
     const matchesStatus =
       statusFilter === "all" || user.status === statusFilter;
     const matchesLoginMethod =
@@ -367,12 +350,14 @@ export default function Users() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Users</h1>
           <p className="text-muted-foreground">Kelola pengguna platform</p>
+          {backendUsers && <p className="text-sm text-muted-foreground">Backend mandiri aktif. Pembuatan akun, reset password, status, role, composer code, dan penghapusan user kosong sudah tersedia. Impersonasi dan audit orphan tetap dinonaktifkan.</p>}
+          {loadError && <div role="alert"><p>{loadError}</p><Button onClick={fetchUsers}>Coba lagi</Button></div>}
         </div>
 
         <Tabs defaultValue="users" className="space-y-6">
           <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
             <TabsTrigger value="users">Daftar User</TabsTrigger>
-            <TabsTrigger value="requests">Permintaan Hapus Artis</TabsTrigger>
+            <TabsTrigger value="requests" disabled={usesBackendArtistLabels()}>Permintaan Hapus Artis</TabsTrigger>
           </TabsList>
 
           <TabsContent value="users">
@@ -390,6 +375,7 @@ export default function Users() {
                     <div className="flex flex-wrap gap-2">
                       <Button
                         variant="outline"
+                        disabled={backendUsers}
                         onClick={() =>
                           navigate("/dashboard/users/orphan-audit")
                         }
@@ -440,7 +426,7 @@ export default function Users() {
                               value={role}
                               className="capitalize"
                             >
-                              {role}
+                              {role === "label_custom" ? "Label Custom" : role}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -536,7 +522,7 @@ export default function Users() {
                               >
                                 {ROLE_ICONS[user.role || "user"]}
                                 <span className="capitalize">
-                                  {user.role || "user"}
+                                  {user.role === "label_custom" ? "Label Custom" : user.role || "user"}
                                 </span>
                               </div>
                             </TableCell>
@@ -596,26 +582,32 @@ export default function Users() {
                                 <DropdownMenuContent align="end">
                                   <DropdownMenuItem
                                     onClick={() => handleEditRole(user)}
-                                    disabled={user.role === "superadmin"}
+                                    disabled={
+                                      user.id === currentUserId ||
+                                      (user.role === "superadmin" && !isSuperadmin)
+                                    }
                                   >
                                     <Edit className="mr-2 h-4 w-4" />
                                     Ubah Role
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
-                                    onClick={() => handleEditPassword(user)}
-                                    disabled={user.role === "superadmin"}
+                                    onClick={() => user.id === currentUserId ? navigate("/dashboard/settings") : handleEditPassword(user)}
+                                    disabled={user.role === "superadmin" && !isSuperadmin}
                                   >
                                     <KeyRound className="mr-2 h-4 w-4" />
-                                    Ubah Password
+                                    {user.id === currentUserId ? "Ubah Password Saya" : "Ubah Password"}
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={() => handleEditStatus(user)}
-                                    disabled={user.role === "superadmin"}
+                                    disabled={
+                                      user.id === currentUserId ||
+                                      (user.role === "superadmin" && !isSuperadmin)
+                                    }
                                   >
                                     <UserCog className="mr-2 h-4 w-4" />
                                     Ubah Status
                                   </DropdownMenuItem>
-                                  {isSuperadmin &&
+                                  {!backendUsers && isSuperadmin &&
                                     user.role !== "superadmin" && (
                                       <DropdownMenuItem
                                         onClick={() =>
@@ -651,7 +643,10 @@ export default function Users() {
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
                                     onClick={() => handleDeleteUser(user)}
-                                    disabled={user.role === "superadmin"}
+                                    disabled={
+                                      !isSuperadmin ||
+                                      user.id === currentUserId
+                                    }
                                     className="text-destructive focus:text-destructive"
                                   >
                                     <Trash2 className="mr-2 h-4 w-4" />
@@ -671,7 +666,7 @@ export default function Users() {
           </TabsContent>
 
           <TabsContent value="requests">
-            <DeletionRequestsTable />
+            {!usesBackendArtistLabels() && <DeletionRequestsTable />}
           </TabsContent>
         </Tabs>
       </div>

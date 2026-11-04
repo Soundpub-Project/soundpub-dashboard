@@ -1,0 +1,13 @@
+# Phase 3D frontend decoupling
+
+Local backend mode selects `users,artists,labels,releases,storage,notifications,audit,settings` through `VITE_SOUNDPUB_BACKEND_DOMAINS`; `src/api/routing.ts` limits this to Vite DEV. Backend business clients: `src/api/media.ts`, `src/api/notifications.ts`, `src/api/audit.ts`, `src/api/settings.ts`. Shared token provider continues Phase 4-deferred Supabase Auth. The storage client requests a signed short-lived PUT, uploads directly to dedicated local object store, completes/validates through backend, and resolves private GET capability only when needed. No canonical signed URL persists in frontend state.
+
+Backend UI uses `BackendMediaUpload` for profile avatar, label light/dark logos and release cover/track audio, with private download capability refresh. `BackendNotificationInbox` polls instead of Supabase Realtime. Legacy components mount only outside their respective backend domain mode; settings export and media-library legacy operations fail closed in backend mode. Unsupported branding/media/legal/payout operations are disabled or deferred, not silently rerouted to Supabase. The user/account API and existing auth/session bridge remain Phase 3A/Phase 4 boundaries.
+
+Static check `src/services/phase3d.test.cjs`: 0 Supabase calls in Phase 3D API clients/hooks/new components; legacy mount guards and backend settings export guards present. Live browser run (36/36 core checks, three viewports): 0 migrated-domain Supabase requests observed. Source-wide literal count is **not zero**: `rg -n 'supabase\.storage|createSignedUrl|getPublicUrl|storage/v1|from\(.notifications.|from\(.audit_logs.|from\(.app_settings.' src` still finds legacy-only/Phase 3E financial/Phase 3F legal/Phase 4 auth call sites. Do not confuse source count with active backend-mode network count. Production build retains legacy behavior; no traffic switch.
+
+Unfinished: public display branding assets cannot be uploaded or downloaded anonymously by the private media model, and full interrupted/network/expiry/error UI matrix remains unverified. Mixed partial domain flags are not certified; use full local set for Phase 3D acceptance.
+
+## Final closeout result
+
+Backend-mode active calls for Storage/Media, Notifications, Audit and Settings: **0 direct Supabase calls**. Users/artists exports now fail closed and dashboard profile Realtime is disabled when their backend flags are active. Legacy and Phase 3E/3F/Auth source remains behind guards; literal source count is not used as runtime verdict. Final browser egress saw zero migrated-domain Supabase requests. Six blocked royalty RPC attempts are Phase 3E and outside this phase.

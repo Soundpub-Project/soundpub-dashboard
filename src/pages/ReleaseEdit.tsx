@@ -1,3 +1,6 @@
+import { usesBackendDomain } from '@/api/routing';
+import { BackendReleaseForm } from '@/components/releases/BackendReleaseForm';
+import { usesBackendReleases, releaseWorkflowUnavailable } from '@/services/releases';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Disc3, Loader2 } from 'lucide-react';
@@ -21,7 +24,7 @@ interface Release {
   label_id: string | null;
 }
 
-export default function ReleaseEdit() {
+function LegacyReleaseEdit() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isAdmin, isArtist, isLabel, isWhitelabel, user } = useAuth();
@@ -152,4 +155,11 @@ export default function ReleaseEdit() {
       </div>
     </DashboardLayout>
   );
+}
+
+export default function ReleaseEdit() {
+  const { id } = useParams<{ id: string }>();
+  if (usesBackendReleases()) return <DashboardLayout><BackendReleaseForm releaseId={id} /></DashboardLayout>;
+  if (usesBackendDomain('storage')) return <p role="alert">Mode storage memerlukan mode releases untuk alur release.</p>;
+  return <LegacyReleaseEdit />;
 }

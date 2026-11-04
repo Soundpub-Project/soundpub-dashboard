@@ -1,3 +1,5 @@
+import { usesBackendReleases, releaseWorkflowUnavailable } from '@/services/releases';
+import { usesBackendFinance } from '@/components/finance/mode';
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -22,7 +24,7 @@ interface DeleteReleaseDialogProps {
   onSuccess: () => void;
 }
 
-export function DeleteReleaseDialog({ open, onOpenChange, release, onSuccess }: DeleteReleaseDialogProps) {
+function LegacyDeleteReleaseDialog({ open, onOpenChange, release, onSuccess }: DeleteReleaseDialogProps) {
   const { isAdmin } = useAuth();
   const [loading, setLoading] = useState(false);
 
@@ -32,65 +34,19 @@ export function DeleteReleaseDialog({ open, onOpenChange, release, onSuccess }: 
     if (!release) return;
     setLoading(true);
     try {
-      // If release was paid, handle refund by crediting back to user's balance
-      if (isPaid && isAdmin) {
-        const { data: payment } = await supabase
-          .from('release_payments')
-          .select('amount, user_id')
-          .eq('release_id', release.id)
-          .eq('status', 'paid')
-          .maybeSingle();
+      const { data, error } = await supabase.rpc('delete_release_with_refund' as never, {
+        p_release_id: release.id,
+      } as never);
+      if (error) throw error;
 
-        if (payment) {
-          // Credit balance back
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('balance')
-            .eq('id', payment.user_id)
-            .single();
+      const refundAmount = Number((data as { refundAmount?: number } | null)?.refundAmount || 0);
 
-          if (profile) {
-            await supabase
-              .from('profiles')
-              .update({ balance: profile.balance + payment.amount })
-              .eq('id', payment.user_id);
-          }
-
-          // Update payment status to refunded
-          await supabase
-            .from('release_payments')
-            .update({ status: 'refunded' })
-            .eq('release_id', release.id)
-            .eq('status', 'paid');
-
-          // Notify user about refund
-          await supabase.from('notifications').insert({
-            user_id: payment.user_id,
-            type: 'success',
-            title: 'Dana Dikembalikan',
-            message: `Dana sebesar Rp ${Number(payment.amount).toLocaleString('id-ID')} untuk release "${release.title}" telah dikembalikan ke saldo Anda.`,
-            metadata: { release_id: release.id, amount: payment.amount },
-          });
-        }
-      }
-
-      // Delete payment records
-      await supabase.from('release_payments').delete().eq('release_id', release.id);
-
-      // Delete tracks
-      const { error: tracksError } = await supabase.from('tracks').delete().eq('release_id', release.id);
-      if (tracksError) throw tracksError;
-
-      // Delete release
-      const { error: releaseError } = await supabase.from('releases').delete().eq('id', release.id);
-      if (releaseError) throw releaseError;
-
-      toast.success(isPaid ? 'Release dihapus dan dana dikembalikan' : 'Release berhasil dihapus');
+      toast.success(refundAmount > 0 ? `Release dihapus dan Rp ${refundAmount.toLocaleString('id-ID')} dikembalikan` : 'Release berhasil dihapus');
       onSuccess();
       onOpenChange(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting release:', error);
-      toast.error(error.message || 'Gagal menghapus release');
+      toast.error(error instanceof Error ? error.message : 'Gagal menghapus release');
     } finally {
       setLoading(false);
     }
@@ -131,4 +87,9 @@ export function DeleteReleaseDialog({ open, onOpenChange, release, onSuccess }: 
       </AlertDialogContent>
     </AlertDialog>
   );
+}
+
+export function DeleteReleaseDialog(props: Parameters<typeof LegacyDeleteReleaseDialog>[0]) {
+  if (usesBackendReleases() || usesBackendFinance()) return props.open ? <p role="alert">{releaseWorkflowUnavailable}</p> : null;
+  return <LegacyDeleteReleaseDialog {...props} />;
 }

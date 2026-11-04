@@ -1,0 +1,16 @@
+# Phase 3C Edge Function replacement matrix
+
+Date: 2026-10-28. Agent F independent local source review. Concurrent implementation snapshot; not a frozen release. No production access, deployment, provider calls, secrets, database operations, browser execution or runtime tests. PROVEN_SOURCE means inspected code only; BLOCKER means acceptance gap; DEFERRED means separate scope requiring explicit retention, never PASS.
+
+| Function | Current callers / local source | Replacement requirement | State |
+| --- | --- | --- | --- |
+| create-xendit-invoice | src/lib/xendit.ts:27, called by all three release forms; function index.ts | Authorize actor/creator/Label, validate custom distribution, count Tracks, read pricing settings, persist price snapshots, reuse pending invoices, payment row / notifications; deterministic sandbox idempotency and compensation | BLOCKER; real provider connection DEFERRED |
+| xendit-webhook | Provider callback; index.ts release_payments and releases writes | Authenticate exact callback contract; replay/conflict/concurrent settlement, amount/currency verification, paid status and notification; generic mock HMAC webhook is not Xendit replacement | DEFERRED live provider; BLOCKER paid parity |
+| download-release-invoice | src/pages/Invoices.tsx:105 | payment_id ownership, generate/reuse invoice PDF, private release-invoices upload, payment metadata, signed download (local source TTL 600 seconds) | BLOCKER; generic object signing insufficient |
+| get-catalog-tracks | src/pages/LandingPage.tsx:80 | Public active-only allowlisted Release/Track projection, nested Label, filter/count contract and bounded paging; no private media/creator disclosure | BLOCKER no reviewed registered replacement |
+| transfer-artist-label | src/services/users.ts legacy fallback; function index.ts writes releases/tracks | Separate present management from historical Release/Track and royalty owners; Phase3B transfer is not permission to rewrite history | PROVEN_SOURCE legacy dependency; BLOCKER cross-domain regression |
+| remove-artist-from-label | legacy function index.ts reads releases; current Artist service used by migrated branch | Release dependency guards; preserve historical owners; unknown inventory denies destruction | BLOCKER lifecycle regression evidence |
+| process-royalty-upload | src/pages/UploadRoyalty.tsx plus local Release/Track lookup | Resolve catalog and attribution safely, transactional import, downstream dependencies and exact-once effects | DEFERRED financial domain; active lookup closure BLOCKER |
+| send-app-email / notifications | Payment invoice / callback side effects and local Edge sources | Scoped recipient capability, durable event and retry semantics; generic actor-only outbox does not prove workflow mail | DEFERRED mail provider; BLOCKER if workflow notification acceptance claimed |
+
+Production handlers were not inspected. Phase3 historical report records deployed/local drift including xendit-webhook and send-app-email; local code cannot settle deployed behavior. No shared runtime, hook, callback URL, function or secret touched. Phase4 Auth/session replacement remains deferred; request authentication/ownership for Phase3C remains mandatory now.

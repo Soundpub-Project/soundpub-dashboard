@@ -1,3 +1,4 @@
+import { usesBackendDomain } from '@/api/routing';
 import { useEffect, useState } from 'react';
 import { BellRing, Loader2, Save } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,6 +15,11 @@ const DEFAULT_CONFIG: AuthNoticeConfig = { enabled: false, title: 'Informasi Lin
 function parseConfig(value: string | null): AuthNoticeConfig { try { return value ? { ...DEFAULT_CONFIG, ...(JSON.parse(value) as Partial<AuthNoticeConfig>) } : DEFAULT_CONFIG; } catch { return DEFAULT_CONFIG; } }
 
 export function AuthNoticeSettings() {
+  if (usesBackendDomain('settings')) return <p role="status">Pengaturan ini belum tersedia.</p>;
+  return <LegacyAuthNoticeSettings />;
+}
+
+function LegacyAuthNoticeSettings() {
   const { toast } = useToast();
   const [config, setConfig] = useState<AuthNoticeConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);

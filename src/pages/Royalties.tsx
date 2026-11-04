@@ -1,3 +1,7 @@
+import { useAuth } from '@/hooks/useAuth';
+import { FinanceUnavailable } from '@/components/finance/FinanceUnavailable';
+import { BackendRoyalties } from '@/components/finance/BackendRoyalties';
+import { usesBackendFinance } from '@/components/finance/mode';
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRoyalties } from '@/lib/fetchAllRoyalties';
@@ -96,7 +100,7 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-export default function Royalties() {
+function LegacyRoyalties() {
   const [royalties, setRoyalties] = useState<Royalty[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -541,4 +545,11 @@ export default function Royalties() {
       </div>
     </DashboardLayout>
   );
+}
+
+export default function Royalties() {
+  const { role } = useAuth();
+  if (role === 'label_custom' && !usesBackendFinance()) return <FinanceUnavailable />;
+  if (usesBackendFinance()) return <BackendRoyalties />;
+  return <LegacyRoyalties />;
 }

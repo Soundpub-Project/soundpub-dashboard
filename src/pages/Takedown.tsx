@@ -1,3 +1,4 @@
+import { usesBackendReleases } from '@/services/releases';
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -43,7 +44,7 @@ const durationLabel = (seconds?: number | null) => {
 
 
 
-export default function Takedown() {
+function LegacyTakedown() {
   const { user, profile, isAdmin, isLabel, isArtist } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -212,4 +213,9 @@ export default function Takedown() {
       </DialogContent>
     </Dialog>
   </div></DashboardLayout>;
+}
+
+export default function Takedown() {
+  if (usesBackendReleases()) return <main role="alert" className="p-6">Takedown menunggu migrasi domain Takedown.</main>;
+  return <LegacyTakedown />;
 }

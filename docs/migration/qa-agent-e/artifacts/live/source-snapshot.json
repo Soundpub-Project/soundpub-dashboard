@@ -1,0 +1,42 @@
+{
+  "timestamp": "2026-10-28T03:37:35.461Z",
+  "timing": "After completed live run; concurrent workspace remains mutable",
+  "files": [
+    {
+      "path": "src/hooks/useAuth.tsx",
+      "sha256": "d039fb7b13f1c3269c6b85afff50611abcc0014cabcd61d8810fdd6c1f3f3a4d"
+    },
+    {
+      "path": "src/pages/Users.tsx",
+      "sha256": "40e1970eaefd42ba5a18c90324bd990b58d6b8f78956a976092141e3211f4bfb"
+    },
+    {
+      "path": "src/pages/Settings.tsx",
+      "sha256": "20c71260fb742580100cfd86dfc0d24f98b38ab6d7a0bc22969f2826f91bc179"
+    },
+    {
+      "path": "src/services/users.ts",
+      "sha256": "4cff1f1a9699389c15797ae7e95e14fa0c76496dd5b018964b3274812a7b4e7c"
+    },
+    {
+      "path": "src/api/users.ts",
+      "sha256": "e27eabfb4f70fbc218ce48e32488df580c45d96cbbc790b63cc4bb7164f440d1"
+    },
+    {
+      "path": "vite.config.ts",
+      "sha256": "a416794ed6673aadacaf08f68b7a4f8837415e6259ce26c9767abc5f296b662c"
+    },
+    {
+      "path": "backend/src/auth/providers.ts",
+      "sha256": "229daca1bdb5241b676353d1f986366a7fe2e718f0400098ca47231f1032988c"
+    },
+    {
+      "path": "backend/src/api/index.ts",
+      "sha256": "0c08be4dedc9130bb0d5417d5699894675796b79830ede3a5b9566c19783fc3b"
+    },
+    {
+      "path": "backend/src/users/index.ts",
+      "sha256": "d3354bd78cdae98bcc11ce5aa4f5a6bedf8bdfeca5ac2b962309f9494fd380c2"
+    }
+  ]
+}

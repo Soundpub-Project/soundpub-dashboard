@@ -1,0 +1,49 @@
+{
+  "name": "soundpub-backend-foundation",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "worker:dev": "tsx watch src/worker-main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/src/main.js",
+    "worker:start": "node dist/src/worker-main.js",
+    "test": "tsx --test test/*.test.ts",
+    "test:docker:commands": "tsx --test --test-name-pattern=\"Compose (command construction|fixture cleanup)\" test/orphan-repair.test.ts",
+    "test:docker": "tsx --test --test-concurrency=1 test/*.test.ts",
+    "test:unit": "tsx --test test/auth*.test.ts test/authorization*.test.ts test/config*.test.ts test/observability*.test.ts test/storage*.test.ts test/users.test.ts",
+    "test:integration": "tsx --test test/api*.test.ts test/db*.test.ts test/worker*.test.ts test/webhook*.test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "migration:up": "tsx src/db/cli.ts up",
+    "migration:status": "tsx src/db/cli.ts status",
+    "database:reset": "tsx src/db/cli.ts reset",
+    "docker:config": "docker compose -p dashboard-sounpub-dev config --quiet",
+    "docker:up": "docker compose -p dashboard-sounpub-dev up -d --build",
+    "docker:down": "docker compose -p dashboard-sounpub-dev down",
+    "database:seed": "tsx src/db/seed.ts",
+    "auth:provision": "tsx src/local-auth/provision-cli.ts",
+    "security:check": "node scripts/check-isolation.mjs",
+    "media:reconcile": "tsx src/media/cli.ts reconcile",
+    "media:cleanup": "tsx src/media/cli.ts cleanup",
+    "audit": "npm audit --omit=dev --audit-level=moderate"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.1157.0",
+    "@aws-sdk/s3-request-presigner": "3.1157.0",
+    "fastify": "5.12.7",
+    "pg": "8.16.3",
+    "pino": "10.1.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.11",
+    "@types/pg": "8.15.6",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3"
+  }
+}

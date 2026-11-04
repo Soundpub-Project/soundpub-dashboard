@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { usesBackendDomain } from '@/api/routing';
+import { usersApi } from '@/api/users';
 import {
   Dialog,
   DialogContent,
@@ -22,6 +24,7 @@ interface EditComposerCodeDialogProps {
     email: string;
     full_name: string;
     role?: string;
+    composer_code?: string | null;
   } | null;
   onSuccess?: () => void;
 }
@@ -32,6 +35,7 @@ export function EditComposerCodeDialog({
   user,
   onSuccess,
 }: EditComposerCodeDialogProps) {
+  const backendUsers = usesBackendDomain('users');
   const [composerCode, setComposerCode] = useState('');
   const [originalCode, setOriginalCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -39,13 +43,20 @@ export function EditComposerCodeDialog({
 
   useEffect(() => {
     if (open && user) {
-      fetchComposerCode();
+      if (backendUsers) {
+        const code = user.composer_code ?? '';
+        setComposerCode(code);
+        setOriginalCode(code);
+      } else {
+        fetchComposerCode();
+      }
     }
   }, [open, user]);
 
   const fetchComposerCode = async () => {
     if (!user) return;
     
+    if (backendUsers) return;
     setFetching(true);
     try {
       const { data, error } = await supabase
@@ -72,19 +83,19 @@ export function EditComposerCodeDialog({
 
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ composer_code: composerCode.trim() || null })
-        .eq('id', user.id);
-
-      if (error) throw error;
+      const normalizedCode = composerCode.trim() || null;
+      if (backendUsers) await usersApi.composerCode(user.id, normalizedCode);
+      else {
+        const { error } = await supabase.from('profiles').update({ composer_code: normalizedCode }).eq('id', user.id);
+        if (error) throw error;
+      }
 
       toast.success(`Composer Code untuk ${user.full_name} berhasil diperbarui`);
       onOpenChange(false);
       onSuccess?.();
     } catch (error) {
       console.error('Error updating composer code:', error);
-      toast.error('Gagal memperbarui composer code');
+      toast.error(error instanceof Error ? error.message : 'Gagal memperbarui composer code');
     } finally {
       setLoading(false);
     }
@@ -135,6 +146,7 @@ export function EditComposerCodeDialog({
                   placeholder="Contoh: UTR0001"
                   value={composerCode}
                   onChange={(e) => setComposerCode(e.target.value.toUpperCase())}
+                  maxLength={100}
                 />
                 <p className="text-xs text-muted-foreground">
                   Kode unik yang digunakan untuk mencocokkan data royalti dari file upload. 

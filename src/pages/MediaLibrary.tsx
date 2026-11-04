@@ -1,4 +1,6 @@
-﻿import { useState, useEffect } from 'react';
+import { usesBackendDomain } from '@/api/routing';
+import { usesBackendReleases } from '@/services/releases';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -183,7 +185,7 @@ const getStorageReferenceKeys = (url: string | null, bucket: BucketType) => {
   return keys;
 };
 
-export default function MediaLibrary() {
+function LegacyMediaLibrary() {
   const { isAdmin } = useAuth();
   const { toast } = useToast();
   
@@ -734,3 +736,8 @@ export default function MediaLibrary() {
 
 
 
+
+export default function MediaLibrary() {
+  if (usesBackendDomain('storage') || usesBackendReleases()) return <main role="alert" className="p-6">Pemindaian media menunggu Phase 3D Storage.</main>;
+  return <LegacyMediaLibrary />;
+}

@@ -72,7 +72,7 @@ const contractStageButtons = [
 
 const contractStatusOrder = ['draft', 'generated', 'stamping_pending', 'stamped', 'signed', 'active', 'void'] as const;
 
-const pdfServiceUrl = (import.meta as { env?: Record<string, string> }).env?.VITE_PDF_SERVICE_URL || 'http://localhost:3001';
+const pdfServiceUrl = import.meta.env.VITE_PDF_SERVICE_URL;
 const contractBucket = (import.meta as { env?: Record<string, string> }).env?.VITE_CONTRACT_BUCKET || 'contracts';
 
 const templatePath = 'FINAL%20-%20DRAFT%20KONTRAK%20Soundpub%20COMPLETE.docx';
@@ -310,7 +310,7 @@ export default function CopyrightRegistrationReview() {
     { label: 'Preview HTML', value: selectedContract?.preview_html_url },
     { label: 'Draft PDF', value: selectedContract?.draft_pdf_url },
     { label: 'Generated PDF', value: selectedContract?.generated_pdf_url },
-    { label: 'Stamped PDF', value: selectedContract?.stamped_pdf_url },
+    { label: 'Stamped PDF', value: selectedContract?.stamped_pdf_url, private: true },
   ];
   const selectedContractStatusIndex = getContractStatusIndex(selectedContract?.status);
   const canGenerateContract = !selectedContract || selectedContract.status === 'draft';
@@ -319,17 +319,38 @@ export default function CopyrightRegistrationReview() {
   const canActivateContract = selectedContract?.status === 'signed';
   const canDownloadDraftPdf = selectedPayment?.payment_status === 'paid';
 
+  const openContractUrl = async (value: string, isPrivate = false) => {
+    if (!isPrivate) {
+      window.open(value, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    const { data, error } = await supabase.storage.from(contractBucket).createSignedUrl(value, 300);
+    if (error) throw error;
+    window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+  };
+
   const downloadDraftPdf = async () => {
     if (!selected) return;
+    if (!pdfServiceUrl || new URL(pdfServiceUrl, window.location.origin).origin !== window.location.origin || !pdfServiceUrl.startsWith('https://')) {
+      toast.error('Layanan PDF memerlukan endpoint HTTPS pada origin yang sama.');
+      return;
+    }
     if (!canDownloadDraftPdf) {
       toast.error('Draft PDF hanya bisa diunduh setelah pembayaran Rp100.000 berstatus paid.');
       return;
     }
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Sesi autentikasi tidak tersedia.');
+
       const response = await fetch(`${pdfServiceUrl}/api/contracts/generate-pdf`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
           templatePath,
           registrationId: selected.id,
@@ -368,16 +389,13 @@ export default function CopyrightRegistrationReview() {
 
       if (uploadError) throw uploadError;
 
-      const { data } = supabase.storage.from(contractBucket).getPublicUrl(filePath);
-      const publicUrl = data.publicUrl;
-
       const { error: contractError } = await supabase.rpc('admin_update_copyright_contract', {
         _registration_id: selected.id,
         _status: 'stamped',
         _preview_html_url: selectedContract?.preview_html_url ?? null,
         _draft_pdf_url: selectedContract?.draft_pdf_url ?? null,
         _generated_pdf_url: selectedContract?.generated_pdf_url ?? null,
-        _stamped_pdf_url: publicUrl,
+        _stamped_pdf_url: filePath,
       });
 
       if (contractError) throw contractError;
@@ -561,13 +579,14 @@ export default function CopyrightRegistrationReview() {
                     {contractUrlRows.map((row) => (
                       row.value ? (
                         <div key={row.label} className="flex items-center gap-2">
-                          <Button variant="outline" onClick={() => window.open(row.value!, '_blank', 'noopener,noreferrer')}>
+                          <Button
+                            variant="outline"
+                            onClick={() => openContractUrl(row.value!, row.private).catch((error) => toast.error(error instanceof Error ? error.message : 'Gagal membuka kontrak'))}
+                          >
                             <FileText className="mr-2 h-4 w-4" />
                             Buka {row.label}
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => navigator.clipboard.writeText(row.value!).then(() => toast.success('URL disalin'))}>
-                            Salin
-                          </Button>
+                          {!row.private && <Button variant="ghost" size="sm" onClick={() => navigator.clipboard.writeText(row.value!).then(() => toast.success('URL disalin'))}>Salin</Button>}
                         </div>
                       ) : null
                     ))}

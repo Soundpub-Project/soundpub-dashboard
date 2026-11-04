@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { getArtist, updateArtistAccount, usesBackendArtistLabels } from '@/services/artists';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -23,7 +23,7 @@ import { Loader2, UserPen } from 'lucide-react';
 
 interface ArtistProfile {
   id: string;
-  email: string;
+  email: string | null;
   full_name: string;
   phone: string | null;
   status: string;
@@ -48,6 +48,7 @@ export function EditArtistDialog({
   const [address, setAddress] = useState('');
   const [status, setStatus] = useState('active');
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     if (artist) {
@@ -56,9 +57,24 @@ export function EditArtistDialog({
       setAddress(artist.address || '');
       setStatus(artist.status);
     }
-  }, [artist]);
+    if (!artist || !open || !usesBackendArtistLabels()) return;
+    let cancelled = false;
+    setLoading(true);
+    setLoadError('');
+    getArtist(artist.id).then(data => {
+      if (cancelled) return;
+      setFullName(data.full_name);
+      setPhone(data.phone || '');
+      setAddress(data.address || '');
+      setStatus(data.status);
+    }).catch(() => {
+      if (!cancelled) setLoadError('Data artis belum dapat dimuat. Tutup dialog dan coba lagi.');
+    }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [artist, open]);
 
   const handleSave = async () => {
+    if (loading || loadError) return;
     if (!artist) return;
     
     if (!fullName.trim()) {
@@ -68,17 +84,12 @@ export function EditArtistDialog({
 
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
+      await updateArtistAccount(artist.id, {
           full_name: fullName.trim(),
           phone: phone.trim() || null,
           address: address.trim() || null,
           status,
-        })
-        .eq('id', artist.id);
-
-      if (error) throw error;
+        });
 
       toast.success('Data artist berhasil diupdate');
       onSuccess();
@@ -100,11 +111,12 @@ export function EditArtistDialog({
             Edit Artist
           </DialogTitle>
           <DialogDescription>
-            Update informasi artist
+            {usesBackendArtistLabels() ? 'Update nama dan kontak artis. Status akun dikelola melalui Users.' : 'Update informasi artist'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {loadError && <p role="alert">{loadError}</p>}
           <div className="space-y-2">
             <Label htmlFor="editFullName">Nama Lengkap</Label>
             <Input
@@ -115,7 +127,7 @@ export function EditArtistDialog({
             />
           </div>
 
-          <div className="space-y-2">
+          {!usesBackendArtistLabels() && <div className="space-y-2">
             <Label htmlFor="editEmail">Email</Label>
             <Input
               id="editEmail"
@@ -125,7 +137,7 @@ export function EditArtistDialog({
               className="opacity-60"
             />
             <p className="text-xs text-muted-foreground">Email tidak dapat diubah</p>
-          </div>
+          </div>}
 
           <div className="space-y-2">
             <Label htmlFor="editPhone">Nomor Telepon</Label>
@@ -150,7 +162,7 @@ export function EditArtistDialog({
 
           <div className="space-y-2">
             <Label>Status</Label>
-            <Select value={status} onValueChange={(value) => setStatus(value)}>
+            <Select value={status} onValueChange={(value) => setStatus(value)} disabled={usesBackendArtistLabels()}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Pilih status" />
               </SelectTrigger>
@@ -167,7 +179,7 @@ export function EditArtistDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Batal
           </Button>
-          <Button onClick={handleSave} disabled={loading || !fullName.trim()}>
+          <Button onClick={handleSave} disabled={loading || !!loadError || !fullName.trim()}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Simpan
           </Button>

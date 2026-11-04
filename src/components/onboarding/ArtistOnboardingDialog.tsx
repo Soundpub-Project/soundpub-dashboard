@@ -7,6 +7,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { usesBackendArtistLabels, saveArtistProfile } from '@/services/artists';
+import { usesBackendDomain } from '@/api/routing';
 import { useAuth } from '@/hooks/useAuth';
 import { Music, Users, Mic2 } from 'lucide-react';
 
@@ -23,7 +25,7 @@ export function ArtistOnboardingDialog({
   allowSkip = true,
   onComplete,
 }: ArtistOnboardingDialogProps) {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -59,6 +61,19 @@ export function ArtistOnboardingDialog({
 
     setLoading(true);
     try {
+      if (usesBackendArtistLabels()) {
+        await saveArtistProfile(profile?.id || user.id, {
+          artist_name: formData.artist_name.trim(), artist_type: formData.artist_type,
+          bio: formData.bio.trim() || null, genre: formData.genre.trim() || null,
+          phone: formData.phone.trim(),
+          social_links: Object.fromEntries(Object.entries(formData.social_links).filter(([, value]) => value.trim())),
+        });
+        if (usesBackendDomain('users')) await refreshProfile();
+        toast({ title: 'Berhasil!', description: 'Data artis berhasil disimpan' });
+        onComplete?.();
+        onOpenChange(false);
+        return;
+      }
       // Insert artist profile - cast needed since table not yet in generated types
       const { error: insertError } = await (supabase as any)
         .from('artist_profiles')

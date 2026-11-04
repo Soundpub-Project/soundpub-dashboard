@@ -1,0 +1,9 @@
+# Phase 1B public build and secret hygiene
+
+Status: **local build PASS; production deployment and secret-rotation gate NOT VERIFIED.** Observed 2026-10-27 (Asia/Bangkok).
+
+- Removed two debug-only OAuth/CORS test HTML files from `public/`; no application imports or links targeted either file. Retained `silent-check-sso.html`, which `src/lib/keycloak.ts` references for live SSO.
+- Moved all seven tracked legacy migration export files from `public/exports/` into `docs/migration/legacy-public-assets/`; originals preserved without public-build exposure. `src/pages/Export.tsx` now only exposes existing CSV export workflow; old guides described Supabase Cloud and directed a cutover even though Phase 2 is not ready. This is an intentional removal of obsolete static-file downloads, not a migration start.
+- `npm run build` PASS. Production `dist/` contains only `favicon.ico`, `index.html`, `placeholder.svg`, `robots.txt` and required `silent-check-sso.html` outside asset bundles. A local comparison of configured secret values against the built JS/CSS found zero exact matches; variable names alone appeared in compiled code and are not proof of embedded values. Frontend anonymous/publishable values were not classified as secrets.
+- Published host bundle and deployment pipeline were not inspected, so no assertion that already deployed assets disappeared. Existing public URLs should be checked on production host only after the next verified rollout.
+- During separate routing inspection, rendered server config printed live secret-key and service-role token values to tool output. Values were not written into repository reports. Treat as a credential exposure: limit transcript access, inventory dependent callers and coordinate rotation through secret management. No unplanned rotation or downtime was performed.

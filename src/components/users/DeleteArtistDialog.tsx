@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { removeLabelArtist, usesBackendArtistLabels } from '@/services/labels';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -15,8 +16,9 @@ import { Loader2 } from 'lucide-react';
 
 interface ArtistProfile {
   id: string;
-  email: string;
+  email: string | null;
   full_name: string;
+  parent_label_id?: string | null;
 }
 
 interface DeleteArtistDialogProps {
@@ -32,20 +34,17 @@ export function DeleteArtistDialog({
   artist,
   onSuccess 
 }: DeleteArtistDialogProps) {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
 
   const handleDelete = async () => {
-    if (!artist) return;
+    if (!artist || !user) return;
 
     setLoading(true);
     try {
-      // Call edge function to remove artist and log the action
-      const { data, error } = await supabase.functions.invoke('remove-artist-from-label', {
-        body: { artist_id: artist.id },
-      });
-
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      const labelId = usesBackendArtistLabels() ? artist.parent_label_id : user.id;
+      if (!labelId) throw new Error('Relasi label belum tersedia. Muat ulang daftar artis.');
+      await removeLabelArtist(labelId, artist.id);
 
       toast.success(`${artist.full_name} telah dihapus dari label Anda`);
       onSuccess();

@@ -1,3 +1,4 @@
+import { usesBackendReleases } from '@/services/releases';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -20,7 +21,7 @@ const statusLabels: Record<string, string> = { SUBMITTED: 'Diajukan', UNDER_REVI
 const dateLabel = (value?: string | null) => value ? new Date(value).toLocaleString('id-ID') : '-';
 const badgeVariant = (status: string) => status === 'REJECTED' ? 'destructive' : status === 'COMPLETED' ? 'default' : 'secondary';
 
-export default function TakedownDetail() {
+function LegacyTakedownDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
@@ -118,4 +119,9 @@ export default function TakedownDetail() {
       </AlertDialogContent>
     </AlertDialog>
   </div></DashboardLayout>;
+}
+
+export default function TakedownDetail() {
+  if (usesBackendReleases()) return <main role="alert" className="p-6">Takedown menunggu migrasi domain Takedown.</main>;
+  return <LegacyTakedownDetail />;
 }

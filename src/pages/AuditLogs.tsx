@@ -1,3 +1,5 @@
+import { usesBackendDomain } from '@/api/routing';
+import { BackendAuditLogs } from '@/components/settings/BackendAuditLogs';
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -80,6 +82,11 @@ const ACTION_CONFIG: Record<string, { label: string; icon: React.ReactNode; colo
 };
 
 export default function AuditLogs() {
+  if (usesBackendDomain('audit')) return <BackendAuditLogs />;
+  return <LegacyAuditLogs />;
+}
+
+function LegacyAuditLogs() {
   const { isAdmin, loading: authLoading, user } = useAuth();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);

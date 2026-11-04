@@ -1,5 +1,9 @@
+import { requireLegacyFinance } from '@/components/finance/mode';
+import { usesBackendDomain } from '@/api/routing';
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { usesBackendReleases, listBackendReleases } from '@/services/releases';
+import { listBackendTracks } from '@/services/tracks';
 import { toast } from 'sonner';
 
 export interface ExportableTable {
@@ -51,6 +55,7 @@ export const useExportCsv = () => {
       name: 'Users/Profiles',
       description: 'Data semua user dan profil',
       fetchData: async () => {
+        if (usesBackendDomain('users')) throw new Error('Users export belum tersedia');
         const { data, error } = await supabase.from('profiles').select('*');
         if (error) throw error;
         return data || [];
@@ -61,6 +66,7 @@ export const useExportCsv = () => {
       name: 'Artists',
       description: 'Data semua artist',
       fetchData: async () => {
+        if (usesBackendDomain('artists')) throw new Error('Artists export belum tersedia');
         const { data, error } = await supabase.from('artists').select('*');
         if (error) throw error;
         return data || [];
@@ -71,6 +77,7 @@ export const useExportCsv = () => {
       name: 'Releases',
       description: 'Data semua release/album',
       fetchData: async () => {
+        if (usesBackendReleases()) return listBackendReleases();
         const { data, error } = await supabase.from('releases').select('*');
         if (error) throw error;
         return data || [];
@@ -81,6 +88,7 @@ export const useExportCsv = () => {
       name: 'Tracks',
       description: 'Data semua track/lagu',
       fetchData: async () => {
+        if (usesBackendReleases()) return listBackendTracks();
         const { data, error } = await supabase.from('tracks').select('*');
         if (error) throw error;
         return data || [];
@@ -91,6 +99,7 @@ export const useExportCsv = () => {
       name: 'Royalties',
       description: 'Data royalti dari semua platform',
       fetchData: async () => {
+        requireLegacyFinance();
         const { data, error } = await supabase.from('royalties').select('*');
         if (error) throw error;
         return data || [];
@@ -101,6 +110,7 @@ export const useExportCsv = () => {
       name: 'Royalty Uploads',
       description: 'Riwayat upload data royalti',
       fetchData: async () => {
+        requireLegacyFinance();
         const { data, error } = await supabase.from('royalty_uploads').select('*');
         if (error) throw error;
         return data || [];
@@ -111,6 +121,7 @@ export const useExportCsv = () => {
       name: 'Payout Requests',
       description: 'Data permintaan pencairan',
       fetchData: async () => {
+        requireLegacyFinance();
         const { data, error } = await supabase.from('payout_requests').select('*');
         if (error) throw error;
         return data || [];
@@ -121,6 +132,7 @@ export const useExportCsv = () => {
       name: 'Audit Logs',
       description: 'Log aktivitas sistem',
       fetchData: async () => {
+        if (usesBackendDomain('audit')) throw new Error('Audit export belum tersedia');
         const { data, error } = await supabase.from('audit_logs').select('*');
         if (error) throw error;
         return data || [];
@@ -131,6 +143,7 @@ export const useExportCsv = () => {
       name: 'User Roles',
       description: 'Data role pengguna',
       fetchData: async () => {
+        if (usesBackendDomain('users')) throw new Error('Roles export belum tersedia');
         const { data, error } = await supabase.from('user_roles').select('*');
         if (error) throw error;
         return data || [];
@@ -141,6 +154,7 @@ export const useExportCsv = () => {
       name: 'App Settings',
       description: 'Pengaturan aplikasi',
       fetchData: async () => {
+        if (usesBackendDomain('settings')) throw new Error('Settings export belum tersedia');
         const { data, error } = await supabase.from('app_settings').select('*');
         if (error) throw error;
         return data || [];

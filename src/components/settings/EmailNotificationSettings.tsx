@@ -1,3 +1,5 @@
+import { usesBackendDomain } from '@/api/routing';
+import { BackendUserSettings } from './BackendSettings';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -22,6 +24,11 @@ const FIELDS: { key: keyof Prefs; label: string; desc: string }[] = [
 ];
 
 export function EmailNotificationSettings() {
+  if (usesBackendDomain('settings')) return <BackendUserSettings />;
+  return <LegacyEmailNotificationSettings />;
+}
+
+function LegacyEmailNotificationSettings() {
   const { user } = useAuth();
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [loading, setLoading] = useState(true);

@@ -1,0 +1,17 @@
+# Phase3E transaction model
+
+Use existing backend `withTransaction(pool, async db => ...)` at READ COMMITTED. Authorize using current DB status/roles and existing authority-lock protocol. Then lock financial accounts in ascending owner UUID order with `lockAccount`. Then lock domain records, calculate `getBalance`, validate trusted inputs, post immutable event using `postEvent`, write domain state and commit once. Retry whole transaction after a serialization/deadlock failure only with same deterministic operation key. Never retry partial mutation.
+
+Payout request: authority, financial account, eligibility/provenance, amount, payout row, reservation event, domain audit/outbox, commit. Release/settlement: same account then payout row, verify state and trusted evidence, terminal event using original reservation reference/amount, domain transition, commit. Do not acquire account after payout row in another code path. Caller must check current owner account and state; ledger does not grant payout authorization.
+
+Royalty batch: lock all beneficiary authority/account scopes in deterministic order, persist validated history and reconciled credits in same transaction. Preview has no financial mutation. Unreconciled import rows never credit availability. Correction is new adjustment; original remains. Unknown legacy balances/provenance are not converted into synthetic opening credits.
+
+Database BEFORE INSERT guard rejects isolation other than READ COMMITTED, repeats account lock and checks balance, matching active reservation and refund cap even for backend SQL callers. Unique constraints prevent duplicate operation/business effects and reused evidence. Immutable triggers forbid edits/deletes/truncation. Before/after snapshots are derived inside guard and overwrite supplied values. Supported posting primitive inserts one event per statement; batch writers call `postEvent` in sequence inside one transaction.
+
+Database AFTER INSERT trigger inserts dedicated immutable audit, general audit and outbox. Any failure aborts event statement. `postEvent` uses savepoint for controlled conflict reporting; unexpected errors propagate and owning transaction must roll back. A caller may catch a controlled financial rejection but must not commit a payout/domain success without matching event. Event/audit/outbox and domain writes all roll back on parent error.
+
+Outbox `finance.event` contains immutable event ID only. Delivery is at least once; consumer must deduplicate effect by event ID and preserve durable processing evidence. No provider dispatch implemented or authorized by this primitive. Audit state and event remain immutable while outbox delivery fields may change.
+
+Reconciliation: `reconcileAccount(db,ownerId,expected,currency?)` compares complete backend-supplied domain/provider expectation set with ledger and audit/outbox. Returns DRY_RUN plus mismatch codes and no repairs. For consistent multi-domain snapshots, acquire account lock before querying domain/provider snapshot data or use externally frozen synthetic snapshot. Caller must not label arbitrary/empty expected set as provider verification. Missing event, unexpected event, amount/evidence mismatch or missing audit/outbox blocks finality. Repairs require explicit reviewed compensating operation and fresh audit; no automatic repair for ambiguous mismatch.
+
+No payout/payment routes, HTTP server, production providers, production fixtures, SSH or shared Supabase mutation belong to Agent C.

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { updateUserRole, type AppRole } from '@/services/users';
+import { usesBackendDomain } from '@/api/routing';
+import { usesBackendArtistLabels, listLabels } from '@/services/labels';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -21,8 +23,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AlertTriangle, Loader2, Shield, Music, Building2, User, Crown, ShieldCheck } from 'lucide-react';
-
-type AppRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user' | 'copyright' | 'whitelabel';
 
 interface LabelOption {
   id: string;
@@ -61,6 +61,12 @@ const ROLE_OPTIONS: { value: AppRole; label: string; icon: React.ReactNode; desc
     icon: <Building2 className="h-4 w-4" />,
     description: 'Dapat manage releases dan artis'
   },
+  {
+    value: 'label_custom',
+    label: 'Label Custom',
+    icon: <Building2 className="h-4 w-4" />,
+    description: 'Kelola artis tanpa akun login'
+  },
   { 
     value: 'whitelabel', 
     label: 'White Label', 
@@ -79,6 +85,12 @@ const ROLE_OPTIONS: { value: AppRole; label: string; icon: React.ReactNode; desc
     icon: <Shield className="h-4 w-4" />,
     description: 'Akses penuh ke semua fitur'
   },
+  {
+    value: 'superadmin',
+    label: 'Super Admin',
+    icon: <Crown className="h-4 w-4 text-amber-500" />,
+    description: 'Akses tertinggi untuk administrasi platform'
+  },
 ];
 
 export function ChangeRoleDialog({ 
@@ -88,7 +100,8 @@ export function ChangeRoleDialog({
   currentRole,
   onSuccess 
 }: ChangeRoleDialogProps) {
-  const { isSuperadmin } = useAuth();
+  const { isAdmin, isSuperadmin } = useAuth();
+  const backendUsers = usesBackendDomain('users');
   const [selectedRole, setSelectedRole] = useState<AppRole>(currentRole);
   const [selectedLabelId, setSelectedLabelId] = useState<string>('');
   const [labels, setLabels] = useState<LabelOption[]>([]);
@@ -98,10 +111,10 @@ export function ChangeRoleDialog({
 
   // Fetch labels when dialog opens
   useEffect(() => {
-    if (open) {
+    if (open && isAdmin) {
       fetchLabels();
     }
-  }, [open]);
+  }, [open, isAdmin]);
 
   // Reset state when dialog opens with new user
   useEffect(() => {
@@ -114,49 +127,18 @@ export function ChangeRoleDialog({
   const fetchLabels = async () => {
     setLoadingLabels(true);
     try {
-      // Fetch all users with label or whitelabel role
-      const { data: roles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('user_id, role')
-        .in('role', ['label', 'whitelabel']);
-
-      if (rolesError) throw rolesError;
-
-      const labelUserIds = roles?.map(r => r.user_id) || [];
-
-      if (labelUserIds.length > 0) {
-        const { data: profiles, error: profilesError } = await supabase
-          .from('profiles')
-          .select('id, full_name')
-          .in('id', labelUserIds)
-          .eq('status', 'active');
-
-        if (profilesError) throw profilesError;
-
-        // Add role info to distinguish labels from whitelabels
-        const profilesWithRole = (profiles || []).map(profile => {
-          const roleInfo = roles?.find(r => r.user_id === profile.id);
-          return {
-            ...profile,
-            full_name: roleInfo?.role === 'whitelabel' 
-              ? `${profile.full_name} (Whitelabel)` 
-              : profile.full_name
-          };
-        });
-
-        setLabels(profilesWithRole);
-      } else {
-        setLabels([]);
-      }
+      setLabels(await listLabels());
     } catch (error) {
-      console.error('Error fetching labels:', error);
+      setLabels([]);
+      toast.error('Gagal memuat label. Tutup dialog dan coba lagi.');
     } finally {
       setLoadingLabels(false);
     }
   };
 
   const handleSave = async () => {
-    if (!user) return;
+    if (!user || !isAdmin || (selectedRole === 'label_custom' && !backendUsers)) return;
+    if (['admin', 'superadmin'].includes(selectedRole) && !isSuperadmin) return;
     
     // Validate that artist role requires a label
     if (selectedRole === 'artist' && !selectedLabelId) {
@@ -167,6 +149,7 @@ export function ChangeRoleDialog({
     // Check if nothing changed
     const roleChanged = selectedRole !== currentRole;
     const labelChanged = selectedRole === 'artist' && selectedLabelId !== (user.parent_label_id || '');
+    const transferringArtist = currentRole === 'artist' && selectedRole === 'artist' && labelChanged;
     
     if (!roleChanged && !labelChanged) {
       onOpenChange(false);
@@ -175,86 +158,24 @@ export function ChangeRoleDialog({
 
     setLoading(true);
     try {
-      // Update role through server-side authorization checks.
-      if (roleChanged) {
-        const { data: { session } } = await supabase.auth.getSession();
-
-        if (!session?.access_token) {
-          throw new Error('Sesi login sudah habis. Silakan login ulang lalu coba kembali.');
-        }
-
-        const { data, error: roleError } = await supabase.functions.invoke('update-user-role', {
-          body: {
-            user_id: user.id,
-            new_role: selectedRole,
-          },
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        });
-
-        if (roleError) {
-          const response = roleError.context instanceof Response ? roleError.context : null;
-          const errorBody = response ? await response.clone().json().catch(() => null) : null;
-          throw new Error(errorBody?.error || roleError.message || 'Gagal mengubah role user');
-        }
-        if (!data?.success) throw new Error(data?.error || 'Gagal mengubah role user');
-      }
-
-      // Update parent_label_id safely. Artist label transfer must go through
-      // an edge function so historical royalties/releases stay with the old label.
       const newParentLabelId = selectedRole === 'artist' ? selectedLabelId : null;
-
-      if (labelChanged && selectedRole === 'artist') {
+      if (transferringArtist) {
         if (transferConfirmation !== 'PINDAH LABEL') {
           toast.error('Ketik PINDAH LABEL untuk konfirmasi perpindahan label artist');
           setLoading(false);
           return;
         }
-
-        const { error: transferError } = await supabase.functions.invoke('transfer-artist-label', {
-          body: {
-            artist_id: user.id,
-            new_label_id: selectedLabelId,
-            confirmation_phrase: transferConfirmation,
-            royalty_transfer_mode: 'keep_old_label',
-          },
-        });
-
-        if (transferError) throw transferError;
-      } else {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({ parent_label_id: newParentLabelId })
-          .eq('id', user.id);
-
-        if (profileError) throw profileError;
       }
+      await updateUserRole({
+        userId: user.id, fullName: user.full_name, role: selectedRole,
+        previousRole: currentRole, parentLabelId: newParentLabelId,
+        previousParentLabelId: user.parent_label_id ?? null, transferConfirmation,
+      });
 
-      // CRITICAL: Sync to artists table for immediate integration for non-transfer artist assignments.
-      if (selectedRole === 'artist' && selectedLabelId && !labelChanged) {
-        const { data: existingArtist } = await supabase
-          .from('artists')
-          .select('id')
-          .eq('name', user.full_name)
-          .eq('label_id', selectedLabelId)
-          .maybeSingle();
-
-        if (!existingArtist) {
-          const { error: artistError } = await supabase
-            .from('artists')
-            .insert({
-              name: user.full_name,
-              label_id: selectedLabelId,
-            });
-
-          if (artistError) {
-            console.error('Error syncing to artists table:', artistError);
-          }
-        }
-      }
-
-      toast.success(`Role ${user.full_name} berhasil diubah menjadi ${selectedRole}`);
+      toast.success(roleChanged
+        ? `Role ${user.full_name} berhasil diubah menjadi ${selectedRole === 'label_custom' ? 'Label Custom' : selectedRole}`
+        : `Label ${user.full_name} berhasil dipindahkan`
+      );
       onSuccess();
       onOpenChange(false);
     } catch (error) {
@@ -269,12 +190,15 @@ export function ChangeRoleDialog({
     if (!open) {
       // Reset state when closing
       setSelectedLabelId('');
+      setTransferConfirmation('');
     }
     onOpenChange(open);
   };
 
   const showLabelSelect = selectedRole === 'artist';
   const currentLabelName = labels.find(l => l.id === user?.parent_label_id)?.full_name;
+
+  if (!isAdmin) return null;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -287,6 +211,7 @@ export function ChangeRoleDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {backendUsers && <p role="status" className="text-sm text-muted-foreground">Promosi user menjadi artist dibuat bersama relasi label. Perpindahan artist yang sudah ada tetap memakai konfirmasi khusus.</p>}
           <div className="space-y-2">
             <Label>User</Label>
             <div className="p-3 rounded-lg bg-muted/50">
@@ -308,11 +233,11 @@ export function ChangeRoleDialog({
                 <SelectValue placeholder="Pilih role" />
               </SelectTrigger>
               <SelectContent>
-                {ROLE_OPTIONS.map((role) => (
+                {ROLE_OPTIONS.filter(role => role.value !== 'label_custom' || backendUsers).map((role) => (
                   <SelectItem
                     key={role.value}
                     value={role.value}
-                    disabled={role.value === 'superadmin' && !isSuperadmin}
+                    disabled={['admin', 'superadmin'].includes(role.value) && !isSuperadmin}
                   >
                     <div className="flex items-center gap-2">
                       {role.icon}
@@ -363,8 +288,8 @@ export function ChangeRoleDialog({
               <p className="text-sm">
                 {selectedRole !== currentRole ? (
                   <>
-                    Role akan diubah dari <span className="font-semibold capitalize">{currentRole}</span>{' '}
-                    menjadi <span className="font-semibold capitalize">{selectedRole}</span>
+                    Role akan diubah dari <span className="font-semibold capitalize">{currentRole === 'label_custom' ? 'Label Custom' : currentRole}</span>{' '}
+                    menjadi <span className="font-semibold capitalize">{selectedRole === 'label_custom' ? 'Label Custom' : selectedRole}</span>
                   </>
                 ) : null}
                 {selectedRole === 'artist' && selectedLabelId && selectedLabelId !== (user?.parent_label_id || '') && (
@@ -377,7 +302,7 @@ export function ChangeRoleDialog({
             </div>
           )}
 
-          {selectedRole === 'artist' && selectedLabelId && selectedLabelId !== (user?.parent_label_id || '') && (
+          {currentRole === 'artist' && selectedRole === 'artist' && selectedLabelId && selectedLabelId !== (user?.parent_label_id || '') && (
             <div className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3">
               <div className="flex gap-2 text-sm">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
@@ -406,7 +331,7 @@ export function ChangeRoleDialog({
           </Button>
           <Button 
             onClick={handleSave} 
-            disabled={loading || (selectedRole === currentRole && (!showLabelSelect || selectedLabelId === (user?.parent_label_id || ''))) || (showLabelSelect && !selectedLabelId) || (selectedRole === 'artist' && selectedLabelId !== (user?.parent_label_id || '') && transferConfirmation !== 'PINDAH LABEL')}
+            disabled={loading || (selectedRole === currentRole && (!showLabelSelect || selectedLabelId === (user?.parent_label_id || ''))) || (showLabelSelect && !selectedLabelId) || (currentRole === 'artist' && selectedRole === 'artist' && selectedLabelId !== (user?.parent_label_id || '') && transferConfirmation !== 'PINDAH LABEL')}
           >
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Simpan

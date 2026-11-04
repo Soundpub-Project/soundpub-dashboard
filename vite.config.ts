@@ -7,7 +7,13 @@ import { componentTagger } from "lovable-tagger";
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
-    port: 8181,
+    port: Number(process.env.VITE_DEV_PORT ?? 8181),
+    proxy: {
+      '/api': {
+        target: process.env.VITE_DEV_API_PROXY_TARGET ?? 'http://127.0.0.1:3300',
+        changeOrigin: false,
+      },
+    },
     allowedHosts: [
       "all",
       // "dev-dashboard.Soundpub.xyz",
@@ -16,6 +22,7 @@ export default defineConfig(({ mode }) => ({
       "dev.Soundpub.xyz",
       "https://dev.Soundpub.xyz",
       "localhost:8181",
+      "localhost:8281",
       "localhost",
       "127.0.0.1",
       "dev-Soundpub.maskhar.com",

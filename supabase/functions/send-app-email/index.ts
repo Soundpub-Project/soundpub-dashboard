@@ -1,20 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
-const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'Soundpub'
-
-const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
-  const existingDb = options.db || {}
-  return createClient(supabaseUrl, supabaseKey, {
-    ...options,
-    db: { ...existingDb, schema: getDatabaseSchema() },
-  })
-}
-
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
+import { authenticatePrivilegedRequest, consumeRateLimit, errorResponse, HttpError, privilegedCorsHeaders as corsHeaders, readJsonObject } from '../_shared/privileged-api.ts'
 
 const GMAIL_GATEWAY = 'https://connector-gateway.lovable.dev/google_mail/gmail/v1'
 const FROM_NAME = 'Soundpub'
@@ -24,7 +8,7 @@ const APP_URL = 'https://dashboard.Soundpub.xyz'
 function base64UrlEncode(str: string): string {
   const bytes = new TextEncoder().encode(str)
   let binary = ''
-  for (const b of bytes) binary += String.fromCharCode(b)
+  for (const byte of bytes) binary += String.fromCharCode(byte)
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
@@ -56,12 +40,12 @@ async function sendGmail(opts: { to: string; subject: string; html: string }) {
     body: JSON.stringify({ raw }),
     signal: AbortSignal.timeout(10_000),
   })
-  if (!res.ok) throw new Error(`Gmail API ${res.status}: ${await res.text()}`)
+  if (!res.ok) throw new Error(`Gmail API ${res.status}`)
   return await res.json()
 }
 
-const fmtIDR = (n: number) =>
-  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(n) || 0)
+const fmtIDR = (amount: unknown) =>
+  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(amount) || 0)
 
 function layout(title: string, accent: string, bodyHtml: string, ctaText?: string, ctaHref?: string) {
   const cta = ctaText && ctaHref ? `
@@ -88,7 +72,9 @@ function layout(title: string, accent: string, bodyHtml: string, ctaText?: strin
 
 type TemplateOutput = { subject: string; html: string; scope: 'payout' | 'release' | 'payment' | 'announcement' | 'transactional' }
 
-const TEMPLATES: Record<string, (data: any, recipientName: string) => TemplateOutput> = {
+type TemplateData = Record<string, string | number | boolean | null>
+
+const TEMPLATES: Record<string, (data: TemplateData, recipientName: string) => TemplateOutput> = {
   'payout-requested': (d, _name) => ({
     scope: 'payout',
     subject: `ðŸ”” Payout request baru â€” ${fmtIDR(d.amount)}`,
@@ -176,7 +162,7 @@ const TEMPLATES: Record<string, (data: any, recipientName: string) => TemplateOu
     html: layout('Reset Password', 'linear-gradient(135deg,#2563eb 0%,#1d4ed8 100%)',       `<p>Halo ${name},</p>
       <p>Kami menerima permintaan untuk mengatur ulang password akun Anda.</p>
       <p>Link ini berlaku selama 24 jam. Jika Anda tidak meminta reset password, abaikan email ini.</p>`,
-      'Reset Password', d.resetUrl),
+      'Reset Password', String(d.resetUrl)),
   }),
   'password-reset-confirmation': (d, name) => ({
     scope: 'transactional',
@@ -184,7 +170,7 @@ const TEMPLATES: Record<string, (data: any, recipientName: string) => TemplateOu
     html: layout('Password Berhasil Diubah', 'linear-gradient(135deg,#059669 0%,#047857 100%)',       `<p>Halo ${name},</p>
       <p>Password akun Anda telah berhasil diubah.</p>
       <p>Jika Anda tidak melakukan perubahan ini, segera amankan akun Anda.</p>`,
-      'Masuk ke Soundpub', d.loginUrl || `${APP_URL}/login`),
+      'Masuk ke Soundpub', String(d.loginUrl || `${APP_URL}/login`)),
   }),
   'email-verification': (d, name) => ({
     scope: 'transactional',
@@ -192,12 +178,12 @@ const TEMPLATES: Record<string, (data: any, recipientName: string) => TemplateOu
     html: layout('Verifikasi Email', 'linear-gradient(135deg,#7c3aed 0%,#5b21b6 100%)',       `<p>Halo ${name},</p>
       <p>Verifikasi alamat email Anda untuk mengaktifkan fitur akun Soundpub.</p>
       <p>Link ini berlaku selama 7 hari.</p>`,
-      'Verifikasi Email', d.verifyUrl),
+      'Verifikasi Email', String(d.verifyUrl)),
   }),
   'announcement': (d, name) => ({
     scope: 'announcement',
     subject: `ðŸ“¢ ${d.title}`,
-    html: layout(d.title, 'linear-gradient(135deg,#667eea 0%,#764ba2 100%)', `
+    html: layout(String(d.title), 'linear-gradient(135deg,#667eea 0%,#764ba2 100%)', `
       <p>Halo ${name},</p>
       <div style="white-space:pre-wrap;background:#f9fafb;border-radius:8px;padding:16px;margin:16px 0;">${d.message}</div>`,
       'Buka Dashboard', APP_URL),
@@ -215,41 +201,115 @@ interface SendInput {
   templateName: string
   recipientUserId?: string
   recipientEmail?: string
-  templateData: Record<string, any>
+  templateData: TemplateData
   idempotencyKey?: string
   // For broadcast (announcement): if true, fan out to all opt-in users with the given role filter
   broadcastRoles?: string[] | null
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const ROLES = ['superadmin', 'admin', 'label', 'whitelabel', 'artist', 'copyright']
+const INTERNAL_TEMPLATES = ['password-reset', 'password-reset-confirmation', 'email-verification', 'payment-success']
+const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!)
+
+function validateInput(value: Record<string, unknown>): SendInput {
+  if (typeof value.templateName !== 'string' || !Object.hasOwn(TEMPLATES, value.templateName) ||
+    !value.templateData || typeof value.templateData !== 'object' || Array.isArray(value.templateData)) {
+    throw new HttpError(400, 'Invalid email request')
+  }
+  for (const item of Object.values(value.templateData)) {
+    if (item !== null && typeof item !== 'string' && typeof item !== 'number' && typeof item !== 'boolean') throw new HttpError(400, 'Invalid template data')
+    if ((typeof item === 'string' && item.length > 8000) || (typeof item === 'number' && !Number.isFinite(item))) throw new HttpError(400, 'Invalid template data')
+  }
+  if (value.recipientUserId !== undefined && (typeof value.recipientUserId !== 'string' || !UUID.test(value.recipientUserId))) throw new HttpError(400, 'Invalid recipient')
+  if (value.recipientEmail !== undefined && (typeof value.recipientEmail !== 'string' || !/^[^\s@<>;,]+@[^\s@<>;,]+\.[^\s@<>;,]+$/.test(value.recipientEmail))) throw new HttpError(400, 'Invalid recipient')
+  if (value.broadcastRoles != null && (!Array.isArray(value.broadcastRoles) || value.broadcastRoles.length === 0 || value.broadcastRoles.length > ROLES.length || value.broadcastRoles.some(role => !ROLES.includes(role)))) throw new HttpError(400, 'Invalid roles')
+  if ([value.recipientUserId !== undefined, value.recipientEmail !== undefined, value.broadcastRoles != null].filter(Boolean).length !== 1) throw new HttpError(400, 'Choose one recipient selector')
+  if (value.idempotencyKey !== undefined && (typeof value.idempotencyKey !== 'string' || !/^[\w:.-]{1,200}$/.test(value.idempotencyKey))) throw new HttpError(400, 'Invalid idempotency key')
+  const input = value as unknown as SendInput
+  if (input.broadcastRoles) input.broadcastRoles = [...new Set(input.broadcastRoles)].sort()
+  const requiredStrings: Record<string, string[]> = {
+    'payout-requested': ['bankName', 'accountNumber', 'accountHolderName'],
+    'announcement': ['title', 'message'],
+    'payment-success': ['title'],
+  }
+  if ((requiredStrings[input.templateName] || []).some(field => typeof input.templateData[field] !== 'string' || !String(input.templateData[field]).trim())) throw new HttpError(400, 'Missing template data')
+  if (['payout-requested', 'payment-success'].includes(input.templateName) &&
+    (!['number', 'string'].includes(typeof input.templateData.amount) || !String(input.templateData.amount).trim() || !Number.isFinite(Number(input.templateData.amount)) || Number(input.templateData.amount) <= 0)) throw new HttpError(400, 'Invalid amount')
+  if (input.templateName === 'payment-success' && (!Number.isInteger(input.templateData.trackCount) || Number(input.templateData.trackCount) < 1)) throw new HttpError(400, 'Invalid track count')
+  for (const field of ['resetUrl', 'verifyUrl', 'loginUrl']) {
+    if (input.templateData[field] === undefined) continue
+    try {
+      const target = new URL(String(input.templateData[field]))
+      const paths: Record<string, string> = { resetUrl: '/reset-password', verifyUrl: '/verify-email', loginUrl: '/login' }
+      if (typeof input.templateData[field] !== 'string' || target.protocol !== 'https:' || target.username || target.password ||
+        target.origin !== new URL(Deno.env.get('APP_URL') || APP_URL).origin || target.pathname !== paths[field]) throw new Error('Invalid URL')
+    } catch {
+      throw new HttpError(400, 'Invalid action URL')
+    }
+  }
+  if ((input.templateName === 'password-reset' && !input.templateData.resetUrl) ||
+    (input.templateName === 'email-verification' && !input.templateData.verifyUrl) ||
+    (input.templateName === 'announcement' && (!input.templateData.title || !input.templateData.message))) throw new HttpError(400, 'Missing template data')
+  return input
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
 
-  const supabase = createSoundpubClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-  )
-
   try {
-    const input: SendInput = await req.json()
-    const tpl = TEMPLATES[input.templateName]
-    if (!tpl) {
-      return new Response(JSON.stringify({ error: `Unknown template: ${input.templateName}` }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    const { supabase, actor } = await authenticatePrivilegedRequest(req, true)
+    const input = validateInput(await readJsonObject(req))
+    if (actor.internal) {
+      if (!INTERNAL_TEMPLATES.includes(input.templateName) || !input.recipientUserId) throw new HttpError(403, 'Forbidden')
+    } else if (input.templateName === 'announcement') {
+      if (!['admin', 'superadmin'].includes(actor.role) || !input.broadcastRoles) throw new HttpError(403, 'Forbidden')
+    } else if (input.templateName === 'payout-requested' && ROLES.includes(actor.role)) {
+      if (input.recipientEmail || input.recipientUserId || !input.broadcastRoles || input.broadcastRoles.length !== 2 ||
+        !['superadmin', 'admin'].every(role => input.broadcastRoles!.includes(role))) throw new HttpError(403, 'Forbidden')
+      const { data: payout, error } = await supabase.from('payout_requests')
+        .select('id, amount, bank_name, account_number, account_holder_name')
+        .eq('user_id', actor.id).eq('status', 'pending')
+        .eq('amount', input.templateData.amount).eq('bank_name', input.templateData.bankName)
+        .eq('account_number', input.templateData.accountNumber).eq('account_holder_name', input.templateData.accountHolderName)
+        .gte('created_at', new Date(Date.now() - 15 * 60000).toISOString())
+        .order('created_at', { ascending: false }).limit(1).maybeSingle()
+      if (error) throw new HttpError(503, 'Service unavailable')
+      if (!payout) throw new HttpError(403, 'Forbidden')
+      input.templateData = { userName: actor.name, amount: payout.amount, bankName: payout.bank_name, accountNumber: payout.account_number, accountHolderName: payout.account_holder_name }
+      input.idempotencyKey = `payout-requested-${payout.id}`
+    } else {
+      throw new HttpError(403, 'Forbidden')
     }
+    if (!Deno.env.get('LOVABLE_API_KEY') || !Deno.env.get('GOOGLE_MAIL_API_KEY')) throw new HttpError(503, 'Email provider unavailable')
+    await consumeRateLimit(supabase, actor.id, 'send-app-email', actor.internal ? 60 : 10, 1)
+    const tpl = TEMPLATES[input.templateName]
 
     // Idempotency short-circuit
     if (input.idempotencyKey) {
-      const { data: existing } = await supabase
+      const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([actor.id, input.templateName, input.recipientUserId, input.broadcastRoles, input.idempotencyKey])))
+      const identifier = Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('')
+      input.idempotencyKey = identifier
+      let duplicateQuery = supabase
         .from('email_send_log')
         .select('id')
         .eq('idempotency_key', input.idempotencyKey)
+        .eq('template_name', input.templateName)
         .eq('status', 'sent')
         .limit(1)
+      if (input.recipientUserId) duplicateQuery = duplicateQuery.eq('recipient_user_id', input.recipientUserId)
+      const { data: existing, error } = await duplicateQuery
+      if (error) throw new HttpError(503, 'Service unavailable')
       if (existing && existing.length > 0) {
         return new Response(JSON.stringify({ skipped: true, reason: 'idempotent_duplicate' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
+      }
+      try {
+        await consumeRateLimit(supabase, identifier, 'email-idempotency', 1, 24 * 60)
+      } catch (error) {
+        if (error instanceof HttpError && error.status === 429) throw new HttpError(409, 'Duplicate request')
+        throw error
       }
     }
 
@@ -262,82 +322,89 @@ Deno.serve(async (req) => {
 
     if (input.broadcastRoles && input.broadcastRoles.length > 0) {
       // Fan out
-      const { data: roles } = await supabase
+      const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id')
         .in('role', input.broadcastRoles)
-      const userIds = [...new Set((roles || []).map((r: any) => r.user_id))]
+      if (rolesError) throw new HttpError(503, 'Service unavailable')
+      const userIds = [...new Set((roles || []).map(role => role.user_id))]
       if (userIds.length === 0) {
         return new Response(JSON.stringify({ sent: 0, suppressed: 0 }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
-      const { data: profs } = await supabase
+      const { data: profs, error: profilesError } = await supabase
         .from('profiles')
         .select(profileFields)
         .in('id', userIds)
-      recipients = (profs || [])
-        .filter((p: any) => !!p.email)
-        .map((p: any) => ({ user_id: p.id, email: p.email, full_name: p.full_name || 'User', optin: !optinCol || p[optinCol] !== false }))
+      if (profilesError) throw new HttpError(503, 'Service unavailable')
+      recipients = ((profs || []) as unknown as Array<Record<string, unknown>>)
+        .filter(profile => !!profile.email)
+        .map(profile => ({ user_id: String(profile.id), email: String(profile.email), full_name: String(profile.full_name || 'User'), optin: !optinCol || profile[optinCol] !== false }))
     } else if (input.recipientUserId) {
-      const { data: p } = await supabase
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select(`id, email, full_name, ${optinCol}`)
+        .select(profileFields)
         .eq('id', input.recipientUserId)
         .maybeSingle()
-      if (p && (p as any).email) {
-        recipients = [{ user_id: (p as any).id, email: (p as any).email, full_name: (p as any).full_name || 'User', optin: !optinCol || (p as any)[optinCol] !== false }]
+      if (profileError) throw new HttpError(503, 'Service unavailable')
+      const profile = profileData as unknown as Record<string, unknown> | null
+      if (profile?.email) {
+        recipients = [{ user_id: String(profile.id), email: String(profile.email), full_name: String(profile.full_name || 'User'), optin: !optinCol || profile[optinCol] !== false }]
       }
     } else if (input.recipientEmail) {
       // Direct send (no opt-in check â€” only used for admin notifications by user_id lookup)
-      const { data: p } = await supabase
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select(['id', 'full_name', optinCol].filter(Boolean).join(', '))
         .eq('email', input.recipientEmail)
         .maybeSingle()
+      if (profileError) throw new HttpError(503, 'Service unavailable')
+      const profile = profileData as unknown as Record<string, unknown> | null
       recipients = [{
-        user_id: p ? (p as any).id : null,
+        user_id: profile ? String(profile.id) : null,
         email: input.recipientEmail,
-        full_name: p ? ((p as any).full_name || 'User') : 'User',
-        optin: !optinCol || !p || (p as any)[optinCol] !== false,
+        full_name: String(profile?.full_name || 'User'),
+        optin: !optinCol || !profile || profile[optinCol] !== false,
       }]
     }
 
     let sent = 0, suppressed = 0, failed = 0
-    for (const r of recipients) {
-      if (!r.optin) {
+    const templateData = Object.fromEntries(Object.entries(input.templateData).map(([key, value]) => [key, typeof value === 'string' ? escapeHtml(value) : value]))
+    for (const recipient of recipients) {
+      if (!/^[^\s@<>;,]+@[^\s@<>;,]+\.[^\s@<>;,]+$/.test(recipient.email)) throw new HttpError(400, 'Invalid recipient')
+      if (!recipient.optin) {
         suppressed++
         await supabase.from('email_send_log').insert({
           template_name: input.templateName,
-          recipient_email: r.email,
-          recipient_user_id: r.user_id,
+          recipient_email: recipient.email,
+          recipient_user_id: recipient.user_id,
           status: 'suppressed',
           metadata: { reason: 'opt_out' },
           idempotency_key: input.idempotencyKey || null,
         })
         continue
       }
-      const rendered = tpl(input.templateData || {}, r.full_name)
+      const rendered = tpl(templateData, escapeHtml(recipient.full_name))
       try {
-        await sendGmail({ to: r.email, subject: rendered.subject, html: rendered.html })
+        await sendGmail({ to: recipient.email, subject: rendered.subject, html: rendered.html })
         sent++
         await supabase.from('email_send_log').insert({
           template_name: input.templateName,
-          recipient_email: r.email,
-          recipient_user_id: r.user_id,
+          recipient_email: recipient.email,
+          recipient_user_id: recipient.user_id,
           status: 'sent',
           idempotency_key: input.idempotencyKey || null,
-          metadata: input.templateData || {},
+          metadata: scope === 'transactional' ? {} : input.templateData,
         })
         // Throttle: 300ms between sends to be polite with Gmail quota
         if (recipients.length > 1) await new Promise((res) => setTimeout(res, 300))
-      } catch (err: any) {
+      } catch {
         failed++
-        console.error('Send failed:', err?.message || err)
         await supabase.from('email_send_log').insert({
           template_name: input.templateName,
-          recipient_email: r.email,
-          recipient_user_id: r.user_id,
+          recipient_email: recipient.email,
+          recipient_user_id: recipient.user_id,
           status: 'failed',
-          error_message: String(err?.message || err).slice(0, 500),
+          error_message: 'Email delivery failed',
           idempotency_key: input.idempotencyKey || null,
         })
       }
@@ -346,10 +413,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ sent, suppressed, failed }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
-  } catch (err: any) {
-    console.error('send-app-email error:', err)
-    return new Response(JSON.stringify({ error: err?.message || 'Internal error' }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+  } catch (error) {
+    return errorResponse(error)
   }
 })

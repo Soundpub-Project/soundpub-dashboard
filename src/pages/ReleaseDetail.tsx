@@ -1,3 +1,8 @@
+import { usesBackendFinance } from '@/components/finance/mode';
+import { useMediaUrl } from '@/hooks/useMediaUrl';
+import { resolveMediaDownload } from '@/services/media';
+import { usesBackendReleases, getBackendRelease } from '@/services/releases';
+import { listBackendTracks } from '@/services/tracks';
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -91,7 +96,7 @@ interface Release {
   upc: string;
   title: string;
   artist_name: string;
-  artist_user_id: string | null;
+  artist_user_id?: string | null;
   release_date: string | null;
   cover_url: string | null;
   genre: string | null;
@@ -112,15 +117,15 @@ interface Track {
   isrc: string;
   title: string;
   artist_name: string;
-  artist_user_id: string | null;
+  artist_user_id?: string | null;
   composer: string | null;
   lyricist: string | null;
   genre: string | null;
   lyrics: string | null;
   created_at: string;
-  audio_url: string | null;
-  clip_url: string | null;
-  contributors: unknown;
+  audio_url?: string | null;
+  clip_url?: string | null;
+  contributors?: unknown;
   explicit_lyrics: boolean | null;
   duration: number | null;
 }
@@ -134,8 +139,9 @@ interface Contributor {
 export default function ReleaseDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAdmin, isLabel, isWhitelabel, isArtist, isSuperadmin, user } = useAuth();
+  const { isAdmin, isLabelCustom, isLabel, isWhitelabel, isArtist, isSuperadmin, user } = useAuth();
   const [release, setRelease] = useState<Release | null>(null);
+  const coverUrl = useMediaUrl(release?.cover_url);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [labelInfo, setLabelInfo] = useState<LabelInfo | null>(null);
   const [releaseCreatorInfo, setReleaseCreatorInfo] = useState<ReleaseCreatorInfo | null>(null);
@@ -154,7 +160,7 @@ export default function ReleaseDetail() {
   const [downloadingTrackId, setDownloadingTrackId] = useState<string | null>(null);
   const [downloadingReleasePackage, setDownloadingReleasePackage] = useState(false);
 
-  const canManageReleases = isAdmin || isLabel || isWhitelabel;
+  const canManageReleases = isAdmin || isLabel || isWhitelabel || (isLabelCustom && usesBackendReleases());
   
   // Determine edit capability based on status
   // - Admin: can always fully edit
@@ -168,7 +174,7 @@ export default function ReleaseDetail() {
     (!release.artist_user_id && release.artist_name === user?.user_metadata?.full_name)
   );
   const isLocked = release?.status === 'pending_paid' || release?.status === 'active';
-  const canFullyEdit = isAdmin || ((isLabel || isWhitelabel) && isEditableResubmissionStatus) || (isOwnRelease && isEditableResubmissionStatus);
+  const canFullyEdit = isAdmin || ((isLabel || isWhitelabel || (isLabelCustom && usesBackendReleases())) && isEditableResubmissionStatus) || (isOwnRelease && isEditableResubmissionStatus);
   const canEditLyricsOnly = (isLabel || isWhitelabel) && release?.status === 'active';
   
   // Get tracks with audio
@@ -213,6 +219,14 @@ export default function ReleaseDetail() {
     try {
       setLoading(true);
       
+      if (usesBackendReleases()) {
+        const [release, tracks] = await Promise.all([getBackendRelease(id!), listBackendTracks(id!)]);
+        setRelease(release);
+        setTracks(tracks);
+        setLabelInfo(release.label_id && release.label_name ? { id: release.label_id, full_name: release.label_name, email: '' } : null);
+        setReleaseCreatorInfo(null);
+        return;
+      }
       // Fetch release
       const { data: releaseData, error: releaseError } = await supabase
         .from('releases')
@@ -255,7 +269,7 @@ export default function ReleaseDetail() {
       } else {
         // For artists who can't see label profiles due to RLS,
         // try to get label name from royalties table
-        const { data: royaltyData } = await supabase
+        const { data: royaltyData } = usesBackendFinance() ? { data: null } : await supabase
           .from('royalties')
           .select('label_name')
           .limit(1);
@@ -306,14 +320,16 @@ export default function ReleaseDetail() {
     }
   };
 
-  const playTrack = (index: number) => {
+  const playTrack = async (index: number) => {
     const track = tracksWithAudio[index];
     if (!track?.audio_url || !audioRef.current) return;
 
-    audioRef.current.src = track.audio_url;
-    audioRef.current.play();
-    setCurrentTrackIndex(index);
-    setIsPlaying(true);
+    try {
+      audioRef.current.src = await resolveMediaDownload(track.audio_url);
+      await audioRef.current.play();
+      setCurrentTrackIndex(index);
+      setIsPlaying(true);
+    } catch { toast.error('Gagal memuat audio'); }
   };
 
   const togglePlayPause = () => {
@@ -347,7 +363,7 @@ export default function ReleaseDetail() {
   const downloadAudio = async (track: Track, url: string, suffix = '') => {
     try {
       setDownloadingTrackId(track.id);
-      const response = await fetch(url);
+      const response = await fetch(await resolveMediaDownload(url));
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const blob = await response.blob();
@@ -413,7 +429,7 @@ export default function ReleaseDetail() {
 
       if (release.cover_url) {
         try {
-          const coverResponse = await fetch(release.cover_url);
+          const coverResponse = await fetch(await resolveMediaDownload(release.cover_url));
           if (!coverResponse.ok) throw new Error(`HTTP ${coverResponse.status}`);
           const coverBlob = await coverResponse.blob();
           const coverExtension = getFileExtension(release.cover_url, coverBlob.type, 'jpg');
@@ -428,7 +444,7 @@ export default function ReleaseDetail() {
         if (!track.audio_url) return;
 
         try {
-          const audioResponse = await fetch(track.audio_url);
+          const audioResponse = await fetch(await resolveMediaDownload(track.audio_url));
           if (!audioResponse.ok) throw new Error(`HTTP ${audioResponse.status}`);
           const audioBlob = await audioResponse.blob();
           const audioExtension = getFileExtension(track.audio_url, audioBlob.type, 'mp3');
@@ -627,7 +643,7 @@ export default function ReleaseDetail() {
               <div className="aspect-square rounded-lg bg-muted flex items-center justify-center overflow-hidden mb-6">
                 {release.cover_url ? (
                   <img
-                    src={release.cover_url}
+                    src={coverUrl}
                     alt={release.title}
                     className="w-full h-full object-cover"
                   />

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { publicCatalogApi } from '@/api/public-catalog';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,7 +52,10 @@ export default function LandingPage() {
   const { user } = useAuth();
   const [releases, setReleases] = useState<CatalogRelease[]>([]);
   const [loading, setLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState(false);
+  const [selectedRelease, setSelectedRelease] = useState<CatalogRelease | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [submittedSearch, setSubmittedSearch] = useState('');
   const [pagination, setPagination] = useState<PaginationInfo>({
     total: 0,
     limit: 12,
@@ -61,41 +64,19 @@ export default function LandingPage() {
   });
 
   useEffect(() => {
-    fetchCatalog();
-  }, [pagination.offset]);
+    fetchCatalog(submittedSearch);
+  }, [pagination.offset, submittedSearch]);
 
   const fetchCatalog = async (search?: string) => {
     try {
       setLoading(true);
-      
-      const params = new URLSearchParams({
-        limit: pagination.limit.toString(),
-        offset: pagination.offset.toString(),
-      });
-      
-      if (search) {
-        params.append('search', search);
-      }
-
-      const { data, error } = await supabase.functions.invoke('get-catalog-tracks', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (error) throw error;
-      
-      if (data?.success) {
-        setReleases(data.data || []);
-        setPagination(prev => ({
-          ...prev,
-          total: data.pagination?.total || 0,
-          hasMore: data.pagination?.hasMore || false
-        }));
-      }
+      setCatalogError(false);
+      const page = await publicCatalogApi.list({ limit: pagination.limit, offset: pagination.offset, search });
+      setReleases(page.data);
+      setPagination(prev => ({ ...prev, ...page.pagination }));
     } catch (error) {
       console.error('Error fetching catalog:', error);
+      setCatalogError(true);
     } finally {
       setLoading(false);
     }
@@ -104,7 +85,8 @@ export default function LandingPage() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setPagination(prev => ({ ...prev, offset: 0 }));
-    fetchCatalog(searchQuery);
+    if (searchQuery === submittedSearch) void fetchCatalog(searchQuery);
+    else setSubmittedSearch(searchQuery);
   };
 
   const handlePrevPage = () => {
@@ -195,6 +177,7 @@ export default function LandingPage() {
             </p>
           </div>
 
+          {catalogError && <div role="alert" className="mb-6 text-destructive">Katalog tidak dapat dimuat. <Button variant="outline" onClick={() => void fetchCatalog(submittedSearch)}>Coba lagi</Button></div>}
           {/* Releases Grid */}
           {loading ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
@@ -230,11 +213,11 @@ export default function LandingPage() {
                       </div>
                     )}
                     {/* Play overlay */}
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    {!usesBackendReleases() && <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <Button size="icon" variant="secondary" className="rounded-full">
                         <Play className="h-6 w-6" />
                       </Button>
-                    </div>
+                    </div>}
                   </div>
                   <CardContent className="p-3">
                     <h3 className="font-medium truncate" title={release.title}>
@@ -255,11 +238,18 @@ export default function LandingPage() {
                         </span>
                       )}
                     </div>
+                    <Button variant="outline" className="mt-3 w-full" onClick={() => void publicCatalogApi.detail(release.id).then(setSelectedRelease).catch(() => setCatalogError(true))}>Lihat detail</Button>
                   </CardContent>
                 </Card>
               ))}
             </div>
           )}
+
+          {selectedRelease && <section aria-label="Detail rilisan publik" className="mt-8 rounded-lg border bg-card p-5">
+            <div className="flex items-start justify-between gap-4"><div><h2 className="text-2xl font-semibold">{selectedRelease.title}</h2><p className="text-muted-foreground">{selectedRelease.artist_name}</p></div><Button variant="outline" onClick={() => setSelectedRelease(null)}>Tutup detail</Button></div>
+            <p className="mt-3">{selectedRelease.release_type} · {selectedRelease.genre || 'Genre tidak tersedia'} · {selectedRelease.release_date || 'Tanggal tidak tersedia'}</p>
+            <ol className="mt-4 space-y-1">{selectedRelease.tracks.map((item, index) => <li key={item.id}>{index + 1}. {item.title} — {item.artist_name}</li>)}</ol>
+          </section>}
 
           {/* Pagination */}
           {!loading && totalPages > 1 && (

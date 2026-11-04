@@ -1,4 +1,8 @@
-﻿import { ReactNode, useEffect, useState } from "react";
+import { usesBackendFinance } from '@/components/finance/mode';
+import { balanceApi } from '@/api/balance';
+import { useMediaUrl } from '@/hooks/useMediaUrl';
+import { usesBackendDomain } from '@/api/routing';
+import { ReactNode, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,6 +22,7 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { user, loading, profile, isAdmin, isLabel, isWhitelabel, role } =
     useAuth();
+  const avatarUrl = useMediaUrl(profile?.avatar_url);
   const navigate = useNavigate();
   const [announcementOpen, setAnnouncementOpen] = useState(false);
   const [impersonation, setImpersonation] = useState<{
@@ -28,14 +33,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     const stored = sessionStorage.getItem("soundpub_impersonation_active");
     return stored ? JSON.parse(stored) : null;
   });
-  const [currentBalance, setCurrentBalance] = useState<number>(
-    profile?.balance || 0,
+  const [currentBalance, setCurrentBalance] = useState<string>(
+    usesBackendFinance() ? '—' : Number(profile?.balance || 0).toLocaleString('id-ID'),
   );
 
   const refreshCurrentBalance = async () => {
     if (!profile?.id) return;
+    if (usesBackendFinance()) {
+      const balance = await balanceApi.get();
+      setCurrentBalance(balance.available ?? '—');
+      return;
+    }
     if (!isLabel && !isWhitelabel) {
-      setCurrentBalance(Number(profile.balance || 0));
+      setCurrentBalance(Number(profile.balance || 0).toLocaleString('id-ID'));
       return;
     }
 
@@ -43,9 +53,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       .rpc("get_dashboard_role_stats" as never)
       .single();
     if (!error && data) {
-      setCurrentBalance(
-        Number((data as { available_balance?: number }).available_balance || 0),
-      );
+      setCurrentBalance(Number((data as { available_balance?: number }).available_balance || 0).toLocaleString('id-ID'));
     }
   };
 
@@ -54,7 +62,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (!profile?.id) return;
 
     // Set initial balance from label aggregate or own profile balance
-    void refreshCurrentBalance();
+    void refreshCurrentBalance().catch(() => setCurrentBalance('—'));
+    if (usesBackendDomain('users')) return;
+    if (usesBackendFinance()) return;
 
     // Subscribe to profile changes
     const channel = supabase
@@ -214,13 +224,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {getRoleLabel(role)} • Balance: Rp{" "}
-                          {currentBalance.toLocaleString("id-ID")}
+                          {currentBalance}
                         </p>
                       </div>
                       <Avatar className="h-9 w-9">
                         {profile.avatar_url ? (
                           <AvatarImage
-                            src={profile.avatar_url}
+                            src={avatarUrl}
                             alt={profile.full_name}
                           />
                         ) : null}
@@ -237,7 +247,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     <Avatar className="h-9 w-9 sm:hidden">
                       {profile.avatar_url ? (
                         <AvatarImage
-                          src={profile.avatar_url}
+                          src={avatarUrl}
                           alt={profile.full_name}
                         />
                       ) : null}

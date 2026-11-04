@@ -1,0 +1,1 @@
+GRANT DELETE ON soundpub.external_identities, soundpub.user_roles, soundpub.profiles, soundpub.backend_users TO soundpub_app;

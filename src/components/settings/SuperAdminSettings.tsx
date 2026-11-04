@@ -1,3 +1,5 @@
+import { usesBackendDomain } from '@/api/routing';
+import { BackendAdminSettings } from './BackendSettings';
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,6 +27,11 @@ interface AppSettings {
 }
 
 export function SuperAdminSettings() {
+  if (usesBackendDomain('settings')) return <BackendAdminSettings />;
+  return <LegacySuperAdminSettings />;
+}
+
+function LegacySuperAdminSettings() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [uploadingLogoLight, setUploadingLogoLight] = useState(false);

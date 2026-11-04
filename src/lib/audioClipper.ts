@@ -1,3 +1,5 @@
+import { usesBackendDomain } from '@/api/routing';
+import { resolveMediaDownload } from '@/services/media';
 // Web Audio API helpers for client-side audio clipping.
 // No external deps. Encodes output as 16-bit PCM WAV.
 
@@ -9,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
  * point at the private `track-audio` bucket (e.g. blob:/data: URLs).
  */
 export async function resolveTrackAudioUrl(url: string): Promise<string> {
+  if (usesBackendDomain('storage')) return resolveMediaDownload(url);
   if (!url) return url;
   const match = url.match(
     /\/storage\/v1\/object\/(?:public|sign)\/track-audio\/([^?#]+)/,

@@ -1,3 +1,5 @@
+import { usesBackendDomain } from '@/api/routing';
+import { notificationsApi } from '@/api/notifications';
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -37,31 +39,35 @@ export function AnnouncementDialog({ open, onOpenChange }: AnnouncementDialogPro
 
     setLoading(true);
     try {
-      // Insert global notification
-      const { error } = await supabase.from('notifications').insert({
-        user_id: user?.id,
-        type: 'announcement',
-        title: title.trim(),
-        message: message.trim(),
-        is_global: true,
-        created_by: user?.id,
-        metadata: { send_email: sendEmail },
-      });
-
-      if (error) throw error;
-
-      // Optionally broadcast email to all opt-in users
-      if (sendEmail) {
-        await supabase.functions.invoke('send-app-email', {
-          body: {
-            templateName: 'announcement',
-            broadcastRoles: ['superadmin', 'admin', 'label', 'whitelabel', 'artist', 'copyright'],
-            templateData: { title: title.trim(), message: message.trim() },
-            idempotencyKey: `announcement-${Date.now()}`,
-          },
+      if (usesBackendDomain('notifications')) {
+        await notificationsApi.announce({ title: title.trim(), body: message.trim() });
+      } else {
+        // Insert global notification
+        const { error } = await supabase.from('notifications').insert({
+          user_id: user?.id,
+          type: 'announcement',
+          title: title.trim(),
+          message: message.trim(),
+          is_global: true,
+          created_by: user?.id,
+          metadata: { send_email: sendEmail },
         });
-      }
 
+        if (error) throw error;
+
+        // Optionally broadcast email to all opt-in users
+        if (sendEmail) {
+          await supabase.functions.invoke('send-app-email', {
+            body: {
+              templateName: 'announcement',
+              broadcastRoles: ['superadmin', 'admin', 'label', 'whitelabel', 'artist', 'copyright'],
+              templateData: { title: title.trim(), message: message.trim() },
+              idempotencyKey: `announcement-${Date.now()}`,
+            },
+          });
+        }
+
+      }
       toast.success('Pengumuman berhasil dikirim');
       setTitle('');
       setMessage('');
@@ -88,6 +94,7 @@ export function AnnouncementDialog({ open, onOpenChange }: AnnouncementDialogPro
           <div className="space-y-2">
             <Label>Judul</Label>
             <Input
+              maxLength={200}
               placeholder="Judul pengumuman..."
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -96,6 +103,7 @@ export function AnnouncementDialog({ open, onOpenChange }: AnnouncementDialogPro
           <div className="space-y-2">
             <Label>Pesan</Label>
             <Textarea
+              maxLength={10000}
               placeholder="Isi pengumuman..."
               rows={4}
               value={message}
@@ -103,7 +111,7 @@ export function AnnouncementDialog({ open, onOpenChange }: AnnouncementDialogPro
             />
           </div>
           <div className="flex items-center gap-3">
-            <Switch checked={sendEmail} onCheckedChange={setSendEmail} />
+            <Switch disabled={usesBackendDomain('notifications')} checked={sendEmail} onCheckedChange={setSendEmail} />
             <Label className="cursor-pointer">Kirim juga via email ke semua user</Label>
           </div>
         </div>

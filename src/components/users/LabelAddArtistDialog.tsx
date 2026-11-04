@@ -1,5 +1,7 @@
 import { useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { usesBackendArtistLabels, artistAuthUnavailable, artistMediaUnavailable } from '@/services/labels';
+import { createArtist } from '@/services/artists';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -35,6 +37,7 @@ interface LabelAddArtistDialogProps {
 }
 
 export function LabelAddArtistDialog({ open, onOpenChange, onSuccess }: LabelAddArtistDialogProps) {
+  const backendArtists = usesBackendArtistLabels();
   const { user: currentUser } = useAuth();
   const [fullName, setFullName] = useState('');
   const [genre, setGenre] = useState('');
@@ -44,12 +47,13 @@ export function LabelAddArtistDialog({ open, onOpenChange, onSuccess }: LabelAdd
   const [hasAppleMusic, setHasAppleMusic] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
-  
+
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (backendArtists) return;
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
@@ -90,6 +94,17 @@ export function LabelAddArtistDialog({ open, onOpenChange, onSuccess }: LabelAdd
 
     setLoading(true);
     try {
+      if (backendArtists) {
+        await createArtist({
+          artist_name: fullName.trim(), full_name: fullName.trim(), artist_type: artistType,
+          genre: selectedGenre, social_links: { spotify: hasSpotify, apple_music: hasAppleMusic },
+        });
+        toast.success('Artist berhasil ditambahkan tanpa akun login');
+        resetForm();
+        onSuccess();
+        onOpenChange(false);
+        return;
+      }
       // Create user using edge function (this will generate dummy email & password)
       const response = await supabase.functions.invoke('create-user', {
         body: {
@@ -118,7 +133,7 @@ export function LabelAddArtistDialog({ open, onOpenChange, onSuccess }: LabelAdd
       if (selectedImage) {
         const fileExt = selectedImage.name.split('.').pop();
         const filePath = `${newUserId}/${Math.random()}.${fileExt}`;
-        
+
         const { error: uploadError } = await supabase.storage
           .from('avatars')
           .upload(filePath, selectedImage);
@@ -128,13 +143,13 @@ export function LabelAddArtistDialog({ open, onOpenChange, onSuccess }: LabelAdd
             .from('avatars')
             .getPublicUrl(filePath);
           profileImageUrl = data.publicUrl;
-          
+
           // Update profile with avatar_url
           await supabase.from('profiles')
             .update({ avatar_url: profileImageUrl })
             .eq('id', newUserId);
         }
-      }
+      }
       // Artist profile metadata is created in create-user Edge Function to avoid client RLS issues.
       // artist_profile_completed is set in create-user Edge Function.
 
@@ -181,7 +196,7 @@ export function LabelAddArtistDialog({ open, onOpenChange, onSuccess }: LabelAdd
             Tambah Artis Baru
           </DialogTitle>
           <DialogDescription>
-            Isi detail artist yang akan Anda kelola.
+            {backendArtists ? `Data artis dibuat tanpa akun login. ${artistAuthUnavailable} ${artistMediaUnavailable}` : 'Isi detail artist yang akan Anda kelola.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -240,23 +255,23 @@ export function LabelAddArtistDialog({ open, onOpenChange, onSuccess }: LabelAdd
             <Label className="text-base">Profil Streaming (Opsional)</Label>
             <div className="space-y-3">
               <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="spotify" 
-                  checked={hasSpotify} 
-                  onCheckedChange={(checked) => setHasSpotify(!!checked)} 
+                <Checkbox
+                  id="spotify"
+                  checked={hasSpotify}
+                  onCheckedChange={(checked) => setHasSpotify(!!checked)}
                 />
                 <Label htmlFor="spotify" className="font-normal">Terdaftar di Spotify</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="apple" 
-                  checked={hasAppleMusic} 
-                  onCheckedChange={(checked) => setHasAppleMusic(!!checked)} 
+                <Checkbox
+                  id="apple"
+                  checked={hasAppleMusic}
+                  onCheckedChange={(checked) => setHasAppleMusic(!!checked)}
                 />
                 <Label htmlFor="apple" className="font-normal">Terdaftar di Apple Music</Label>
               </div>
             </div>
-            
+
             <div className="mt-4 bg-amber-100/50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200 p-3 rounded-md flex items-start gap-3 text-sm">
               <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
               <p>Jika artist Anda belum tersedia di platform manapun, secara otomatis Anda mengizinkan platform untuk mendaftarkan dan membuat profil artist baru di platform digital.</p>
@@ -275,9 +290,10 @@ export function LabelAddArtistDialog({ open, onOpenChange, onSuccess }: LabelAdd
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={backendArtists}
                     onClick={() => fileInputRef.current?.click()}
                     className="w-full justify-start text-left font-normal"
                   >
@@ -285,6 +301,7 @@ export function LabelAddArtistDialog({ open, onOpenChange, onSuccess }: LabelAdd
                     {selectedImage ? selectedImage.name : 'Choose file'}
                   </Button>
                   <input
+                    disabled={backendArtists}
                     ref={fileInputRef}
                     type="file"
                     accept="image/jpeg,image/png,image/jpg"
@@ -300,10 +317,10 @@ export function LabelAddArtistDialog({ open, onOpenChange, onSuccess }: LabelAdd
           </div>
 
           <div className="flex items-start space-x-2 pt-2">
-            <Checkbox 
-              id="terms" 
-              checked={agreed} 
-              onCheckedChange={(checked) => setAgreed(!!checked)} 
+            <Checkbox
+              id="terms"
+              checked={agreed}
+              onCheckedChange={(checked) => setAgreed(!!checked)}
             />
             <Label htmlFor="terms" className="font-normal leading-snug">
               Saya menyetujui bahwa data yang saya masukkan adalah benar dan saya memiliki hak untuk mendaftarkan artist ini.
@@ -315,8 +332,8 @@ export function LabelAddArtistDialog({ open, onOpenChange, onSuccess }: LabelAdd
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Batal
           </Button>
-          <Button 
-            onClick={handleSave} 
+          <Button
+            onClick={handleSave}
             disabled={loading || !fullName || !genre || !artistType || !agreed}
             className="gradient-primary w-full sm:w-auto"
           >
@@ -328,4 +345,3 @@ export function LabelAddArtistDialog({ open, onOpenChange, onSuccess }: LabelAdd
     </Dialog>
   );
 }
-

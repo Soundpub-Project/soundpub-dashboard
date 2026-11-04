@@ -1,3 +1,5 @@
+import { usesBackendFinance } from '@/components/finance/mode';
+import { FinanceUnavailable } from '@/components/finance/FinanceUnavailable';
 ﻿import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -50,7 +52,7 @@ interface ValidationResult {
   period: string;
 }
 
-export default function CopyrightRoyaltyUpload() {
+function LegacyCopyrightRoyaltyUpload() {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
   const [file, setFile] = useState<File | null>(null);
@@ -461,4 +463,8 @@ export default function CopyrightRoyaltyUpload() {
       </Dialog>
     </DashboardLayout>
   );
+}
+export default function CopyrightRoyaltyUpload() {
+  if (usesBackendFinance()) return <FinanceUnavailable title="Royalti komposer" />;
+  return <LegacyCopyrightRoyaltyUpload />;
 }

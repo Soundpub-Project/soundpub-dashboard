@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
-const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'Soundpub'
+const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'soundpub'
 
-const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
+const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: NonNullable<Parameters<typeof createClient>[2]> = {}) => {
   const existingDb = options.db || {}
   return createClient(supabaseUrl, supabaseKey, {
     ...options,
@@ -29,13 +29,25 @@ const statusMap: Record<string, 'paid' | 'expired' | 'failed'> = {
   FAILED: 'failed',
 }
 
+const decimal = (value: unknown) => {
+  if (typeof value !== 'string' && typeof value !== 'number') return null
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(String(value))
+  return match ? `${match[1].replace(/^0+(?=\d)/, '')}.${(match[2] || '').replace(/0+$/, '')}` : null
+}
 const amountsMatch = (expected: unknown, received: unknown) =>
-  received === undefined || received === null || Number(expected) === Number(received)
+  decimal(expected) !== null && decimal(expected) === decimal(received)
+
+const notificationId = async (paymentId: string, recipient: string, status: string) => {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`xendit:${paymentId}:${recipient}:${status}`))
+  const hex = Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
+  if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405)
 
   try {
     const webhookToken = Deno.env.get('XENDIT_WEBHOOK_TOKEN')
@@ -51,12 +63,12 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Invalid callback token' }, 403)
     }
 
-    const body = await req.json()
-    console.log('Xendit webhook received:', JSON.stringify(body))
+    const body = await req.json().catch(() => null)
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return jsonResponse({ error: 'Invalid payload' }, 400)
 
     const { id: invoiceId, status, amount, currency } = body
 
-    if (!invoiceId || !status) {
+    if (typeof invoiceId !== 'string' || !invoiceId || typeof status !== 'string' || !status || decimal(amount) === null || typeof currency !== 'string' || !/^[A-Z]{3}$/.test(currency)) {
       return jsonResponse({ error: 'Missing required fields' }, 400)
     }
 
@@ -79,12 +91,15 @@ Deno.serve(async (req) => {
       const mappedStatus = statusMap[String(status).toUpperCase()]
       if (!mappedStatus) return jsonResponse({ success: true, ignored: true, reason: 'unsupported_status' })
       if (!amountsMatch(copyrightPayment.amount, amount) || (currency && String(currency).toUpperCase() !== copyrightPayment.currency.toUpperCase())) return jsonResponse({ error: 'Webhook payment data does not match invoice' }, 409)
-      if (copyrightPayment.payment_status === 'paid') return jsonResponse({ success: true, duplicate: true })
+      if (copyrightPayment.payment_status === 'paid' && mappedStatus !== 'paid') return jsonResponse({ success: true, ignored: true })
+      if (!['pending', 'paid'].includes(copyrightPayment.payment_status)) return jsonResponse({ success: true, ignored: true, reason: 'terminal_payment_status' })
       const update: Record<string, unknown> = { payment_status: mappedStatus, updated_at: new Date().toISOString() }
       if (mappedStatus === 'paid') update.paid_at = new Date().toISOString()
-      const { data: updated, error: updateError } = await supabase.from('copyright_registration_payments').update(update).eq('id', copyrightPayment.id).eq('payment_status', copyrightPayment.payment_status).select('id').maybeSingle()
+      const { data: updated, error: updateError } = copyrightPayment.payment_status === 'paid'
+        ? { data: copyrightPayment, error: null }
+        : await supabase.from('copyright_registration_payments').update(update).eq('id', copyrightPayment.id).eq('payment_status', 'pending').select('id').maybeSingle()
       if (updateError) return jsonResponse({ error: 'Failed to update copyright payment' }, 500)
-      if (!updated) return jsonResponse({ success: true, duplicate: true })
+      if (!updated) return jsonResponse({ error: 'Payment changed; retry callback' }, 503)
       if (mappedStatus === 'paid') {
         const { error: registrationUpdateError } = await supabase.from('copyright_registrations').update({ status: 'paid_pending_review' }).eq('id', copyrightPayment.registration_id).eq('status', 'awaiting_payment')
         if (registrationUpdateError) return jsonResponse({ error: 'Failed to update copyright registration' }, 500)
@@ -99,7 +114,6 @@ Deno.serve(async (req) => {
       .single()
 
     if (paymentError || !payment) {
-      console.error('Payment not found for invoice:', invoiceId)
       return jsonResponse({ error: 'Payment record not found' }, 404)
     }
 
@@ -114,24 +128,22 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Webhook payment data does not match invoice' }, 409)
     }
 
-    if (payment.status === 'paid') {
-      return jsonResponse({ success: true, duplicate: true })
-    }
-
-    if ((mappedStatus === 'expired' || mappedStatus === 'failed') && payment.status !== 'pending') {
+    if (payment.status !== 'pending' && payment.status !== mappedStatus) {
       return jsonResponse({ success: true, ignored: true, reason: 'terminal_payment_status' })
     }
 
-    const updateData: Record<string, any> = { status: mappedStatus }
+    const updateData: Record<string, unknown> = { status: mappedStatus }
     if (mappedStatus === 'paid') {
       updateData.paid_at = new Date().toISOString()
     }
 
-    const { data: updatedPayment, error: paymentUpdateError } = await supabase
+    const { data: updatedPayment, error: paymentUpdateError } = payment.status === mappedStatus
+      ? { data: payment, error: null }
+      : await supabase
       .from('release_payments')
       .update(updateData)
       .eq('id', payment.id)
-      .eq('status', payment.status)
+      .eq('status', 'pending')
       .select('id')
       .maybeSingle()
 
@@ -141,7 +153,7 @@ Deno.serve(async (req) => {
     }
 
     if (!updatedPayment) {
-      return jsonResponse({ success: true, duplicate: true })
+      return jsonResponse({ error: 'Payment changed; retry callback' }, 503)
     }
 
     if (mappedStatus === 'paid') {
@@ -149,44 +161,50 @@ Deno.serve(async (req) => {
         .from('releases')
         .update({ status: 'pending_paid' })
         .eq('id', payment.release_id)
-        .neq('status', 'active')
+        .eq('status', 'awaiting_payment')
 
       if (releaseUpdateError) {
         console.error('Release update error:', releaseUpdateError)
         return jsonResponse({ error: 'Failed to update release status', details: releaseUpdateError.message }, 500)
       }
 
-      const releaseInfo = payment.releases as any
+      const releaseInfo = payment.releases
 
-      // Notification for the user (NOT global)
-      await supabase.from('notifications').insert({
+      const { error: notificationError } = await supabase.from('notifications').upsert({
+        id: await notificationId(payment.id, payment.user_id, mappedStatus),
         user_id: payment.user_id,
         type: 'success',
         title: 'Pembayaran Berhasil',
         message: `Pembayaran untuk release "${releaseInfo?.title || 'Unknown'}" berhasil. Admin akan segera mengonfirmasi.`,
         metadata: { release_id: payment.release_id, amount: payment.amount },
-      })
+      }, { onConflict: 'id', ignoreDuplicates: true })
+      if (notificationError) return jsonResponse({ error: 'Failed to save payment notification' }, 500)
 
       // Notify each admin/superadmin individually (NOT global)
-      const { data: adminRoles } = await supabase
+      const { data: adminRoles, error: adminRolesError } = await supabase
         .from('user_roles')
         .select('user_id')
         .in('role', ['superadmin', 'admin'])
+      if (adminRolesError) return jsonResponse({ error: 'Failed to read notification recipients' }, 500)
 
       if (adminRoles && adminRoles.length > 0) {
-        const adminNotifs = adminRoles.map((ar: any) => ({
-          user_id: ar.user_id,
+        const adminNotifs = await Promise.all([...new Set(adminRoles.map(ar => ar.user_id))].filter(userId => userId !== payment.user_id).map(async (userId) => ({
+          id: await notificationId(payment.id, String(userId), mappedStatus),
+          user_id: userId,
           type: 'release',
           title: 'Release Baru Dibayar',
           message: `Release "${releaseInfo?.title || 'Unknown'}" oleh ${releaseInfo?.artist_name || 'Unknown'} telah dibayar. Menunggu konfirmasi.`,
           metadata: { release_id: payment.release_id, amount: payment.amount },
-        }))
-        await supabase.from('notifications').insert(adminNotifs)
+        })))
+        if (adminNotifs.length) {
+          const { error } = await supabase.from('notifications').upsert(adminNotifs, { onConflict: 'id', ignoreDuplicates: true })
+          if (error) return jsonResponse({ error: 'Failed to save admin notifications' }, 500)
+        }
       }
 
       // Email ke user pembayar (opt-in via send-app-email + Gmail)
       try {
-        await supabase.functions.invoke('send-app-email', {
+        const { error } = await supabase.functions.invoke('send-app-email', {
           body: {
             templateName: 'payment-success',
             recipientUserId: payment.user_id,
@@ -198,36 +216,45 @@ Deno.serve(async (req) => {
             idempotencyKey: `payment-${payment.id}-paid`,
           },
         })
+        if (error) return jsonResponse({ error: 'Payment email delivery pending' }, 500)
       } catch (e) {
-        console.error('send-app-email payment-success failed:', e)
+        return jsonResponse({ error: 'Payment email delivery pending' }, 500)
       }
 
       // Existing admin notification via Resend (legacy, dipertahankan)
       try {
         await sendEmailNotification(payment, supabase)
       } catch (emailError) {
-        console.error('Email notification failed:', emailError)
+        return jsonResponse({ error: 'Admin email delivery pending' }, 500)
       }
     } else if (mappedStatus === 'expired' || mappedStatus === 'failed') {
-      const releaseInfo = payment.releases as any
-      await supabase.from('notifications').insert({
+      const releaseInfo = payment.releases
+      const { error } = await supabase.from('notifications').upsert({
+        id: await notificationId(payment.id, payment.user_id, mappedStatus),
         user_id: payment.user_id,
         type: mappedStatus === 'expired' ? 'warning' : 'error',
         title: mappedStatus === 'expired' ? 'Pembayaran Expired' : 'Pembayaran Gagal',
         message: `Pembayaran untuk release "${releaseInfo?.title || 'Unknown'}" ${mappedStatus === 'expired' ? 'telah kedaluwarsa' : 'gagal'}. Silakan coba lagi.`,
         metadata: { release_id: payment.release_id },
-      })
+      }, { onConflict: 'id', ignoreDuplicates: true })
+      if (error) return jsonResponse({ error: 'Failed to save payment notification' }, 500)
     }
 
     return jsonResponse({ success: true })
 
   } catch (error) {
-    console.error('Webhook error:', error)
-    return jsonResponse({ error: error?.message || 'Internal server error' }, 500)
+    console.error('Webhook processing failed')
+    return jsonResponse({ error: 'Internal server error' }, 500)
   }
 })
 
-async function sendEmailNotification(payment: any, supabase: any) {
+async function sendEmailNotification(payment: {
+  id: string
+  user_id: string
+  amount: number
+  track_count: number
+  releases?: { title?: string; artist_name?: string } | null
+}, supabase: ReturnType<typeof createSoundpubClient>) {
   const notificationEmail = Deno.env.get('NOTIFICATION_EMAIL') || 'publisher@Soundpub.xyz'
   const resendApiKey = Deno.env.get('RESEND_API_KEY')
   
@@ -263,6 +290,7 @@ async function sendEmailNotification(payment: any, supabase: any) {
     headers: {
       'Authorization': `Bearer ${resendApiKey}`,
       'Content-Type': 'application/json',
+      'Idempotency-Key': `xendit-${payment.id}-paid`,
     },
     body: JSON.stringify({
       from: 'Soundpub <noreply@Soundpub.xyz>',
@@ -272,6 +300,5 @@ async function sendEmailNotification(payment: any, supabase: any) {
     }),
   })
 
-  const resendBody = await resendResponse.text()
-  console.log('Resend notification result:', resendResponse.status, resendBody)
+  if (!resendResponse.ok) throw new Error('Admin email delivery failed')
 }

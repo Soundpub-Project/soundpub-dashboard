@@ -1,5 +1,7 @@
 ﻿import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { updateUserStatus } from '@/services/users';
+import { useEffect } from 'react';
+import { usesBackendDomain } from '@/api/routing';
 import {
   Dialog,
   DialogContent,
@@ -45,7 +47,7 @@ const STATUS_OPTIONS: { value: UserStatus; label: string; icon: React.ReactNode;
     value: 'inactive',
     label: 'Inactive',
     icon: <XCircle className="h-4 w-4 text-yellow-500" />,
-    description: 'User tidak aktif tapi masih bisa login',
+    description: 'User dinonaktifkan dan tidak dapat login sampai status diaktifkan kembali',
   },
   {
     value: 'suspended',
@@ -63,37 +65,16 @@ export function ChangeStatusDialog({
 }: ChangeStatusDialogProps) {
   const [selectedStatus, setSelectedStatus] = useState<UserStatus>('active');
   const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (open && user) setSelectedStatus(user.status as UserStatus);
+  }, [open, user]);
 
   const handleSave = async () => {
     if (!user) return;
 
     setLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      const response = await supabase.functions.invoke('update-user-status', {
-        body: {
-          user_id: user.id,
-          status: selectedStatus,
-        },
-        headers: {
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-      });
-
-      if (response.error) {
-        const errorMsg = response.error.message || 'Failed to update status';
-        if (errorMsg.includes('503') || errorMsg.includes('FunctionsRelayError') || errorMsg.includes('FunctionsFetchError')) {
-          throw new Error(
-            'Edge Function tidak tersedia (Error 503). Silakan hubungi administrator untuk deploy edge functions. Lihat file DEPLOY_EDGE_FUNCTIONS.md untuk panduan.'
-          );
-        }
-        throw new Error(errorMsg);
-      }
-
-      if (!response.data?.success) {
-        throw new Error(response.data?.error || 'Failed to update status');
-      }
+      await updateUserStatus(user.id, selectedStatus);
 
       toast.success(`Status ${user.full_name} berhasil diubah menjadi ${selectedStatus}`);
       onOpenChange(false);
@@ -119,6 +100,7 @@ export function ChangeStatusDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
+          {usesBackendDomain('users') && <p role="status" className="text-sm text-muted-foreground">Status mengatur akses aplikasi. Identitas login tetap dikelola melalui PHASE4_AUTH.</p>}
           <DialogTitle className="flex items-center gap-2">
             <UserCog className="h-5 w-5 text-primary" />
             Ubah Status User

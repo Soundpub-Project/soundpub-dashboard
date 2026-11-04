@@ -1,0 +1,14 @@
+# Phase 3C RPC replacement matrix
+
+Date: 2026-10-28. Agent F independent local source review. Concurrent implementation snapshot; not a frozen release. No production access, deployment, provider calls, secrets, database operations, browser execution or runtime tests. PROVEN_SOURCE means inspected code only; BLOCKER means acceptance gap; DEFERRED means separate scope requiring explicit retention, never PASS.
+
+| RPC / internal SQL | Exact caller / source | Required replacement semantics | Verdict |
+| --- | --- | --- | --- |
+| soundpub.delete_release_with_refund(uuid), argument p_release_id | src/components/releases/DeleteReleaseDialog.tsx:35; supabase/migrations/20261023041039_harden_royalty_financial_workflows.sql:191 | Financial advisory transaction lock, Release and paid payment row locks; admin or owning Label without paid payment; balance_adjustments entry, Release delete, rebuild balances, audit, return {deleted, refundAmount}; rollback / concurrent callback / repeat delete proof | BLOCKER: backend Release delete deliberately returns 409; no refund replacement |
+| soundpub.is_soundpub_artist_for_release(uuid, uuid), _user_id / _label_id | ReleaseFormPage RPC; supabase/migrations/20260909_add_release_distribution_service.sql:15 | Active nondeleted Artist role, matching current parent Label, Label role and normalized Soundpub Label name; recheck inside custom-label write transaction | BLOCKER: no eligibility replacement accepted; UI preflight insufficient |
+| soundpub.enforce_release_distribution_service() trigger | Same distribution migration:39 and trigger declaration | Custom distribution creator must equal actor; eligibility and both names required; standard distribution clears custom names | BLOCKER: new table check only requires custom_label_name and does not establish actor eligibility |
+| get_dashboard_role_stats | src/pages/Dashboard.tsx:174 | Role-scoped aggregate projection including Release/Track callers; match source SQL and returned shape before replacement | BLOCKER indirect aggregate, no accepted replacement evidence |
+| rebuild_royalty_balances() | delete_release_with_refund SQL, financial migration | Internal balance reconciliation within refund transaction; not a public frontend replacement endpoint | DEFERRED financial domain; BLOCKER refund acceptance |
+| release_track_guard() | backend/migrations/0008_release_tracks.sql | New internal version/ownership trigger; not replacement for refund or custom-distribution eligibility | PROVEN_SOURCE only; restricted-login SQL not executed |
+
+Legacy direct Release/Track CRUD is PostgREST, not RPC. Public catalog, invoices and callbacks are Edge contracts; see Edge matrix. No new endpoint name is advertised as registered without inspection of route registration. Generic user, storage or notification APIs do not replace these RPCs.

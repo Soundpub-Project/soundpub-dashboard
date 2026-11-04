@@ -1,4 +1,7 @@
-﻿import { useState } from 'react';
+import { usesBackendDomain } from '@/api/routing';
+import { BackendReleaseForm } from '@/components/releases/BackendReleaseForm';
+import { usesBackendReleases, releaseWorkflowUnavailable } from '@/services/releases';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check, Disc3, ImageIcon, ListMusic } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -24,7 +27,7 @@ const steps = [
   },
 ];
 
-export default function ReleaseCreate() {
+function LegacyReleaseCreate() {
   const navigate = useNavigate();
   const { isArtist, isArtistProfileCompleted, refreshProfile } = useAuth();
   const [onboardingOpen, setOnboardingOpen] = useState(isArtist && !isArtistProfileCompleted);
@@ -133,4 +136,10 @@ export default function ReleaseCreate() {
       />
     </DashboardLayout>
   );
+}
+
+export default function ReleaseCreate() {
+  if (usesBackendReleases()) return <DashboardLayout><BackendReleaseForm /></DashboardLayout>;
+  if (usesBackendDomain('storage')) return <p role="alert">Mode storage memerlukan mode releases untuk alur release.</p>;
+  return <LegacyReleaseCreate />;
 }

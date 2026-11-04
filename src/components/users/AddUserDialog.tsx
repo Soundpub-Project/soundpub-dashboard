@@ -1,5 +1,10 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { usesBackendDomain } from '@/api/routing';
+import { usersApi } from '@/api/users';
+import { SoundpubApiError } from '@/api/client';
+import { listLabels as listBackendLabels, type AppRole } from '@/services/users';
+import { usesBackendArtistLabels, artistLabelApiReady, artistAuthUnavailable } from '@/services/labels';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -21,8 +26,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, Shield, Music, Building2, User, UserPlus, Crown, ShieldCheck } from 'lucide-react';
-
-type AppRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user' | 'copyright' | 'whitelabel';
 
 interface LabelOption {
   id: string;
@@ -64,6 +67,12 @@ const ALL_ROLE_OPTIONS: RoleOption[] = [
     icon: <Building2 className="h-4 w-4" />,
     description: 'Dapat manage releases dan artis'
   },
+  {
+    value: 'label_custom',
+    label: 'Label Custom',
+    icon: <Building2 className="h-4 w-4" />,
+    description: 'Kelola artis tanpa akun login'
+  },
   { 
     value: 'whitelabel', 
     label: 'White Label', 
@@ -82,6 +91,12 @@ const ALL_ROLE_OPTIONS: RoleOption[] = [
     icon: <Shield className="h-4 w-4" />,
     description: 'Akses penuh ke semua fitur'
   },
+  {
+    value: 'superadmin',
+    label: 'Super Admin',
+    icon: <Crown className="h-4 w-4 text-amber-500" />,
+    description: 'Akses tertinggi untuk administrasi platform'
+  },
 ];
 
 export function AddUserDialog({ 
@@ -92,7 +107,8 @@ export function AddUserDialog({
   defaultParentLabelId,
   isWhitelabelMode = false,
 }: AddUserDialogProps) {
-  const { user: currentUser, isAdmin, isLabel, isWhitelabel } = useAuth();
+  const backendUsers = usesBackendDomain('users');
+  const { user: currentUser, isAdmin, isSuperadmin, isLabel, isWhitelabel } = useAuth();
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
@@ -102,10 +118,11 @@ export function AddUserDialog({
   const [labels, setLabels] = useState<LabelOption[]>([]);
   const [loadingLabels, setLoadingLabels] = useState(false);
   const [loading, setLoading] = useState(false);
+  const canCreateUser = isAdmin || isLabel || isWhitelabel;
 
   // Fetch labels when dialog opens and role is artist
   useEffect(() => {
-    if (open && isAdmin) {
+    if (open && isAdmin && (backendUsers || !usesBackendArtistLabels())) {
       fetchLabels();
     }
   }, [open, isAdmin]);
@@ -113,6 +130,10 @@ export function AddUserDialog({
   const fetchLabels = async () => {
     setLoadingLabels(true);
     try {
+      if (backendUsers) {
+        setLabels(await listBackendLabels());
+        return;
+      }
       // Fetch all users with label or whitelabel role
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
@@ -154,14 +175,12 @@ export function AddUserDialog({
     }
   };
 
-  // Filter role options based on allowedRoles or user permissions
+  // Caller restrictions narrow permissions; they never grant additional roles.
   const roleOptions = ALL_ROLE_OPTIONS.filter(role => {
-    if (allowedRoles) {
-      return allowedRoles.includes(role.value);
-    }
-    // Admin can add all roles except superadmin
+    if (allowedRoles && !allowedRoles.includes(role.value)) return false;
+    if (role.value === 'label_custom' && !backendUsers) return false;
     if (isAdmin) {
-      return true;
+      return !['admin', 'superadmin'].includes(role.value) || isSuperadmin;
     }
     // Label or Whitelabel can only add artists
     if (isLabel || isWhitelabel) {
@@ -171,6 +190,8 @@ export function AddUserDialog({
   });
 
   const handleSave = async () => {
+    if (!canCreateUser || !roleOptions.some(role => role.value === selectedRole)) return;
+    if (usesBackendArtistLabels() && !backendUsers) return;
     // For whitelabel mode, password is not required
     if (!email || !fullName) {
       toast.error('Email dan nama lengkap harus diisi');
@@ -183,8 +204,9 @@ export function AddUserDialog({
       return;
     }
 
-    if (!isWhitelabelMode && password.length < 6) {
-      toast.error('Password minimal 6 karakter');
+    const minimumPasswordLength = backendUsers ? 12 : 6;
+    if (!isWhitelabelMode && password.length < minimumPasswordLength) {
+      toast.error(`Password minimal ${minimumPasswordLength} karakter`);
       return;
     }
 
@@ -193,15 +215,13 @@ export function AddUserDialog({
       toast.error('Pilih label untuk artist');
       return;
     }
+    if (backendUsers && selectedRole === 'artist' && !artistLabelApiReady()) {
+      toast.error(artistAuthUnavailable);
+      return;
+    }
 
     setLoading(true);
     try {
-      // Get current session token
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('Not authenticated');
-      }
-
       // Determine parent_label_id
       let parentLabelId = defaultParentLabelId || null;
       if (selectedRole === 'artist') {
@@ -212,8 +232,17 @@ export function AddUserDialog({
         }
       }
 
-      // Use different edge function for whitelabel mode
-      if (isWhitelabelMode) {
+      if (backendUsers) {
+        await usersApi.create({
+          email, password, fullName, phone: phone || null, role: selectedRole,
+          parentLabelId: selectedRole === 'artist' ? parentLabelId : null,
+        });
+      } else {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('Not authenticated');
+
+        // Use different edge function for whitelabel mode
+        if (isWhitelabelMode) {
         const response = await supabase.functions.invoke('create-whitelabel-artist', {
           body: {
             email,
@@ -234,7 +263,7 @@ export function AddUserDialog({
         if (!response.data.success) {
           throw new Error(response.data.error || 'Gagal membuat artist');
         }
-      } else {
+        } else {
         // Call edge function to create user without logging in as them
         const response = await supabase.functions.invoke('create-user', {
           body: {
@@ -285,9 +314,10 @@ export function AddUserDialog({
             }
           }
         }
+        }
       }
 
-      toast.success(`${isWhitelabelMode ? 'Artist' : 'User'} ${fullName} berhasil ditambahkan${isWhitelabelMode ? '' : ` sebagai ${selectedRole}`}`);
+      toast.success(`${isWhitelabelMode ? 'Artist' : 'User'} ${fullName} berhasil ditambahkan${isWhitelabelMode ? '' : ` sebagai ${selectedRole === 'label_custom' ? 'Label Custom' : selectedRole}`}`);
       
       // Reset form
       setEmail('');
@@ -299,12 +329,14 @@ export function AddUserDialog({
       
       onSuccess();
       onOpenChange(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating user:', error);
-      if (error.message?.includes('already registered') || error.message?.includes('already been registered')) {
+      if (error instanceof SoundpubApiError && error.category === 'CONFLICT') {
+        toast.error('Email sudah terdaftar');
+      } else if (error instanceof Error && (error.message.includes('already registered') || error.message.includes('already been registered'))) {
         toast.error('Email sudah terdaftar');
       } else {
-        toast.error(error.message || 'Gagal menambahkan user');
+        toast.error(error instanceof Error ? error.message : 'Gagal menambahkan user');
       }
     } finally {
       setLoading(false);
@@ -330,6 +362,16 @@ export function AddUserDialog({
     : 'Tambahkan user baru ke platform';
 
   const showLabelSelect = isAdmin && selectedRole === 'artist' && !defaultParentLabelId;
+
+  if (!canCreateUser) return null;
+
+  if (usesBackendArtistLabels() && !backendUsers) return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent><DialogHeader><DialogTitle>{dialogTitle}</DialogTitle>
+        <DialogDescription>{artistAuthUnavailable}</DialogDescription>
+      </DialogHeader></DialogContent>
+    </Dialog>
+  );
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -446,8 +488,9 @@ export function AddUserDialog({
 
           <div className="p-3 rounded-lg bg-muted/50 border border-border/50">
             <p className="text-sm text-muted-foreground">
-              User akan menerima email konfirmasi untuk verifikasi akun. 
-              Password di atas akan digunakan untuk login pertama.
+              {backendUsers
+                ? 'Akun aktif setelah dibuat. Password di atas digunakan untuk login pertama.'
+                : 'User akan menerima email konfirmasi untuk verifikasi akun. Password di atas akan digunakan untuk login pertama.'}
             </p>
           </div>
         </div>
@@ -458,7 +501,7 @@ export function AddUserDialog({
           </Button>
           <Button 
             onClick={handleSave} 
-            disabled={loading || !email || !fullName || !password || (showLabelSelect && !selectedLabelId)}
+            disabled={loading || !roleOptions.some(role => role.value === selectedRole) || !email || !fullName || !password || (showLabelSelect && !selectedLabelId)}
             className="gradient-primary"
           >
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

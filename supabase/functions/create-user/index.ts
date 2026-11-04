@@ -50,13 +50,13 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
+  if (req.method !== 'POST') return new Response(null, { status: 405, headers: corsHeaders })
 
   try {
     // Verify the request is from an authenticated admin or label
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      throw new Error('No authorization header')
-    }
+    const token = authHeader?.match(/^Bearer ([^\s]+)$/i)?.[1]
+    if (!token) return new Response(null, { status: 401, headers: corsHeaders })
 
     // Create a client with the user's token to check their permissions
     const supabaseClient = createSoundpubClient(
@@ -70,13 +70,29 @@ Deno.serve(async (req) => {
     )
 
     // Get the current user
-    const { data: { user: currentUser }, error: userError } = await supabaseClient.auth.getUser()
+    const { data: { user: currentUser }, error: userError } = await supabaseClient.auth.getUser(token)
     if (userError || !currentUser) {
-      throw new Error('Unauthorized')
+      return new Response(null, { status: 401, headers: corsHeaders })
+    }
+
+    const supabaseAdmin = createSoundpubClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+
+    const { data: callerProfile, error: profileLookupError } = await supabaseAdmin
+      .from('profiles')
+      .select('status')
+      .eq('id', currentUser.id)
+      .single()
+
+    if (profileLookupError || callerProfile?.status !== 'active') {
+      return new Response(null, { status: 403, headers: corsHeaders })
     }
 
     // Check if current user is admin or label
-    const { data: userRole } = await supabaseClient
+    const { data: userRole, error: roleLookupError } = await supabaseAdmin
       .from('user_roles')
       .select('role')
       .eq('user_id', currentUser.id)
@@ -86,8 +102,8 @@ Deno.serve(async (req) => {
     const isLabel = userRole?.role === 'label'
     const isWhitelabel = userRole?.role === 'whitelabel'
 
-    if (!isAdmin && !isLabel && !isWhitelabel) {
-      throw new Error('Only admins, labels, and whitelabels can create users')
+    if (roleLookupError || (!isAdmin && !isLabel && !isWhitelabel)) {
+      return new Response(null, { status: 403, headers: corsHeaders })
     }
 
     // Parse and validate request body
@@ -114,6 +130,11 @@ Deno.serve(async (req) => {
     }
     
     let { email, password, full_name, phone, role, parent_label_id, artist_type, genre, social_links } = validationResult.data
+    if ((role === 'superadmin' && userRole?.role !== 'superadmin') ||
+        ((isLabel || isWhitelabel) && (role !== 'artist' ||
+          (parent_label_id != null && parent_label_id !== currentUser.id)))) {
+      return new Response(null, { status: 403, headers: corsHeaders })
+    }
     const isManagedArtistCreation = isLabel && role === 'artist'
 
     // For label creating artists, email & password are not inputted. We generate them.
@@ -147,17 +168,6 @@ Deno.serve(async (req) => {
     }
 
     // Create admin client for user creation
-    const supabaseAdmin = createSoundpubClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
-
     // Create user using admin API (this won't affect the current session)
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
@@ -192,7 +202,7 @@ Deno.serve(async (req) => {
     }
 
     // Set parent_label_id and phone if provided (for artists under a label)
-    const labelId = parent_label_id || ((isLabel || isWhitelabel) ? currentUser.id : null)
+    const labelId = (isLabel || isWhitelabel) ? currentUser.id : parent_label_id || null
     
     // Update profile with additional fields
     const profileUpdate: Record<string, unknown> = {}

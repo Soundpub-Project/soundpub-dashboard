@@ -1,7 +1,12 @@
+import { usesBackendFinance } from '@/components/finance/mode';
+import { FinanceUnavailable } from '@/components/finance/FinanceUnavailable';
+import { usesBackendReleases } from '@/services/releases';
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { usesBackendArtistLabels } from "@/services/labels";
+import MyArtists from './MyArtists';
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import {
   Card,
@@ -76,7 +81,7 @@ interface WhitelabelStats {
   artistsWithoutAccess: number;
 }
 
-export default function WhitelabelDashboard() {
+function LegacyWhitelabelDashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, profile, isWhitelabel, loading: authLoading } = useAuth();
@@ -115,6 +120,7 @@ export default function WhitelabelDashboard() {
   }, [isWhitelabel, user]);
 
   const fetchData = async () => {
+    if (usesBackendArtistLabels()) return;
     if (!user) return;
 
     try {
@@ -218,6 +224,7 @@ export default function WhitelabelDashboard() {
   };
 
   const handleSetPassword = async () => {
+    if (usesBackendArtistLabels()) return;
     if (!selectedArtist || !newPassword) return;
 
     setSettingPassword(true);
@@ -225,7 +232,7 @@ export default function WhitelabelDashboard() {
       const { error } = await supabase.functions.invoke("set-artist-password", {
         body: {
           artist_id: selectedArtist.id,
-          new_password: newPassword,
+          password: newPassword,
         },
       });
 
@@ -268,6 +275,8 @@ export default function WhitelabelDashboard() {
   if (!isWhitelabel) {
     return null;
   }
+
+  if (usesBackendArtistLabels()) return <MyArtists />;
 
   return (
     <DashboardLayout>
@@ -607,4 +616,10 @@ export default function WhitelabelDashboard() {
       </Dialog>
     </DashboardLayout>
   );
+}
+
+export default function WhitelabelDashboard() {
+  if (usesBackendFinance()) return <FinanceUnavailable />;
+  if (usesBackendReleases()) return <main role="alert" className="p-6">Dashboard whitelabel belum terhubung dengan metadata Release backend.</main>;
+  return <LegacyWhitelabelDashboard />;
 }

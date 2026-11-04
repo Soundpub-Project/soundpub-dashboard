@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { getArtist, saveArtistProfile, usesBackendArtistLabels, artistMediaUnavailable } from "@/services/artists";
+import { labelsApi } from "@/api/labels";
+import { usesBackendDomain } from "@/api/routing";
+import type { ArtistPatch } from "@/api/artists";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import {
   Card,
@@ -50,7 +54,7 @@ import {
 
 interface ArtistProfileData {
   id: string;
-  user_id: string;
+  user_id?: string;
   artist_name: string;
   artist_type: string;
   legal_name: string | null;
@@ -62,11 +66,11 @@ interface ArtistProfileData {
   date_of_birth: string | null;
   genre: string | null;
   bio: string | null;
-  social_links: Record<string, string> | null;
-  spotify_artist_id: string | null;
-  spotify_artist_url: string | null;
-  spotify_data: any;
-  spotify_synced_at: string | null;
+  social_links: Record<string, string | boolean> | null;
+  spotify_artist_id?: string | null;
+  spotify_artist_url?: string | null;
+  spotify_data?: any;
+  spotify_synced_at?: string | null;
   verified: boolean;
 }
 
@@ -115,10 +119,12 @@ const formatCurrency = (value: number) =>
   `Rp ${Number(value || 0).toLocaleString("id-ID")}`;
 
 export default function ArtistProfile() {
+  const backendArtists = usesBackendArtistLabels();
   const { userId } = useParams<{ userId?: string }>();
   const { user, profile, isAdmin, isLabel, isWhitelabel, refreshProfile } =
     useAuth();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [syncingSpotify, setSyncingSpotify] = useState(false);
@@ -126,6 +132,7 @@ export default function ArtistProfile() {
     null,
   );
   const [ownerName, setOwnerName] = useState("");
+  const [managementName, setManagementName] = useState("");
   const [spotifyInput, setSpotifyInput] = useState("");
   const [spotifySearch, setSpotifySearch] = useState("");
   const [spotifyResults, setSpotifyResults] = useState<any[] | null>(null);
@@ -154,10 +161,10 @@ export default function ArtistProfile() {
   });
 
   const [artistUserProfile, setArtistUserProfile] = useState<any>(null);
-  const targetUserId = userId || user?.id;
-  const isViewingOther = !!userId && userId !== user?.id;
-  const isParentLabel = artistUserProfile?.parent_label_id === user?.id;
-  const canEdit = !isViewingOther || isAdmin || isParentLabel;
+  const targetUserId = userId || (backendArtists ? profile?.id : user?.id);
+  const isViewingOther = !!userId && userId !== (backendArtists ? profile?.id : user?.id);
+  const isParentLabel = backendArtists ? artistUserProfile?.label_user_id === profile?.id : artistUserProfile?.parent_label_id === user?.id;
+  const canEdit = (!isViewingOther || isAdmin || isParentLabel) && (!backendArtists || !loadError);
 
   useEffect(() => {
     if (targetUserId) {
@@ -169,6 +176,7 @@ export default function ArtistProfile() {
   }, [targetUserId]);
 
   const fetchArtistSummary = async () => {
+    if (backendArtists) return;
     if (!targetUserId) return;
     try {
       const { data, error } = await supabase.rpc(
@@ -185,6 +193,7 @@ export default function ArtistProfile() {
   };
 
   const fetchOwnerName = async () => {
+    if (backendArtists) return;
     if (!userId) return;
     const { data } = await supabase
       .from("profiles")
@@ -200,22 +209,31 @@ export default function ArtistProfile() {
 
   const fetchArtistProfile = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from("artist_profiles")
-        .select("*")
-        .eq("user_id", targetUserId!)
-        .maybeSingle();
-
-      if (error) throw error;
+      let data: ArtistProfileData | null;
+      let account = artistUserProfile;
+      if (backendArtists) {
+        const result = await getArtist(targetUserId!);
+        account = result;
+        setArtistUserProfile(result);
+        setOwnerName(result.full_name);
+        setManagementName(result.label_user_id ? (await labelsApi.detail(result.label_user_id)).full_name : "Tidak ada label");
+        data = result;
+        setLoadError("");
+        setArtistProfile(data);
+      } else {
+        const result = await (supabase as any).from("artist_profiles").select("*").eq("user_id", targetUserId!).maybeSingle();
+        if (result.error) throw result.error;
+        data = result.data;
+      }
 
       if (data) {
         setArtistProfile(data as ArtistProfileData);
-        const social = (data.social_links as Record<string, string>) || {};
+        const social = Object.fromEntries(Object.entries(data.social_links || {}).filter(([, value]) => typeof value === 'string')) as Record<string, string>;
         setFormData({
           artist_name: data.artist_name || "",
           legal_name: data.legal_name || "",
           artist_type: data.artist_type || "solo",
-          phone: isViewingOther
+          phone: backendArtists ? account?.phone || "" : isViewingOther
             ? artistUserProfile?.phone || ""
             : profile?.phone || "",
           genre: data.genre || "",
@@ -231,6 +249,8 @@ export default function ArtistProfile() {
           twitter: social.twitter || "",
           website: social.website || "",
         });
+      } else if (backendArtists) {
+        setFormData((prev) => ({ ...prev, artist_name: account?.full_name || "", phone: account?.phone || "" }));
       } else if (!isViewingOther) {
         setFormData((prev) => ({
           ...prev,
@@ -239,12 +259,19 @@ export default function ArtistProfile() {
       }
     } catch (error) {
       console.error("Error fetching artist profile:", error);
+      if (backendArtists) {
+        setArtistProfile(null);
+        setArtistUserProfile(null);
+        setManagementName("");
+        setLoadError("Profil artis backend belum dapat dimuat. Coba lagi setelah layanan tersedia.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (backendArtists || usesBackendDomain('storage')) return;
     const file = e.target.files?.[0];
     if (!file || !targetUserId) return;
     if (!file.type.startsWith("image/")) {
@@ -327,6 +354,7 @@ export default function ArtistProfile() {
   };
 
   const runSpotifyFetch = async (input: string) => {
+    if (backendArtists) return;
     setSyncingSpotify(true);
     try {
       const { data, error } = await supabase.functions.invoke(
@@ -371,6 +399,7 @@ export default function ArtistProfile() {
 
   // Debounced live search
   useEffect(() => {
+    if (backendArtists) return;
     if (!spotifySearch.trim() || spotifySearch.trim().length < 2) {
       setSpotifyResults(null);
       return;
@@ -397,6 +426,7 @@ export default function ArtistProfile() {
   }, [spotifySearch]);
 
   const handleSpotifyDisconnect = async () => {
+    if (backendArtists) return;
     if (!targetUserId) return;
     const { error } = await (supabase as any)
       .from("artist_profiles")
@@ -429,10 +459,11 @@ export default function ArtistProfile() {
 
     setSaving(true);
     try {
-      const socialLinks: Record<string, string> = {};
+      const socialLinks: Record<string, string | boolean> = backendArtists ? { ...artistProfile?.social_links } : {};
       ["instagram", "youtube", "tiktok", "twitter", "website"].forEach((k) => {
         const v = (formData as any)[k];
         if (v) socialLinks[k] = v;
+        else if (backendArtists) delete socialLinks[k];
       });
 
       const profileData: any = {
@@ -449,6 +480,20 @@ export default function ArtistProfile() {
         bio: formData.bio || null,
         social_links: Object.keys(socialLinks).length > 0 ? socialLinks : null,
       };
+
+      if (backendArtists) {
+        const patch: ArtistPatch = {
+          artist_name: profileData.artist_name, artist_type: profileData.artist_type, legal_name: profileData.legal_name,
+          genre: profileData.genre, country: profileData.country, city: profileData.city, language: profileData.language,
+          gender: profileData.gender, date_of_birth: profileData.date_of_birth, bio: profileData.bio,
+          social_links: profileData.social_links, phone: formData.phone.trim(),
+        };
+        await saveArtistProfile(targetUserId, patch);
+        if (!isViewingOther && usesBackendDomain('users')) await refreshProfile();
+        await fetchArtistProfile();
+        toast.success("Profil artis berhasil disimpan");
+        return;
+      }
 
       const { data: existingRow, error: existingError } = await (
         supabase as any
@@ -506,7 +551,7 @@ export default function ArtistProfile() {
     );
   }
 
-  const isComplete = REQUIRED_FIELDS.every((field) => {
+  const isComplete = backendArtists ? artistUserProfile?.artist_profile_completed === true : REQUIRED_FIELDS.every((field) => {
     const value = formData[field];
     return value && String(value).trim() !== "";
   });
@@ -525,6 +570,9 @@ export default function ArtistProfile() {
             Profil ini jadi sumber data utama (nama, foto, dll) untuk semua
             release musik Anda.
           </p>
+          {backendArtists && <p role="status" className="text-sm text-muted-foreground">{artistMediaUnavailable} Ringkasan royalti dan rilis belum tersedia melalui backend.</p>}
+          {backendArtists && !loadError && <p>Label pengelola: {managementName}</p>}
+          {loadError && <p role="alert">{loadError} <Button variant="outline" onClick={fetchArtistProfile}>Coba lagi</Button></p>}
         </div>
 
         {/* Status */}
@@ -554,6 +602,7 @@ export default function ArtistProfile() {
         </Card>
 
         {/* Artist Summary */}
+        {!backendArtists && <>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card className="bg-card/50 border-border/50">
             <CardHeader className="pb-2">
@@ -761,6 +810,7 @@ export default function ArtistProfile() {
         </div>
 
         {/* Foto Artis */}
+        </>}
         <Card className="bg-card/50 border-border/50">
           <CardHeader>
             <CardTitle className="text-lg">Foto Artis</CardTitle>
@@ -778,7 +828,7 @@ export default function ArtistProfile() {
                   {formData.artist_name?.[0]?.toUpperCase() || <User />}
                 </AvatarFallback>
               </Avatar>
-              {canEdit && (
+              {canEdit && !backendArtists && (
                 <div>
                   <input
                     type="file"
@@ -870,6 +920,9 @@ export default function ArtistProfile() {
                     <SelectItem value="solo">Solo</SelectItem>
                     <SelectItem value="band">Band</SelectItem>
                     <SelectItem value="group">Group</SelectItem>
+                    {backendArtists && !['solo', 'band', 'group'].includes(formData.artist_type) && (
+                      <SelectItem value={formData.artist_type}>{formData.artist_type}</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -1087,6 +1140,7 @@ export default function ArtistProfile() {
         </Card>
 
         {/* Spotify Integration */}
+        {!backendArtists &&
         <Card className="bg-card/50 border-border/50">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -1313,6 +1367,8 @@ export default function ArtistProfile() {
             )}
           </CardContent>
         </Card>
+
+        }
 
         {!isViewingOther && (
           <Card className="bg-muted/30 border-border/50">

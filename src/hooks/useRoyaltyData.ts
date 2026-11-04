@@ -1,3 +1,4 @@
+import { usesBackendFinance, requireLegacyFinance } from '@/components/finance/mode';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -5,8 +6,9 @@ const STALE_TIME = 5 * 60 * 1000; // 5 minutes
 
 export function useRoyaltyStats() {
   return useQuery({
-    queryKey: ['royalty-stats'],
+    queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-stats'],
     queryFn: async () => {
+      requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_stats');
       if (error) throw error;
       if (!data?.[0]) return null;
@@ -20,14 +22,16 @@ export function useRoyaltyStats() {
         uniqueTracks: Number(s.unique_tracks || 0),
       };
     },
+    retry: usesBackendFinance() ? false : undefined,
     staleTime: STALE_TIME,
   });
 }
 
 export function useRoyaltyMonthlySummary() {
   return useQuery({
-    queryKey: ['royalty-monthly-summary'],
+    queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-monthly-summary'],
     queryFn: async () => {
+      requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_monthly_summary');
       if (error) throw error;
       return (data || []).map((d: any) => ({
@@ -37,14 +41,16 @@ export function useRoyaltyMonthlySummary() {
         streams: Number(d.streams),
       }));
     },
+    retry: usesBackendFinance() ? false : undefined,
     staleTime: STALE_TIME,
   });
 }
 
 export function useRoyaltyPlatformSummary(limit: number = 10) {
   return useQuery({
-    queryKey: ['royalty-platform-summary', limit],
+    queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-platform-summary', limit],
     queryFn: async () => {
+      requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_platform_summary', { _limit: limit });
       if (error) throw error;
       return (data || []).map((d: any, i: number) => ({
@@ -55,14 +61,16 @@ export function useRoyaltyPlatformSummary(limit: number = 10) {
         fill: CHART_COLORS[i % CHART_COLORS.length],
       }));
     },
+    retry: usesBackendFinance() ? false : undefined,
     staleTime: STALE_TIME,
   });
 }
 
 export function useRoyaltyCountrySummary(limit: number = 10) {
   return useQuery({
-    queryKey: ['royalty-country-summary', limit],
+    queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-country-summary', limit],
     queryFn: async () => {
+      requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_country_summary', { _limit: limit });
       if (error) throw error;
       return (data || []).map((d: any, i: number) => ({
@@ -72,18 +80,21 @@ export function useRoyaltyCountrySummary(limit: number = 10) {
         fill: CHART_COLORS[i % CHART_COLORS.length],
       }));
     },
+    retry: usesBackendFinance() ? false : undefined,
     staleTime: STALE_TIME,
   });
 }
 
 export function useRoyaltyPeriods() {
   return useQuery({
-    queryKey: ['royalty-periods'],
+    queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-periods'],
     queryFn: async () => {
+      requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_periods');
       if (error) throw error;
       return (data || []).map((d: any) => d.period as string);
     },
+    retry: usesBackendFinance() ? false : undefined,
     staleTime: STALE_TIME,
   });
 }
@@ -92,8 +103,9 @@ export function useRoyaltyPeriods() {
 
 export function useRoyaltyPeriodSummary() {
   return useQuery({
-    queryKey: ['royalty-period-summary'],
+    queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-period-summary'],
     queryFn: async () => {
+      requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_period_summary' as any);
       if (error) throw error;
       return (data || []).map((d: any) => ({
@@ -108,14 +120,16 @@ export function useRoyaltyPeriodSummary() {
         growth: Number(d.growth || 0),
       }));
     },
+    retry: usesBackendFinance() ? false : undefined,
     staleTime: STALE_TIME,
   });
 }
 
 export function useRoyaltyLabelBreakdown(period: string | null) {
   return useQuery({
-    queryKey: ['royalty-label-breakdown', period],
+    queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-label-breakdown', period],
     queryFn: async () => {
+      requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_label_breakdown' as any, {
         _period: period,
       });
@@ -129,14 +143,16 @@ export function useRoyaltyLabelBreakdown(period: string | null) {
         adminRevenue: Number(d.admin_share || 0),
       }));
     },
+    retry: usesBackendFinance() ? false : undefined,
     staleTime: STALE_TIME,
   });
 }
 
 export function useRoyaltyArtistBreakdown(period: string | null, limit: number = 20) {
   return useQuery({
-    queryKey: ['royalty-artist-breakdown', period, limit],
+    queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-artist-breakdown', period, limit],
     queryFn: async () => {
+      requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_artist_breakdown' as any, {
         _period: period,
         _limit: limit,
@@ -153,14 +169,16 @@ export function useRoyaltyArtistBreakdown(period: string | null, limit: number =
         adminRevenue: Number(d.admin_share || 0),
       }));
     },
+    retry: usesBackendFinance() ? false : undefined,
     staleTime: STALE_TIME,
   });
 }
 
 export function useRoyaltyTrackBreakdown(period: string | null) {
   return useQuery({
-    queryKey: ['royalty-track-breakdown', period],
+    queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-track-breakdown', period],
     queryFn: async () => {
+      requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_track_breakdown' as any, {
         _period: period,
       });
@@ -180,14 +198,16 @@ export function useRoyaltyTrackBreakdown(period: string | null) {
         adminRevenue: Number(d.admin_share || 0),
       }));
     },
+    retry: usesBackendFinance() ? false : undefined,
     staleTime: STALE_TIME,
   });
 }
 
 export function useRoyaltyComparison(currentPeriods: string[], previousPeriods: string[]) {
   return useQuery({
-    queryKey: ['royalty-comparison', currentPeriods, previousPeriods],
+    queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-comparison', currentPeriods, previousPeriods],
     queryFn: async () => {
+      requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_comparison' as any, {
         _current_periods: currentPeriods,
         _previous_periods: previousPeriods,
@@ -202,6 +222,7 @@ export function useRoyaltyComparison(currentPeriods: string[], previousPeriods: 
       return { currentMap, previousMap };
     },
     enabled: currentPeriods.length > 0 || previousPeriods.length > 0,
+    retry: usesBackendFinance() ? false : undefined,
     staleTime: STALE_TIME,
   });
 }
@@ -213,8 +234,9 @@ export function useRoyaltyTopPerformers(
   limit: number = 10
 ) {
   return useQuery({
-    queryKey: ['royalty-top-performers', currentPeriods, previousPeriods, groupBy, limit],
+    queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-top-performers', currentPeriods, previousPeriods, groupBy, limit],
     queryFn: async () => {
+      requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_top_performers' as any, {
         _current_periods: currentPeriods,
         _previous_periods: previousPeriods,
@@ -230,6 +252,7 @@ export function useRoyaltyTopPerformers(
       }));
     },
     enabled: currentPeriods.length > 0,
+    retry: usesBackendFinance() ? false : undefined,
     staleTime: STALE_TIME,
   });
 }

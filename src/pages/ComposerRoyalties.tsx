@@ -1,3 +1,5 @@
+import { usesBackendFinance } from '@/components/finance/mode';
+import { FinanceUnavailable } from '@/components/finance/FinanceUnavailable';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -44,7 +46,7 @@ interface ComposerRoyalty {
   created_at: string;
 }
 
-export default function ComposerRoyalties() {
+function LegacyComposerRoyalties() {
   const navigate = useNavigate();
   const { isAdmin, role, loading: authLoading } = useAuth();
   const [royalties, setRoyalties] = useState<ComposerRoyalty[]>([]);
@@ -360,4 +362,10 @@ export default function ComposerRoyalties() {
       </div>
     </DashboardLayout>
   );
+}
+
+
+export default function ComposerRoyalties() {
+  if (usesBackendFinance()) return <FinanceUnavailable />;
+  return <LegacyComposerRoyalties />;
 }

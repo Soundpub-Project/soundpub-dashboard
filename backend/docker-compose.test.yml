@@ -1,0 +1,28 @@
+# Disposable fixtures only. Target generated per-test services explicitly.
+services:
+  test-postgres:
+    image: postgres:17-alpine
+    profiles: [test-templates]
+    network_mode: bridge
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_DB: soundpub_test
+    ports:
+      - "127.0.0.1::5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+  test-rustfs:
+    image: rustfs/rustfs:1.0.4
+    profiles: [test-templates]
+    network_mode: bridge
+    user: "0:0"
+    command: ["/data"]
+    environment:
+      RUSTFS_ACCESS_KEY: synthetic-matrix
+      RUSTFS_SECRET_KEY: synthetic-matrix-secret
+      RUSTFS_CONSOLE_ENABLE: "false"
+      RUSTFS_OBS_LOGGER_LEVEL: error
+    ports:
+      - "127.0.0.1::9000"
+    tmpfs:
+      - /data

@@ -1,3 +1,4 @@
+import { requireLegacyFinance } from '@/components/finance/mode';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface XenditInvoiceResult {
@@ -24,6 +25,7 @@ const readFunctionError = async (error: any) => {
 };
 
 export async function createXenditInvoice(releaseId: string): Promise<XenditInvoiceResult> {
+  requireLegacyFinance();
   const { data, error } = await supabase.functions.invoke('create-xendit-invoice', {
     body: { release_id: releaseId },
   });
@@ -40,6 +42,7 @@ export async function createXenditInvoice(releaseId: string): Promise<XenditInvo
 }
 
 export async function createCopyrightInvoice(registrationId: string): Promise<XenditInvoiceResult> {
+  requireLegacyFinance();
   const { data, error } = await supabase.functions.invoke('create-copyright-invoice', { body: { registration_id: registrationId } });
   if (error) throw new Error(await readFunctionError(error));
   if (!data?.invoice_url) throw new Error(data?.error || 'Invoice URL tidak ditemukan');

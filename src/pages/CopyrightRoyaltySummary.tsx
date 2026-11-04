@@ -1,3 +1,5 @@
+import { usesBackendFinance } from '@/components/finance/mode';
+import { FinanceUnavailable } from '@/components/finance/FinanceUnavailable';
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -65,7 +67,7 @@ const chartConfig = {
   },
 };
 
-export default function CopyrightRoyaltySummary() {
+function LegacyCopyrightRoyaltySummary() {
   const navigate = useNavigate();
   const { isAdmin, isCopyright, role } = useAuth();
   const [royalties, setRoyalties] = useState<ComposerRoyalty[]>([]);
@@ -486,4 +488,9 @@ export default function CopyrightRoyaltySummary() {
       </div>
     </DashboardLayout>
   );
+}
+
+export default function CopyrightRoyaltySummary() {
+  if (usesBackendFinance()) return <FinanceUnavailable title="Royalti komposer" />;
+  return <LegacyCopyrightRoyaltySummary />;
 }

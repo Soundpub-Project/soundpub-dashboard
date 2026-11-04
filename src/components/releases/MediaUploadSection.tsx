@@ -1,3 +1,4 @@
+import { usesBackendDomain } from '@/api/routing';
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -63,7 +64,7 @@ const ICON_MAP: Record<MediaType, React.ReactNode> = {
   clip: <FileAudio className="h-4 w-4" />,
 };
 
-export function MediaUploadSection({
+function LegacyMediaUploadSection({
   trackIndex,
   releaseTitle,
   releaseId,
@@ -577,4 +578,9 @@ export function MediaUploadSection({
       )}
     </div>
   );
+}
+
+export function MediaUploadSection(props: MediaUploadSectionProps) {
+  if (usesBackendDomain('storage')) return <p role="status">Gunakan upload audio pada release backend. Audio clip belum tersedia.</p>;
+  return <LegacyMediaUploadSection {...props} />;
 }

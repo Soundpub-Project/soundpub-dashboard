@@ -1,19 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
-const getDatabaseSchema = () => Deno.env.get('DATABASE_SCHEMA') || Deno.env.get('SUPABASE_DB_SCHEMA') || 'Soundpub'
-
-const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
-  const existingDb = options.db || {}
-  return createClient(supabaseUrl, supabaseKey, {
-    ...options,
-    db: { ...existingDb, schema: getDatabaseSchema() },
-  })
-}
-
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { authenticatePrivilegedRequest, consumeRateLimit, errorResponse, HttpError, privilegedCorsHeaders as corsHeaders, readJsonObject } from '../_shared/privileged-api.ts'
 
 const DRIVE_GATEWAY = 'https://connector-gateway.lovable.dev/google_drive'
 const ROOT_FOLDER_NAME = 'Soundpub-Backup'
@@ -45,10 +30,10 @@ async function findOrCreateFolder(name: string, parentId: string | null): Promis
     : `name='${name.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder' and trashed=false`
 
   const searchUrl = `${DRIVE_GATEWAY}/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&pageSize=1`
-  const sr = await fetch(searchUrl, { headers: driveHeaders() })
-  if (sr.ok) {
-    const sd = await sr.json()
-    if (sd.files?.[0]?.id) return sd.files[0].id
+  const searchResponse = await fetch(searchUrl, { headers: driveHeaders() })
+  if (searchResponse.ok) {
+    const searchData = await searchResponse.json()
+    if (searchData.files?.[0]?.id) return searchData.files[0].id
   }
 
   const body: Record<string, unknown> = {
@@ -57,14 +42,14 @@ async function findOrCreateFolder(name: string, parentId: string | null): Promis
   }
   if (parentId) body.parents = [parentId]
 
-  const cr = await fetch(`${DRIVE_GATEWAY}/drive/v3/files?fields=id`, {
+  const createResponse = await fetch(`${DRIVE_GATEWAY}/drive/v3/files?fields=id`, {
     method: 'POST',
     headers: { ...driveHeaders(), 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-  if (!cr.ok) throw new Error(`Drive folder create failed: ${cr.status} ${await cr.text()}`)
-  const cd = await cr.json()
-  return cd.id
+  if (!createResponse.ok) throw new Error(`Drive folder create failed: ${createResponse.status}`)
+  const createData = await createResponse.json()
+  return createData.id
 }
 
 async function uploadToDrive(fileName: string, parentId: string, blob: Blob): Promise<string> {
@@ -73,17 +58,17 @@ async function uploadToDrive(fileName: string, parentId: string, blob: Blob): Pr
   form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }))
   form.append('file', blob)
 
-  const r = await fetch(`${DRIVE_GATEWAY}/upload/drive/v3/files?uploadType=multipart&fields=id`, {
+  const response = await fetch(`${DRIVE_GATEWAY}/upload/drive/v3/files?uploadType=multipart&fields=id`, {
     method: 'POST',
     headers: driveHeaders(),
     body: form,
   })
-  if (!r.ok) throw new Error(`Drive upload failed: ${r.status} ${await r.text()}`)
-  const d = await r.json()
-  return d.id
+  if (!response.ok) throw new Error(`Drive upload failed: ${response.status}`)
+  const data = await response.json()
+  return data.id
 }
 
-async function listAllFilesInBucket(supabase: any, bucket: string, prefix = ''): Promise<Array<{ path: string; size: number; updated_at: string | null }>> {
+async function listAllFilesInBucket(supabase: Awaited<ReturnType<typeof authenticatePrivilegedRequest>>['supabase'], bucket: string, prefix = ''): Promise<Array<{ path: string; size: number; updated_at: string | null }>> {
   const out: Array<{ path: string; size: number; updated_at: string | null }> = []
   const stack: string[] = [prefix]
   while (stack.length) {
@@ -121,17 +106,26 @@ async function listAllFilesInBucket(supabase: any, bucket: string, prefix = ''):
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  const supabase = createSoundpubClient(supabaseUrl, serviceKey)
+  let authorization: Awaited<ReturnType<typeof authenticatePrivilegedRequest>>
+  try {
+    authorization = await authenticatePrivilegedRequest(req, false)
+    const input = await readJsonObject(req)
+    if (Object.keys(input).length) throw new HttpError(400, 'Expected empty JSON object')
+    await consumeRateLimit(authorization.supabase, authorization.actor.id, 'backup-storage-to-drive', 1, 1)
+    if (!Deno.env.get('GOOGLE_DRIVE_API_KEY') || !Deno.env.get('LOVABLE_API_KEY')) throw new HttpError(503, 'Backup provider unavailable')
+  } catch (error) {
+    return errorResponse(error)
+  }
+  const { supabase } = authorization
 
   // Insert run record
-  const { data: runRow } = await supabase
+  const { data: runRow, error: runError } = await supabase
     .from('storage_backup_runs')
-    .insert({ status: 'running', triggered_by: req.headers.get('x-trigger') ?? 'cron' })
+    .insert({ status: 'running', triggered_by: 'authorized-internal' })
     .select('id')
     .single()
-  const runId = runRow?.id
+  if (runError || !runRow) return errorResponse(new HttpError(503, 'Backup log unavailable'))
+  const runId = runRow.id
 
   let uploaded = 0
   let skipped = 0
@@ -253,8 +247,8 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ success: true, uploaded, skipped, errors, run_id: runId }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
-  } catch (e) {
-    const msg = (e as Error).message
+  } catch {
+    const msg = 'Backup failed'
     await supabase.from('storage_backup_runs').update({
       finished_at: new Date().toISOString(),
       status: 'failed',
@@ -264,7 +258,7 @@ Deno.serve(async (req) => {
       error_message: msg,
     }).eq('id', runId)
     return new Response(JSON.stringify({ success: false, error: msg }), {
-      status: 200,
+      status: 503,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }

@@ -1,3 +1,6 @@
+import { FinanceUnavailable } from '@/components/finance/FinanceUnavailable';
+import { usesBackendFinance } from '@/components/finance/mode';
+import { BackendPayouts } from '@/components/finance/BackendPayouts';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -35,7 +38,7 @@ interface PayoutRequest {
 
 const BANK_LIST = ['BCA', 'BNI', 'BRI', 'Mandiri', 'CIMB Niaga', 'Bank Jago', 'Bank Jenius', 'SeaBank', 'Dana', 'OVO', 'GoPay', 'ShopeePay', 'Lainnya'];
 
-export default function Payouts() {
+function LegacyPayouts() {
   const { profile, user, isLabel, isWhitelabel } = useAuth();
   const [payouts, setPayouts] = useState<PayoutRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -330,3 +333,11 @@ export default function Payouts() {
   );
 }
 
+
+
+export default function Payouts() {
+  const { role } = useAuth();
+  if (role === 'label_custom' && !usesBackendFinance()) return <FinanceUnavailable />;
+  if (usesBackendFinance()) return <BackendPayouts />;
+  return <LegacyPayouts />;
+}

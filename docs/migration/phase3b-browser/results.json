@@ -1,0 +1,152 @@
+{
+  "boundary": "Mock API; list/transport only; no persistence or transfer browser acceptance.",
+  "results": [
+    {
+      "device": "mobile",
+      "list": "PASS",
+      "overflow": false,
+      "requests": [
+        {
+          "blocked": "/css2"
+        },
+        {
+          "blocked": "/css2"
+        },
+        {
+          "blocked": "/css2"
+        },
+        {
+          "blocked": "/css2"
+        },
+        {
+          "blocked": "/css2"
+        },
+        {
+          "path": "/api/v1/profile",
+          "method": "GET",
+          "authorized": true
+        },
+        {
+          "path": "/api/v1/profile",
+          "method": "GET",
+          "authorized": true
+        },
+        {
+          "path": "/api/v1/labels/11111111-1111-4111-8111-111111111111/artists",
+          "method": "GET",
+          "authorized": true
+        },
+        {
+          "blocked": "/rest/v1/profiles"
+        },
+        {
+          "blocked": "/rest/v1/app_settings"
+        },
+        {
+          "blocked": "/rest/v1/notifications"
+        },
+        {
+          "blocked": "/rest/v1/rpc/get_dashboard_role_stats"
+        }
+      ]
+    },
+    {
+      "device": "tablet",
+      "list": "PASS",
+      "overflow": false,
+      "requests": [
+        {
+          "blocked": "/css2"
+        },
+        {
+          "blocked": "/css2"
+        },
+        {
+          "blocked": "/css2"
+        },
+        {
+          "blocked": "/css2"
+        },
+        {
+          "blocked": "/css2"
+        },
+        {
+          "path": "/api/v1/profile",
+          "method": "GET",
+          "authorized": true
+        },
+        {
+          "path": "/api/v1/profile",
+          "method": "GET",
+          "authorized": true
+        },
+        {
+          "path": "/api/v1/labels/11111111-1111-4111-8111-111111111111/artists",
+          "method": "GET",
+          "authorized": true
+        },
+        {
+          "blocked": "/rest/v1/profiles"
+        },
+        {
+          "blocked": "/rest/v1/app_settings"
+        },
+        {
+          "blocked": "/rest/v1/notifications"
+        },
+        {
+          "blocked": "/rest/v1/rpc/get_dashboard_role_stats"
+        }
+      ]
+    },
+    {
+      "device": "desktop",
+      "list": "PASS",
+      "overflow": false,
+      "requests": [
+        {
+          "blocked": "/css2"
+        },
+        {
+          "blocked": "/css2"
+        },
+        {
+          "blocked": "/css2"
+        },
+        {
+          "blocked": "/css2"
+        },
+        {
+          "blocked": "/css2"
+        },
+        {
+          "path": "/api/v1/profile",
+          "method": "GET",
+          "authorized": true
+        },
+        {
+          "path": "/api/v1/profile",
+          "method": "GET",
+          "authorized": true
+        },
+        {
+          "path": "/api/v1/labels/11111111-1111-4111-8111-111111111111/artists",
+          "method": "GET",
+          "authorized": true
+        },
+        {
+          "blocked": "/rest/v1/profiles"
+        },
+        {
+          "blocked": "/rest/v1/app_settings"
+        },
+        {
+          "blocked": "/rest/v1/notifications"
+        },
+        {
+          "blocked": "/rest/v1/rpc/get_dashboard_role_stats"
+        }
+      ]
+    }
+  ]
+}

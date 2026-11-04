@@ -1,3 +1,5 @@
+import { usesBackendDomain } from '@/api/routing';
+import { usesBackendReleases, releaseWorkflowUnavailable } from '@/services/releases';
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -222,7 +224,7 @@ interface ReleaseFormPageProps {
   onStepChange?: (step: 1 | 2) => void;
 }
 
-export function ReleaseFormPage({
+function LegacyReleaseFormPage({
   open,
   onOpenChange,
   release,
@@ -2554,4 +2556,10 @@ export function ReleaseFormPage({
       </div>
     </div>
   );
+}
+
+export function ReleaseFormPage(props: Parameters<typeof LegacyReleaseFormPage>[0]) {
+  if (usesBackendReleases()) return <p role="alert">{releaseWorkflowUnavailable}</p>;
+  if (usesBackendDomain('storage')) return <p role="alert">Mode storage memerlukan mode releases untuk alur release.</p>;
+  return <LegacyReleaseFormPage {...props} />;
 }

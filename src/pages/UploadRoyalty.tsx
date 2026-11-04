@@ -1,3 +1,6 @@
+import { BackendRoyaltyImport } from '@/components/finance/BackendRoyaltyImport';
+import { usesBackendFinance } from '@/components/finance/mode';
+import { usesBackendReleases } from '@/services/releases';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -77,10 +80,10 @@ interface UploadSummary {
 
 interface RevenueSplitPreview {
   label: string;
-  totalRevenue: number;
-  labelShare: number;
-  artistShare: number;
-  adminShare: number;
+  totalRevenue: bigint;
+  labelShare: bigint;
+  artistShare: bigint;
+  adminShare: bigint;
   labelPercentage: number;
   artistPercentage: number;
   adminPercentage: number;
@@ -122,18 +125,97 @@ const REQUIRED_COLUMNS = [
 // Optional columns that can be auto-filled from database
 const OPTIONAL_COLUMNS = ['upc', 'artist', 'label_name', 'title', 'sales_type'];
 
-export default function UploadRoyalty() {
+const parseCsvDocument = (text: string): string[][] => {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let quoted = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (quoted) {
+      if (character === '"' && text[index + 1] === '"') {
+        field += '"';
+        index += 1;
+      } else if (character === '"') {
+        quoted = false;
+      } else {
+        field += character;
+      }
+    } else if (character === '"' && field.length === 0) {
+      quoted = true;
+    } else if (character === ',') {
+      row.push(field.trim());
+      field = '';
+    } else if (character === '\n' || character === '\r') {
+      if (character === '\r' && text[index + 1] === '\n') index += 1;
+      row.push(field.trim());
+      if (row.some(value => value.length > 0)) rows.push(row);
+      row = [];
+      field = '';
+    } else {
+      field += character;
+    }
+  }
+
+  if (quoted) throw new Error('Tanda kutip CSV tidak ditutup');
+  row.push(field.trim());
+  if (row.some(value => value.length > 0)) rows.push(row);
+  return rows;
+};
+
+const revenueToCents = (revenue: number): bigint => BigInt(Math.round(revenue * 100));
+const roundShareCents = (revenueCents: bigint, percentage: bigint): bigint =>
+  (revenueCents * percentage + 50n) / 100n;
+const formatRevenueCents = (revenueCents: bigint): string => {
+  const negative = revenueCents < 0n;
+  const absoluteCents = negative ? -revenueCents : revenueCents;
+  const whole = absoluteCents / 100n;
+  const fraction = absoluteCents % 100n;
+  const formatted = whole.toLocaleString('id-ID');
+  return `${negative ? '-' : ''}${formatted}${fraction === 0n ? '' : `,${fraction.toString().padStart(2, '0')}`}`;
+};
+
+const getFunctionErrorMessage = async (error: unknown): Promise<string> => {
+  if (typeof error === 'object' && error !== null && 'context' in error) {
+    const context = (error as { context?: unknown }).context;
+    if (context instanceof Response) {
+      try {
+        const payload = await context.clone().json() as { error?: unknown; message?: unknown };
+        if (typeof payload.error === 'string' && payload.error.trim()) return payload.error;
+        if (typeof payload.message === 'string' && payload.message.trim()) return payload.message;
+      } catch {
+        const responseText = await context.clone().text().catch(() => '');
+        if (responseText.trim()) return responseText;
+      }
+    }
+  }
+
+  return error instanceof Error ? error.message : 'Terjadi kesalahan saat mengimport data';
+};
+
+function LegacyUploadRoyalty() {
   const navigate = useNavigate();
   const { user, isAdmin, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadErrorRef = useRef<HTMLDivElement>(null);
+  // Refs block repeated events before React commits disabled controls.
+  const activeActionRef = useRef<'parsing' | 'upload' | 'delete' | null>(null);
+  const importedFileRef = useRef<File | null>(null);
+  const deletedUploadIdsRef = useRef(new Set<string>());
   
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [parsedData, setParsedData] = useState<RoyaltyRow[]>([]);
   const [parseErrors, setParseErrors] = useState<ValidationError[]>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [serverValidationErrors, setServerValidationErrors] = useState<ValidationError[]>([]);
+  const [visibleIssueCount, setVisibleIssueCount] = useState(10);
   const [revenueSplitPreview, setRevenueSplitPreview] = useState<RevenueSplitPreview[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isParsing, setIsParsing] = useState(false);
+  const [deletingUploadId, setDeletingUploadId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStage, setUploadStage] = useState<string>('');
   const [uploadHistory, setUploadHistory] = useState<UploadHistory[]>([]);
@@ -150,7 +232,18 @@ export default function UploadRoyalty() {
   const [isrcMatchResults, setIsrcMatchResults] = useState<ISRCMatchResult[]>([]);
   const [isCheckingISRC, setIsCheckingISRC] = useState(false);
   const [replaceExisting, setReplaceExisting] = useState(false);
-  const [replaceMode, setReplaceMode] = useState<'filename_period' | 'period'>('filename_period');
+  const [replaceMode, setReplaceMode] = useState<'filename_period'>('filename_period');
+  const [replaceScopeAcknowledged, setReplaceScopeAcknowledged] = useState(false);
+  const isBusy = isUploading || isParsing || deletingUploadId !== null;
+  const hasParseErrors = parseErrors.some(error => error.severity === 'error');
+  const replacementPeriods = [...new Set(parsedData.map(row => row.period))].sort();
+  const replacementPeriodLabel = replacementPeriods.join(', ');
+  const serverErrorRow = uploadError?.match(/^Row (\d+):/i)?.[1];
+  const serverErrorData = serverErrorRow ? parsedData[Number(serverErrorRow) - 1] : null;
+
+  useEffect(() => {
+    if (uploadError) uploadErrorRef.current?.focus();
+  }, [uploadError]);
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -182,18 +275,29 @@ export default function UploadRoyalty() {
   };
 
   const parseCSV = (text: string): { data: RoyaltyRow[]; errors: ValidationError[] } => {
-    const lines = text.trim().split('\n');
     const errors: ValidationError[] = [];
     const data: RoyaltyRow[] = [];
+    let rows: string[][];
 
-    if (lines.length < 2) {
+    try {
+      rows = parseCsvDocument(text.replace(/^\uFEFF/, ''));
+    } catch (error) {
+      errors.push({ row: 0, field: 'file', message: error instanceof Error ? error.message : 'Format CSV tidak valid', severity: 'error' });
+      return { data, errors };
+    }
+
+    if (rows.length < 2) {
       errors.push({ row: 0, field: 'file', message: 'File CSV kosong atau tidak memiliki data', severity: 'error' });
       return { data, errors };
     }
 
     // Parse header
-    const headerLine = lines[0].toLowerCase().replace(/\r/g, '');
-    const headers = headerLine.split(',').map(h => h.trim().replace(/"/g, ''));
+    const headers = rows[0].map(header => header.toLowerCase().trim());
+    const duplicateHeaders = headers.filter((header, index) => header && headers.indexOf(header) !== index);
+    if (duplicateHeaders.length > 0) {
+      errors.push({ row: 1, field: 'header', message: `Header duplikat: ${[...new Set(duplicateHeaders)].join(', ')}`, severity: 'error' });
+      return { data, errors };
+    }
     
     // Check required columns
     const missingColumns = REQUIRED_COLUMNS.filter(col => !headers.includes(col));
@@ -211,27 +315,8 @@ export default function UploadRoyalty() {
     const getIndex = (name: string) => headers.indexOf(name);
 
     // Parse data rows
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].replace(/\r/g, '');
-      if (!line.trim()) continue;
-
-      // Handle CSV with quoted values
-      const values: string[] = [];
-      let current = '';
-      let inQuotes = false;
-      
-      for (let j = 0; j < line.length; j++) {
-        const char = line[j];
-        if (char === '"') {
-          inQuotes = !inQuotes;
-        } else if (char === ',' && !inQuotes) {
-          values.push(current.trim());
-          current = '';
-        } else {
-          current += char;
-        }
-      }
-      values.push(current.trim());
+    for (let i = 1; i < rows.length; i++) {
+      const values = rows[i];
 
       try {
         const period = values[getIndex('period')] || '';
@@ -241,12 +326,12 @@ export default function UploadRoyalty() {
         const label_name = values[getIndex('label_name')] || '';
         const platform = values[getIndex('platform')] || '';
         const country = values[getIndex('country')] || '';
-        const salesUnitRaw = values[getIndex('sales_unit')] || '0';
-        const netRevenueRaw = values[getIndex('net_revenue')] || '0';
+        const salesUnitRaw = values[getIndex('sales_unit')] ?? '';
+        const netRevenueRaw = values[getIndex('net_revenue')] ?? '';
         
         // Validate period format (YYYY-MM or similar)
-        if (!period) {
-          errors.push({ row: i + 1, field: 'period', message: 'Period tidak boleh kosong', severity: 'error' });
+        if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
+          errors.push({ row: i + 1, field: 'period', message: 'Period wajib berformat YYYY-MM', severity: 'error' });
           continue;
         }
         
@@ -260,13 +345,15 @@ export default function UploadRoyalty() {
           continue;
         }
         if (isrc.length !== 12) {
-          errors.push({ row: i + 1, field: 'isrc', message: `ISRC "${isrcRaw}" harus 12 karakter setelah normalisasi (saat ini: ${isrc.length})`, severity: 'warning' });
+          errors.push({ row: i + 1, field: 'isrc', message: `ISRC "${isrcRaw}" harus 12 karakter setelah normalisasi (saat ini: ${isrc.length})`, severity: 'error' });
+          continue;
         }
         
         // UPC is now OPTIONAL - will be auto-filled from database
         // Only validate format if provided
         if (upc && !/^\d{12,13}$/.test(upc)) {
-          errors.push({ row: i + 1, field: 'upc', message: `UPC "${upc}" harus 12-13 digit angka`, severity: 'warning' });
+          errors.push({ row: i + 1, field: 'upc', message: `UPC "${upc}" harus 12-13 digit angka`, severity: 'error' });
+          continue;
         }
         
         // Artist and label_name are optional (will be auto-filled from ISRC match)
@@ -279,28 +366,38 @@ export default function UploadRoyalty() {
         }
         
         // Validate country
-        if (!country) {
-          errors.push({ row: i + 1, field: 'country', message: 'Country tidak boleh kosong', severity: 'error' });
+        if (!/^[A-Za-z]{2}$/.test(country)) {
+          errors.push({ row: i + 1, field: 'country', message: 'Country wajib berupa kode 2 huruf', severity: 'error' });
           continue;
         }
         
         // Validate numeric fields
-        const salesUnit = parseInt(salesUnitRaw, 10);
-        if (isNaN(salesUnit)) {
+        const salesUnit = Number(salesUnitRaw);
+        if (!/^[+-]?\d+$/.test(salesUnitRaw) || !Number.isSafeInteger(salesUnit)) {
           errors.push({ row: i + 1, field: 'sales_unit', message: `Sales unit "${salesUnitRaw}" bukan angka valid`, severity: 'error' });
           continue;
         }
         if (salesUnit < 0) {
-          errors.push({ row: i + 1, field: 'sales_unit', message: 'Sales unit tidak boleh negatif', severity: 'warning' });
+          errors.push({ row: i + 1, field: 'sales_unit', message: 'Sales unit tidak boleh negatif', severity: 'error' });
+          continue;
         }
         
-        const netRevenue = parseFloat(netRevenueRaw);
-        if (isNaN(netRevenue)) {
+        const netRevenue = Number(netRevenueRaw);
+        if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(netRevenueRaw) || !Number.isFinite(netRevenue)) {
           errors.push({ row: i + 1, field: 'net_revenue', message: `Net revenue "${netRevenueRaw}" bukan angka valid`, severity: 'error' });
           continue;
         }
         if (netRevenue < 0) {
-          errors.push({ row: i + 1, field: 'net_revenue', message: 'Net revenue negatif terdeteksi', severity: 'warning' });
+          errors.push({ row: i + 1, field: 'net_revenue', message: 'Net revenue tidak boleh negatif', severity: 'error' });
+          continue;
+        }
+        if (netRevenue > Number.MAX_SAFE_INTEGER / 100) {
+          errors.push({ row: i + 1, field: 'net_revenue', message: 'Net revenue melebihi rentang nilai yang didukung', severity: 'error' });
+          continue;
+        }
+        if (Math.abs(netRevenue * 100 - Math.round(netRevenue * 100)) > 1e-8) {
+          errors.push({ row: i + 1, field: 'net_revenue', message: 'Net revenue maksimal 2 angka desimal', severity: 'error' });
+          continue;
         }
 
         const row: RoyaltyRow = {
@@ -328,28 +425,37 @@ export default function UploadRoyalty() {
 
   // Calculate revenue split preview per label
   const calculateRevenueSplitPreview = (data: RoyaltyRow[]): RevenueSplitPreview[] => {
-    const labelTotals: Record<string, number> = {};
+    const labelTotals: Record<string, RevenueSplitPreview> = {};
     
     data.forEach(row => {
-      labelTotals[row.label_name] = (labelTotals[row.label_name] || 0) + row.net_revenue;
+      const label = row.label_name || 'Label belum teridentifikasi';
+      const revenueCents = revenueToCents(row.net_revenue);
+      const adminShare = roundShareCents(revenueCents, 9n);
+      const artistShare = roundShareCents(revenueCents, 70n);
+
+      if (!labelTotals[label]) {
+        labelTotals[label] = {
+          label,
+          totalRevenue: 0n,
+          labelShare: 0n,
+          artistShare: 0n,
+          adminShare: 0n,
+          labelPercentage: 21,
+          artistPercentage: 70,
+          adminPercentage: 9,
+        };
+      }
+
+      // SQL rounds admin and artist shares per royalty row; label receives row remainder.
+      labelTotals[label].totalRevenue += revenueCents;
+      labelTotals[label].adminShare += adminShare;
+      labelTotals[label].artistShare += artistShare;
+      labelTotals[label].labelShare += revenueCents - adminShare - artistShare;
     });
     
-    return Object.entries(labelTotals).map(([label, totalRevenue]) => {
-      // Flat split for all labels: 70% Artist, 21% Label, 9% Admin
-      const adminShare = Math.round((totalRevenue * 0.09 + Number.EPSILON) * 100) / 100;
-      const artistShare = Math.round((totalRevenue * 0.70 + Number.EPSILON) * 100) / 100;
-      const labelShare = Math.round((totalRevenue - adminShare - artistShare + Number.EPSILON) * 100) / 100;
-      return {
-        label,
-        totalRevenue,
-        labelShare,
-        artistShare,
-        adminShare,
-        labelPercentage: 21,
-        artistPercentage: 70,
-        adminPercentage: 9,
-      };
-    }).sort((a, b) => b.totalRevenue - a.totalRevenue);
+    return Object.values(labelTotals).sort((a, b) =>
+      a.totalRevenue === b.totalRevenue ? 0 : a.totalRevenue > b.totalRevenue ? -1 : 1
+    );
   };
 
   // Check which UPCs/ISRCs from CSV exist in the database
@@ -443,6 +549,7 @@ export default function UploadRoyalty() {
   };
 
   const handleFileSelect = (file: File) => {
+    if (activeActionRef.current) return;
     if (!file.name.toLowerCase().endsWith('.csv')) {
       toast({
         title: 'Format File Salah',
@@ -461,47 +568,66 @@ export default function UploadRoyalty() {
       return;
     }
 
+    activeActionRef.current = 'parsing';
+    importedFileRef.current = null;
+    setIsParsing(true);
     setSelectedFile(file);
     setParsedData([]);
     setParseErrors([]);
+    setUploadError(null);
+    setServerValidationErrors([]);
+    setVisibleIssueCount(10);
     setRevenueSplitPreview([]);
     setLastUploadResult(null);
     setIsrcMatchResults([]);
+    setReplaceExisting(false);
+    setReplaceMode('filename_period');
+    setReplaceScopeAcknowledged(false);
 
     const reader = new FileReader();
     reader.onload = async (e) => {
-      const text = e.target?.result as string;
-      const { data, errors } = parseCSV(text);
-      setParsedData(data);
-      setParseErrors(errors);
-      
-      // Calculate revenue split preview
-      if (data.length > 0) {
-        setRevenueSplitPreview(calculateRevenueSplitPreview(data));
-        // Check ISRCs in database
-        await checkISRCsInDatabase(data);
-      }
+      try {
+        const text = e.target?.result as string;
+        const { data, errors } = parseCSV(text);
+        setParsedData(data);
+        setParseErrors(errors);
 
-      const errorCount = errors.filter(e => e.severity === 'error').length;
-      const warningCount = errors.filter(e => e.severity === 'warning').length;
-      
-      if (data.length > 0) {
-        toast({
-          title: 'File Berhasil Diparsing',
-          description: `${data.length} baris valid${warningCount > 0 ? `, ${warningCount} peringatan` : ''}`,
-        });
-      } else if (errorCount > 0) {
-        toast({
-          title: 'Parsing Gagal',
-          description: `Ditemukan ${errorCount} error yang harus diperbaiki`,
-          variant: 'destructive',
-        });
+        // Calculate revenue split preview
+        if (data.length > 0) {
+          setRevenueSplitPreview(calculateRevenueSplitPreview(data));
+          // Check ISRCs in database
+          await checkISRCsInDatabase(data);
+        }
+
+        const errorCount = errors.filter(e => e.severity === 'error').length;
+        const warningCount = errors.filter(e => e.severity === 'warning').length;
+
+        if (errorCount > 0) {
+          toast({
+            title: 'Parsing Gagal',
+            description: `Ditemukan ${errorCount} error yang harus diperbaiki sebelum import`,
+            variant: 'destructive',
+          });
+        } else if (data.length > 0) {
+          toast({
+            title: 'File Berhasil Diparsing',
+            description: `${data.length} baris valid${warningCount > 0 ? `, ${warningCount} peringatan` : ''}`,
+          });
+        }
+      } finally {
+        activeActionRef.current = null;
+        setIsParsing(false);
       }
+    };
+    reader.onerror = reader.onabort = () => {
+      setParseErrors([{ row: 0, field: 'file', message: 'File CSV gagal dibaca. Pilih ulang file.', severity: 'error' }]);
+      activeActionRef.current = null;
+      setIsParsing(false);
     };
     reader.readAsText(file);
   };
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     
@@ -509,10 +635,11 @@ export default function UploadRoyalty() {
     if (file) {
       handleFileSelect(file);
     }
-  }, []);
+  };
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    if (activeActionRef.current) return;
     setIsDragging(true);
   }, []);
 
@@ -522,12 +649,24 @@ export default function UploadRoyalty() {
   }, []);
 
   const handleUpload = async () => {
-    if (!selectedFile || parsedData.length === 0 || !user) return;
+    if (activeActionRef.current || !selectedFile || parsedData.length === 0 || !user || importedFileRef.current === selectedFile) return;
+    if (parseErrors.some(error => error.severity === 'error')) {
+      toast({ title: 'Validasi Gagal', description: 'Perbaiki semua error CSV sebelum import.', variant: 'destructive' });
+      return;
+    }
+    if (replaceExisting && !replaceScopeAcknowledged) {
+      toast({ title: 'Konfirmasi Replace Diperlukan', description: 'Konfirmasi scope penggantian sebelum menghapus data lama.', variant: 'destructive' });
+      return;
+    }
 
+    activeActionRef.current = 'upload';
     setIsUploading(true);
     setUploadProgress(0);
     setUploadStage('Memvalidasi data...');
     setLastUploadResult(null);
+    setUploadError(null);
+    setServerValidationErrors([]);
+    setVisibleIssueCount(10);
 
     try {
       // Simulate progress for UX
@@ -566,6 +705,8 @@ export default function UploadRoyalty() {
       if (!data.success) {
         // Handle validation errors from server
         if (data.validationErrors && data.validationErrors.length > 0) {
+          setUploadError('Validasi server menemukan data yang perlu diperbaiki.');
+          setServerValidationErrors(data.validationErrors);
           const errorMessages = data.validationErrors.slice(0, 5).map(
             (err: ValidationError) => `Baris ${err.row}: ${err.field} - ${err.message}`
           );
@@ -593,6 +734,7 @@ export default function UploadRoyalty() {
 
       setUploadProgress(100);
       setUploadStage('Selesai!');
+      importedFileRef.current = selectedFile;
 
       // Store result for display
       setLastUploadResult({
@@ -605,7 +747,10 @@ export default function UploadRoyalty() {
         replacedRows: data.replacedRows || 0,
       });
 
-      toast({
+      toast(data.idempotentReplay ? {
+        title: 'Upload Duplikat Dicegah',
+        description: 'CSV identik sudah pernah diimport. Data tidak ditambahkan ulang.',
+      } : {
         title: 'Upload Berhasil!',
         description: `${data.insertedCount} data royalty berhasil diimport`,
       });
@@ -614,18 +759,25 @@ export default function UploadRoyalty() {
       setSelectedFile(null);
       setParsedData([]);
       setParseErrors([]);
+      setRevenueSplitPreview([]);
+      setIsrcMatchResults([]);
+      if (fileInputRef.current) fileInputRef.current.value = '';
       setReplaceExisting(false);
       setReplaceMode('filename_period');
-      fetchUploadHistory();
+      setReplaceScopeAcknowledged(false);
+      await fetchUploadHistory();
 
-    } catch (error: any) {
-      console.error('Upload error:', error);
+    } catch (error: unknown) {
+      const errorMessage = await getFunctionErrorMessage(error);
+      setUploadError(errorMessage);
+      console.error('Upload error:', error, errorMessage);
       toast({
         title: 'Upload Gagal',
-        description: error.message || 'Terjadi kesalahan saat mengimport data',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
+      activeActionRef.current = null;
       setIsUploading(false);
       setUploadProgress(0);
       setUploadStage('');
@@ -633,6 +785,9 @@ export default function UploadRoyalty() {
   };
 
   const handleDeleteUpload = async (uploadId: string, filename: string) => {
+    if (activeActionRef.current || deletedUploadIdsRef.current.has(uploadId)) return;
+    activeActionRef.current = 'delete';
+    setDeletingUploadId(uploadId);
     try {
       toast({ title: 'Menghapus...', description: `Menghapus upload ${filename} dan rollback saldo...` });
 
@@ -643,19 +798,29 @@ export default function UploadRoyalty() {
       if (error) throw error;
       if (!data?.ok) throw new Error(data?.error || 'Unknown error');
 
+      deletedUploadIdsRef.current.add(uploadId);
+      setUploadHistory(history => history.filter(upload => upload.id !== uploadId));
+      if (data.rebuildErrors?.length || data.balanceRebuilt === false) {
+        throw new Error(`${data.deletedRecords} record dihapus, tetapi penghitungan ulang saldo gagal. ${data.rebuildErrors?.join(', ') || 'Saldo belum berhasil dihitung ulang.'}`);
+      }
+
       toast({
         title: 'Upload Dihapus',
         description: `${data.deletedRecords} record dihapus dan saldo telah di-rollback.`,
       });
 
-      fetchUploadHistory();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Delete upload error:', error);
       toast({
         title: 'Gagal Menghapus',
-        description: error.message || 'Terjadi kesalahan saat menghapus upload',
+        description: error instanceof Error ? error.message : 'Terjadi kesalahan saat menghapus upload',
         variant: 'destructive',
       });
+    } finally {
+      // A failed response can follow a committed delete; refresh before allowing another action.
+      await fetchUploadHistory();
+      activeActionRef.current = null;
+      setDeletingUploadId(null);
     }
   };
 
@@ -710,6 +875,40 @@ export default function UploadRoyalty() {
             Download Sample CSV
           </Button>
         </div>
+
+        {uploadError && (
+          <Card ref={uploadErrorRef} tabIndex={-1} role="alert" aria-labelledby="royalty-upload-error-title" className="border-destructive/50 bg-destructive/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive">
+            <CardHeader className="pb-2">
+              <CardTitle id="royalty-upload-error-title" className="flex items-center gap-2 text-destructive">
+                <XCircle className="h-5 w-5" aria-hidden="true" /> Upload royalti gagal
+              </CardTitle>
+              <CardDescription>Periksa masalah berikut sebelum mencoba lagi. Jika koneksi terputus, cek riwayat upload lebih dulu.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <p className="break-words font-medium">{uploadError}</p>
+              {serverErrorData && (
+                <p className="break-words rounded-md border border-destructive/30 bg-background/70 p-3">
+                  Baris data {serverErrorRow} (setelah header): ISRC {serverErrorData.isrc}, artist {serverErrorData.artist || 'kosong'}, label {serverErrorData.label_name || 'kosong'}.
+                </p>
+              )}
+              {serverValidationErrors.length > 0 && (
+                <ul className="max-h-64 space-y-2 overflow-y-auto" aria-label="Detail validasi server">
+                  {serverValidationErrors.slice(0, visibleIssueCount).map((issue, index) => (
+                    <li key={index}>Baris {issue.row}, {issue.field}: {issue.message}</li>
+                  ))}
+                </ul>
+              )}
+              {serverValidationErrors.length > visibleIssueCount && (
+                <Button variant="outline" size="sm" onClick={() => setVisibleIssueCount(count => count + 20)}>
+                  Tampilkan 20 detail berikutnya ({serverValidationErrors.length - visibleIssueCount} tersisa)
+                </Button>
+              )}
+              {serverErrorData && /artist.*(unresolved|ambiguous|missing|inactive)/i.test(uploadError) && (
+                <p className="text-muted-foreground">Periksa nama artist, label, dan ISRC pada baris ini. Jika ada nama artist yang sama, pastikan katalog menunjuk ke akun yang benar.</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Upload Result Summary */}
         {lastUploadResult && (
@@ -796,7 +995,7 @@ export default function UploadRoyalty() {
           </CardHeader>
           <CardContent>
             <div
-              className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${
+              className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${isBusy ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${
                 isDragging
                   ? 'border-primary bg-primary/10'
                   : 'border-border hover:border-primary/50 hover:bg-muted/30'
@@ -804,16 +1003,19 @@ export default function UploadRoyalty() {
               onDrop={handleDrop}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
-              onClick={() => fileInputRef.current?.click()}
+              aria-disabled={isBusy}
+              onClick={() => { if (!activeActionRef.current) fileInputRef.current?.click(); }}
             >
               <input
                 ref={fileInputRef}
                 type="file"
                 accept=".csv"
+                disabled={isBusy}
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) handleFileSelect(file);
+                  e.target.value = '';
                 }}
               />
               
@@ -835,6 +1037,8 @@ export default function UploadRoyalty() {
                 </div>
               )}
             </div>
+
+            {isParsing && <p role="status" className="mt-2 text-sm text-muted-foreground">Membaca dan memvalidasi CSV...</p>}
 
             {/* Parse Results */}
             {(parsedData.length > 0 || parseErrors.length > 0) && (
@@ -910,7 +1114,7 @@ export default function UploadRoyalty() {
                           Error ({parseErrors.filter(e => e.severity === 'error').length}):
                         </p>
                         <ul className="text-sm text-red-300 space-y-1">
-                          {parseErrors.filter(e => e.severity === 'error').slice(0, 5).map((error, index) => (
+                          {parseErrors.filter(e => e.severity === 'error').slice(0, visibleIssueCount).map((error, index) => (
                             <li key={index} className="flex items-start gap-2">
                               <span className="text-red-400 font-mono text-xs bg-red-500/20 px-1.5 py-0.5 rounded">
                                 Baris {error.row}
@@ -920,12 +1124,12 @@ export default function UploadRoyalty() {
                               </span>
                             </li>
                           ))}
-                          {parseErrors.filter(e => e.severity === 'error').length > 5 && (
-                            <li className="text-red-400/70">
-                              ...dan {parseErrors.filter(e => e.severity === 'error').length - 5} error lainnya
-                            </li>
-                          )}
                         </ul>
+                        {parseErrors.filter(e => e.severity === 'error').length > visibleIssueCount && (
+                          <Button variant="outline" size="sm" className="mt-3" onClick={() => setVisibleIssueCount(count => count + 20)}>
+                            Tampilkan error berikutnya ({parseErrors.filter(e => e.severity === 'error').length - visibleIssueCount} tersisa)
+                          </Button>
+                        )}
                       </div>
                     )}
                     
@@ -937,7 +1141,7 @@ export default function UploadRoyalty() {
                           Peringatan ({parseErrors.filter(e => e.severity === 'warning').length}):
                         </p>
                         <ul className="text-sm text-yellow-300 space-y-1">
-                          {parseErrors.filter(e => e.severity === 'warning').slice(0, 3).map((error, index) => (
+                          {parseErrors.filter(e => e.severity === 'warning').slice(0, visibleIssueCount).map((error, index) => (
                             <li key={index} className="flex items-start gap-2">
                               <span className="text-yellow-400 font-mono text-xs bg-yellow-500/20 px-1.5 py-0.5 rounded">
                                 Baris {error.row}
@@ -947,12 +1151,12 @@ export default function UploadRoyalty() {
                               </span>
                             </li>
                           ))}
-                          {parseErrors.filter(e => e.severity === 'warning').length > 3 && (
-                            <li className="text-yellow-400/70">
-                              ...dan {parseErrors.filter(e => e.severity === 'warning').length - 3} peringatan lainnya
-                            </li>
-                          )}
                         </ul>
+                        {parseErrors.filter(e => e.severity === 'warning').length > visibleIssueCount && (
+                          <Button variant="outline" size="sm" className="mt-3" onClick={() => setVisibleIssueCount(count => count + 20)}>
+                            Tampilkan peringatan berikutnya ({parseErrors.filter(e => e.severity === 'warning').length - visibleIssueCount} tersisa)
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1069,28 +1273,28 @@ export default function UploadRoyalty() {
                               <span className="font-medium">{split.label}</span>
                             </div>
                             <span className="font-mono text-sm text-muted-foreground">
-                              Total: Rp {split.totalRevenue.toLocaleString('id-ID')}
+                              Total: Rp {formatRevenueCents(split.totalRevenue)}
                             </span>
                           </div>
                           <div className="grid grid-cols-3 gap-2 text-sm">
                             <div className="p-2 rounded bg-red-500/10 border border-red-500/20">
                               <p className="text-xs text-muted-foreground">Admin ({split.adminPercentage}%)</p>
-                              <p className="font-mono text-red-400">Rp {split.adminShare.toLocaleString('id-ID')}</p>
+                              <p className="font-mono text-red-400">Rp {formatRevenueCents(split.adminShare)}</p>
                             </div>
                             <div className="p-2 rounded bg-blue-500/10 border border-blue-500/20">
                               <p className="text-xs text-muted-foreground">Label ({split.labelPercentage}%)</p>
-                              <p className="font-mono text-blue-400">Rp {split.labelShare.toLocaleString('id-ID')}</p>
+                              <p className="font-mono text-blue-400">Rp {formatRevenueCents(split.labelShare)}</p>
                             </div>
                             <div className="p-2 rounded bg-green-500/10 border border-green-500/20">
                               <p className="text-xs text-muted-foreground">Artist ({split.artistPercentage}%)</p>
-                              <p className="font-mono text-green-400">Rp {split.artistShare.toLocaleString('id-ID')}</p>
+                              <p className="font-mono text-green-400">Rp {formatRevenueCents(split.artistShare)}</p>
                             </div>
                           </div>
                         </div>
                       ))}
                     </div>
                     <p className="text-xs text-muted-foreground mt-3">
-                      * Semua label: 70% Artist, 21% Label, 9% Admin
+                      * Semua label: 70% Artist, 21% Label, 9% Admin. Pembulatan dilakukan per baris, sama seperti SQL server.
                     </p>
                   </div>
                 )}
@@ -1145,7 +1349,11 @@ export default function UploadRoyalty() {
                       type="checkbox"
                       className="mt-1 h-4 w-4 rounded border-border"
                       checked={replaceExisting}
-                      onChange={(event) => setReplaceExisting(event.target.checked)}
+                      disabled={isBusy}
+                      onChange={(event) => {
+                        setReplaceExisting(event.target.checked);
+                        setReplaceScopeAcknowledged(false);
+                      }}
                     />
                     <span>
                       <span className="block font-medium">Replace upload lama dengan nama file yang sama</span>
@@ -1154,34 +1362,31 @@ export default function UploadRoyalty() {
                       </span>
                     </span>
                   </label>
+                  {!replaceExisting && (
+                    <p className="ml-7 text-sm text-muted-foreground">
+                      Import biasa menambahkan data baru. CSV identik akan dikenali server sebagai duplikat dan tidak ditambahkan ulang.
+                    </p>
+                  )}
                   {replaceExisting && (
                     <div className="ml-7 mt-3 space-y-2 text-sm">
-                      <label className="flex items-start gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="replaceMode"
-                          className="mt-1"
-                          checked={replaceMode === 'filename_period'}
-                          onChange={() => setReplaceMode('filename_period')}
-                        />
-                        <span>
-                          <span className="block font-medium">Default: original filename + period</span>
-                          <span className="block text-muted-foreground">Hanya mengganti upload lama dengan nama file sama dan periode yang ada di file baru.</span>
-                        </span>
-                      </label>
-                      <label className="flex items-start gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="replaceMode"
-                          className="mt-1"
-                          checked={replaceMode === 'period'}
-                          onChange={() => setReplaceMode('period')}
-                        />
-                        <span>
-                          <span className="block font-medium text-amber-700 dark:text-amber-300">Manual: replace semua data pada period ini</span>
-                          <span className="block text-muted-foreground">Gunakan untuk revisi file berbeda nama. Semua royalty lama pada periode di file ini akan diganti.</span>
-                        </span>
-                      </label>
+                      <p className="font-medium">Nama file asli + periode</p>
+                      <p className="text-muted-foreground">Hanya upload lama dengan nama file dan periode sama yang dapat diganti.</p>
+                      <div className="rounded border border-amber-500/30 bg-amber-500/10 p-3">
+                        <p className="font-medium text-amber-700 dark:text-amber-300">Scope yang akan diganti</p>
+                        <p className="mt-1 text-muted-foreground">
+                          {`Data dari file lama bernama "${selectedFile?.name}" untuk periode ${replacementPeriodLabel} akan dihapus lalu diganti.`}
+                        </p>
+                        <label className="mt-3 flex items-start gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="mt-1 h-4 w-4 rounded border-border"
+                            checked={replaceScopeAcknowledged}
+                            disabled={isBusy}
+                            onChange={(event) => setReplaceScopeAcknowledged(event.target.checked)}
+                          />
+                          <span className="text-sm font-medium">Saya memahami scope penggantian ini.</span>
+                        </label>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1206,18 +1411,28 @@ export default function UploadRoyalty() {
                     <Button
                       className="gradient-primary"
                       onClick={handleUpload}
-                      disabled={isUploading}
+                      disabled={isBusy || hasParseErrors || (replaceExisting && !replaceScopeAcknowledged)}
                     >
                       <Upload className="h-4 w-4 mr-2" />
                       {replaceExisting ? 'Replace & Import' : 'Import'} {parsedData.length} Data
                     </Button>
                     <Button
                       variant="outline"
+                      disabled={isBusy}
                       onClick={() => {
+                        if (activeActionRef.current) return;
                         setSelectedFile(null);
                         setParsedData([]);
                         setParseErrors([]);
+                        setUploadError(null);
+                        setServerValidationErrors([]);
+                        setVisibleIssueCount(10);
                         setRevenueSplitPreview([]);
+                        setIsrcMatchResults([]);
+                        setReplaceExisting(false);
+                        setReplaceMode('filename_period');
+                        setReplaceScopeAcknowledged(false);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
                       }}
                     >
                       <XCircle className="h-4 w-4 mr-2" />
@@ -1276,7 +1491,7 @@ export default function UploadRoyalty() {
                           {upload.total_records.toLocaleString('id-ID')}
                         </TableCell>
                         <TableCell className="text-right">
-                          {(upload.inserted_records || upload.total_records).toLocaleString('id-ID')}
+                          {(upload.inserted_records ?? upload.total_records).toLocaleString('id-ID')}
                         </TableCell>
                         <TableCell>
                           <Badge className={`capitalize ${getStatusBadge(upload.status)}`}>
@@ -1286,8 +1501,8 @@ export default function UploadRoyalty() {
                         <TableCell className="text-right">
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
-                                <Trash2 className="h-4 w-4" />
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" disabled={isBusy || deletedUploadIdsRef.current.has(upload.id)} aria-label={`Hapus ${upload.original_filename}`}>
+                                {deletingUploadId === upload.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
@@ -1295,7 +1510,7 @@ export default function UploadRoyalty() {
                                 <AlertDialogTitle>Hapus Upload Royalti?</AlertDialogTitle>
                                 <AlertDialogDescription asChild>
                                   <div className="space-y-2 text-sm text-muted-foreground">
-                                    <div>Anda akan menghapus upload <strong>{upload.original_filename}</strong> ({(upload.inserted_records || upload.total_records).toLocaleString('id-ID')} record).</div>
+                                    <div>Anda akan menghapus upload <strong>{upload.original_filename}</strong> ({(upload.inserted_records ?? upload.total_records).toLocaleString('id-ID')} record).</div>
                                     <div className="text-destructive font-medium">⚠️ Saldo akan dihitung ulang dari data royalti yang tersisa.</div>
                                     <div>Tindakan ini tidak dapat dibatalkan.</div>
                                   </div>
@@ -1304,6 +1519,7 @@ export default function UploadRoyalty() {
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Batal</AlertDialogCancel>
                                 <AlertDialogAction
+                                  disabled={isBusy || deletedUploadIdsRef.current.has(upload.id)}
                                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                   onClick={() => handleDeleteUpload(upload.id, upload.original_filename)}
                                 >
@@ -1324,4 +1540,10 @@ export default function UploadRoyalty() {
       </div>
     </DashboardLayout>
   );
+}
+
+export default function UploadRoyalty() {
+  if (usesBackendReleases()) return <BackendRoyaltyImport />;
+  if (usesBackendFinance()) return <BackendRoyaltyImport />;
+  return <LegacyUploadRoyalty />;
 }

@@ -1,4 +1,10 @@
-import { useState, useRef } from 'react';
+import { usesBackendFinance } from '@/components/finance/mode';
+import { PicDestinationStatus } from '@/components/finance/PicDestinationStatus';
+import { BackendMediaUpload } from '@/components/settings/BackendMediaUpload';
+import { useEffect, useState, useRef } from 'react';
+import { Link } from 'react-router-dom';
+import { updateCurrentProfile } from '@/services/users';
+import { usesBackendDomain } from '@/api/routing';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -16,9 +22,13 @@ import { LabelLogoSettings } from '@/components/settings/LabelLogoSettings';
 import { IccnIntegrationSettings } from '@/components/settings/IccnIntegrationSettings';
 import { EmailNotificationSettings } from '@/components/settings/EmailNotificationSettings';
 import { AuthNoticeSettings } from '@/components/settings/AuthNoticeSettings';
+import { BackendAdminSettings, BackendUserSettings } from '@/components/settings/BackendSettings';
 
 export default function Settings() {
-  const { profile, user, role, isLabel, isWhitelabel, isSsoUser, refreshProfile } = useAuth();
+  const backendUsers = usesBackendDomain('users');
+  const backendStorage = usesBackendDomain('storage');
+  const backendSettings = usesBackendDomain('settings');
+  const { profile, user, role, isAdmin, isLabel, isWhitelabel, isSsoUser, refreshProfile, changePassword } = useAuth();
   const isGoogleUser = profile?.sso_provider === 'google';
   const isIccnUser = profile?.sso_provider === 'iccn';
   const hasPasswordSet = profile?.password_set === true;
@@ -35,9 +45,19 @@ export default function Settings() {
     address: profile?.address || '',
   });
   const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
+
+  useEffect(() => {
+    if (!profile) return;
+    setFormData({
+      full_name: profile.full_name || '',
+      phone: profile.phone || '',
+      address: profile.address || '',
+    });
+  }, [profile]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,16 +66,12 @@ export default function Settings() {
 
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
+      await updateCurrentProfile(user.id, {
           full_name: formData.full_name,
           phone: formData.phone,
           address: formData.address,
-        })
-        .eq('id', user.id);
-
-      if (error) throw error;
+        });
+      await refreshProfile();
 
       toast({
         title: 'Berhasil',
@@ -78,10 +94,10 @@ export default function Settings() {
     
     if (!user) return;
 
-    if (passwordData.newPassword.length < 6) {
+    if (passwordData.newPassword.length < 12) {
       toast({
         title: 'Error',
-        description: 'Password minimal 6 karakter',
+        description: 'Password minimal 12 karakter',
         variant: 'destructive',
       });
       return;
@@ -98,22 +114,14 @@ export default function Settings() {
 
     setPasswordLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('change-own-password', {
-        body: { new_password: passwordData.newPassword },
-      });
-
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      await changePassword(passwordData.currentPassword, passwordData.newPassword);
 
       toast({
         title: 'Berhasil',
-        description: isGoogleUser && !hasPasswordSet 
-          ? 'Password berhasil diatur. Anda sekarang bisa login dengan email & password.' 
-          : 'Password berhasil diubah',
+        description: 'Password berhasil diubah. Silakan login kembali.',
       });
       
-      setPasswordData({ newPassword: '', confirmPassword: '' });
-      await refreshProfile();
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (error: any) {
       console.error('Error changing password:', error);
       toast({
@@ -127,6 +135,8 @@ export default function Settings() {
   };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (backendUsers) return;
+    if (backendStorage) return;
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
@@ -154,11 +164,7 @@ export default function Settings() {
         .getPublicUrl(filePath);
 
       const avatarUrl = `${publicUrl}?t=${Date.now()}`;
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ avatar_url: avatarUrl })
-        .eq('id', user.id);
-      if (updateError) throw updateError;
+      await updateCurrentProfile(user.id, { avatar_url: avatarUrl });
 
       await refreshProfile();
       toast({ title: 'Berhasil', description: 'Foto profil berhasil diupload' });
@@ -172,14 +178,11 @@ export default function Settings() {
   };
 
   const handleRemoveAvatar = async () => {
+    if (backendStorage || backendUsers) return;
     if (!user) return;
     setAvatarLoading(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ avatar_url: null })
-        .eq('id', user.id);
-      if (error) throw error;
+      await updateCurrentProfile(user.id, { avatar_url: null });
       await refreshProfile();
       toast({ title: 'Berhasil', description: 'Foto profil berhasil dihapus' });
     } catch (error: any) {
@@ -199,20 +202,36 @@ export default function Settings() {
           <p className="text-muted-foreground">Kelola pengaturan akun Anda</p>
         </div>
 
+        {role === 'label_custom' && (usesBackendFinance() ? <PicDestinationStatus /> : <p role="status">Keuangan PIC belum diaktifkan. Rekening dan saldo belum dapat dikonfirmasi.</p>)}
+        {backendSettings && <section role="status" className="space-y-3 rounded-lg border bg-muted/30 p-4">
+          <p>Backend mandiri aktif. Di halaman ini Anda dapat mengubah profil, password, preferensi notifikasi, branding, dan pengaturan aplikasi. Pembuatan serta pengelolaan akun berada di halaman Users.</p>
+          {isAdmin && <Button asChild variant="outline"><Link to="/dashboard/users">Buka pengelolaan Users</Link></Button>}
+        </section>}
+
         {/* Super Admin Settings Section */}
         {isSuperAdmin && (
           <>
-            <div>
-              <h2 className="text-xl font-semibold mb-4">Super Admin Settings</h2>
-              <SuperAdminSettings />
-            </div>
+            {backendSettings ? <BackendAdminSettings /> : <>
+              <div>
+                <h2 className="text-xl font-semibold mb-4">Super Admin Settings</h2>
+                <SuperAdminSettings />
+              </div>
+              <Separator className="my-6" />
+              <AuthNoticeSettings />
+            </>}
             <Separator className="my-6" />
-            <AuthNoticeSettings />
-            <Separator className="my-6" />
-            <div>
+            {backendSettings ? <Card className="bg-card/50 border-border/50">
+              <CardHeader>
+                <CardTitle>Integrasi ICCN</CardTitle>
+                <CardDescription>Keycloak partner akan dihubungkan melalui adapter backend Soundpub.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">Konfigurasi legacy Supabase dinonaktifkan. Integrasi baru menunggu issuer, realm, client ID, redirect URI, dan metode PKCE Keycloak yang terverifikasi.</p>
+              </CardContent>
+            </Card> : <div>
               <h2 className="text-xl font-semibold mb-4">Integrasi ICCN</h2>
               <IccnIntegrationSettings />
-            </div>
+            </div>}
             <Separator className="my-6" />
           </>
         )}
@@ -226,7 +245,7 @@ export default function Settings() {
         )}
 
         {/* Avatar Section */}
-        <Card className="bg-card/50 border-border/50">
+        {backendStorage ? (backendUsers && profile ? <BackendMediaUpload label="Foto profil" binding={{ category: 'USER_AVATAR', resource_type: 'user', resource_id: profile.id }} reference={profile.avatar_url} onChange={refreshProfile} /> : <p role="status">Profil backend diperlukan untuk upload foto.</p>) : <Card className="bg-card/50 border-border/50">
           <CardHeader>
             <CardTitle>Foto Profil</CardTitle>
             <CardDescription>Upload foto profil Anda</CardDescription>
@@ -247,7 +266,7 @@ export default function Settings() {
                     variant="outline"
                     size="sm"
                     onClick={() => avatarInputRef.current?.click()}
-                    disabled={avatarLoading}
+                    disabled={backendUsers || backendStorage || avatarLoading}
                   >
                     {avatarLoading ? (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -261,7 +280,7 @@ export default function Settings() {
                       variant="ghost"
                       size="sm"
                       onClick={handleRemoveAvatar}
-                      disabled={avatarLoading}
+                      disabled={backendUsers || backendStorage || avatarLoading}
                       className="text-destructive hover:text-destructive"
                     >
                       <Trash2 className="h-4 w-4 mr-2" />
@@ -269,7 +288,7 @@ export default function Settings() {
                     </Button>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground">JPG, PNG, WebP. Maks 2MB.</p>
+                <p className="text-xs text-muted-foreground">{backendStorage ? 'Gunakan upload media di atas. PNG, JPEG, WebP. Maks 5MB.' : backendUsers ? 'Upload foto ditunda sampai penyimpanan media backend tersedia.' : 'JPG, PNG, WebP. Maks 2MB.'}</p>
                 <input
                   ref={avatarInputRef}
                   type="file"
@@ -280,7 +299,7 @@ export default function Settings() {
               </div>
             </div>
           </CardContent>
-        </Card>
+        </Card>}
 
         {/* Two Column Layout for Desktop */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -382,6 +401,17 @@ export default function Settings() {
                   )}
                   <form onSubmit={handlePasswordChange} className="space-y-4">
                     <div className="space-y-2">
+                      <Label htmlFor="current_password">Password Saat Ini</Label>
+                      <Input
+                        id="current_password"
+                        type="password"
+                        value={passwordData.currentPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                        placeholder="Masukkan password saat ini"
+                        autoComplete="current-password"
+                      />
+                    </div>
+                    <div className="space-y-2">
                       <Label htmlFor="new_password">
                         {isGoogleUser && !hasPasswordSet ? 'Password' : 'Password Baru'}
                       </Label>
@@ -392,6 +422,7 @@ export default function Settings() {
                           value={passwordData.newPassword}
                           onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
                           placeholder={isGoogleUser && !hasPasswordSet ? 'Buat password Anda' : 'Masukkan password baru'}
+                          autoComplete="new-password"
                           className="pr-10"
                         />
                         <Button
@@ -419,6 +450,7 @@ export default function Settings() {
                           value={passwordData.confirmPassword}
                           onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
                           placeholder="Konfirmasi password"
+                          autoComplete="new-password"
                           className="pr-10"
                         />
                         <Button
@@ -441,7 +473,7 @@ export default function Settings() {
                       type="submit" 
                       variant={isGoogleUser && !hasPasswordSet ? 'default' : 'outline'}
                       className={isGoogleUser && !hasPasswordSet ? 'gradient-primary' : ''}
-                      disabled={passwordLoading || !passwordData.newPassword || !passwordData.confirmPassword}
+                      disabled={passwordLoading || !passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword}
                     >
                       {passwordLoading ? (
                         <>
@@ -516,7 +548,7 @@ export default function Settings() {
               </CardContent>
             </Card>
 
-            <EmailNotificationSettings />
+            {backendSettings ? <BackendUserSettings /> : <EmailNotificationSettings />}
           </div>
         </div>
       </div>

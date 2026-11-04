@@ -1,3 +1,4 @@
+import { usesBackendDomain } from '@/api/routing';
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,6 +16,7 @@ export function GA4Provider({ children }: { children: React.ReactNode }) {
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
+    if (usesBackendDomain('settings')) return;
     const checkGA4Status = async () => {
       try {
         const { data, error } = await supabase
@@ -36,7 +38,7 @@ export function GA4Provider({ children }: { children: React.ReactNode }) {
 
   // Initialize GA4 script
   useEffect(() => {
-    if (!ga4Enabled || initialized) return;
+    if (usesBackendDomain('settings') || !ga4Enabled || initialized) return;
 
     // GA4 Measurement ID is stored as a secret, we'll use a placeholder
     // In production, this would come from an edge function

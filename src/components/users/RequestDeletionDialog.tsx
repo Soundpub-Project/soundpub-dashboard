@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { requestArtistDeletion } from "@/services/artists";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -16,7 +16,7 @@ import { Loader2, Trash2 } from "lucide-react";
 
 interface ArtistProfile {
   id: string;
-  email: string;
+  email: string | null;
   full_name: string;
 }
 
@@ -45,19 +45,7 @@ export function RequestDeletionDialog({
 
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Unauthorized");
-
-      const { error } = await supabase
-        .from("artist_deletion_requests")
-        .insert({
-          artist_id: artist.id,
-          label_id: user.id,
-          reason: reason,
-          status: "pending"
-        });
-
-      if (error) throw error;
+      await requestArtistDeletion(artist.id, reason);
 
       toast.success("Permintaan penghapusan profil artis berhasil dikirim ke Admin");
       setReason("");

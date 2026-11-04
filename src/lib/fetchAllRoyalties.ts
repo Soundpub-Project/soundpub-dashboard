@@ -1,3 +1,4 @@
+import { requireLegacyFinance } from '@/components/finance/mode';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface RoyaltyRecord {
@@ -19,6 +20,7 @@ export interface RoyaltyRecord {
 }
 
 export async function fetchAllRoyalties(selectColumns?: string): Promise<RoyaltyRecord[]> {
+  requireLegacyFinance();
   const allData: RoyaltyRecord[] = [];
   const BATCH_SIZE = 1000;
   let offset = 0;

@@ -1,3 +1,6 @@
+import { useMediaUrl } from '@/hooks/useMediaUrl';
+import { releasesApi } from '@/api/releases';
+import { usesBackendReleases, releaseWorkflowUnavailable, listBackendReleases, archiveBackendRelease } from '@/services/releases';
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -62,6 +65,7 @@ interface Release {
   status: string;
   created_at: string;
   label_id: string;
+  version?: number;
   archived_at: string | null;
   rejection_reason: string | null;
 }
@@ -81,10 +85,11 @@ const PAGE_SIZE_OPTIONS = [
 
 export default function Releases() {
   const navigate = useNavigate();
-  const { isAdmin, isLabel, isArtist, isWhitelabel, isSsoUser, isArtistProfileCompleted, refreshProfile, loading: authLoading } = useAuth();
+  const { isAdmin, isLabelCustom, isLabel, isArtist, isWhitelabel, isSsoUser, isArtistProfileCompleted, refreshProfile, loading: authLoading } = useAuth();
   const [releases, setReleases] = useState<Release[]>([]);
   const [labels, setLabels] = useState<LabelInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   
@@ -107,8 +112,8 @@ export default function Releases() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<string>('10');
 
-  const canManageReleases = isAdmin || isLabel || isWhitelabel;
-  const canCreateRelease = isAdmin || isLabel || isArtist || isWhitelabel;
+  const canManageReleases = isAdmin || isLabel || isWhitelabel || (isLabelCustom && usesBackendReleases());
+  const canCreateRelease = isAdmin || isLabel || isArtist || isWhitelabel || (isLabelCustom && usesBackendReleases());
 
   useEffect(() => {
     fetchReleases();
@@ -116,7 +121,14 @@ export default function Releases() {
   }, []);
 
   const fetchReleases = async () => {
+    setLoading(true); setLoadError('');
     try {
+      if (usesBackendReleases()) {
+        const data = await listBackendReleases();
+        setReleases(data);
+        setLabels(data.filter(row => row.label_id && row.label_name).map(row => ({ id: row.label_id!, full_name: row.label_name! })));
+        return;
+      }
       const { data, error } = await supabase
         .from('releases')
         .select('*')
@@ -126,12 +138,15 @@ export default function Releases() {
       setReleases(data || []);
     } catch (error) {
       console.error('Error fetching releases:', error);
+      setLoadError(error instanceof Error ? error.message : 'Gagal memuat data');
+      toast.error(error instanceof Error ? error.message : 'Gagal memuat releases');
     } finally {
       setLoading(false);
     }
   };
 
   const fetchLabels = async () => {
+    if (usesBackendReleases()) return;
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -147,7 +162,7 @@ export default function Releases() {
 
   // Fetch labels when releases are loaded
   useEffect(() => {
-    if (releases.length > 0) {
+    if (!usesBackendReleases() && releases.length > 0) {
       const labelIds = [...new Set(releases.map(r => r.label_id))];
       supabase
         .from('profiles')
@@ -193,6 +208,16 @@ export default function Releases() {
   };
 
   const handleConfirmRelease = async (release: Release) => {
+    if (usesBackendReleases()) {
+      if (!isAdmin) return;
+      try {
+        const current = await releasesApi.detail(release.id);
+        await releasesApi.update(release.id, { version: current.version, status: 'processing' });
+        toast.success('Release berhasil dikonfirmasi');
+        await fetchReleases();
+      } catch (error) { toast.error(error instanceof Error ? error.message : 'Gagal mengkonfirmasi release'); }
+      return;
+    }
     if (!isAdmin) return;
     
     try {
@@ -210,11 +235,13 @@ export default function Releases() {
   };
 
   const handleOpenActivateDialog = (release: Release) => {
+    if (usesBackendReleases()) { toast.error(releaseWorkflowUnavailable); return; }
     setSelectedRelease(release);
     setActivateDialogOpen(true);
   };
 
   const handleOpenRejectDialog = (release: Release) => {
+    if (usesBackendReleases()) { toast.error(releaseWorkflowUnavailable); return; }
     setSelectedRelease(release);
     setRejectDialogOpen(true);
   };
@@ -286,6 +313,7 @@ export default function Releases() {
   };
 
   const handleAddRelease = () => {
+    if (usesBackendReleases()) { navigate('/dashboard/releases/new'); return; }
     // All artists must complete artist profile first
     if (isArtist && !isArtistProfileCompleted) {
       setOnboardingOpen(true);
@@ -300,6 +328,7 @@ export default function Releases() {
   };
 
   const handleContinuePayment = async (release: Release) => {
+    if (usesBackendReleases()) { toast.error(releaseWorkflowUnavailable); return; }
     try {
       const invoiceData = await createXenditInvoice(release.id);
       toast.success('Mengarahkan ke halaman pembayaran...');
@@ -311,11 +340,25 @@ export default function Releases() {
   };
 
   const handleDeleteRelease = (release: Release) => {
+    if (usesBackendReleases()) { toast.error(releaseWorkflowUnavailable); return; }
     setSelectedRelease(release);
     setDeleteDialogOpen(true);
   };
 
-  const handleArchiveRelease = (release: Release) => {
+  const handleArchiveRelease = async (release: Release) => {
+    if (usesBackendReleases()) {
+      if (bulkLoading) return;
+      setBulkLoading(true);
+      try {
+        if (!release.version) throw new Error('Muat ulang release sebelum mengarsipkan.');
+        await archiveBackendRelease({ id: release.id, version: release.version, archived_at: release.archived_at });
+        toast.success(release.archived_at ? 'Release dipulihkan' : 'Release diarsipkan');
+        await fetchReleases();
+      } catch (error) {
+        toast.error(`${error instanceof Error ? error.message : 'Gagal mengarsipkan release'}. Muat ulang sebelum mencoba lagi.`);
+      } finally { setBulkLoading(false); }
+      return;
+    }
     setSelectedRelease(release);
     setArchiveDialogOpen(true);
   };
@@ -342,6 +385,7 @@ export default function Releases() {
   };
 
   const handleBulkArchive = async () => {
+    if (usesBackendReleases()) { toast.error(releaseWorkflowUnavailable); return; }
     if (selectedIds.length === 0) return;
 
     setBulkLoading(true);
@@ -372,6 +416,7 @@ export default function Releases() {
   };
 
   const handleBulkStatusChange = async () => {
+    if (usesBackendReleases()) { toast.error(releaseWorkflowUnavailable); return; }
     if (selectedIds.length === 0 || !bulkStatus) return;
 
     setBulkLoading(true);
@@ -396,6 +441,7 @@ export default function Releases() {
   };
 
   const handleBulkDelete = async () => {
+    if (usesBackendReleases()) { toast.error(releaseWorkflowUnavailable); return; }
     if (selectedIds.length === 0) return;
 
     if (!confirm(`Yakin ingin menghapus ${selectedIds.length} release? Tindakan ini tidak dapat dibatalkan.`)) {
@@ -455,6 +501,8 @@ export default function Releases() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        {loadError && <div role="alert"><p>{loadError}</p><Button disabled={loading} onClick={() => void fetchReleases()}>Coba lagi</Button></div>}
+        {usesBackendReleases() && <p role="status">{releaseWorkflowUnavailable}</p>}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold">Releases</h1>
@@ -683,7 +731,7 @@ export default function Releases() {
                         )}
                         <div className="h-14 w-14 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
                           {release.cover_url ? (
-                            <img src={release.cover_url} alt={release.title} className="h-full w-full object-cover" />
+                            <ReleaseCover reference={release.cover_url} alt={release.title} className="h-full w-full object-cover" />
                           ) : (
                             <Disc3 className="h-6 w-6 text-muted-foreground" />
                           )}
@@ -793,8 +841,8 @@ export default function Releases() {
                           <TableCell>
                             <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center overflow-hidden">
                               {release.cover_url ? (
-                                <img
-                                  src={release.cover_url}
+                                <ReleaseCover
+                                  reference={release.cover_url}
                                   alt={release.title}
                                   className="h-full w-full object-cover"
                                 />
@@ -1025,4 +1073,9 @@ export default function Releases() {
       </div>
     </DashboardLayout>
   );
+}
+
+function ReleaseCover({ reference, ...props }: { reference: string; alt: string; className: string }) {
+  const url = useMediaUrl(reference);
+  return url ? <img src={url} {...props} /> : null;
 }

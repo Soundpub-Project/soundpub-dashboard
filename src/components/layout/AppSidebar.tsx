@@ -1,3 +1,7 @@
+import { usesBackendFinance } from '@/components/finance/mode';
+import { usesBackendDomain } from '@/api/routing';
+import { useMediaUrl } from '@/hooks/useMediaUrl';
+import { brandingUpdatedEvent, getPublicSettingsRows } from '@/services/settings';
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
@@ -60,25 +64,25 @@ const musicDashboardItems: NavItem[] = [
     title: 'Dasbor', 
     url: '/dashboard', 
     icon: LayoutDashboard,
-    roles: ['superadmin', 'admin', 'label', 'artist', 'user', 'whitelabel'],
+    roles: ['superadmin', 'admin', 'label', 'label_custom', 'artist', 'user', 'whitelabel'],
   },
   { 
     title: 'Rilis', 
     url: '/dashboard/releases', 
     icon: Disc3,
-    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel'],
+    roles: ['superadmin', 'admin', 'label', 'label_custom', 'artist', 'whitelabel'],
   },
   { 
     title: 'Lagu', 
     url: '/dashboard/tracks', 
     icon: Music,
-    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel'],
+    roles: ['superadmin', 'admin', 'label', 'label_custom', 'artist', 'whitelabel'],
   },
   { 
     title: 'Royalti', 
     url: '/dashboard/royalties', 
     icon: DollarSign,
-    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel'],
+    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel', 'label_custom'],
   },
   { 
     title: 'Analitik', 
@@ -90,7 +94,7 @@ const musicDashboardItems: NavItem[] = [
     title: 'Ringkasan Royalti', 
     url: '/dashboard/royalty-summary', 
     icon: PieChart,
-    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel'],
+    roles: ['superadmin', 'admin', 'label', 'artist', 'whitelabel', 'label_custom'],
   },
   {
     title: 'Takedown',
@@ -218,7 +222,7 @@ const labelManagementItems: NavItem[] = [
     title: 'Artis', 
     url: '/dashboard/my-artists',
     icon: Users,
-    roles: ['superadmin', 'admin', 'label', 'whitelabel'],
+    roles: ['superadmin', 'admin', 'label', 'label_custom', 'whitelabel'],
   },
   {
     title: 'Permintaan Hapus Artis',
@@ -240,13 +244,13 @@ const accountItems: NavItem[] = [
     title: 'Pembayaran', 
     url: '/dashboard/payouts', 
     icon: CreditCard,
-    roles: ['superadmin', 'admin', 'label', 'artist', 'user', 'whitelabel'],
+    roles: ['superadmin', 'admin', 'label', 'artist', 'user', 'whitelabel', 'label_custom'],
   },
   { 
     title: 'Pengaturan', 
     url: '/dashboard/settings', 
     icon: Settings,
-    roles: ['superadmin', 'admin', 'label', 'artist', 'user', 'copyright', 'whitelabel'],
+    roles: ['superadmin', 'admin', 'label', 'label_custom', 'artist', 'user', 'copyright', 'whitelabel'],
   },
 ];
 
@@ -265,6 +269,7 @@ const getRoleLabel = (roleValue: string | null) => {
     superadmin: 'Super Admin',
     admin: 'Admin',
     label: 'Label',
+    label_custom: 'Label Custom',
     artist: 'Artist',
     copyright: 'Copyright',
     whitelabel: 'White Label',
@@ -279,6 +284,7 @@ const getRoleBadge = (role: string | null) => {
     superadmin: 'bg-red-500/20 text-red-400',
     admin: 'bg-orange-500/20 text-orange-400',
     label: 'bg-blue-500/20 text-blue-400',
+    label_custom: 'bg-blue-500/20 text-blue-400',
     artist: 'bg-green-500/20 text-green-400',
     user: 'bg-gray-500/20 text-gray-400',
     copyright: 'bg-cyan-500/20 text-cyan-400',
@@ -289,11 +295,13 @@ const getRoleBadge = (role: string | null) => {
 
 export function AppSidebar() {
   const location = useLocation();
-  const { user, role, signOut, isAdmin, isLabel, isWhitelabel, isArtist, isCopyright, isSuperAdmin } = useAuth();
-  const { isSsoUser, triggerSsoLogout } = useSsoAuth();
+  const { profile: authProfile, user, role, signOut, isAdmin, isLabel, isLabelCustom, isWhitelabel, isArtist, isCopyright, isSuperadmin: isSuperAdmin, isSsoUser } = useAuth();
+  const { triggerSsoLogout } = useSsoAuth();
   const { resolvedTheme } = useTheme();
   const { state } = useSidebar(); const isCollapsed = state === "collapsed";
-  const [profile, setProfile] = useState<any>(null);
+  const [legacyProfile, setProfile] = useState<any>(null);
+  const profile = usesBackendDomain('users') ? authProfile : legacyProfile;
+  const avatarUrl = useMediaUrl(profile?.avatar_url);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -305,12 +313,9 @@ export function AppSidebar() {
   useEffect(() => {
     const fetchLogo = async () => {
       try {
-        const { data, error } = await supabase
-          .from('app_settings')
-          .select('key, value')
-          .in('key', ['dashboard_logo_light', 'dashboard_logo_dark', 'dashboard_logo']);
+        const data = await getPublicSettingsRows(['dashboard_logo_light', 'dashboard_logo_dark', 'dashboard_logo']);
 
-        if (!error && data) {
+        if (data) {
           const settingsMap: Record<string, string | null> = {};
           data.forEach(row => {
             settingsMap[row.key] = row.value;
@@ -320,17 +325,20 @@ export function AppSidebar() {
             ? settingsMap.dashboard_logo_dark || settingsMap.dashboard_logo_light || settingsMap.dashboard_logo
             : settingsMap.dashboard_logo_light || settingsMap.dashboard_logo;
           
-          setLogoUrl(themeLogo || null);
+          setLogoUrl(themeLogo ? `${themeLogo}?v=${Date.now()}` : null);
         }
       } catch (error) {
         console.error('Error fetching dashboard logo:', error);
       }
     };
 
-    fetchLogo();
+    void fetchLogo();
+    window.addEventListener(brandingUpdatedEvent, fetchLogo);
+    return () => window.removeEventListener(brandingUpdatedEvent, fetchLogo);
   }, [resolvedTheme]);
 
   const fetchProfile = async () => {
+    if (usesBackendDomain('users')) return;
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
@@ -344,7 +352,8 @@ export function AppSidebar() {
 
   const filterByRole = (items: NavItem[]) => {
     if (!role) return [];
-    return items.filter(item => !item.roles || item.roles.includes(role));
+    return items.filter(item => !(role === 'label_custom' && ['/dashboard/royalties', '/dashboard/royalty-summary', '/dashboard/payouts'].includes(item.url) && !usesBackendFinance()) && (!item.roles || item.roles.includes(role)) &&
+      !(role === 'label_custom' && ['/dashboard/releases', '/dashboard/tracks'].includes(item.url) && !usesBackendDomain('releases')));
   };
 
   const isActive = (path: string) => {
@@ -376,7 +385,7 @@ export function AppSidebar() {
 
       <SidebarContent className="px-2">
         {/* Dasbor Music */}
-        {(isAdmin || isLabel || isWhitelabel || isArtist) && filterByRole(musicDashboardItems).length > 0 && (
+        {(isAdmin || isLabel || isLabelCustom || isWhitelabel || isArtist) && filterByRole(musicDashboardItems).length > 0 && (
           <SidebarGroup>
             <SidebarGroupLabel>Dasbor Music</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -506,7 +515,7 @@ export function AppSidebar() {
         )}
 
         {/* Manajemen Label, Whitelabel & Artist */}
-        {(isLabel || isWhitelabel || isArtist) && filterByRole(labelManagementItems).length > 0 && (
+        {(isLabel || isLabelCustom || isWhitelabel || isArtist) && filterByRole(labelManagementItems).length > 0 && (
           <SidebarGroup>
             <SidebarGroupLabel>Manajemen</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -562,7 +571,7 @@ export function AppSidebar() {
           <div className="flex items-center gap-3 p-2 rounded-lg bg-sidebar-accent/50">
             <Avatar className="h-9 w-9 shrink-0">
               {profile?.avatar_url ? (
-                <AvatarImage src={profile.avatar_url} alt={profile.full_name} />
+                <AvatarImage src={avatarUrl} alt={profile.full_name} />
               ) : null}
               <AvatarFallback className="bg-primary text-primary-foreground text-sm">
                 {profile?.full_name ? getInitials(profile.full_name) : 'U'}

@@ -1,3 +1,5 @@
+import { usesBackendDomain } from '@/api/routing';
+import { BackendNotificationInbox } from './BackendNotificationInbox';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -27,6 +29,11 @@ interface AppNotification {
 }
 
 export function NotificationBell() {
+  if (usesBackendDomain('notifications')) return <BackendNotificationInbox />;
+  return <LegacyNotificationBell />;
+}
+
+function LegacyNotificationBell() {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [open, setOpen] = useState(false);

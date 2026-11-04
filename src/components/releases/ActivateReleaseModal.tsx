@@ -1,4 +1,5 @@
-﻿import { useState, useEffect } from 'react';
+import { usesBackendReleases, releaseWorkflowUnavailable } from '@/services/releases';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Dialog,
@@ -32,7 +33,7 @@ interface ActivateReleaseModalProps {
   onSuccess: () => void;
 }
 
-export function ActivateReleaseModal({
+function LegacyActivateReleaseModal({
   open,
   onOpenChange,
   release,
@@ -270,4 +271,9 @@ export function ActivateReleaseModal({
       </DialogContent>
     </Dialog>
   );
+}
+
+export function ActivateReleaseModal(props: Parameters<typeof LegacyActivateReleaseModal>[0]) {
+  if (usesBackendReleases()) return props.open ? <p role="alert">{releaseWorkflowUnavailable}</p> : null;
+  return <LegacyActivateReleaseModal {...props} />;
 }

@@ -1,3 +1,5 @@
+import { usesBackendFinance } from '@/components/finance/mode';
+import { usesBackendReleases } from '@/services/releases';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -56,11 +58,30 @@ import Takedown from "./pages/Takedown";
 import TakedownDetail from "./pages/TakedownDetail";
 import NotFound from "./pages/NotFound";
 import IccnIframeAuth from "./pages/IccnIframeAuth";
+import { useEffect } from "react";
+import { brandingUpdatedEvent, getPublicSettingsRows } from "@/services/settings";
 
 const queryClient = new QueryClient();
 
+function PublicFavicon() {
+  useEffect(() => {
+    const load = () => getPublicSettingsRows(['favicon']).then(rows => {
+      const href = rows[0]?.value;
+      let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+      if (!href) { link?.remove(); return; }
+      if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
+      link.href = `${href}?v=${Date.now()}`;
+    }).catch(() => undefined);
+    void load();
+    window.addEventListener(brandingUpdatedEvent, load);
+    return () => window.removeEventListener(brandingUpdatedEvent, load);
+  }, []);
+  return null;
+}
+
 const App = () => (
   <ThemeProvider>
+    <PublicFavicon />
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
@@ -97,7 +118,7 @@ const App = () => (
                 <Route
                   path="/dashboard"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedRoles={["superadmin", "admin", "copyright", "user", "label", "label_custom", "artist", "whitelabel"]}>
                       <Dashboard />
                     </ProtectedRoute>
                   }
@@ -105,7 +126,7 @@ const App = () => (
                 <Route
                   path="/dashboard/releases"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedRoles={usesBackendReleases() ? ["superadmin", "admin", "copyright", "user", "label", "label_custom", "artist", "whitelabel"] : undefined}>
                       <Releases />
                     </ProtectedRoute>
                   }
@@ -113,7 +134,7 @@ const App = () => (
                 <Route
                   path="/dashboard/releases/new"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedRoles={usesBackendReleases() ? ["superadmin", "admin", "copyright", "user", "label", "label_custom", "artist", "whitelabel"] : undefined}>
                       <ReleaseCreate />
                     </ProtectedRoute>
                   }
@@ -121,7 +142,7 @@ const App = () => (
                 <Route
                   path="/dashboard/releases/:id/edit"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedRoles={usesBackendReleases() ? ["superadmin", "admin", "copyright", "user", "label", "label_custom", "artist", "whitelabel"] : undefined}>
                       <ReleaseEdit />
                     </ProtectedRoute>
                   }
@@ -129,7 +150,7 @@ const App = () => (
                 <Route
                   path="/dashboard/releases/:id"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedRoles={usesBackendReleases() ? ["superadmin", "admin", "copyright", "user", "label", "label_custom", "artist", "whitelabel"] : undefined}>
                       <ReleaseDetail />
                     </ProtectedRoute>
                   }
@@ -137,7 +158,7 @@ const App = () => (
                 <Route
                   path="/dashboard/tracks"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedRoles={usesBackendReleases() ? ["superadmin", "admin", "copyright", "user", "label", "label_custom", "artist", "whitelabel"] : undefined}>
                       <Tracks />
                     </ProtectedRoute>
                   }
@@ -165,7 +186,7 @@ const App = () => (
                 <Route
                   path="/dashboard/royalties"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedRoles={usesBackendFinance() ? ["superadmin", "admin", "copyright", "user", "label", "label_custom", "artist", "whitelabel"] : undefined}>
                       <Royalties />
                     </ProtectedRoute>
                   }
@@ -181,7 +202,7 @@ const App = () => (
                 <Route
                   path="/dashboard/royalty-summary"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedRoles={usesBackendFinance() ? ["superadmin", "admin", "copyright", "user", "label", "label_custom", "artist", "whitelabel"] : undefined}>
                       <RoyaltySummary />
                     </ProtectedRoute>
                   }
@@ -189,7 +210,7 @@ const App = () => (
                 <Route
                   path="/dashboard/payouts"
                   element={
-                    <ProtectedRoute allowedRoles={["label", "artist", "user", "whitelabel"]}>
+                    <ProtectedRoute allowedRoles={usesBackendFinance() ? ["label", "label_custom", "artist", "user", "whitelabel"] : ["label", "artist", "user", "whitelabel"]}>
                       <Payouts />
                     </ProtectedRoute>
                   }
@@ -197,7 +218,7 @@ const App = () => (
                 <Route
                   path="/dashboard/settings"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedRoles={["superadmin", "admin", "copyright", "user", "label", "label_custom", "artist", "whitelabel"]}>
                       <Settings />
                     </ProtectedRoute>
                   }
@@ -205,7 +226,7 @@ const App = () => (
                 <Route
                   path="/dashboard/my-artists"
                   element={
-                    <ProtectedRoute allowedRoles={["label", "artist", "user", "whitelabel"]}>
+                    <ProtectedRoute allowedRoles={["label", "label_custom", "artist", "user", "whitelabel"]}>
                       <MyArtists />
                     </ProtectedRoute>
                   }
@@ -218,6 +239,7 @@ const App = () => (
                         "superadmin",
                         "admin",
                         "label",
+                        "label_custom",
                         "whitelabel",
                       ]}
                     >

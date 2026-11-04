@@ -10,12 +10,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { supabase } from '@/integrations/supabase/client';
+import { listArtistDeletionRequests, usesBackendArtistLabels } from '@/services/artists';
 import { Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface DeletionRequest {
   id: string;
+  artist_id?: string;
   reason: string | null;
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
@@ -34,6 +35,7 @@ const statusLabel: Record<DeletionRequest['status'], string> = {
 export default function ArtistDeletionRequests() {
   const [requests, setRequests] = useState<DeletionRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     fetchRequests();
@@ -42,22 +44,12 @@ export default function ArtistDeletionRequests() {
   const fetchRequests = async () => {
     setLoading(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('artist_deletion_requests')
-        .select(`
-          id,
-          reason,
-          status,
-          created_at,
-          artist:profiles!artist_id(full_name, email)
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setRequests(data || []);
+      setLoadError('');
+      setRequests(await listArtistDeletionRequests());
     } catch (error: any) {
       console.error('Error fetching artist deletion requests:', error);
       toast.error(error.message || 'Gagal memuat permintaan hapus artis');
+      if (usesBackendArtistLabels()) setLoadError('Permintaan hapus artis backend belum dapat dimuat.');
     } finally {
       setLoading(false);
     }
@@ -69,6 +61,7 @@ export default function ArtistDeletionRequests() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Permintaan Hapus Artis</h1>
           <p className="text-muted-foreground">Pantau status permintaan penghapusan profil artis dari label Anda</p>
+          {loadError && <p role="alert">{loadError}</p>}
         </div>
 
         <Card className="bg-card/50 border-border/50">
@@ -101,7 +94,7 @@ export default function ArtistDeletionRequests() {
                     {requests.map((request) => (
                       <TableRow key={request.id}>
                         <TableCell className="font-medium">
-                          {request.artist?.full_name || 'Artis Terhapus'}
+                           {request.artist?.full_name || request.artist_id || 'Artis Terhapus'}
                           <div className="text-xs text-muted-foreground">{request.artist?.email}</div>
                         </TableCell>
                         <TableCell className="max-w-xs truncate" title={request.reason || ''}>

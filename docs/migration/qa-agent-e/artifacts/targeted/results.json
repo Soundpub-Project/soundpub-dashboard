@@ -1,0 +1,1263 @@
+{
+  "started": "2026-10-28T03:40:43.678Z",
+  "boundary": "All API/Auth responses intercepted; 8282 only for fixtures, no live proxy/CORS assertion.",
+  "snapshots": [
+    {
+      "path": "src/hooks/useAuth.tsx",
+      "sha256": "3178e5bfcd3d6892f1ddfc036c86abb4e0072d16c0364d8f3698a05c06c3c7d4"
+    },
+    {
+      "path": "src/pages/Settings.tsx",
+      "sha256": "20c71260fb742580100cfd86dfc0d24f98b38ab6d7a0bc22969f2826f91bc179"
+    },
+    {
+      "path": "src/components/auth/ProtectedRoute.tsx",
+      "sha256": "7c94752adaa3cdba28c02b8aa1ed9c378b5a0aea41cbee4fdeab0cd993a174e5"
+    },
+    {
+      "path": "src/lib/sessionLimit.ts",
+      "sha256": "3710a280575653288f41a9283d9c6e5961503f58f5a8ad13e5515e0d81cb2961"
+    },
+    {
+      "path": "src/components/users/ChangeRoleDialog.tsx",
+      "sha256": "6bc94fd202837a06ef33b6da64aa98105c6a103556ab5d48ac937257b94a4d82"
+    },
+    {
+      "path": "src/components/users/ChangeStatusDialog.tsx",
+      "sha256": "0b6938aa68d69fa2842210a6201f81202199393c4db7191cbf88bd34fc63c8dd"
+    }
+  ],
+  "scenarios": [
+    {
+      "viewportName": "mobile",
+      "scenario": "expired-refresh-success",
+      "requests": [
+        {
+          "method": "POST",
+          "path": "/auth/v1/token?grant_type=refresh_token",
+          "body": "{\"refresh_token\":\"synthetic-refresh\"}",
+          "bearer": "other-or-missing"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "refreshed"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "refreshed"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "refreshed"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "body": null,
+          "bearer": "refreshed"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users"
+      ],
+      "errors": [],
+      "assertions": [
+        "one refresh; Users rendered; only refreshed bearer used for API",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "body": "Toggle Sidebar\n\nSoundpub\n\nQA Admin\n\nToggle theme\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n1 dari 1 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\nNama\tEmail\tRole\tLogin\tLabel / Kode\tStatus\tBalance\tBergabung\tAksi\nQA Target\ttarget@example.invalid\t\nUser\n\tEmail\t-\tActive\tRp 0\t28/10/2026\t",
+      "sessionPresent": true
+    },
+    {
+      "viewportName": "mobile",
+      "scenario": "expired-refresh-rejected",
+      "requests": [
+        {
+          "method": "POST",
+          "path": "/auth/v1/token?grant_type=refresh_token",
+          "body": "{\"refresh_token\":\"synthetic-refresh\"}",
+          "bearer": "other-or-missing"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/auth"
+      ],
+      "errors": [],
+      "assertions": [
+        "redirect /auth; login UI visible; cached session removed",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "body": "Login\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "sessionPresent": false
+    },
+    {
+      "viewportName": "mobile",
+      "scenario": "six-hour-expired",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/v1/logout?scope=global",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "body": null,
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/auth"
+      ],
+      "errors": [],
+      "assertions": [
+        "redirect /auth; login UI visible; cached session removed",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "body": "Sesi berakhir setelah 6 jam. Silakan login kembali.\nLogin\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "sessionPresent": false
+    },
+    {
+      "viewportName": "mobile",
+      "scenario": "profile-validation",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/v1/profile",
+          "body": "{\"full_name\":\"   \",\"phone\":\"\",\"address\":\"\"}",
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/settings",
+        "http://127.0.0.1:8282/dashboard/settings"
+      ],
+      "errors": [],
+      "assertions": [
+        "400 profile toast; input retained; save re-enabled; exactly one PATCH; no success",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/settings",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/settings",
+      "body": "Error\nGagal memperbarui profil\nToggle Sidebar\n\nSoundpub\n\nQA Admin\n\nToggle theme\nQA\nSettings\n\nKelola pengaturan akun Anda\n\nSuper Admin Settings\nLogo Dashboard\n\nUpload logo untuk tema terang dan gelap. Logo akan ditampilkan di sidebar, halaman login, dan header dashboard.\n\nTema Terang\n\nBelum ada logo\n\nUpload\nTema Gelap\n\nBelum ada logo\n\nUpload\n\n📐 Ketentuan Gambar:\n\nUkuran rekomendasi: 512 x 512 px (rasio 1:1)\nUkuran minimal: 128 x 128 px\nUkuran maksimal file: 1 MB\nFormat: PNG, JPG, SVG\nFavicon\n\nUpload favicon untuk ditampilkan di tab browser\n\nBelum ada favicon. Upload favicon untuk browser tab.\n\nUpload Favicon\n\n📐 Ketentuan Gambar:\n\nUkuran rekomendasi: 32 x 32 px atau 64 x 64 px\nUkuran maksimal file: 500 KB\nFormat: ICO, PNG, SVG\nStorage & Analytics\n\nKonfigurasi penyimpanan file dan tracking analitik\n\nPopup Informasi Auth\n\nTampil di halaman login sebelum user masuk. Setiap simpan membuat popup muncul kembali untuk semua browser.\n\nIntegrasi ICCN\nFoto Profil\n\nUpload foto profil Anda\n\nQA\nUpload Foto\n\nUpload foto ditunda sampai penyimpanan media backend tersedia.\n\nProfil\n\nInformasi pribadi Anda\n\nEmail\n\nEmail tidak dapat diubah\n\nNama Lengkap\nNomor Telepon\nAlamat\nSimpan Perubahan\nUbah Password\n\nUbah password akun Anda\n\nPassword Baru\nKonfirmasi Password\nUbah Password\nAkun\n\nInformasi akun Anda\n\nStatus Akun\n\nActive\n\nactive\n\nBergabung Sejak\n\n28 Oktober 2026\n\nNotifikasi Email\n\nPilih jenis email yang ingin Anda terima. Notifikasi in-app (lonceng) tetap aktif walaupun email dimatikan.",
+      "sessionPresent": true
+    },
+    {
+      "viewportName": "mobile",
+      "scenario": "role-validation",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "PUT",
+          "path": "/api/v1/admin/users/22222222-2222-4222-8222-222222222222/roles",
+          "body": "{\"roles\":[\"admin\"]}",
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users"
+      ],
+      "errors": [],
+      "assertions": [
+        "400 validation error visible; dialog retained; save re-enabled; one mutation",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "body": "VALIDATION_ERROR\nToggle Sidebar\n\nSoundpub\n\nQA Admin\n\nToggle theme\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n1 dari 1 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\nNama\tEmail\tRole\tLogin\tLabel / Kode\tStatus\tBalance\tBergabung\tAksi\nQA Target\ttarget@example.invalid\t\nUser\n\tEmail\t-\tActive\tRp 0\t28/10/2026\t\nUbah Role User\n\nPilih role baru untuk QA Target\n\nPHASE3B_ARTISTS_LABELS: Perpindahan label belum tersedia.\n\nUser\n\nQA Target\n\ntarget@example.invalid\n\nRole\nAdmin- Akses penuh ke semua fitur\n\nRole akan diubah dari User menjadi Admin\n\nBatal\nSimpan\nClose",
+      "sessionPresent": true
+    },
+    {
+      "viewportName": "mobile",
+      "scenario": "status-validation",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/v1/admin/users/22222222-2222-4222-8222-222222222222/status",
+          "body": "{\"status\":\"inactive\"}",
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users"
+      ],
+      "errors": [],
+      "assertions": [
+        "400 validation error visible; dialog retained; save re-enabled; one mutation",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "body": "VALIDATION_ERROR\nToggle Sidebar\n\nSoundpub\n\nQA Admin\n\nToggle theme\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n1 dari 1 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\nNama\tEmail\tRole\tLogin\tLabel / Kode\tStatus\tBalance\tBergabung\tAksi\nQA Target\ttarget@example.invalid\t\nUser\n\tEmail\t-\tActive\tRp 0\t28/10/2026\t\n\nStatus mengatur akses aplikasi. Identitas login tetap dikelola melalui PHASE4_AUTH.\n\nUbah Status User\n\nUbah status untuk user berikut\n\nQA Target\n\ntarget@example.invalid\n\nStatus saat ini: Active\n\nStatus Baru\nInactive\n\nUser tidak aktif tapi masih bisa login\n\nBatal\nSimpan Status\nClose",
+      "sessionPresent": true
+    },
+    {
+      "viewportName": "mobile",
+      "scenario": "profile-401-settings",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/v1/logout?scope=global",
+          "body": null,
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/settings",
+        "http://127.0.0.1:8282/dashboard/settings",
+        "http://127.0.0.1:8282/auth"
+      ],
+      "errors": [],
+      "assertions": [
+        "profile rejection redirects /auth; correct toast; cached session cleared; logout called; no admin list/refresh",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/settings",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "body": "Sesi tidak valid. Silakan login kembali.\nLogin\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "sessionPresent": false
+    },
+    {
+      "viewportName": "mobile",
+      "scenario": "profile-403-settings",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/v1/logout?scope=global",
+          "body": null,
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/settings",
+        "http://127.0.0.1:8282/dashboard/settings",
+        "http://127.0.0.1:8282/auth"
+      ],
+      "errors": [],
+      "assertions": [
+        "profile rejection redirects /auth; correct toast; cached session cleared; logout called; no admin list/refresh",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/settings",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "body": "Akun tidak memiliki akses. Silakan hubungi administrator.\nLogin\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "sessionPresent": false
+    },
+    {
+      "viewportName": "mobile",
+      "scenario": "profile-401-users",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/v1/logout?scope=global",
+          "body": null,
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/auth"
+      ],
+      "errors": [],
+      "assertions": [
+        "profile rejection redirects /auth; correct toast; cached session cleared; logout called; no admin list/refresh",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "body": "Sesi tidak valid. Silakan login kembali.\nLogin\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "sessionPresent": false
+    },
+    {
+      "viewportName": "mobile",
+      "scenario": "profile-403-users",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/v1/logout?scope=global",
+          "body": null,
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/auth"
+      ],
+      "errors": [],
+      "assertions": [
+        "profile rejection redirects /auth; correct toast; cached session cleared; logout called; no admin list/refresh",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "body": "Akun tidak memiliki akses. Silakan hubungi administrator.\nLogin\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "sessionPresent": false
+    },
+    {
+      "viewportName": "tablet",
+      "scenario": "expired-refresh-success",
+      "requests": [
+        {
+          "method": "POST",
+          "path": "/auth/v1/token?grant_type=refresh_token",
+          "body": "{\"refresh_token\":\"synthetic-refresh\"}",
+          "bearer": "other-or-missing"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "refreshed"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "refreshed"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "refreshed"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "body": null,
+          "bearer": "refreshed"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users"
+      ],
+      "errors": [],
+      "assertions": [
+        "one refresh; Users rendered; only refreshed bearer used for API",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "body": "Soundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n1 dari 1 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\nNama\tEmail\tRole\tLogin\tLabel / Kode\tStatus\tBalance\tBergabung\tAksi\nQA Target\ttarget@example.invalid\t\nUser\n\tEmail\t-\tActive\tRp 0\t28/10/2026\t",
+      "sessionPresent": true
+    },
+    {
+      "viewportName": "tablet",
+      "scenario": "expired-refresh-rejected",
+      "requests": [
+        {
+          "method": "POST",
+          "path": "/auth/v1/token?grant_type=refresh_token",
+          "body": "{\"refresh_token\":\"synthetic-refresh\"}",
+          "bearer": "other-or-missing"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/auth"
+      ],
+      "errors": [],
+      "assertions": [
+        "redirect /auth; login UI visible; cached session removed",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "body": "Login\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "sessionPresent": false
+    },
+    {
+      "viewportName": "tablet",
+      "scenario": "six-hour-expired",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/v1/logout?scope=global",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "body": null,
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/auth"
+      ],
+      "errors": [],
+      "assertions": [
+        "redirect /auth; login UI visible; cached session removed",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "body": "Sesi berakhir setelah 6 jam. Silakan login kembali.\nLogin\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "sessionPresent": false
+    },
+    {
+      "viewportName": "tablet",
+      "scenario": "profile-validation",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/v1/profile",
+          "body": "{\"full_name\":\"   \",\"phone\":\"\",\"address\":\"\"}",
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/settings",
+        "http://127.0.0.1:8282/dashboard/settings"
+      ],
+      "errors": [],
+      "assertions": [
+        "400 profile toast; input retained; save re-enabled; exactly one PATCH; no success",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/settings",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/settings",
+      "body": "Error\nGagal memperbarui profil\nSoundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nSettings\n\nKelola pengaturan akun Anda\n\nSuper Admin Settings\nLogo Dashboard\n\nUpload logo untuk tema terang dan gelap. Logo akan ditampilkan di sidebar, halaman login, dan header dashboard.\n\nTema Terang\n\nBelum ada logo\n\nUpload\nTema Gelap\n\nBelum ada logo\n\nUpload\n\n📐 Ketentuan Gambar:\n\nUkuran rekomendasi: 512 x 512 px (rasio 1:1)\nUkuran minimal: 128 x 128 px\nUkuran maksimal file: 1 MB\nFormat: PNG, JPG, SVG\nFavicon\n\nUpload favicon untuk ditampilkan di tab browser\n\nBelum ada favicon. Upload favicon untuk browser tab.\n\nUpload Favicon\n\n📐 Ketentuan Gambar:\n\nUkuran rekomendasi: 32 x 32 px atau 64 x 64 px\nUkuran maksimal file: 500 KB\nFormat: ICO, PNG, SVG\nStorage & Analytics\n\nKonfigurasi penyimpanan file dan tracking analitik\n\nPopup Informasi Auth\n\nTampil di halaman login sebelum user masuk. Setiap simpan membuat popup muncul kembali untuk semua browser.\n\nIntegrasi ICCN\nFoto Profil\n\nUpload foto profil Anda\n\nQA\nUpload Foto\n\nUpload foto ditunda sampai penyimpanan media backend tersedia.\n\nProfil\n\nInformasi pribadi Anda\n\nEmail\n\nEmail tidak dapat diubah\n\nNama Lengkap\nNomor Telepon\nAlamat\nSimpan Perubahan\nUbah Password\n\nUbah password akun Anda\n\nPassword Baru\nKonfirmasi Password\nUbah Password\nAkun\n\nInformasi akun Anda\n\nStatus Akun\n\nActive\n\nactive\n\nBergabung Sejak\n\n28 Oktober 2026\n\nNotifikasi Email\n\nPilih jenis email yang ingin Anda terima. Notifikasi in-app (lonceng) tetap aktif walaupun email dimatikan.",
+      "sessionPresent": true
+    },
+    {
+      "viewportName": "tablet",
+      "scenario": "role-validation",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "PUT",
+          "path": "/api/v1/admin/users/22222222-2222-4222-8222-222222222222/roles",
+          "body": "{\"roles\":[\"admin\"]}",
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users"
+      ],
+      "errors": [],
+      "assertions": [
+        "400 validation error visible; dialog retained; save re-enabled; one mutation",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "body": "VALIDATION_ERROR\nSoundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n1 dari 1 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\nNama\tEmail\tRole\tLogin\tLabel / Kode\tStatus\tBalance\tBergabung\tAksi\nQA Target\ttarget@example.invalid\t\nUser\n\tEmail\t-\tActive\tRp 0\t28/10/2026\t\nUbah Role User\n\nPilih role baru untuk QA Target\n\nPHASE3B_ARTISTS_LABELS: Perpindahan label belum tersedia.\n\nUser\n\nQA Target\n\ntarget@example.invalid\n\nRole\nAdmin- Akses penuh ke semua fitur\n\nRole akan diubah dari User menjadi Admin\n\nBatal\nSimpan\nClose",
+      "sessionPresent": true
+    },
+    {
+      "viewportName": "tablet",
+      "scenario": "status-validation",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/v1/admin/users/22222222-2222-4222-8222-222222222222/status",
+          "body": "{\"status\":\"inactive\"}",
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users"
+      ],
+      "errors": [],
+      "assertions": [
+        "400 validation error visible; dialog retained; save re-enabled; one mutation",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "body": "VALIDATION_ERROR\nSoundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n1 dari 1 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\nNama\tEmail\tRole\tLogin\tLabel / Kode\tStatus\tBalance\tBergabung\tAksi\nQA Target\ttarget@example.invalid\t\nUser\n\tEmail\t-\tActive\tRp 0\t28/10/2026\t\n\nStatus mengatur akses aplikasi. Identitas login tetap dikelola melalui PHASE4_AUTH.\n\nUbah Status User\n\nUbah status untuk user berikut\n\nQA Target\n\ntarget@example.invalid\n\nStatus saat ini: Active\n\nStatus Baru\nInactive\n\nUser tidak aktif tapi masih bisa login\n\nBatal\nSimpan Status\nClose",
+      "sessionPresent": true
+    },
+    {
+      "viewportName": "tablet",
+      "scenario": "profile-401-settings",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/v1/logout?scope=global",
+          "body": null,
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/settings",
+        "http://127.0.0.1:8282/dashboard/settings",
+        "http://127.0.0.1:8282/auth"
+      ],
+      "errors": [],
+      "assertions": [
+        "profile rejection redirects /auth; correct toast; cached session cleared; logout called; no admin list/refresh",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/settings",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "body": "Sesi tidak valid. Silakan login kembali.\nLogin\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "sessionPresent": false
+    },
+    {
+      "viewportName": "tablet",
+      "scenario": "profile-403-settings",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/v1/logout?scope=global",
+          "body": null,
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/settings",
+        "http://127.0.0.1:8282/dashboard/settings",
+        "http://127.0.0.1:8282/auth"
+      ],
+      "errors": [],
+      "assertions": [
+        "profile rejection redirects /auth; correct toast; cached session cleared; logout called; no admin list/refresh",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/settings",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "body": "Akun tidak memiliki akses. Silakan hubungi administrator.\nLogin\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "sessionPresent": false
+    },
+    {
+      "viewportName": "tablet",
+      "scenario": "profile-401-users",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/v1/logout?scope=global",
+          "body": null,
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/auth"
+      ],
+      "errors": [],
+      "assertions": [
+        "profile rejection redirects /auth; correct toast; cached session cleared; logout called; no admin list/refresh",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "body": "Sesi tidak valid. Silakan login kembali.\nLogin\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "sessionPresent": false
+    },
+    {
+      "viewportName": "tablet",
+      "scenario": "profile-403-users",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/v1/logout?scope=global",
+          "body": null,
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/auth"
+      ],
+      "errors": [],
+      "assertions": [
+        "profile rejection redirects /auth; correct toast; cached session cleared; logout called; no admin list/refresh",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "body": "Akun tidak memiliki akses. Silakan hubungi administrator.\nLogin\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "sessionPresent": false
+    },
+    {
+      "viewportName": "desktop",
+      "scenario": "expired-refresh-success",
+      "requests": [
+        {
+          "method": "POST",
+          "path": "/auth/v1/token?grant_type=refresh_token",
+          "body": "{\"refresh_token\":\"synthetic-refresh\"}",
+          "bearer": "other-or-missing"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "refreshed"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "refreshed"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "refreshed"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "body": null,
+          "bearer": "refreshed"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users"
+      ],
+      "errors": [],
+      "assertions": [
+        "one refresh; Users rendered; only refreshed bearer used for API",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "body": "Soundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n1 dari 1 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\nNama\tEmail\tRole\tLogin\tLabel / Kode\tStatus\tBalance\tBergabung\tAksi\nQA Target\ttarget@example.invalid\t\nUser\n\tEmail\t-\tActive\tRp 0\t28/10/2026\t",
+      "sessionPresent": true
+    },
+    {
+      "viewportName": "desktop",
+      "scenario": "expired-refresh-rejected",
+      "requests": [
+        {
+          "method": "POST",
+          "path": "/auth/v1/token?grant_type=refresh_token",
+          "body": "{\"refresh_token\":\"synthetic-refresh\"}",
+          "bearer": "other-or-missing"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/auth"
+      ],
+      "errors": [],
+      "assertions": [
+        "redirect /auth; login UI visible; cached session removed",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "body": "Login\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "sessionPresent": false
+    },
+    {
+      "viewportName": "desktop",
+      "scenario": "six-hour-expired",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/v1/logout?scope=global",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "body": null,
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/auth"
+      ],
+      "errors": [],
+      "assertions": [
+        "redirect /auth; login UI visible; cached session removed",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "body": "Sesi berakhir setelah 6 jam. Silakan login kembali.\nLogin\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "sessionPresent": false
+    },
+    {
+      "viewportName": "desktop",
+      "scenario": "profile-validation",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/v1/profile",
+          "body": "{\"full_name\":\"   \",\"phone\":\"\",\"address\":\"\"}",
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/settings",
+        "http://127.0.0.1:8282/dashboard/settings"
+      ],
+      "errors": [],
+      "assertions": [
+        "400 profile toast; input retained; save re-enabled; exactly one PATCH; no success",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/settings",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/settings",
+      "body": "Error\nGagal memperbarui profil\nSoundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nSettings\n\nKelola pengaturan akun Anda\n\nSuper Admin Settings\nLogo Dashboard\n\nUpload logo untuk tema terang dan gelap. Logo akan ditampilkan di sidebar, halaman login, dan header dashboard.\n\nTema Terang\n\nBelum ada logo\n\nUpload\nTema Gelap\n\nBelum ada logo\n\nUpload\n\n📐 Ketentuan Gambar:\n\nUkuran rekomendasi: 512 x 512 px (rasio 1:1)\nUkuran minimal: 128 x 128 px\nUkuran maksimal file: 1 MB\nFormat: PNG, JPG, SVG\nFavicon\n\nUpload favicon untuk ditampilkan di tab browser\n\nBelum ada favicon. Upload favicon untuk browser tab.\n\nUpload Favicon\n\n📐 Ketentuan Gambar:\n\nUkuran rekomendasi: 32 x 32 px atau 64 x 64 px\nUkuran maksimal file: 500 KB\nFormat: ICO, PNG, SVG\nStorage & Analytics\n\nKonfigurasi penyimpanan file dan tracking analitik\n\nPopup Informasi Auth\n\nTampil di halaman login sebelum user masuk. Setiap simpan membuat popup muncul kembali untuk semua browser.\n\nIntegrasi ICCN\nFoto Profil\n\nUpload foto profil Anda\n\nQA\nUpload Foto\n\nUpload foto ditunda sampai penyimpanan media backend tersedia.\n\nProfil\n\nInformasi pribadi Anda\n\nEmail\n\nEmail tidak dapat diubah\n\nNama Lengkap\nNomor Telepon\nAlamat\nSimpan Perubahan\nUbah Password\n\nUbah password akun Anda\n\nPassword Baru\nKonfirmasi Password\nUbah Password\nAkun\n\nInformasi akun Anda\n\nStatus Akun\n\nActive\n\nactive\n\nBergabung Sejak\n\n28 Oktober 2026\n\nNotifikasi Email\n\nPilih jenis email yang ingin Anda terima. Notifikasi in-app (lonceng) tetap aktif walaupun email dimatikan.",
+      "sessionPresent": true
+    },
+    {
+      "viewportName": "desktop",
+      "scenario": "role-validation",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "PUT",
+          "path": "/api/v1/admin/users/22222222-2222-4222-8222-222222222222/roles",
+          "body": "{\"roles\":[\"admin\"]}",
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users"
+      ],
+      "errors": [],
+      "assertions": [
+        "400 validation error visible; dialog retained; save re-enabled; one mutation",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "body": "VALIDATION_ERROR\nSoundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n1 dari 1 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\nNama\tEmail\tRole\tLogin\tLabel / Kode\tStatus\tBalance\tBergabung\tAksi\nQA Target\ttarget@example.invalid\t\nUser\n\tEmail\t-\tActive\tRp 0\t28/10/2026\t\nUbah Role User\n\nPilih role baru untuk QA Target\n\nPHASE3B_ARTISTS_LABELS: Perpindahan label belum tersedia.\n\nUser\n\nQA Target\n\ntarget@example.invalid\n\nRole\nAdmin- Akses penuh ke semua fitur\n\nRole akan diubah dari User menjadi Admin\n\nBatal\nSimpan\nClose",
+      "sessionPresent": true
+    },
+    {
+      "viewportName": "desktop",
+      "scenario": "status-validation",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/v1/admin/users/22222222-2222-4222-8222-222222222222/status",
+          "body": "{\"status\":\"inactive\"}",
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users"
+      ],
+      "errors": [],
+      "assertions": [
+        "400 validation error visible; dialog retained; save re-enabled; one mutation",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "body": "VALIDATION_ERROR\nSoundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n1 dari 1 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\nNama\tEmail\tRole\tLogin\tLabel / Kode\tStatus\tBalance\tBergabung\tAksi\nQA Target\ttarget@example.invalid\t\nUser\n\tEmail\t-\tActive\tRp 0\t28/10/2026\t\n\nStatus mengatur akses aplikasi. Identitas login tetap dikelola melalui PHASE4_AUTH.\n\nUbah Status User\n\nUbah status untuk user berikut\n\nQA Target\n\ntarget@example.invalid\n\nStatus saat ini: Active\n\nStatus Baru\nInactive\n\nUser tidak aktif tapi masih bisa login\n\nBatal\nSimpan Status\nClose",
+      "sessionPresent": true
+    },
+    {
+      "viewportName": "desktop",
+      "scenario": "profile-401-settings",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/v1/logout?scope=global",
+          "body": null,
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/settings",
+        "http://127.0.0.1:8282/dashboard/settings",
+        "http://127.0.0.1:8282/auth"
+      ],
+      "errors": [],
+      "assertions": [
+        "profile rejection redirects /auth; correct toast; cached session cleared; logout called; no admin list/refresh",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/settings",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "body": "Sesi tidak valid. Silakan login kembali.\nLogin\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "sessionPresent": false
+    },
+    {
+      "viewportName": "desktop",
+      "scenario": "profile-403-settings",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/v1/logout?scope=global",
+          "body": null,
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/settings",
+        "http://127.0.0.1:8282/dashboard/settings",
+        "http://127.0.0.1:8282/auth"
+      ],
+      "errors": [],
+      "assertions": [
+        "profile rejection redirects /auth; correct toast; cached session cleared; logout called; no admin list/refresh",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/settings",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "body": "Akun tidak memiliki akses. Silakan hubungi administrator.\nLogin\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "sessionPresent": false
+    },
+    {
+      "viewportName": "desktop",
+      "scenario": "profile-401-users",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/v1/logout?scope=global",
+          "body": null,
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/auth"
+      ],
+      "errors": [],
+      "assertions": [
+        "profile rejection redirects /auth; correct toast; cached session cleared; logout called; no admin list/refresh",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "body": "Sesi tidak valid. Silakan login kembali.\nLogin\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "sessionPresent": false
+    },
+    {
+      "viewportName": "desktop",
+      "scenario": "profile-403-users",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "body": null,
+          "bearer": "cached"
+        },
+        {
+          "method": "POST",
+          "path": "/auth/v1/logout?scope=global",
+          "body": null,
+          "bearer": "cached"
+        }
+      ],
+      "navigations": [
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/dashboard/users",
+        "http://127.0.0.1:8282/auth"
+      ],
+      "errors": [],
+      "assertions": [
+        "profile rejection redirects /auth; correct toast; cached session cleared; logout called; no admin list/refresh",
+        "2.2-second quiet window: no repeated requests/navigation; zero uncaught page errors"
+      ],
+      "result": "PASS",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "body": "Akun tidak memiliki akses. Silakan hubungi administrator.\nLogin\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "sessionPresent": false
+    }
+  ],
+  "finished": "2026-10-28T03:42:24.951Z"
+}

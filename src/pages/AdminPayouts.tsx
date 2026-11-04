@@ -1,3 +1,6 @@
+import { FinanceUnavailable } from '@/components/finance/FinanceUnavailable';
+import { usesBackendFinance } from '@/components/finance/mode';
+import { BackendPayouts } from '@/components/finance/BackendPayouts';
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -72,7 +75,7 @@ interface PayoutRequest {
 
 type TabStatus = 'pending' | 'approved' | 'rejected' | 'paid' | 'all';
 
-export default function AdminPayouts() {
+function LegacyAdminPayouts() {
   const { user, isAdmin, loading: authLoading } = useAuth();
   const [payouts, setPayouts] = useState<PayoutRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -590,3 +593,11 @@ export default function AdminPayouts() {
   );
 }
 
+
+
+export default function AdminPayouts() {
+  const { role } = useAuth();
+  if (role === 'label_custom') return <FinanceUnavailable title="Akses admin diperlukan" />;
+  if (usesBackendFinance()) return <BackendPayouts admin />;
+  return <LegacyAdminPayouts />;
+}

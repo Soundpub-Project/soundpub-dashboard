@@ -1,3 +1,5 @@
+import { usesBackendDomain } from '@/api/routing';
+import { usesBackendReleases, releaseWorkflowUnavailable } from '@/services/releases';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -112,7 +114,7 @@ interface ArtistReleaseFormDialogProps {
   onSuccess: () => void;
 }
 
-export function ArtistReleaseFormDialog({
+function LegacyArtistReleaseFormDialog({
   open,
   onOpenChange,
   release,
@@ -1023,4 +1025,10 @@ export function ArtistReleaseFormDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+export function ArtistReleaseFormDialog(props: Parameters<typeof LegacyArtistReleaseFormDialog>[0]) {
+  if (usesBackendReleases()) return <p role="alert">{releaseWorkflowUnavailable}</p>;
+  if (usesBackendDomain('storage')) return <p role="alert">Mode storage memerlukan mode releases untuk alur release.</p>;
+  return <LegacyArtistReleaseFormDialog {...props} />;
 }

@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { usersApi } from '@/api/users';
 import {
   Dialog,
   DialogContent,
@@ -19,7 +19,7 @@ interface ChangePasswordDialogProps {
   onOpenChange: (open: boolean) => void;
   user: {
     id: string;
-    email: string;
+    email: string | null;
     full_name: string;
   } | null;
   onSuccess?: () => void;
@@ -39,8 +39,8 @@ export function ChangePasswordDialog({
   const handleSave = async () => {
     if (!user) return;
 
-    if (newPassword.length < 6) {
-      toast.error('Password minimal 6 karakter');
+    if (newPassword.length < 12) {
+      toast.error('Password minimal 12 karakter');
       return;
     }
 
@@ -51,31 +51,7 @@ export function ChangePasswordDialog({
 
     setLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      const response = await supabase.functions.invoke('update-user-password', {
-        body: {
-          user_id: user.id,
-          new_password: newPassword,
-        },
-        headers: {
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-      });
-
-      if (response.error) {
-        const errorMsg = response.error.message || 'Failed to update password';
-        if (errorMsg.includes('503') || errorMsg.includes('FunctionsRelayError') || errorMsg.includes('FunctionsFetchError')) {
-          throw new Error(
-            'Edge Function tidak tersedia (Error 503). Silakan hubungi administrator untuk deploy edge functions. Lihat file DEPLOY_EDGE_FUNCTIONS.md untuk panduan.'
-          );
-        }
-        throw new Error(errorMsg);
-      }
-
-      if (!response.data?.success) {
-        throw new Error(response.data?.error || 'Failed to update password');
-      }
+      await usersApi.resetPassword(user.id, newPassword);
 
       toast.success(`Password untuk ${user.full_name} berhasil diubah`);
       onOpenChange(false);

@@ -1,0 +1,2884 @@
+[
+  {
+    "environment": {
+      "origin": "http://127.0.0.1:63367",
+      "backendOrigin": "http://127.0.0.1:63366",
+      "postgres": "127.0.0.1:54737/soundpub_test_browser",
+      "container": "soundpub-browser-41964-1793193176505",
+      "migrations": [
+        "0001_foundation.sql",
+        "0002_app_grants.sql",
+        "0003_restrict_runtime.sql",
+        "0004_runtime_least_privilege.sql",
+        "0005_role_authority_lock.sql",
+        "0006_user_profiles.sql",
+        "0007_artists_labels.sql"
+      ],
+      "runtimeRole": "soundpub_app"
+    },
+    "auth": "Synthetic local identity binding; no external auth provider"
+  },
+  {
+    "device": "mobile",
+    "status": "PASS",
+    "overflow": false,
+    "checks": [
+      "UI roster list",
+      "UI required-field validation",
+      "UI create + independent DB row + reload",
+      "UI detail read/edit + independent DB row + reload",
+      "Browser fetch real API list/detail Artist/Label; 400/401/404 (not product UI acceptance)",
+      "Label roster controlled 500; no retry loop; manual recovery",
+      "Browser fetch transfer/detach/assign + DB state; stale 409; UI roster reload (no mutation controls exercised)",
+      "Aborted roster connection; useful UI error + recovery; no response mocked",
+      "Loaded UI authority revoked in DB; UI create denied 403; error visible, dialog retained, no DB row",
+      "UI invalid 51-character phone PATCH 400; visible VALIDATION_ERROR; DB unchanged",
+      "Loaded UI edit with identity unverified in DB; real 401; visible UNAUTHENTICATED, dialog retained",
+      "Full Artist detail success; identity, management Label, editable fields, DB persistence and reload",
+      "Artist detail controlled backend 500; no retry loop; manual recovery",
+      "Artist detail network failure; stable page; manual recovery",
+      "Artist detail GET 401 after loaded session revocation; no privilege leak; recovery",
+      "Missing Artist detail route: real 404 and visible useful product error",
+      "Canonical Label list: Users rows + role dialog options; current Label A roster and empty Label B confirmed in DB",
+      "Label B detail empty UI and persisted reload; DB roster zero",
+      "Label destination invalidated after selection: UI 400, visible validation, retained dialog, unchanged parent",
+      "Label transfer UI 401 after identity revocation; dialog retained; no optimistic mutation",
+      "Label transfer UI 403 after admin authority revocation; dialog retained; no privilege leak",
+      "Label B detail via own roster: current transferred artist, independent membership row and persisted reload",
+      "Missing Label detail 404 via related Artist page; no leaked Label data; manual recovery",
+      "Admin Users UI transfer; independent DB parent B; persisted row after reload",
+      "UI transfer stale after competing real detach; 409 visible CONFLICT, dialog retained, DB remains detached",
+      "Admin Users UI assign independent artist; DB parent A + persisted reload",
+      "Whitelabel roster UI detach; independent DB null parent; persisted absence after reload"
+    ],
+    "requests": [
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "3eef2441-5048-4274-98ff-9e7f2913e6f6"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "d102dc7b-13b6-41ac-b463-22bff82b1202"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "5d50b403-58b6-45c0-ac6d-2bd81c468213"
+      },
+      {
+        "path": "/api/v1/artists",
+        "method": "POST",
+        "status": 200,
+        "requestId": "fcb0f849-33d7-4406-aeed-798998555900"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "56aa2229-f1f5-4df2-b3d9-eac4b3d4cf63"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "c317293e-35f6-4b15-b61e-ce26ebe064da"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "9f4c2cdb-cb96-44b8-a0d9-9ce2d68ec0c3"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "83a2ef5a-82ec-4d3c-8b18-cc6d14f09de9"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25",
+        "method": "GET",
+        "status": 200,
+        "requestId": "9fc30b27-d4a7-42e8-b195-8405ffe82d00"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25",
+        "method": "PATCH",
+        "status": 200,
+        "requestId": "254a43a6-33b2-45c5-8416-cf2a2921e288"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "fa0cf3f0-9462-4b97-bb0d-3d29ffaa449a"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "2d17fa97-bca3-47a2-b63f-d6a7a04eca89"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "618c89b7-6046-4058-83d4-51e7f756e252"
+      },
+      {
+        "path": "/api/v1/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "b5a35f4b-a90b-4ff5-a728-866678d0fee1"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25",
+        "method": "GET",
+        "status": 200,
+        "requestId": "a0db5c4b-c91c-4f09-b9c7-f2dc22e7ebb5"
+      },
+      {
+        "path": "/api/v1/labels",
+        "method": "GET",
+        "status": 200,
+        "requestId": "1829d13a-4c00-4cee-87de-a816c76c2684"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101",
+        "method": "GET",
+        "status": 200,
+        "requestId": "07bb4787-0a8a-4080-9d80-d66c28294690"
+      },
+      {
+        "path": "/api/v1/artists",
+        "method": "POST",
+        "status": 400,
+        "requestId": "1f507863-c1f6-49c3-89ac-7ac9de1257de"
+      },
+      {
+        "path": "/api/v1/artists",
+        "method": "GET",
+        "status": 401,
+        "requestId": "023d2188-27f9-4889-9565-7b20569d43f7"
+      },
+      {
+        "path": "/api/v1/artists/00000000-0000-4000-8000-000000000999",
+        "method": "GET",
+        "status": 404,
+        "requestId": "f4d09154-96e9-4eaa-89b1-27aaf6076943"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25/transfer",
+        "method": "POST",
+        "status": 200,
+        "requestId": "40852adc-56f4-4445-a09e-762ca240e452"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25/transfer",
+        "method": "POST",
+        "status": 409,
+        "requestId": "f867ee5f-b3d0-42ac-80f5-78c631118ab5"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "1dc82192-5945-41bc-89c2-38c856f30b07"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "3cc949e2-b8e4-499d-8623-9785544a6262"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 500,
+        "requestId": "d3beb390-953a-4a74-a4bb-b26a646d3a25"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "8f81b3b1-392a-4245-8ec4-bb20e6d32c00"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25/remove",
+        "method": "POST",
+        "status": 200,
+        "requestId": "9d9becbc-2b29-43eb-a52f-d0bb144bb80e"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25/assign",
+        "method": "POST",
+        "status": 200,
+        "requestId": "83a146b9-e7de-4071-b95b-03ea31b84c0f"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "5b48ba3c-0a84-4215-bc45-7b8a5826ae4c"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "e3f31c93-84f4-40df-a814-8073bf00902d"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "995c3321-a5db-4467-bbd5-f7324d887a7a"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "e8b16ec4-8d96-4e97-bbb0-d66256500b18"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "8fd50536-28c5-4fee-8d6e-444ebb4b3e39"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "9c8adb13-58b1-48d5-959b-611936879520"
+      },
+      {
+        "path": "/api/v1/artists",
+        "method": "POST",
+        "status": 403,
+        "requestId": "0583c2d8-184a-4081-a386-15fd8a881a98"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25",
+        "method": "GET",
+        "status": 200,
+        "requestId": "f12e7ae2-51b4-44d1-a1b3-d5a22412b7fa"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25",
+        "method": "PATCH",
+        "status": 400,
+        "requestId": "3156bf30-f5ab-497e-b720-1c2830ba2a21"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25",
+        "method": "GET",
+        "status": 200,
+        "requestId": "8185d9b4-7105-41a5-bc70-d20c6f83571e"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25",
+        "method": "PATCH",
+        "status": 401,
+        "requestId": "c0fadc2b-94af-42fc-b41b-497825c10deb"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "b303b2ab-e089-450c-a83f-f766a400bb1c"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "85f5a2c9-09a1-4cac-a123-7337aed94171"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25",
+        "method": "GET",
+        "status": 200,
+        "requestId": "4b8927ea-79bd-4231-abbe-63c3c088c748"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101",
+        "method": "GET",
+        "status": 200,
+        "requestId": "73a1912d-34ab-405c-b9d6-585c462a4e45"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25",
+        "method": "PATCH",
+        "status": 200,
+        "requestId": "b97be768-d694-4b8a-b2a4-2ac0cbf92f74"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "4a6b95ff-fa4f-4b17-bd2e-0226a91e6f5a"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "b821dd02-0779-4775-8c75-1d9e1ada688d"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25",
+        "method": "GET",
+        "status": 200,
+        "requestId": "b1ad0ee9-3bf3-441b-80bc-ac421c7807f2"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101",
+        "method": "GET",
+        "status": 200,
+        "requestId": "63d16614-1709-49dd-b3d2-61832a3231ef"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "cafbda49-af4e-48fe-af31-f19f8e42668b"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "af3bc4c0-a55c-4658-82bd-85bdcd3379ed"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25",
+        "method": "GET",
+        "status": 500,
+        "requestId": "3d336c34-d0df-47eb-bc36-2c5a83a8b9aa"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25",
+        "method": "GET",
+        "status": 200,
+        "requestId": "b59feb47-9dd5-40b3-b256-f6f69ee8a401"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101",
+        "method": "GET",
+        "status": 200,
+        "requestId": "407342b7-54a7-41e5-9eee-b40e715ad596"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "c2beb7b9-2d3c-42e7-b031-7ffc5554e132"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "434bdda0-f308-4a2c-acac-4ccb39f04710"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25",
+        "method": "GET",
+        "status": 200,
+        "requestId": "bcc60bf7-4d4e-4521-afeb-be079e6e63f7"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101",
+        "method": "GET",
+        "status": 200,
+        "requestId": "2822ea3e-f30e-41da-b3db-53ceb91c842b"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "bf2efe3c-86cf-4357-a6ea-ebcd762f3a16"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "e4aef822-c640-4be7-8a7d-4d755e50cdba"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25",
+        "method": "GET",
+        "status": 500,
+        "requestId": "cd7257ce-041b-4d8b-8246-095319c2a4e7"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25",
+        "method": "GET",
+        "status": 401,
+        "requestId": "77b04398-b60d-4fee-845a-d6592608c979"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25",
+        "method": "GET",
+        "status": 200,
+        "requestId": "6e0c424b-c6d0-4da8-b477-a752ad51b4c7"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101",
+        "method": "GET",
+        "status": 200,
+        "requestId": "2ae3f484-3a82-43be-95b0-146fa4cd4dd2"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "086369e0-fc35-48a3-91ab-0a863f9e9b8b"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "f0e5beab-cef5-4790-9b2e-a6a190fff0d8"
+      },
+      {
+        "path": "/api/v1/artists/00000000-0000-4000-8000-000000000999",
+        "method": "GET",
+        "status": 404,
+        "requestId": "5b51d691-3687-4a71-8826-6a64f89a2d2e"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "d164018e-aff3-42f2-a0a7-e376a5c657a0",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "63937380-0c53-4715-9b68-3f997ea9c907",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/admin/users",
+        "method": "GET",
+        "status": 200,
+        "requestId": "97928a75-88af-40bb-963c-b569ea51f123",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "ed15cfe2-ac35-4d16-9d79-cb2fe59f055a",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "84547fa0-572c-465c-940e-36c5a2a98b22",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/admin/users",
+        "method": "GET",
+        "status": 200,
+        "requestId": "ab757496-e982-4d3e-9264-ad98b31e1f66",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/labels",
+        "method": "GET",
+        "status": 200,
+        "requestId": "926702ef-6c76-4a90-bb7b-2d9df8963b06",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "ffde5e07-e3c8-47bb-ac6c-9f0b760dc550",
+        "actor": "empty Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "c62fc049-ed78-43d7-834b-a4d8f3ae5c2d",
+        "actor": "empty Label B UI"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000102/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "9510aa7b-3b3d-40f4-8b06-a7e5ea0fc1d3",
+        "actor": "empty Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "fe4e5adf-4a5a-4d06-9fc3-bd20bd6cc0a7",
+        "actor": "empty Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "05e1d93e-ee61-4d00-a82f-1183ac4055be",
+        "actor": "empty Label B UI"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000102/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "92450891-c79d-4083-96d6-065a12ce808d",
+        "actor": "empty Label B UI"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25/transfer",
+        "method": "POST",
+        "status": 400,
+        "requestId": "22bbbc85-f5a3-4b4d-879b-8523e5e32807",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25/transfer",
+        "method": "POST",
+        "status": 401,
+        "requestId": "e7630108-e0ea-472d-8ad8-ee597feec33e",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25/transfer",
+        "method": "POST",
+        "status": 403,
+        "requestId": "ce9f9978-8b6f-413e-890d-df512ca0de8c",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25/transfer",
+        "method": "POST",
+        "status": 200,
+        "requestId": "06ac17a4-2485-4042-b9f3-f3f1942eac5f",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "12786018-ea93-4de2-aea1-91012e4f3a63",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "c3c517cb-1944-4a5c-a0e8-02d61df3596d",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/admin/users",
+        "method": "GET",
+        "status": 200,
+        "requestId": "a5b60a14-d06d-4249-856c-d046e61f1b76",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "6329bb57-d0a2-4399-9abb-bb26d5e176cd",
+        "actor": "Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "587a964c-ac5d-4744-8553-c0db5532930d",
+        "actor": "Label B UI"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000102/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "83dc8edb-eb91-41fc-91b6-5cfb2b39a302",
+        "actor": "Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "65109d78-7f98-41bf-ae8d-569ad2dcd4ad",
+        "actor": "Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "33ff0a56-f91d-4799-81f2-549e9614db09",
+        "actor": "Label B UI"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000102/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "4ea353e1-2011-41a4-8769-5f039f5de6f6",
+        "actor": "Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "f0a2e267-de4d-41f1-bda2-fc42cff98078",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "b3f47ff5-8e95-4fe2-b816-b48093535b6f",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25",
+        "method": "GET",
+        "status": 200,
+        "requestId": "2735cf2d-c4a3-495d-8263-5093fdb0eaa8",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000102",
+        "method": "GET",
+        "status": 404,
+        "requestId": "4e41f1b3-f050-4e28-9207-9406aed02ca9",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25",
+        "method": "GET",
+        "status": 200,
+        "requestId": "08099a9f-c551-4d8f-af70-bc3f62679833",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000102",
+        "method": "GET",
+        "status": 200,
+        "requestId": "f9fd06c4-52e1-44a6-a4b5-a26e40ac884d",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "10f90fbd-a792-4c34-abc4-e1effaff31e2",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "2ad7df03-b55c-48dc-91e0-bbabadd6be52",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/admin/users",
+        "method": "GET",
+        "status": 200,
+        "requestId": "f90dcd40-facf-4965-99bc-f6c4cbfe2867",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/labels",
+        "method": "GET",
+        "status": 200,
+        "requestId": "02eb23be-ddf1-487a-8009-6620de534b3a",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25/remove",
+        "method": "POST",
+        "status": 200,
+        "requestId": "a58c4989-d152-4e25-88fd-e46f68523d98"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25/transfer",
+        "method": "POST",
+        "status": 409,
+        "requestId": "6779f9ff-998e-4ba8-8b2c-7e5cb91bef6a",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "d537970b-1a35-433a-906c-fc6a670acab7",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "6a129d00-e2b1-40d4-87e1-1ed4dc85ab35",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/admin/users",
+        "method": "GET",
+        "status": 200,
+        "requestId": "d8a651a5-424a-4a27-b9fe-d2362141d227",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/labels",
+        "method": "GET",
+        "status": 200,
+        "requestId": "0a8eae67-a68d-4b30-816e-fbc12663aa9b",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25/assign",
+        "method": "POST",
+        "status": 200,
+        "requestId": "bab6d5ba-a18f-4fe4-934f-2e998eb636a7",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "e5f1c4fd-8973-47fc-aee6-d88277acbc66",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "9253b1de-5ea2-41a9-b0b2-15d3e052fc53",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/admin/users",
+        "method": "GET",
+        "status": 200,
+        "requestId": "1f5d10ff-b77f-4ad7-9a02-4fdf76ebc105",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "cd4be49f-67a2-4016-b1fc-bcc15daab37f"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "0685f4ed-f22c-46d6-a513-feb04f296293"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "d289e2ac-6c45-4d67-b96a-2a53214c2dd1"
+      },
+      {
+        "path": "/api/v1/artists/d31c59b4-0034-4ede-ab26-f1a3d011ef25/remove",
+        "method": "POST",
+        "status": 200,
+        "requestId": "40a7e96a-d87f-4138-a6ff-8cd1e27d4eb3"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "b26dfd7f-0ba4-4d19-9461-b1dc5c6fbb5a"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "0bfc17bb-ff00-4128-b7b4-a1e8028b0e7f"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "2a8d6f92-6446-426b-8713-79f7f766764f"
+      }
+    ],
+    "blocked": [
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats"
+    ]
+  },
+  {
+    "device": "tablet",
+    "status": "PASS",
+    "overflow": false,
+    "checks": [
+      "UI roster list",
+      "UI required-field validation",
+      "UI create + independent DB row + reload",
+      "UI detail read/edit + independent DB row + reload",
+      "Browser fetch real API list/detail Artist/Label; 400/401/404 (not product UI acceptance)",
+      "Label roster controlled 500; no retry loop; manual recovery",
+      "Browser fetch transfer/detach/assign + DB state; stale 409; UI roster reload (no mutation controls exercised)",
+      "Aborted roster connection; useful UI error + recovery; no response mocked",
+      "Loaded UI authority revoked in DB; UI create denied 403; error visible, dialog retained, no DB row",
+      "UI invalid 51-character phone PATCH 400; visible VALIDATION_ERROR; DB unchanged",
+      "Loaded UI edit with identity unverified in DB; real 401; visible UNAUTHENTICATED, dialog retained",
+      "Full Artist detail success; identity, management Label, editable fields, DB persistence and reload",
+      "Artist detail controlled backend 500; no retry loop; manual recovery",
+      "Artist detail network failure; stable page; manual recovery",
+      "Artist detail GET 401 after loaded session revocation; no privilege leak; recovery",
+      "Missing Artist detail route: real 404 and visible useful product error",
+      "Canonical Label list: Users rows + role dialog options; current Label A roster and empty Label B confirmed in DB",
+      "Label B detail empty UI and persisted reload; DB roster zero",
+      "Label destination invalidated after selection: UI 400, visible validation, retained dialog, unchanged parent",
+      "Label transfer UI 401 after identity revocation; dialog retained; no optimistic mutation",
+      "Label transfer UI 403 after admin authority revocation; dialog retained; no privilege leak",
+      "Label B detail via own roster: current transferred artist, independent membership row and persisted reload",
+      "Missing Label detail 404 via related Artist page; no leaked Label data; manual recovery",
+      "Admin Users UI transfer; independent DB parent B; persisted row after reload",
+      "UI transfer stale after competing real detach; 409 visible CONFLICT, dialog retained, DB remains detached",
+      "Admin Users UI assign independent artist; DB parent A + persisted reload",
+      "Whitelabel roster UI detach; independent DB null parent; persisted absence after reload"
+    ],
+    "requests": [
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "01d1b86b-19ed-4343-aafa-96479cef006d"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "62db0413-6c37-46a0-89b8-a674bdcb9060"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "d80ae30d-69cd-4208-8536-d134610f0eb4"
+      },
+      {
+        "path": "/api/v1/artists",
+        "method": "POST",
+        "status": 200,
+        "requestId": "d826bc72-3aaf-4c1b-94dd-dadb0e07062d"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "1debb45b-24cd-4fc6-911f-1c6d29232c57"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "e15bb203-aa62-4ff6-82ff-a60e885caf91"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "805f95a8-83b6-4ccb-bddb-0ac56dec0811"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "95f4538b-7399-4b2e-a81c-982965b8ff20"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3",
+        "method": "GET",
+        "status": 200,
+        "requestId": "e68784ab-34d4-4f3f-be3b-2f1cd3d78acb"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3",
+        "method": "PATCH",
+        "status": 200,
+        "requestId": "b92a6d72-ec52-437f-b39d-2186990e5179"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "67c1ce0f-a10e-41c9-8610-8f882ace736e"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "3d3e8687-5930-4569-91db-99bc1b8da5be"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "886bec2d-6ecf-4bbf-9fb3-dda22cb972d0"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "c2a72d21-b85f-4c9e-bf41-b6267c49f9aa"
+      },
+      {
+        "path": "/api/v1/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "9c1d8314-4695-41e2-9334-ff8e5273dac6"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3",
+        "method": "GET",
+        "status": 200,
+        "requestId": "be3154de-d6d5-4199-8d85-d02400599804"
+      },
+      {
+        "path": "/api/v1/labels",
+        "method": "GET",
+        "status": 200,
+        "requestId": "0d4acccc-9409-49eb-90e9-e4e458ee5d3f"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101",
+        "method": "GET",
+        "status": 200,
+        "requestId": "3eb77b56-715d-4de5-8406-e63cadf640ed"
+      },
+      {
+        "path": "/api/v1/artists",
+        "method": "POST",
+        "status": 400,
+        "requestId": "112376a1-bc0d-4019-8be8-b1fa4e2a947a"
+      },
+      {
+        "path": "/api/v1/artists",
+        "method": "GET",
+        "status": 401,
+        "requestId": "b70fa563-33c1-4c0a-b227-2271df369cc9"
+      },
+      {
+        "path": "/api/v1/artists/00000000-0000-4000-8000-000000000999",
+        "method": "GET",
+        "status": 404,
+        "requestId": "d8b6a062-7221-44cf-9670-39c8ccafe4e2"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3/transfer",
+        "method": "POST",
+        "status": 200,
+        "requestId": "516e73a6-2329-4c5b-893a-325e7058c01a"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3/transfer",
+        "method": "POST",
+        "status": 409,
+        "requestId": "d014c8c9-c14b-48b9-8df2-d378ba53403a"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "056deb37-6ffa-4f93-8ed4-55bb8a418c7c"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "5fe5edf1-8cab-4cb6-be92-bfd909297b4a"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 500,
+        "requestId": "5deaa3fe-247b-4d8d-b397-668a6129deca"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "36af1758-fdf9-4fd4-ae1a-ac0c2ac6e3d5"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3/remove",
+        "method": "POST",
+        "status": 200,
+        "requestId": "10ae4354-e899-41ec-824f-33e48de3bda5"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3/assign",
+        "method": "POST",
+        "status": 200,
+        "requestId": "88d6c47a-fd28-46b5-85c2-ff2ffbc0c1b7"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "3bbc4631-73c4-46c7-a4a8-691d0c6e5d26"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "59356fc6-58fd-4242-be42-1410a2637d0d"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "8504670b-700d-4476-af66-9c3839fd440d"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "98842296-c1cf-479e-a6f6-6ed14c7cf442"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "7a4eca51-86ff-4e18-ba7b-04eadf749afd"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "76a18eda-9915-4c10-9436-210a24e267aa"
+      },
+      {
+        "path": "/api/v1/artists",
+        "method": "POST",
+        "status": 403,
+        "requestId": "a97c9814-1789-4077-bf9d-cbe1555fa70a"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3",
+        "method": "GET",
+        "status": 200,
+        "requestId": "8032de27-a537-41ad-89b8-d061318ec76b"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3",
+        "method": "PATCH",
+        "status": 400,
+        "requestId": "fcb60702-c72b-4494-bcb5-a3cf48e72ef1"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3",
+        "method": "GET",
+        "status": 200,
+        "requestId": "f6bb0f19-1a3f-45bc-89c7-ca0f46dca089"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3",
+        "method": "PATCH",
+        "status": 401,
+        "requestId": "28795f48-268d-4235-89a1-2d904987bee0"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "29804a7a-8e5f-4247-a5f2-cef8a2918648"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "3df3d278-327d-4b31-8dac-d211463e7d86"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3",
+        "method": "GET",
+        "status": 200,
+        "requestId": "56bbf92e-c0ea-4125-b428-4531f49b6620"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101",
+        "method": "GET",
+        "status": 200,
+        "requestId": "e26cc3d2-347f-405d-8e0b-8b878ebd7d9c"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3",
+        "method": "PATCH",
+        "status": 200,
+        "requestId": "c938a9dc-9705-4105-9762-9cac31395227"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "5f406e35-14b9-4523-9a5d-f3a8ddbc9315"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "bf7d1014-b4b6-40e6-b23f-9cb36ea0b7ab"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3",
+        "method": "GET",
+        "status": 200,
+        "requestId": "5599acfa-dc5d-4db7-95c3-ef6bc98504f1"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101",
+        "method": "GET",
+        "status": 200,
+        "requestId": "c968cde3-a2ae-4424-b4e6-92a10739ebb9"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "9074748a-663f-4328-8351-c09ad6eb6d9f"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "e00d6130-6c2e-4e1e-a243-c47a41ee9feb"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3",
+        "method": "GET",
+        "status": 500,
+        "requestId": "ffc1e835-d656-4525-a1a8-68d975839ec7"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3",
+        "method": "GET",
+        "status": 200,
+        "requestId": "e7b5f43e-02bb-442c-b183-9deb69d5eb41"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101",
+        "method": "GET",
+        "status": 200,
+        "requestId": "92722303-84a0-408e-93de-235edd266ce0"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "a1679e5a-234f-458e-922a-26545813d9d9"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "3bd09162-2275-48c2-9717-a7f556c761d6"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3",
+        "method": "GET",
+        "status": 200,
+        "requestId": "3a5f3c74-ae31-4beb-907e-22fcbe7ae403"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101",
+        "method": "GET",
+        "status": 200,
+        "requestId": "0380c87b-afc6-4dfc-a51e-3df578678917"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "95371218-7a24-4bc5-b967-efa2a01b12a2"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "f9eede99-86f8-44f8-9b2b-65796ec0a804"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3",
+        "method": "GET",
+        "status": 500,
+        "requestId": "190e70a7-ea17-4ebe-964b-08da339a9c56"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3",
+        "method": "GET",
+        "status": 401,
+        "requestId": "d844563d-978e-4f83-9734-a0dfbd2b8aba"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3",
+        "method": "GET",
+        "status": 200,
+        "requestId": "de10fcaa-f275-44dc-a824-f6b2b603389a"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101",
+        "method": "GET",
+        "status": 200,
+        "requestId": "b469602d-2455-45ec-8f96-316782531088"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "db410f0c-8158-4c1b-a4f6-08a1f1bc9cd5"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "2024a3b2-af5a-4844-8e54-ad76fff73281"
+      },
+      {
+        "path": "/api/v1/artists/00000000-0000-4000-8000-000000000999",
+        "method": "GET",
+        "status": 404,
+        "requestId": "ced7304c-bcc9-465b-a9a0-4ef10f629849"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "8531bc1a-9081-4ee1-97ff-76f17aa4c4ae",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "1a5a6f23-7c35-4259-ae58-810a93268839",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/admin/users",
+        "method": "GET",
+        "status": 200,
+        "requestId": "19e1f9b5-87b2-423c-8925-b9bd8e62cffe",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "e2dc1a83-848d-415f-95ae-10ae0b5880ce",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "334fd403-25bc-4ce0-a762-cd9277b66e58",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/admin/users",
+        "method": "GET",
+        "status": 200,
+        "requestId": "dc33168d-aafd-458c-a352-2aa8ae27e491",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/labels",
+        "method": "GET",
+        "status": 200,
+        "requestId": "f8fac38f-3ecf-462f-92b4-09514cc107bf",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "645724cb-d94b-474c-af6b-1bbb6619c356",
+        "actor": "empty Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "f78f303d-593a-43d6-948c-189e934e2123",
+        "actor": "empty Label B UI"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000102/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "863dd587-4e0c-4062-8ce5-599360e9d5e3",
+        "actor": "empty Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "b4c056be-cc2a-4a81-8125-63fa828aa2cd",
+        "actor": "empty Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "cdc3629b-681f-4eee-ac74-f204dcc4f946",
+        "actor": "empty Label B UI"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000102/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "b7f9b1ad-d63e-41d4-b9e2-de7be223abbb",
+        "actor": "empty Label B UI"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3/transfer",
+        "method": "POST",
+        "status": 400,
+        "requestId": "84d3c774-2d13-4098-82fc-b62dc0d73a9a",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3/transfer",
+        "method": "POST",
+        "status": 401,
+        "requestId": "9976eb39-fadf-4b13-998d-4438dc178fac",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3/transfer",
+        "method": "POST",
+        "status": 403,
+        "requestId": "3a2e5d34-e04b-4ad6-8a06-34afb058979d",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3/transfer",
+        "method": "POST",
+        "status": 200,
+        "requestId": "719c298a-2dc4-4207-a52c-2a0e7ebff54e",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "7aade4c6-9910-4fa1-82cd-483290858060",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "869e9207-d012-4001-944d-1bba3f381003",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/admin/users",
+        "method": "GET",
+        "status": 200,
+        "requestId": "add0b813-d272-439e-aca3-c225ed3da918",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "d47b8ebe-ecc9-44b3-808f-2833a3495e3f",
+        "actor": "Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "9763b140-5d82-494e-840b-aaa872c445c3",
+        "actor": "Label B UI"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000102/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "d223a82c-74f0-47ca-8aff-6b7636a0ee20",
+        "actor": "Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "dae55db4-1d05-4dd6-9de2-a3e4edecd745",
+        "actor": "Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "f6755d27-fe2b-402a-b742-75bbb2f6c48f",
+        "actor": "Label B UI"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000102/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "419727c5-139b-4c8b-a58a-f4f0f47e650b",
+        "actor": "Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "92be99d5-57af-46bc-9847-762bcaef8455",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "86f16245-d295-451a-9f77-9f6d5b1d3187",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3",
+        "method": "GET",
+        "status": 200,
+        "requestId": "22904049-e8cc-41a1-ab9a-8522e067841c",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000102",
+        "method": "GET",
+        "status": 404,
+        "requestId": "0fa2afbb-2872-4ca0-b908-541b90e09c03",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3",
+        "method": "GET",
+        "status": 200,
+        "requestId": "88450239-b0c5-4666-b7de-d28c62f0ad62",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000102",
+        "method": "GET",
+        "status": 200,
+        "requestId": "0f590c76-332e-4d61-8e6f-9c1f5d640966",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "c1c6f307-2108-4cbb-8fb9-efe3dd8b4493",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "9c796694-028f-4f61-b415-3c5ab839105e",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/admin/users",
+        "method": "GET",
+        "status": 200,
+        "requestId": "4d979550-9e85-42db-b8c8-ea49f047cbc3",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/labels",
+        "method": "GET",
+        "status": 200,
+        "requestId": "23ed43de-49e7-4b94-b238-cfd0f753f2ea",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3/remove",
+        "method": "POST",
+        "status": 200,
+        "requestId": "633c37da-f64b-4705-bbf6-ea91c0eb44c5"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3/transfer",
+        "method": "POST",
+        "status": 409,
+        "requestId": "bd1a4663-fdee-4e32-a078-0c7cca32e5e0",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "6e1e7cd0-cbce-4747-adbe-70198004fa5a",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "65f4b2ae-c65d-466a-adec-d1b898583d19",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/admin/users",
+        "method": "GET",
+        "status": 200,
+        "requestId": "7f7ca5ac-0a4a-4fb0-813b-2d9cf81ee0eb",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/labels",
+        "method": "GET",
+        "status": 200,
+        "requestId": "1c99ad72-0931-4902-8092-345b01ef9aac",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3/assign",
+        "method": "POST",
+        "status": 200,
+        "requestId": "25dc4db5-319c-41a4-b0e7-095389aba758",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/admin/users",
+        "method": "GET",
+        "status": 200,
+        "requestId": "8386c611-9ffc-4f29-9ea1-a8ce98e45ef3",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "f2f70c9f-28c3-46a5-9cce-0e0ae01fc853",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "3a4bf0c7-d876-4b86-a000-481271b7e459",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/admin/users",
+        "method": "GET",
+        "status": 200,
+        "requestId": "642560cc-9085-464c-b259-67860c5d06ee",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "32f53f9d-8f6d-4af9-afac-891a82b6c2c1"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "a7d34ba3-b5c7-4b74-9fb1-4f691a3740fb"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "481fe05b-cd22-4b82-b867-80b452a2eede"
+      },
+      {
+        "path": "/api/v1/artists/d0432f19-d68e-4d4f-a454-75a11c6ed7f3/remove",
+        "method": "POST",
+        "status": 200,
+        "requestId": "4e8ae516-80b0-42cc-85c8-3887c1e7c87e"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "3edb246a-8a24-4cca-b3eb-de0f54fae04c"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "f4fa7f7e-eee5-4131-be29-9f0c14cf251c"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "176ad6f2-fc3f-49fa-9fc6-b88ece2e26fa"
+      }
+    ],
+    "blocked": [
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats"
+    ]
+  },
+  {
+    "device": "desktop",
+    "status": "PASS",
+    "overflow": false,
+    "checks": [
+      "UI roster list",
+      "UI required-field validation",
+      "UI create + independent DB row + reload",
+      "UI detail read/edit + independent DB row + reload",
+      "Browser fetch real API list/detail Artist/Label; 400/401/404 (not product UI acceptance)",
+      "Label roster controlled 500; no retry loop; manual recovery",
+      "Browser fetch transfer/detach/assign + DB state; stale 409; UI roster reload (no mutation controls exercised)",
+      "Aborted roster connection; useful UI error + recovery; no response mocked",
+      "Loaded UI authority revoked in DB; UI create denied 403; error visible, dialog retained, no DB row",
+      "UI invalid 51-character phone PATCH 400; visible VALIDATION_ERROR; DB unchanged",
+      "Loaded UI edit with identity unverified in DB; real 401; visible UNAUTHENTICATED, dialog retained",
+      "Full Artist detail success; identity, management Label, editable fields, DB persistence and reload",
+      "Artist detail controlled backend 500; no retry loop; manual recovery",
+      "Artist detail network failure; stable page; manual recovery",
+      "Artist detail GET 401 after loaded session revocation; no privilege leak; recovery",
+      "Missing Artist detail route: real 404 and visible useful product error",
+      "Canonical Label list: Users rows + role dialog options; current Label A roster and empty Label B confirmed in DB",
+      "Label B detail empty UI and persisted reload; DB roster zero",
+      "Label destination invalidated after selection: UI 400, visible validation, retained dialog, unchanged parent",
+      "Label transfer UI 401 after identity revocation; dialog retained; no optimistic mutation",
+      "Label transfer UI 403 after admin authority revocation; dialog retained; no privilege leak",
+      "Label B detail via own roster: current transferred artist, independent membership row and persisted reload",
+      "Missing Label detail 404 via related Artist page; no leaked Label data; manual recovery",
+      "Admin Users UI transfer; independent DB parent B; persisted row after reload",
+      "UI transfer stale after competing real detach; 409 visible CONFLICT, dialog retained, DB remains detached",
+      "Admin Users UI assign independent artist; DB parent A + persisted reload",
+      "Whitelabel roster UI detach; independent DB null parent; persisted absence after reload"
+    ],
+    "requests": [
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "f88d77bb-bea4-4eed-bea8-a39a0f5d4323"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "d7996ec7-f043-4f8e-be88-d3211c7fe606"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "64c6447e-1866-45a8-84d1-db8fb7e964cf"
+      },
+      {
+        "path": "/api/v1/artists",
+        "method": "POST",
+        "status": 200,
+        "requestId": "fd789ace-4f82-41ab-a1b9-4199c74686f7"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "64432230-342c-4704-a716-ec6360a246b0"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "c3348025-4961-4e43-bfcd-040436e68d58"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "4f763616-1d58-4f8b-964d-e47194a80b23"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "9e85eb45-77c2-4711-844c-301f1b26ee1a"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04",
+        "method": "GET",
+        "status": 200,
+        "requestId": "e5b75219-4ad4-4c9b-b5e2-a01c83cd8d7f"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04",
+        "method": "PATCH",
+        "status": 200,
+        "requestId": "a65d889a-83e5-444c-ab80-4b875a767b88"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "94c77109-0a55-4777-8455-9bfb27ff72fa"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "155bdf7d-7109-4acc-866e-66dc6e45f5e9"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "cd5fe61e-583b-4228-a0ab-7c6431f31867"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "3736c8f7-4942-4bcc-96c5-cd09f8326c66"
+      },
+      {
+        "path": "/api/v1/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "e87c0e80-0adc-4d7f-a579-77eac4df6de3"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04",
+        "method": "GET",
+        "status": 200,
+        "requestId": "3e3bf417-5913-4cdd-8dad-319b7d1c1eef"
+      },
+      {
+        "path": "/api/v1/labels",
+        "method": "GET",
+        "status": 200,
+        "requestId": "c1657078-71bb-4166-bde5-a3957d9b7063"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101",
+        "method": "GET",
+        "status": 200,
+        "requestId": "f5697e23-36b4-44fd-9b51-91372ac20c98"
+      },
+      {
+        "path": "/api/v1/artists",
+        "method": "POST",
+        "status": 400,
+        "requestId": "6ff8f8d6-027f-49ea-9545-78377eb253ca"
+      },
+      {
+        "path": "/api/v1/artists",
+        "method": "GET",
+        "status": 401,
+        "requestId": "862af212-92ff-4892-b7a5-561580e846c6"
+      },
+      {
+        "path": "/api/v1/artists/00000000-0000-4000-8000-000000000999",
+        "method": "GET",
+        "status": 404,
+        "requestId": "aa01893d-b13d-4a34-85c4-186cc56bdcc7"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04/transfer",
+        "method": "POST",
+        "status": 200,
+        "requestId": "4948d521-8ec9-4647-b007-aa9c826eead1"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04/transfer",
+        "method": "POST",
+        "status": 409,
+        "requestId": "c3207613-cf4a-4fa9-9c9d-122b0edffbd1"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "7f79c568-3ed4-4fe7-ba78-ea2515eaa2cd"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "fd854483-2c78-4d13-a5e9-1d0b9a4a2eb0"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 500,
+        "requestId": "843e1cef-286f-48ad-99a7-314ef1a7155b"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "c0f251e3-2af5-48c7-a0b9-1537ab678c3b"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04/remove",
+        "method": "POST",
+        "status": 200,
+        "requestId": "ec263442-6c77-4ef5-9093-a0e0e39c4b5d"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04/assign",
+        "method": "POST",
+        "status": 200,
+        "requestId": "0426be7a-ec0b-4937-a90c-59c71f476717"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "d9ca1819-4008-4e96-aad9-d6f0d64eca50"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "5851b0c7-30d6-4051-80c5-779eebde21db"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "1cbb627e-23e5-40e8-a7e3-c826bc9d9397"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "6fb86f03-ac16-45e9-a0ef-d8cd26cf3d42"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "486ee114-07e5-437b-b04f-ac6d965741d8"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "3eb92c23-c0ed-4eae-8cf7-c369963b6bc8"
+      },
+      {
+        "path": "/api/v1/artists",
+        "method": "POST",
+        "status": 403,
+        "requestId": "eb74f201-ea52-48e9-a7ac-a5a5ef332dd1"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04",
+        "method": "GET",
+        "status": 200,
+        "requestId": "025153b9-e3da-4892-b942-534a0a79efde"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04",
+        "method": "PATCH",
+        "status": 400,
+        "requestId": "f5653f95-d588-40d6-b3af-796acf5f8aad"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04",
+        "method": "GET",
+        "status": 200,
+        "requestId": "d53364c1-1ea5-4e91-b72e-0d5056a3762f"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04",
+        "method": "PATCH",
+        "status": 401,
+        "requestId": "e4204c49-2b31-4066-915f-9fba533ba4fc"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "414181e3-1e69-4a22-a445-9ccdb17b7051"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "923acd86-1656-4d77-bc67-97ce343dde3f"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04",
+        "method": "GET",
+        "status": 200,
+        "requestId": "e5d4c364-3331-4c23-8357-de4ad15e669a"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101",
+        "method": "GET",
+        "status": 200,
+        "requestId": "fb91bc63-4c69-4fb9-b3de-d135f77607f3"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04",
+        "method": "PATCH",
+        "status": 200,
+        "requestId": "baf5d6ae-4ada-4743-8faf-8af9ec560fb5"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "4a324811-9fbd-425f-b236-3b1b497dd121"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "a775a914-1f82-4311-94a9-6ac336c5b938"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04",
+        "method": "GET",
+        "status": 200,
+        "requestId": "a35dd2a7-389a-427e-8019-4104ea1f85d4"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101",
+        "method": "GET",
+        "status": 200,
+        "requestId": "61349ab2-d9db-4145-96f4-e3556af57993"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "f638f48a-b9b6-4202-b54d-998825bd32c9"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "c7917f8f-dfa6-4dce-a89a-8e05870dbfbc"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04",
+        "method": "GET",
+        "status": 500,
+        "requestId": "58c3fe19-2bea-47b8-b840-4c4e86e96a06"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04",
+        "method": "GET",
+        "status": 200,
+        "requestId": "7333d97b-87b0-4e5d-a778-3344730b1bd4"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101",
+        "method": "GET",
+        "status": 200,
+        "requestId": "9971f82d-f824-40c7-8377-6bb61675e03a"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "7e201738-6199-411a-a905-01823c0b4f78"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "f921f4ba-afc5-4dd4-a25a-019ab96a89ae"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04",
+        "method": "GET",
+        "status": 200,
+        "requestId": "1ead69e6-1718-4911-8f9a-a36e3dffe414"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101",
+        "method": "GET",
+        "status": 200,
+        "requestId": "3d02064b-24dc-4a0d-a6c5-32863c96ed14"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "faa08b37-6ac0-4526-8b7a-7c8e88ea12a6"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "194ca1d1-eece-4235-be9d-0cfea904ad22"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04",
+        "method": "GET",
+        "status": 500,
+        "requestId": "cc7e7fd9-c4b1-4106-973c-8bb4dee2cbd8"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04",
+        "method": "GET",
+        "status": 401,
+        "requestId": "1e1f53c2-48ab-45fe-9b5a-c8a056d1ed59"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04",
+        "method": "GET",
+        "status": 200,
+        "requestId": "69666b98-40a2-4298-96af-230d0af504a8"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101",
+        "method": "GET",
+        "status": 200,
+        "requestId": "e95e6421-f8ed-4014-a415-13a0d8886eb5"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "3617306b-49ce-4068-890a-c94d2bf21913"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "a99e054a-e04f-4cc9-bc25-17205900ab9d"
+      },
+      {
+        "path": "/api/v1/artists/00000000-0000-4000-8000-000000000999",
+        "method": "GET",
+        "status": 404,
+        "requestId": "dc96f213-c152-4064-99ff-2cd7fdf10413"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "f76bab03-44a2-47d3-a047-62f6e5b84075",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "9bba8145-93c3-4be2-903d-1e1729bce12e",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/admin/users",
+        "method": "GET",
+        "status": 200,
+        "requestId": "a6898907-c255-4852-b8f1-bcf54adde15c",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "37af0851-81b3-4d2a-8c18-fc808f78410b",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "9002f014-f851-4122-8967-40e742814fcd",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/admin/users",
+        "method": "GET",
+        "status": 200,
+        "requestId": "c06a6d08-d200-4703-932f-a2f6cedfe642",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/labels",
+        "method": "GET",
+        "status": 200,
+        "requestId": "c4e6a6b3-6d25-417f-8894-147012739815",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "67667379-b43f-423e-bc00-677625fd1ed9",
+        "actor": "empty Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "346d590f-a3f3-4825-8cf4-8c8ad7668de0",
+        "actor": "empty Label B UI"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000102/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "c801445f-04a7-49e7-9b2f-b44a634b0750",
+        "actor": "empty Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "9ee712c9-9b20-4b61-bea4-5164fe77d12d",
+        "actor": "empty Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "ff825a1f-fdfc-46e5-bad6-1aabdafb855d",
+        "actor": "empty Label B UI"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000102/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "53fdad19-78d9-4f7a-b3af-e4f3ae3053ed",
+        "actor": "empty Label B UI"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04/transfer",
+        "method": "POST",
+        "status": 400,
+        "requestId": "5b344e8c-c129-402e-a568-e2d283f7b1ca",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04/transfer",
+        "method": "POST",
+        "status": 401,
+        "requestId": "35d06a55-5469-4d36-ac17-6516a792ab77",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04/transfer",
+        "method": "POST",
+        "status": 403,
+        "requestId": "fe62e6e0-1307-48a5-8dec-b0cb761ea280",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04/transfer",
+        "method": "POST",
+        "status": 200,
+        "requestId": "d67498e9-5dd1-4d75-bfea-5865a305e9ec",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "0c78dec9-8c53-4a80-833f-3a9f49cf822f",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "6585d5a1-f9d4-44df-acb5-9bae835a47d1",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/admin/users",
+        "method": "GET",
+        "status": 200,
+        "requestId": "f01dcbb4-a707-4dd0-8c44-b01bc58dd60b",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "b486b191-ce4b-489d-a4c6-ac99031f058e",
+        "actor": "Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "0f439418-b5ac-4e7b-bc97-01c94a8977a8",
+        "actor": "Label B UI"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000102/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "5c31e89d-2a7e-433d-bb32-32d5bb40383b",
+        "actor": "Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "3ff8bcc1-6c99-445b-bdaf-ad3ba6017a0a",
+        "actor": "Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "9c83309d-4d0b-4f27-af18-9526d59e094c",
+        "actor": "Label B UI"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000102/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "eeab2c72-1b59-4bc4-a6e3-f89ae8bf7fcc",
+        "actor": "Label B UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "baa525ab-7b1d-4cac-8fdb-4d2583f81c06",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "dc1ef50f-f121-4aa6-9614-46f32c47c436",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04",
+        "method": "GET",
+        "status": 200,
+        "requestId": "265b8c3c-5f55-43be-bd4b-673f2f93369a",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000102",
+        "method": "GET",
+        "status": 404,
+        "requestId": "73b50e69-a2a5-407a-ab1a-91e6cf3db9c1",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04",
+        "method": "GET",
+        "status": 200,
+        "requestId": "b6f58f6b-72c8-4498-81f3-8398a97afa06",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000102",
+        "method": "GET",
+        "status": 200,
+        "requestId": "8c0aba69-5083-47d2-b1ac-fec59308c414",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "41a4af6c-bd02-4fdc-bed4-e9a0d0a96af1",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "fac725b4-7b77-41c8-8086-489cea309888",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/admin/users",
+        "method": "GET",
+        "status": 200,
+        "requestId": "1207441e-d0b9-42de-a0da-7e2cc75a1482",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/labels",
+        "method": "GET",
+        "status": 200,
+        "requestId": "b388d487-7ae4-4189-8a77-0c6b46c0f2e3",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04/remove",
+        "method": "POST",
+        "status": 200,
+        "requestId": "d1427d88-f551-471f-809a-feadd7dfe84c"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04/transfer",
+        "method": "POST",
+        "status": 409,
+        "requestId": "3a46e7ec-da80-4cdc-a640-7a5dff21e11c",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "08f722b2-9a71-4536-9785-d93b5bfb8588",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "f884a976-b105-4edf-a2ae-dd240bd371ff",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/admin/users",
+        "method": "GET",
+        "status": 200,
+        "requestId": "8665d9ff-8eba-4a49-8f83-3aae0e6847df",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/labels",
+        "method": "GET",
+        "status": 200,
+        "requestId": "7d7a952d-bc4b-4b99-812a-0ca0da746bd5",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04/assign",
+        "method": "POST",
+        "status": 200,
+        "requestId": "30f397a7-90f8-4c99-81b7-4abad9bc7712",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "2ac237c3-51af-4b4a-837f-01f3f0005736",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "859db91b-c682-4064-99a5-788cbf8c37de",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/admin/users",
+        "method": "GET",
+        "status": 200,
+        "requestId": "5e1b1f1d-4f3f-4991-9553-90e429a5326d",
+        "actor": "admin UI"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "05c764a8-cb22-41ab-860c-600355a22d70"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "3e48c040-123b-4ad4-bbae-710c9fbcb43f"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "bf8e39f4-9077-40fe-bc3d-84994ab92859"
+      },
+      {
+        "path": "/api/v1/artists/b5a03bbd-d445-4a12-bc64-b479970a9c04/remove",
+        "method": "POST",
+        "status": 200,
+        "requestId": "bee7f3eb-49b9-4b8d-96ce-288e50acb5ae"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "7117e84e-ecc0-4976-ab2a-82c25c7b03d6"
+      },
+      {
+        "path": "/api/v1/profile",
+        "method": "GET",
+        "status": 200,
+        "requestId": "d9986102-80bc-4dab-a6dd-180c1dfd5fa3"
+      },
+      {
+        "path": "/api/v1/labels/00000000-0000-4000-8000-000000000101/artists",
+        "method": "GET",
+        "status": 200,
+        "requestId": "97b881ea-4d20-4114-9dd1-0b7f176ea0b2"
+      }
+    ],
+    "blocked": [
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "https://fonts.googleapis.com/css2",
+      "http://127.0.0.1:54321/rest/v1/profiles",
+      "http://127.0.0.1:54321/rest/v1/app_settings",
+      "http://127.0.0.1:54321/rest/v1/notifications",
+      "http://127.0.0.1:54321/rest/v1/rpc/get_dashboard_role_stats"
+    ]
+  },
+  {
+    "teardown": "Owned container removed; no persistent volumes used"
+  }
+]

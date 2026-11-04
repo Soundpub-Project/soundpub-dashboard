@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { listLabelArtists, usesBackendArtistLabels } from "@/services/labels";
+import type { ArtistAccount } from "@/api/artists";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import {
   Card,
@@ -44,22 +45,304 @@ import { ChangePasswordDialog } from "@/components/users/ChangePasswordDialog";
 import { LabelAddArtistDialog } from "@/components/users/LabelAddArtistDialog";
 import { RequestDeletionDialog } from "@/components/users/RequestDeletionDialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { LabelCustomArtistDialog } from "@/components/users/LabelCustomArtistDialog";
+import { SoundpubApiError } from "@/api/client";
+import {
+  archiveLabelCustomArtist,
+  createLabelCustomUnit,
+  getLabelCustomUnit,
+  listLabelCustomArtists,
+  type LabelCustomArtist,
+  type LabelCustomUnit,
+} from "@/services/label-custom";
+import { Label } from "@/components/ui/label";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
-interface ArtistProfile {
-  id: string;
-  email: string;
-  full_name: string;
-  phone: string | null;
-  status: string;
-  address: string | null;
-  created_at: string;
-}
+type ArtistProfile = ArtistAccount;
 
 export default function MyArtists() {
+  const { isLabelCustom, loading, user } = useAuth();
+  if (loading) return null;
+  if (isLabelCustom) return user ? <LabelCustomMyArtists key={user.id} /> : null;
+  return <LegacyMyArtists />;
+}
+
+function labelCustomError(error: unknown, fallback: string) {
+  if (error instanceof SoundpubApiError) {
+    if (error.status === 401) return "Sesi berakhir. Silakan login kembali sebagai PIC Label Custom.";
+    if (error.status === 403) return "Anda tidak memiliki izin. Hubungi admin untuk memeriksa akses PIC.";
+    if (error.status === 409) return "Status data sudah berubah. Muat ulang daftar sebelum mencoba lagi.";
+  }
+  return fallback;
+}
+
+function LabelCustomMyArtists() {
+  const [unit, setUnit] = useState<LabelCustomUnit | null>(null);
+  const [needsSetup, setNeedsSetup] = useState(false);
+  const [artists, setArtists] = useState<LabelCustomArtist[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [unitName, setUnitName] = useState("");
+  const [setupError, setSetupError] = useState("");
+  const [savingUnit, setSavingUnit] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingArtist, setEditingArtist] = useState<LabelCustomArtist | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<LabelCustomArtist | null>(null);
+  const [archiveError, setArchiveError] = useState("");
+  const [archiving, setArchiving] = useState(false);
+  const [message, setMessage] = useState("");
+  const request = useRef(0);
+  const mounted = useRef(true);
+  const mutationPending = useRef(false);
+
+  const fetchArtists = useCallback(async () => {
+    const current = ++request.current;
+    setLoading(true);
+    setLoadError("");
+    setNeedsSetup(false);
+    setArtists([]);
+    try {
+      let currentUnit: LabelCustomUnit;
+      try {
+        currentUnit = await getLabelCustomUnit();
+      } catch (error) {
+        // Only a missing unit offers setup; an artist-list 404 remains an error.
+        if (error instanceof SoundpubApiError && error.status === 404) {
+          if (current === request.current) {
+            setUnit(null);
+            setNeedsSetup(true);
+          }
+          return;
+        }
+        throw error;
+      }
+      if (current !== request.current) return;
+      setUnit(currentUnit);
+      setNeedsSetup(false);
+      // Backend defaults to active; request both statuses to keep archives visible.
+      const [active, archived] = await Promise.all([
+        listLabelCustomArtists({ status: "active" }),
+        listLabelCustomArtists({ status: "archived" }),
+      ]);
+      if (current === request.current) setArtists([...active, ...archived]);
+    } catch (error) {
+      if (current === request.current) setLoadError(labelCustomError(error,
+        "Daftar artis Label Custom belum dapat dimuat. Periksa koneksi lalu coba lagi."));
+    } finally {
+      if (current === request.current) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    mounted.current = true;
+    void fetchArtists();
+    return () => { mounted.current = false; request.current += 1; };
+  }, [fetchArtists]);
+
+  async function setupUnit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (mutationPending.current) return;
+    const name = unitName.trim();
+    if (!name || name.length > 200) {
+      setSetupError("Isi nama unit dengan 1–200 karakter.");
+      return;
+    }
+    mutationPending.current = true;
+    setSavingUnit(true);
+    setSetupError("");
+    try {
+      await createLabelCustomUnit({ name });
+      if (!mounted.current) return;
+      setMessage("Unit Label Custom berhasil dibuat.");
+      await fetchArtists();
+    } catch (error) {
+      if (mounted.current) setSetupError(labelCustomError(error,
+        "Unit belum dapat dibuat. Periksa nama dan koneksi lalu coba lagi."));
+    } finally {
+      mutationPending.current = false;
+      if (mounted.current) setSavingUnit(false);
+    }
+  }
+
+  async function archiveArtist() {
+    if (!archiveTarget || archiveTarget.status === "archived" || mutationPending.current) return;
+    mutationPending.current = true;
+    setArchiving(true);
+    setArchiveError("");
+    try {
+      const archived = await archiveLabelCustomArtist(archiveTarget.id);
+      if (!mounted.current) return;
+      setArtists(current => current.map(artist => artist.id === archived.id ? archived : artist));
+      setArchiveTarget(null);
+      setMessage("Artis berhasil diarsipkan.");
+    } catch (error) {
+      if (mounted.current) setArchiveError(labelCustomError(error,
+        "Artis belum dapat diarsipkan. Periksa koneksi lalu coba lagi."));
+    } finally {
+      mutationPending.current = false;
+      if (mounted.current) setArchiving(false);
+    }
+  }
+
+  const search = searchTerm.trim().toLowerCase();
+  const filteredArtists = artists.filter(artist =>
+    [artist.name, artist.contact_email, artist.contact_phone].some(value => value.toLowerCase().includes(search)));
+  const readOnly = unit?.status !== "active";
+
+  return (
+    <DashboardLayout>
+      <div className="min-w-0 space-y-6">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-bold md:text-3xl">My Artists</h1>
+          <p className="break-words text-muted-foreground">Kelola artis Label Custom{unit ? ` · ${unit.name}` : ""}.</p>
+          <p className="text-sm text-muted-foreground">
+            Saldo dan royalti seluruh artis terakumulasi ke PIC Label Custom. Artis tidak bisa login;
+            email dan telepon hanya digunakan untuk kontak.
+          </p>
+          {message && <p role="status" className="text-sm">{message}</p>}
+        </div>
+
+        {loadError && (
+          <div role="alert" className="space-y-3 rounded-lg border border-destructive p-4">
+            <p>{loadError}</p>
+            <Button variant="outline" className="min-h-11" disabled={loading || archiving} onClick={() => void fetchArtists()}>Coba lagi</Button>
+          </div>
+        )}
+
+        {loading ? (
+          <div role="status" className="flex items-center justify-center gap-2 py-8">
+            <Loader2 aria-hidden="true" className="h-6 w-6 animate-spin motion-reduce:animate-none" /> Memuat artis…
+          </div>
+        ) : needsSetup ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Siapkan Unit Label Custom</CardTitle>
+              <CardDescription>Isi nama unit untuk mulai mengelola artis Anda.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={setupUnit} className="max-w-lg space-y-4" aria-busy={savingUnit}>
+                <div className="space-y-2">
+                  <Label htmlFor="label-custom-unit-name">Nama unit (wajib)</Label>
+                  <Input id="label-custom-unit-name" value={unitName} required maxLength={200}
+                    className="min-h-11" disabled={savingUnit} aria-invalid={!!setupError}
+                    aria-describedby={setupError ? "label-custom-setup-error" : undefined}
+                    onChange={event => setUnitName(event.target.value)} />
+                </div>
+                {setupError && <p id="label-custom-setup-error" role="alert" className="text-sm text-destructive">{setupError}</p>}
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button type="submit" className="min-h-11" disabled={savingUnit}>
+                    {savingUnit ? "Membuat unit…" : "Buat Unit"}
+                  </Button>
+                  <Button type="button" variant="outline" className="min-h-11" disabled={savingUnit} onClick={() => void fetchArtists()}>Muat ulang</Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        ) : !loadError && unit ? (
+          <Card className="min-w-0 bg-card/50 border-border/50">
+            <CardHeader className="space-y-4">
+              <div>
+                <CardTitle>Daftar Artis Label Custom</CardTitle>
+                <CardDescription>{artists.length} total artis, termasuk arsip.</CardDescription>
+                {readOnly && <p role="status" className="mt-2 text-sm text-muted-foreground">Unit diarsipkan. Pengelolaan artis dinonaktifkan. Hubungi admin.</p>}
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="w-full space-y-2 sm:max-w-sm">
+                  <Label htmlFor="label-custom-artist-search">Cari artis</Label>
+                  <Input id="label-custom-artist-search" type="search" placeholder="Nama, email, atau telepon"
+                    className="min-h-11" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} />
+                </div>
+                <Button className="min-h-11 shrink-0" disabled={readOnly || archiving} onClick={() => {
+                  setEditingArtist(null);
+                  setDialogOpen(true);
+                }}><UserPlus aria-hidden="true" className="mr-2 h-4 w-4" />Tambah Artist</Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {filteredArtists.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground">
+                  <p>{search ? "Tidak ada artis yang cocok." : "Belum ada artis."}</p>
+                  {!search && !readOnly && <p className="mt-2 text-sm">Klik Tambah Artist untuk menambahkan artis baru.</p>}
+                </div>
+              ) : (
+                <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {filteredArtists.map(artist => (
+                    <Card key={artist.id} className="min-w-0">
+                      <CardHeader className="space-y-3">
+                        <CardTitle className="break-words text-lg">{artist.name}</CardTitle>
+                        <Badge className="w-fit" variant={artist.status === "active" ? "default" : "secondary"}>
+                          {artist.status === "active" ? "Aktif" : "Diarsipkan"}
+                        </Badge>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <dl className="space-y-2 text-sm">
+                          <div><dt className="text-muted-foreground">Email kontak</dt><dd className="break-all">{artist.contact_email}</dd></div>
+                          <div><dt className="text-muted-foreground">Telepon kontak</dt><dd className="break-all">{artist.contact_phone}</dd></div>
+                        </dl>
+                        <div className="flex flex-wrap gap-2">
+                          <Button variant="outline" className="min-h-11" aria-label={`Edit ${artist.name}`}
+                            disabled={readOnly || artist.status === "archived" || archiving}
+                            onClick={() => { setEditingArtist(artist); setDialogOpen(true); }}>
+                            <Pencil aria-hidden="true" className="mr-2 h-4 w-4" />Edit
+                          </Button>
+                          <Button variant="outline" className="min-h-11" aria-label={`Arsipkan ${artist.name}`}
+                            disabled={readOnly || artist.status === "archived" || archiving}
+                            onClick={() => { setArchiveError(""); setArchiveTarget(artist); }}>
+                            Arsipkan
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ) : null}
+      </div>
+
+      {dialogOpen && !readOnly && (editingArtist ? (
+        <LabelCustomArtistDialog mode="edit" artist={editingArtist} open={dialogOpen}
+          onOpenChange={setDialogOpen} onSuccess={() => void fetchArtists()} />
+      ) : (
+        <LabelCustomArtistDialog mode="create" open={dialogOpen}
+          onOpenChange={setDialogOpen} onSuccess={() => void fetchArtists()} />
+      ))}
+
+      <AlertDialog open={!!archiveTarget} onOpenChange={open => { if (!open && !mutationPending.current) setArchiveTarget(null); }}>
+        <AlertDialogContent className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto sm:max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Arsipkan Artis?</AlertDialogTitle>
+            <AlertDialogDescription className="break-words">
+              Arsipkan {archiveTarget?.name}? Artis yang diarsipkan tidak dapat diedit.
+              Saldo dan royalti tetap terakumulasi ke PIC Label Custom.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {archiveError && <p role="alert" className="text-sm text-destructive">{archiveError}</p>}
+          <AlertDialogFooter>
+            <AlertDialogCancel className="min-h-11" disabled={archiving}>Batal</AlertDialogCancel>
+            <AlertDialogAction className="min-h-11" disabled={archiving} onClick={event => {
+              event.preventDefault();
+              void archiveArtist();
+            }}>{archiving ? "Mengarsipkan…" : "Arsipkan"}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </DashboardLayout>
+  );
+}
+
+function LegacyMyArtists() {
+  const backendArtists = usesBackendArtistLabels();
   const navigate = useNavigate();
-  const { user, isLabel, isWhitelabel, loading: authLoading } = useAuth();
+  const { user, profile, isLabel, isWhitelabel, loading: authLoading } = useAuth();
   const [artists, setArtists] = useState<ArtistProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [addArtistDialogOpen, setAddArtistDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -85,45 +368,20 @@ export default function MyArtists() {
     if (canAccessMyArtists && user) {
       fetchArtists();
     }
-  }, [canAccessMyArtists, user]);
+  }, [canAccessMyArtists, user, profile?.id]);
 
   const fetchArtists = async () => {
     if (!user) return;
 
     try {
-      const { data: profiles, error: profilesError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("parent_label_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (profilesError) throw profilesError;
-
-      if (profiles && profiles.length > 0) {
-        const userIds = profiles.map((p) => p.id);
-        const { data: artistProfiles, error: artistProfilesError } =
-          await supabase
-            .from("artist_profiles")
-            .select("*")
-            .in("user_id", userIds);
-
-        if (artistProfilesError) throw artistProfilesError;
-
-        const combined = profiles.map((profile) => {
-          const artProfile = artistProfiles?.find(
-            (ap) => ap.user_id === profile.id,
-          );
-          return {
-            ...profile,
-            artist_profile: artProfile || null,
-          };
-        });
-        setArtists(combined as any);
-      } else {
-        setArtists([]);
-      }
+      setLoadError("");
+      setArtists(await listLabelArtists(backendArtists ? profile?.id || user.id : user.id));
     } catch (error) {
       console.error("Error fetching artists:", error);
+      if (backendArtists) {
+        setArtists([]);
+        setLoadError("Daftar artis backend belum dapat dimuat. Coba lagi setelah layanan tersedia.");
+      }
     } finally {
       setLoading(false);
     }
@@ -176,6 +434,7 @@ export default function MyArtists() {
           <p className="text-muted-foreground">
             Kelola artist di bawah label Anda
           </p>
+          {loadError && <p role="alert">{loadError} <Button variant="outline" onClick={fetchArtists}>Coba lagi</Button></p>}
         </div>
 
         <Card className="bg-card/50 border-border/50">
@@ -199,9 +458,9 @@ export default function MyArtists() {
                 </div>
                 <Button
                   onClick={() =>
-                    isLabel
-                      ? setLabelAddArtistDialogOpen(true)
-                      : setAddArtistDialogOpen(true)
+                    backendArtists || !isLabel
+                      ? setAddArtistDialogOpen(true)
+                      : setLabelAddArtistDialogOpen(true)
                   }
                   className="gradient-primary"
                 >
@@ -227,7 +486,7 @@ export default function MyArtists() {
             ) : isLabel ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                 {filteredArtists.map((artist) => {
-                  const artistProfile = (artist as any).artist_profile;
+                  const artistProfile = artist.artist_profile;
                   const hasSpotify =
                     artistProfile?.social_links?.spotify || false;
                   const hasAppleMusic =
@@ -343,10 +602,10 @@ export default function MyArtists() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Nama</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Telepon</TableHead>
+                      {!backendArtists && <TableHead>Email</TableHead>}
+                      {!backendArtists && <TableHead>Telepon</TableHead>}
                       <TableHead>Status</TableHead>
-                      <TableHead>Bergabung</TableHead>
+                      {!backendArtists && <TableHead>Bergabung</TableHead>}
                       <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -356,8 +615,8 @@ export default function MyArtists() {
                         <TableCell className="font-medium">
                           {artist.full_name}
                         </TableCell>
-                        <TableCell>{artist.email}</TableCell>
-                        <TableCell>{artist.phone || "-"}</TableCell>
+                        {!backendArtists && <TableCell>{artist.email || "—"}</TableCell>}
+                        {!backendArtists && <TableCell>{artist.phone || "-"}</TableCell>}
                         <TableCell>
                           <Badge
                             variant={getStatusBadge(artist.status)}
@@ -366,11 +625,11 @@ export default function MyArtists() {
                             {artist.status}
                           </Badge>
                         </TableCell>
-                        <TableCell>
-                          {new Date(artist.created_at).toLocaleDateString(
+                        {!backendArtists && <TableCell>
+                          {artist.created_at ? new Date(artist.created_at).toLocaleDateString(
                             "id-ID",
-                          )}
-                        </TableCell>
+                          ) : "—"}
+                        </TableCell>}
                         <TableCell>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -390,6 +649,7 @@ export default function MyArtists() {
                                 Edit
                               </DropdownMenuItem>
                               <DropdownMenuItem
+                                disabled={backendArtists}
                                 onClick={() => handlePasswordClick(artist)}
                               >
                                 <KeyRound className="mr-2 h-4 w-4" />
@@ -415,13 +675,14 @@ export default function MyArtists() {
         </Card>
       </div>
 
-      <AddUserDialog
+      {(!isLabel || backendArtists) && <AddUserDialog
         open={addArtistDialogOpen}
         onOpenChange={setAddArtistDialogOpen}
         onSuccess={fetchArtists}
         allowedRoles={["artist"]}
-        isWhitelabelMode={isWhitelabel}
-      />
+        defaultParentLabelId={backendArtists ? profile?.id || user?.id : undefined}
+        isWhitelabelMode={backendArtists ? false : isWhitelabel}
+      />}
 
       <LabelAddArtistDialog
         open={labelAddArtistDialogOpen}
@@ -450,12 +711,12 @@ export default function MyArtists() {
         onSuccess={fetchArtists}
       />
 
-      <ChangePasswordDialog
+      {!backendArtists && <ChangePasswordDialog
         open={passwordDialogOpen}
         onOpenChange={setPasswordDialogOpen}
         user={selectedArtist}
         onSuccess={fetchArtists}
-      />
+      />}
     </DashboardLayout>
   );
 }

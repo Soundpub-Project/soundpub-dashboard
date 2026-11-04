@@ -1,3 +1,4 @@
+import { usesBackendDomain } from '@/api/routing';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,6 +26,11 @@ interface PricingConfig {
 }
 
 export function PricingSettings() {
+  if (usesBackendDomain('settings')) return <p role="status">Pengaturan ini belum tersedia.</p>;
+  return <LegacyPricingSettings />;
+}
+
+function LegacyPricingSettings() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

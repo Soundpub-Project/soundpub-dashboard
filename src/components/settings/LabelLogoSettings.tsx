@@ -1,4 +1,8 @@
+import { BackendMediaUpload } from './BackendMediaUpload';
 import { useState, useRef, useEffect } from 'react';
+import { updateCurrentProfile } from '@/services/users';
+import { usesBackendDomain } from '@/api/routing';
+import { usesBackendArtistLabels } from '@/services/labels';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +12,17 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Upload, Image as ImageIcon, Check, Trash2, Sun, Moon } from 'lucide-react';
 
 export function LabelLogoSettings() {
+  if (usesBackendDomain('storage')) return <BackendLabelLogoSettings />;
+  return <LegacyLabelLogoSettings />;
+}
+function BackendLabelLogoSettings() {
+  const { user, profile, refreshProfile } = useAuth();
+  if (!user || !profile) return null;
+  if (!usesBackendDomain('users')) return <p role="status">Profil backend diperlukan untuk upload logo.</p>;
+  return <div className="space-y-3">{(['light', 'dark'] as const).map(variant => <BackendMediaUpload key={variant} label={`Logo ${variant}`} binding={{ category: 'LABEL_LOGO', resource_type: 'label', resource_id: profile.id, variant }} reference={variant === 'light' ? profile?.logo_url_light : profile?.logo_url_dark} onChange={refreshProfile} />)}</div>;
+}
+function LegacyLabelLogoSettings() {
+  const backendUsers = usesBackendArtistLabels();
   const { profile, user } = useAuth();
   const { toast } = useToast();
   const [uploadingLight, setUploadingLight] = useState(false);
@@ -28,6 +43,7 @@ export function LabelLogoSettings() {
     e: React.ChangeEvent<HTMLInputElement>,
     type: 'light' | 'dark'
   ) => {
+    if (backendUsers) return;
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
@@ -69,12 +85,7 @@ export function LabelLogoSettings() {
         .getPublicUrl(fileName);
 
       // Update profile with new logo
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ [columnName]: urlData.publicUrl })
-        .eq('id', user.id);
-
-      if (updateError) throw updateError;
+      await updateCurrentProfile(user.id, { [columnName]: urlData.publicUrl });
 
       setLogo(urlData.publicUrl);
       
@@ -98,18 +109,14 @@ export function LabelLogoSettings() {
   };
 
   const handleRemoveLogo = async (type: 'light' | 'dark') => {
+    if (backendUsers && !usesBackendDomain('users')) return;
     if (!user) return;
 
     const setLogo = type === 'light' ? setLogoLight : setLogoDark;
     const columnName = type === 'light' ? 'logo_url_light' : 'logo_url_dark';
 
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ [columnName]: null })
-        .eq('id', user.id);
-
-      if (error) throw error;
+      await updateCurrentProfile(user.id, { [columnName]: null });
 
       setLogo(null);
       
@@ -162,6 +169,7 @@ export function LabelLogoSettings() {
                 variant="destructive"
                 size="sm"
                 onClick={() => handleRemoveLogo(type)}
+                disabled={backendUsers && !usesBackendDomain('users')}
               >
                 <Trash2 className="h-3 w-3 mr-1" />
                 Hapus
@@ -188,7 +196,7 @@ export function LabelLogoSettings() {
             variant="outline"
             size="sm"
             onClick={() => inputRef.current?.click()}
-            disabled={uploading}
+            disabled={backendUsers || uploading}
           >
             {uploading ? (
               <>
@@ -215,7 +223,7 @@ export function LabelLogoSettings() {
           Logo Label
         </CardTitle>
         <CardDescription>
-          Upload logo label untuk tema terang dan gelap. Logo akan ditampilkan di dashboard untuk Anda dan artis di bawah label Anda.
+          {backendUsers ? 'Upload logo ditunda sampai penyimpanan media backend tersedia. Penghapusan URL logo memerlukan layanan Users backend.' : 'Upload logo label untuk tema terang dan gelap. Logo akan ditampilkan di dashboard untuk Anda dan artis di bawah label Anda.'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">

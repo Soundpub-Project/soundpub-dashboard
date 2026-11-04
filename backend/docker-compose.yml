@@ -1,0 +1,168 @@
+name: dashboard-sounpub-dev
+services:
+  postgres:
+    build:
+      context: .
+      dockerfile: postgres.Dockerfile
+    image: dashboard-sounpub-dev-postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: soundpub_dev
+      POSTGRES_USER: postgres
+      MIGRATION_DATABASE_PASSWORD: ${MIGRATION_DATABASE_PASSWORD:?Set a unique migration database password}
+      APP_DATABASE_PASSWORD: ${APP_DATABASE_PASSWORD:?Set a unique application database password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a unique development password}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${SOUNDPUB_DEV_POSTGRES_PORT:-55433}:5432"
+    networks: [isolated, ingress]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d soundpub_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  storage-permissions:
+    image: alpine:3.22
+    user: root
+    command: ["sh", "-c", "chown -R 10001:10001 /data"]
+    volumes:
+      - object_data:/data
+    networks: [isolated]
+    restart: "no"
+  object-storage:
+    image: rustfs/rustfs:1.0.4
+    command: ["/data"]
+    restart: unless-stopped
+    environment:
+      RUSTFS_ACCESS_KEY: ${OBJECT_STORAGE_ACCESS_KEY:?Set a unique development storage access key}
+      RUSTFS_SECRET_KEY: ${OBJECT_STORAGE_SECRET_KEY:?Set a unique development storage secret key}
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ENABLE: "false"
+      RUSTFS_OBS_LOGGER_LEVEL: error
+    volumes:
+      - object_data:/data
+    ports:
+      - "127.0.0.1:${SOUNDPUB_DEV_STORAGE_PORT:-9100}:9000"
+    depends_on:
+      storage-permissions: { condition: service_completed_successfully }
+    networks: [isolated, ingress]
+    healthcheck:
+      test: ["CMD", "sh", "-c", "curl -fsS http://127.0.0.1:9000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+  migrate:
+    build: .
+    command: ["node", "dist/src/db/cli.js", "up"]
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://soundpub_owner:${MIGRATION_DATABASE_PASSWORD:?Set a unique migration database password}@postgres:5432/soundpub_dev
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [isolated]
+    restart: "no"
+  seed:
+    build: .
+    command: ["node", "dist/src/db/seed.js"]
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://soundpub_owner:${MIGRATION_DATABASE_PASSWORD:?Set a unique migration database password}@postgres:5432/soundpub_dev
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    networks: [isolated]
+    restart: "no"
+  backend:
+    build: .
+    restart: unless-stopped
+    environment: &application_env
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgres://soundpub_app:${APP_DATABASE_PASSWORD:?Set a unique application database password}@postgres:5432/soundpub_dev
+      OBJECT_STORAGE_ENDPOINT: object-storage
+      OBJECT_STORAGE_PORT: 9000
+      OBJECT_STORAGE_PUBLIC_ENDPOINT: http://127.0.0.1:${SOUNDPUB_DEV_STORAGE_PORT:-9100}
+      OBJECT_STORAGE_BROWSER_ORIGINS: http://127.0.0.1:${SOUNDPUB_DEV_FRONTEND_PORT:-8281},http://localhost:${SOUNDPUB_DEV_FRONTEND_PORT:-8281}
+      OBJECT_STORAGE_ACCESS_KEY: ${OBJECT_STORAGE_ACCESS_KEY:?Set a unique development storage access key}
+      OBJECT_STORAGE_SECRET_KEY: ${OBJECT_STORAGE_SECRET_KEY:?Set a unique development storage secret key}
+      OBJECT_STORAGE_BUCKET: soundpub-development
+      WEBHOOK_MOCK_SECRET: ${WEBHOOK_MOCK_SECRET:?Set a unique mock webhook secret}
+      DEV_AUTH_TOKENS_JSON: ${DEV_AUTH_TOKENS_JSON:-{}}
+    ports:
+      - "127.0.0.1:${SOUNDPUB_DEV_API_PORT:-3300}:3000"
+    depends_on:
+      seed: { condition: service_completed_successfully }
+      object-storage: { condition: service_healthy }
+    networks: [isolated, ingress]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+  worker:
+    build: .
+    command: ["node", "dist/src/worker-main.js"]
+    restart: unless-stopped
+    environment: *application_env
+    depends_on:
+      seed: { condition: service_completed_successfully }
+      object-storage: { condition: service_healthy }
+    networks: [isolated]
+    healthcheck:
+      test: ["CMD", "node", "-e", "const s=require('node:fs').statSync('/tmp/worker-ready');if(Date.now()-s.mtimeMs>10000)process.exit(1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+  frontend:
+    build:
+      context: ..
+      dockerfile: Dockerfile.dev
+    image: dashboard-sounpub-dev-frontend:latest
+    restart: unless-stopped
+    environment:
+      VITE_DEV_PORT: 8281
+      VITE_DEV_API_PROXY_TARGET: http://backend:3000
+      VITE_SOUNDPUB_BACKEND_DOMAINS: users,artists,labels,releases,storage,notifications,audit,settings,royalties,payouts,payments
+      VITE_SUPABASE_URL: http://supabase.invalid
+      VITE_SUPABASE_PUBLISHABLE_KEY: local-development-placeholder
+      VITE_DATABASE_SCHEMA: Soundpub
+      VITE_SSO_BASE_URL: http://sso.invalid
+      VITE_SSO_REALM: local-development-disabled
+      VITE_SSO_CLIENT_ID: Soundpub-local-development
+    ports:
+      - "127.0.0.1:${SOUNDPUB_DEV_FRONTEND_PORT:-8281}:8281"
+    depends_on:
+      backend: { condition: service_healthy }
+    networks: [ingress]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8281/auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+networks:
+  isolated:
+    internal: true
+  ingress: {}
+volumes:
+  pg_data:
+  object_data:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

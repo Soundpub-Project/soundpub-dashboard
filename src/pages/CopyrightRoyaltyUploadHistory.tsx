@@ -1,3 +1,5 @@
+import { usesBackendFinance } from '@/components/finance/mode';
+import { FinanceUnavailable } from '@/components/finance/FinanceUnavailable';
 ﻿import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -42,7 +44,7 @@ interface UploadRecord {
   updated_at: string;
 }
 
-export default function CopyrightRoyaltyUploadHistory() {
+function LegacyCopyrightRoyaltyUploadHistory() {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
   const [uploads, setUploads] = useState<UploadRecord[]>([]);
@@ -314,4 +316,8 @@ export default function CopyrightRoyaltyUploadHistory() {
       </AlertDialog>
     </DashboardLayout>
   );
+}
+export default function CopyrightRoyaltyUploadHistory() {
+  if (usesBackendFinance()) return <FinanceUnavailable title="Royalti komposer" />;
+  return <LegacyCopyrightRoyaltyUploadHistory />;
 }

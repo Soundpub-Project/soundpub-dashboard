@@ -1,9 +1,7 @@
 import { ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, type AppRole } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
-
-type AllowedRole = 'superadmin' | 'admin' | 'label' | 'artist' | 'user' | 'copyright' | 'whitelabel';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -12,7 +10,7 @@ interface ProtectedRouteProps {
   requireArtist?: boolean;
   requireCopyright?: boolean;
   requireWhitelabel?: boolean;
-  allowedRoles?: AllowedRole[];
+  allowedRoles?: AppRole[];
 }
 
 /**
@@ -48,6 +46,11 @@ export function ProtectedRoute({
     return <Navigate to="/auth" replace />;
   }
 
+  // Label Custom needs an explicit grant, including on authenticated-only routes.
+  if (role === 'label_custom' && !allowedRoles?.includes('label_custom')) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   // Check role-based access
   if (requireAdmin && !isAdmin) {
     return <Navigate to="/dashboard" replace />;
@@ -71,7 +74,7 @@ export function ProtectedRoute({
 
   // Check against allowed roles list
   if (allowedRoles && allowedRoles.length > 0) {
-    const userRole = role as AllowedRole | null;
+    const userRole = role;
     
     // Superadmin always has access
     if (role === 'superadmin') {

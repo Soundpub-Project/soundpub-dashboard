@@ -1,0 +1,2589 @@
+{
+  "timestamp": "2026-10-28T03:31:50.309Z",
+  "boundary": "Browser responses mocked; external requests aborted; no backend identity verification or proxy acceptance established.",
+  "results": [
+    {
+      "viewportName": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scenario": "anonymous",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "result": "EXECUTED",
+      "assertions": "PASS",
+      "overflow": false,
+      "body": "Login\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scenario": "users",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "PASS",
+      "overflow": false,
+      "body": "Toggle Sidebar\n\nSoundpub\n\nQA Admin\n\nToggle theme\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n1 dari 1 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\nNama\tEmail\tRole\tLogin\tLabel / Kode\tStatus\tBalance\tBergabung\tAksi\nQA Target\ttarget@example.invalid\t\nUser\n\tEmail\t-\tActive\tRp 0\t28/10/2026\t",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/v1/admin/users/22222222-2222-4222-8222-222222222222/status",
+          "bearer": true,
+          "body": "{\"status\":\"inactive\"}"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "PUT",
+          "path": "/api/v1/admin/users/22222222-2222-4222-8222-222222222222/roles",
+          "bearer": true,
+          "body": "{\"roles\":[\"admin\"]}"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scenario": "profile",
+      "route": "/dashboard/settings",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/settings",
+      "result": "EXECUTED",
+      "assertions": "PASS",
+      "overflow": false,
+      "body": "Toggle Sidebar\n\nSoundpub\n\nQA Admin\n\nToggle theme\nQA\nSettings\n\nKelola pengaturan akun Anda\n\nSuper Admin Settings\nLogo Dashboard\n\nUpload logo untuk tema terang dan gelap. Logo akan ditampilkan di sidebar, halaman login, dan header dashboard.\n\nTema Terang\n\nBelum ada logo\n\nUpload\nTema Gelap\n\nBelum ada logo\n\nUpload\n\n📐 Ketentuan Gambar:\n\nUkuran rekomendasi: 512 x 512 px (rasio 1:1)\nUkuran minimal: 128 x 128 px\nUkuran maksimal file: 1 MB\nFormat: PNG, JPG, SVG\nFavicon\n\nUpload favicon untuk ditampilkan di tab browser\n\nBelum ada favicon. Upload favicon untuk browser tab.\n\nUpload Favicon\n\n📐 Ketentuan Gambar:\n\nUkuran rekomendasi: 32 x 32 px atau 64 x 64 px\nUkuran maksimal file: 500 KB\nFormat: ICO, PNG, SVG\nStorage & Analytics\n\nKonfigurasi penyimpanan file dan tracking analitik\n\nPopup Informasi Auth\n\nTampil di halaman login sebelum user masuk. Setiap simpan membuat popup muncul kembali untuk semua browser.\n\nIntegrasi ICCN\nFoto Profil\n\nUpload foto profil Anda\n\nQA\nUpload Foto\n\nJPG, PNG, WebP. Maks 2MB.\n\nProfil\n\nInformasi pribadi Anda\n\nEmail\n\nEmail tidak dapat diubah\n\nNama Lengkap\nNomor Telepon\nAlamat\nSimpan Perubahan\nUbah Password\n\nUbah password akun Anda\n\nPassword Baru\nKonfirmasi Password\nUbah Password\nAkun\n\nInformasi akun Anda\n\nStatus Akun\n\nActive\n\nactive\n\nBergabung Sejak\n\n28 Oktober 2026\n\nNotifikasi Email\n\nPilih jenis email yang ingin Anda terima. Notifikasi in-app (lonceng) tetap aktif walaupun email dimatikan.",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": "{\"full_name\":\"QA Edited Name\",\"phone\":\"\",\"address\":\"\"}"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scenario": "empty",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "OBSERVATION_ONLY",
+      "overflow": false,
+      "body": "Toggle Sidebar\n\nSoundpub\n\nQA Admin\n\nToggle theme\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n0 dari 0 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\n\nBelum ada users",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scenario": "unauthorized",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "OBSERVATION_ONLY",
+      "overflow": false,
+      "body": "Toggle Sidebar\n\nSoundpub\n\nQA Admin\n\nToggle theme\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nSesi tidak valid. Silakan login kembali.\n\nCoba lagi\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n0 dari 0 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\n\nBelum ada users",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scenario": "forbidden",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "OBSERVATION_ONLY",
+      "overflow": false,
+      "body": "Toggle Sidebar\n\nSoundpub\n\nQA Admin\n\nToggle theme\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nAnda tidak memiliki akses ke daftar user.\n\nCoba lagi\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n0 dari 0 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\n\nBelum ada users",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scenario": "server-error",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "OBSERVATION_ONLY",
+      "overflow": false,
+      "body": "Toggle Sidebar\n\nSoundpub\n\nQA Admin\n\nToggle theme\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nGagal memuat daftar user. Silakan coba lagi.\n\nCoba lagi\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n0 dari 0 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\n\nBelum ada users",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scenario": "network-error",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "OBSERVATION_ONLY",
+      "overflow": false,
+      "body": "Toggle Sidebar\n\nSoundpub\n\nQA Admin\n\nToggle theme\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nGagal memuat daftar user. Silakan coba lagi.\n\nCoba lagi\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n0 dari 0 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\n\nBelum ada users",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scenario": "loading",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "OBSERVATION_ONLY",
+      "overflow": false,
+      "body": "Toggle Sidebar\n\nSoundpub\n\nQA Admin\n\nToggle theme\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n0 dari 0 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "tablet",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "scenario": "anonymous",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "result": "EXECUTED",
+      "assertions": "PASS",
+      "overflow": false,
+      "body": "Login\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "tablet",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "scenario": "users",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "PASS",
+      "overflow": false,
+      "body": "Soundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n1 dari 1 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\nNama\tEmail\tRole\tLogin\tLabel / Kode\tStatus\tBalance\tBergabung\tAksi\nQA Target\ttarget@example.invalid\t\nUser\n\tEmail\t-\tActive\tRp 0\t28/10/2026\t",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/v1/admin/users/22222222-2222-4222-8222-222222222222/status",
+          "bearer": true,
+          "body": "{\"status\":\"inactive\"}"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "PUT",
+          "path": "/api/v1/admin/users/22222222-2222-4222-8222-222222222222/roles",
+          "bearer": true,
+          "body": "{\"roles\":[\"admin\"]}"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "tablet",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "scenario": "profile",
+      "route": "/dashboard/settings",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/settings",
+      "result": "EXECUTED",
+      "assertions": "PASS",
+      "overflow": false,
+      "body": "Soundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nSettings\n\nKelola pengaturan akun Anda\n\nSuper Admin Settings\nLogo Dashboard\n\nUpload logo untuk tema terang dan gelap. Logo akan ditampilkan di sidebar, halaman login, dan header dashboard.\n\nTema Terang\n\nBelum ada logo\n\nUpload\nTema Gelap\n\nBelum ada logo\n\nUpload\n\n📐 Ketentuan Gambar:\n\nUkuran rekomendasi: 512 x 512 px (rasio 1:1)\nUkuran minimal: 128 x 128 px\nUkuran maksimal file: 1 MB\nFormat: PNG, JPG, SVG\nFavicon\n\nUpload favicon untuk ditampilkan di tab browser\n\nBelum ada favicon. Upload favicon untuk browser tab.\n\nUpload Favicon\n\n📐 Ketentuan Gambar:\n\nUkuran rekomendasi: 32 x 32 px atau 64 x 64 px\nUkuran maksimal file: 500 KB\nFormat: ICO, PNG, SVG\nStorage & Analytics\n\nKonfigurasi penyimpanan file dan tracking analitik\n\nPopup Informasi Auth\n\nTampil di halaman login sebelum user masuk. Setiap simpan membuat popup muncul kembali untuk semua browser.\n\nIntegrasi ICCN\nFoto Profil\n\nUpload foto profil Anda\n\nQA\nUpload Foto\n\nJPG, PNG, WebP. Maks 2MB.\n\nProfil\n\nInformasi pribadi Anda\n\nEmail\n\nEmail tidak dapat diubah\n\nNama Lengkap\nNomor Telepon\nAlamat\nSimpan Perubahan\nUbah Password\n\nUbah password akun Anda\n\nPassword Baru\nKonfirmasi Password\nUbah Password\nAkun\n\nInformasi akun Anda\n\nStatus Akun\n\nActive\n\nactive\n\nBergabung Sejak\n\n28 Oktober 2026\n\nNotifikasi Email\n\nPilih jenis email yang ingin Anda terima. Notifikasi in-app (lonceng) tetap aktif walaupun email dimatikan.",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": "{\"full_name\":\"QA Edited Name\",\"phone\":\"\",\"address\":\"\"}"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "tablet",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "scenario": "empty",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "OBSERVATION_ONLY",
+      "overflow": false,
+      "body": "Soundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n0 dari 0 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\n\nBelum ada users",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "tablet",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "scenario": "unauthorized",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "OBSERVATION_ONLY",
+      "overflow": false,
+      "body": "Soundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nSesi tidak valid. Silakan login kembali.\n\nCoba lagi\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n0 dari 0 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\n\nBelum ada users",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "tablet",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "scenario": "forbidden",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "OBSERVATION_ONLY",
+      "overflow": false,
+      "body": "Soundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nAnda tidak memiliki akses ke daftar user.\n\nCoba lagi\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n0 dari 0 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\n\nBelum ada users",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "tablet",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "scenario": "server-error",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "OBSERVATION_ONLY",
+      "overflow": false,
+      "body": "Soundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nGagal memuat daftar user. Silakan coba lagi.\n\nCoba lagi\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n0 dari 0 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\n\nBelum ada users",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "tablet",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "scenario": "network-error",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "OBSERVATION_ONLY",
+      "overflow": false,
+      "body": "Soundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nGagal memuat daftar user. Silakan coba lagi.\n\nCoba lagi\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n0 dari 0 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\n\nBelum ada users",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "tablet",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "scenario": "loading",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "OBSERVATION_ONLY",
+      "overflow": false,
+      "body": "Soundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n0 dari 0 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "scenario": "anonymous",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/auth",
+      "result": "EXECUTED",
+      "assertions": "PASS",
+      "overflow": false,
+      "body": "Login\nDaftar\nEmail\nPassword\nLupa Password?\nLogin\nATAU\nLogin dengan Google\nLogin dengan SSO (Label)",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "scenario": "users",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "PASS",
+      "overflow": false,
+      "body": "Soundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n1 dari 1 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\nNama\tEmail\tRole\tLogin\tLabel / Kode\tStatus\tBalance\tBergabung\tAksi\nQA Target\ttarget@example.invalid\t\nUser\n\tEmail\t-\tActive\tRp 0\t28/10/2026\t",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/v1/admin/users/22222222-2222-4222-8222-222222222222/status",
+          "bearer": true,
+          "body": "{\"status\":\"inactive\"}"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "PUT",
+          "path": "/api/v1/admin/users/22222222-2222-4222-8222-222222222222/roles",
+          "bearer": true,
+          "body": "{\"roles\":[\"admin\"]}"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "scenario": "profile",
+      "route": "/dashboard/settings",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/settings",
+      "result": "EXECUTED",
+      "assertions": "PASS",
+      "overflow": false,
+      "body": "Soundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nSettings\n\nKelola pengaturan akun Anda\n\nSuper Admin Settings\nLogo Dashboard\n\nUpload logo untuk tema terang dan gelap. Logo akan ditampilkan di sidebar, halaman login, dan header dashboard.\n\nTema Terang\n\nBelum ada logo\n\nUpload\nTema Gelap\n\nBelum ada logo\n\nUpload\n\n📐 Ketentuan Gambar:\n\nUkuran rekomendasi: 512 x 512 px (rasio 1:1)\nUkuran minimal: 128 x 128 px\nUkuran maksimal file: 1 MB\nFormat: PNG, JPG, SVG\nFavicon\n\nUpload favicon untuk ditampilkan di tab browser\n\nBelum ada favicon. Upload favicon untuk browser tab.\n\nUpload Favicon\n\n📐 Ketentuan Gambar:\n\nUkuran rekomendasi: 32 x 32 px atau 64 x 64 px\nUkuran maksimal file: 500 KB\nFormat: ICO, PNG, SVG\nStorage & Analytics\n\nKonfigurasi penyimpanan file dan tracking analitik\n\nPopup Informasi Auth\n\nTampil di halaman login sebelum user masuk. Setiap simpan membuat popup muncul kembali untuk semua browser.\n\nIntegrasi ICCN\nFoto Profil\n\nUpload foto profil Anda\n\nQA\nUpload Foto\n\nJPG, PNG, WebP. Maks 2MB.\n\nProfil\n\nInformasi pribadi Anda\n\nEmail\n\nEmail tidak dapat diubah\n\nNama Lengkap\nNomor Telepon\nAlamat\nSimpan Perubahan\nUbah Password\n\nUbah password akun Anda\n\nPassword Baru\nKonfirmasi Password\nUbah Password\nAkun\n\nInformasi akun Anda\n\nStatus Akun\n\nActive\n\nactive\n\nBergabung Sejak\n\n28 Oktober 2026\n\nNotifikasi Email\n\nPilih jenis email yang ingin Anda terima. Notifikasi in-app (lonceng) tetap aktif walaupun email dimatikan.",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": "{\"full_name\":\"QA Edited Name\",\"phone\":\"\",\"address\":\"\"}"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "scenario": "empty",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "OBSERVATION_ONLY",
+      "overflow": false,
+      "body": "Soundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n0 dari 0 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\n\nBelum ada users",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "scenario": "unauthorized",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "OBSERVATION_ONLY",
+      "overflow": false,
+      "body": "Soundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nSesi tidak valid. Silakan login kembali.\n\nCoba lagi\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n0 dari 0 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\n\nBelum ada users",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "scenario": "forbidden",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "OBSERVATION_ONLY",
+      "overflow": false,
+      "body": "Soundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nAnda tidak memiliki akses ke daftar user.\n\nCoba lagi\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n0 dari 0 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\n\nBelum ada users",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "scenario": "server-error",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "OBSERVATION_ONLY",
+      "overflow": false,
+      "body": "Soundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nGagal memuat daftar user. Silakan coba lagi.\n\nCoba lagi\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n0 dari 0 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\n\nBelum ada users",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "scenario": "network-error",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "OBSERVATION_ONLY",
+      "overflow": false,
+      "body": "Soundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nGagal memuat daftar user. Silakan coba lagi.\n\nCoba lagi\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n0 dari 0 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login\n\nBelum ada users",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewportName": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "scenario": "loading",
+      "route": "/dashboard/users",
+      "finalUrl": "http://127.0.0.1:8282/dashboard/users",
+      "result": "EXECUTED",
+      "assertions": "OBSERVATION_ONLY",
+      "overflow": false,
+      "body": "Soundpub\nDasbor Music\nDasbor\nRilis\nLagu\nRoyalti\nAnalitik\nRingkasan Royalti\nTakedown\nDasbor Hak Cipta\nRegistrasi Hak Cipta\nAnalitik (Hak Cipta)\nRingkasan Royalti (Hak Cipta)\nManajemen Royalti\nUpload Royalti\nSemua Royalti\nRoyalti Komposer\nManajemen Pengguna\nPengguna\nInvoice\nKelola Notifikasi\nMedia Library\nReview Hak Cipta\nAdministrasi Sistem\nLog Aktivitas\nEkspor Data\nKelola Pembayaran\nPengaturan Pembayaran\nAkun\nPembayaran\nPengaturan\nU\n\nUser\n\nSuper Admin\nLogout\nToggle Sidebar\nToggle theme\n\nQA Admin\n\nSuper Admin • Balance: Rp 0\n\nQA\nUsers\n\nKelola pengguna platform\n\nPHASE4_AUTH: Pembuatan, penghapusan akun, password dan impersonasi ditunda. PHASE3B_ARTISTS_LABELS: Perpindahan label ditunda.\n\nDaftar User\nPermintaan Hapus Artis\nDaftar Users\n\n0 dari 0 users\n\nAudit Orphan User\nTambah User\nFilter:\nSemua Role\nSemua Status\nSemua Login",
+      "requests": [
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "https://fonts.googleapis.com/css2",
+          "method": "GET"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/profile",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": true,
+          "body": null
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/profiles",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/app_settings",
+          "method": "GET"
+        },
+        {
+          "blockedExternal": "http://127.0.0.1:54321/rest/v1/notifications",
+          "method": "GET"
+        }
+      ],
+      "errors": []
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+import { usesBackendDomain } from '@/api/routing';
+import { notificationsApi } from '@/api/notifications';
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -59,6 +61,11 @@ export default function NotificationManagement() {
 
   const fetchNotifications = async () => {
     try {
+      if (usesBackendDomain('notifications')) {
+        const page = await notificationsApi.adminList();
+        setNotifications(page.items.map(item => ({ ...item, user_id: item.recipient_user_id, message: item.body, is_read: Boolean(item.read_at), is_global: item.kind === 'GLOBAL_ANNOUNCEMENT', metadata: item.metadata_safe })));
+        return;
+      }
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
@@ -68,6 +75,7 @@ export default function NotificationManagement() {
       setNotifications((data || []) as Notification[]);
     } catch (err) {
       console.error(err);
+      toast.error('Gagal memuat notifikasi');
     } finally {
       setLoading(false);
     }
@@ -77,11 +85,14 @@ export default function NotificationManagement() {
     if (!editNotif) return;
     setSaving(true);
     try {
+      if (usesBackendDomain('notifications')) await notificationsApi.update(editNotif.id, { title: editTitle, body: editMessage });
+      else {
       const { error } = await supabase
         .from('notifications')
         .update({ title: editTitle, message: editMessage })
         .eq('id', editNotif.id);
       if (error) throw error;
+      }
       toast.success('Notifikasi berhasil diperbarui');
       setEditNotif(null);
       fetchNotifications();
@@ -96,11 +107,14 @@ export default function NotificationManagement() {
     if (!deleteNotif) return;
     setDeleting(true);
     try {
+      if (usesBackendDomain('notifications')) await notificationsApi.remove(deleteNotif.id);
+      else {
       const { error } = await supabase
         .from('notifications')
         .delete()
         .eq('id', deleteNotif.id);
       if (error) throw error;
+      }
       toast.success('Notifikasi berhasil dihapus');
       setDeleteNotif(null);
       fetchNotifications();

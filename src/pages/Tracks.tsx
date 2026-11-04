@@ -1,3 +1,7 @@
+import { resolveMediaDownload } from '@/services/media';
+import { usesBackendReleases, listBackendReleases } from '@/services/releases';
+import { listBackendTracks } from '@/services/tracks';
+import { toast } from 'sonner';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -35,10 +39,10 @@ interface Track {
   isrc: string;
   title: string;
   artist_name: string;
-  artist_user_id: string | null;
+  artist_user_id?: string | null;
   genre: string | null;
   composer: string | null;
-  audio_url: string | null;
+  audio_url?: string | null;
   created_at: string;
   release_id: string;
 }
@@ -69,6 +73,7 @@ export default function Tracks() {
   const [releases, setReleases] = useState<Release[]>([]);
   const [labels, setLabels] = useState<LabelInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
   // Filters
@@ -87,7 +92,15 @@ export default function Tracks() {
   }, []);
 
   const fetchData = async () => {
+    setLoading(true); setLoadError('');
     try {
+      if (usesBackendReleases()) {
+        const [tracks, releases] = await Promise.all([listBackendTracks(), listBackendReleases()]);
+        setTracks(tracks);
+        setReleases(releases);
+        setLabels(releases.filter(row => row.label_id && row.label_name).map(row => ({ id: row.label_id!, full_name: row.label_name! })));
+        return;
+      }
       const [tracksRes, releasesRes] = await Promise.all([
         supabase
           .from('tracks')
@@ -114,6 +127,8 @@ export default function Tracks() {
       }
     } catch (error) {
       console.error('Error fetching data:', error);
+      setLoadError(error instanceof Error ? error.message : 'Gagal memuat data');
+      toast.error(error instanceof Error ? error.message : 'Gagal memuat tracks');
     } finally {
       setLoading(false);
     }
@@ -132,10 +147,9 @@ export default function Tracks() {
       return;
     }
 
-    audio.src = track.audio_url;
-    setActiveTrackId(track.id);
-
     try {
+      audio.src = await resolveMediaDownload(track.audio_url);
+      setActiveTrackId(track.id);
       await audio.play();
     } catch (error) {
       console.error('Error playing track:', error);
@@ -239,6 +253,7 @@ export default function Tracks() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        {loadError && <div role="alert"><p>{loadError}</p><Button disabled={loading} onClick={() => void fetchData()}>Coba lagi</Button></div>}
         <audio
           ref={audioRef}
           className="hidden"
@@ -370,6 +385,7 @@ export default function Tracks() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
+                              disabled={!hasAudioFile(track)}
                               onClick={() => void handlePlayTrack(track)}
                               aria-label={isPlaying && activeTrackId === track.id ? `Jeda ${track.title}` : `Putar ${track.title}`}
                             >

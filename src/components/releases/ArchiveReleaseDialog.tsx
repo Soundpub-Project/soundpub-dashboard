@@ -1,3 +1,4 @@
+import { usesBackendReleases, releaseWorkflowUnavailable } from '@/services/releases';
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -27,7 +28,7 @@ interface ArchiveReleaseDialogProps {
   onSuccess: () => void;
 }
 
-export function ArchiveReleaseDialog({
+function LegacyArchiveReleaseDialog({
   open,
   onOpenChange,
   release,
@@ -110,4 +111,9 @@ export function ArchiveReleaseDialog({
       </AlertDialogContent>
     </AlertDialog>
   );
+}
+
+export function ArchiveReleaseDialog(props: Parameters<typeof LegacyArchiveReleaseDialog>[0]) {
+  if (usesBackendReleases()) return props.open ? <p role="alert">{releaseWorkflowUnavailable}</p> : null;
+  return <LegacyArchiveReleaseDialog {...props} />;
 }

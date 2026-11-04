@@ -1,0 +1,388 @@
+{
+  "started": "2026-10-28T03:36:10.561Z",
+  "container": "soundpub-agent-e-860978b9-7f59-49de-9221-7c171261f05c",
+  "checks": [
+    {
+      "check": "Users browser pagination through Vite and real DB",
+      "result": "PASS",
+      "users": 105,
+      "renderedRows": 105,
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100",
+          "bearer": "synthetic-admin"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/users?limit=100&cursor=eyJjcmVhdGVkQXQiOiIyMDI2LTEwLTI4VDAzOjM2OjEyLjExNjE2N1oiLCJpZCI6IjA1ZDgzNGI1LWNjNDYtNDQ3NC1iMzY2LTRhM2I4MzhlZjdmZiIsImZpbHRlciI6Il9rU296TTJKN2E1d3RVeGVXRG1aZWIxOWl4SmtPb09XcldMUWlhZUJ0cEkifQ",
+          "bearer": "synthetic-admin"
+        }
+      ]
+    },
+    {
+      "check": "Browser status update persisted and list refreshed",
+      "result": "PASS"
+    },
+    {
+      "check": "Browser role change persisted and target current principal immediately updated",
+      "result": "PASS"
+    },
+    {
+      "check": "Profile browser edit persisted in PostgreSQL and survived reload",
+      "result": "PASS"
+    },
+    {
+      "check": "missing bearer",
+      "result": "PASS",
+      "path": "/api/v1/me",
+      "status": 401
+    },
+    {
+      "check": "invalid bearer",
+      "result": "PASS",
+      "path": "/api/v1/me",
+      "status": 401
+    },
+    {
+      "check": "active target",
+      "result": "PASS",
+      "path": "/api/v1/me",
+      "status": 200
+    },
+    {
+      "check": "Role removal immediately denies admin access with same target token",
+      "result": "PASS",
+      "status": 403
+    }
+  ],
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/api/v1/profile",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/profile",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users?limit=100",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users?limit=100&cursor=eyJjcmVhdGVkQXQiOiIyMDI2LTEwLTI4VDAzOjM2OjEyLjExNjE2N1oiLCJpZCI6IjA1ZDgzNGI1LWNjNDYtNDQ3NC1iMzY2LTRhM2I4MzhlZjdmZiIsImZpbHRlciI6Il9rU296TTJKN2E1d3RVeGVXRG1aZWIxOWl4SmtPb09XcldMUWlhZUJ0cEkifQ",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/users/22222222-2222-4222-8222-222222222222/status",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users?limit=100",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users?limit=100&cursor=eyJjcmVhdGVkQXQiOiIyMDI2LTEwLTI4VDAzOjM2OjEyLjExNjE2N1oiLCJpZCI6IjA1ZDgzNGI1LWNjNDYtNDQ3NC1iMzY2LTRhM2I4MzhlZjdmZiIsImZpbHRlciI6Il9rU296TTJKN2E1d3RVeGVXRG1aZWIxOWl4SmtPb09XcldMUWlhZUJ0cEkifQ",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me",
+      "bearer": "synthetic-target"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/users/22222222-2222-4222-8222-222222222222/status",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/profile",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/profile",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users?limit=100",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users?limit=100&cursor=eyJjcmVhdGVkQXQiOiIyMDI2LTEwLTI4VDAzOjM2OjEyLjExNjE2N1oiLCJpZCI6IjA1ZDgzNGI1LWNjNDYtNDQ3NC1iMzY2LTRhM2I4MzhlZjdmZiIsImZpbHRlciI6Il9rU296TTJKN2E1d3RVeGVXRG1aZWIxOWl4SmtPb09XcldMUWlhZUJ0cEkifQ",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users?limit=100",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users?limit=100&cursor=eyJjcmVhdGVkQXQiOiIyMDI2LTEwLTI4VDAzOjM2OjEyLjExNjE2N1oiLCJpZCI6IjA1ZDgzNGI1LWNjNDYtNDQ3NC1iMzY2LTRhM2I4MzhlZjdmZiIsImZpbHRlciI6Il9rU296TTJKN2E1d3RVeGVXRG1aZWIxOWl4SmtPb09XcldMUWlhZUJ0cEkifQ",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/users/22222222-2222-4222-8222-222222222222/roles",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users?limit=100",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users?limit=100&cursor=eyJjcmVhdGVkQXQiOiIyMDI2LTEwLTI4VDAzOjM2OjEyLjExNjE2N1oiLCJpZCI6IjA1ZDgzNGI1LWNjNDYtNDQ3NC1iMzY2LTRhM2I4MzhlZjdmZiIsImZpbHRlciI6Il9rU296TTJKN2E1d3RVeGVXRG1aZWIxOWl4SmtPb09XcldMUWlhZUJ0cEkifQ",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me",
+      "bearer": "synthetic-target"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/profile",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/profile",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/profile",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/profile",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/profile",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/profile",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me",
+      "bearer": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me",
+      "bearer": "invalid"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me",
+      "bearer": "synthetic-target"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/users/22222222-2222-4222-8222-222222222222/roles",
+      "bearer": "synthetic-admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users",
+      "bearer": "synthetic-target"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me",
+      "bearer": "synthetic-target"
+    }
+  ],
+  "responses": [
+    {
+      "path": "/api/v1/profile",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/profile",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/users?limit=100",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/users?limit=100&cursor=eyJjcmVhdGVkQXQiOiIyMDI2LTEwLTI4VDAzOjM2OjEyLjExNjE2N1oiLCJpZCI6IjA1ZDgzNGI1LWNjNDYtNDQ3NC1iMzY2LTRhM2I4MzhlZjdmZiIsImZpbHRlciI6Il9rU296TTJKN2E1d3RVeGVXRG1aZWIxOWl4SmtPb09XcldMUWlhZUJ0cEkifQ",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/users/22222222-2222-4222-8222-222222222222/status",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/users?limit=100",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/users?limit=100&cursor=eyJjcmVhdGVkQXQiOiIyMDI2LTEwLTI4VDAzOjM2OjEyLjExNjE2N1oiLCJpZCI6IjA1ZDgzNGI1LWNjNDYtNDQ3NC1iMzY2LTRhM2I4MzhlZjdmZiIsImZpbHRlciI6Il9rU296TTJKN2E1d3RVeGVXRG1aZWIxOWl4SmtPb09XcldMUWlhZUJ0cEkifQ",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/me",
+      "status": 403
+    },
+    {
+      "path": "/api/v1/admin/users/22222222-2222-4222-8222-222222222222/status",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/profile",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/profile",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/users?limit=100",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/users?limit=100&cursor=eyJjcmVhdGVkQXQiOiIyMDI2LTEwLTI4VDAzOjM2OjEyLjExNjE2N1oiLCJpZCI6IjA1ZDgzNGI1LWNjNDYtNDQ3NC1iMzY2LTRhM2I4MzhlZjdmZiIsImZpbHRlciI6Il9rU296TTJKN2E1d3RVeGVXRG1aZWIxOWl4SmtPb09XcldMUWlhZUJ0cEkifQ",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/users?limit=100",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/users?limit=100&cursor=eyJjcmVhdGVkQXQiOiIyMDI2LTEwLTI4VDAzOjM2OjEyLjExNjE2N1oiLCJpZCI6IjA1ZDgzNGI1LWNjNDYtNDQ3NC1iMzY2LTRhM2I4MzhlZjdmZiIsImZpbHRlciI6Il9rU296TTJKN2E1d3RVeGVXRG1aZWIxOWl4SmtPb09XcldMUWlhZUJ0cEkifQ",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/users/22222222-2222-4222-8222-222222222222/roles",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/users?limit=100",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/users?limit=100&cursor=eyJjcmVhdGVkQXQiOiIyMDI2LTEwLTI4VDAzOjM2OjEyLjExNjE2N1oiLCJpZCI6IjA1ZDgzNGI1LWNjNDYtNDQ3NC1iMzY2LTRhM2I4MzhlZjdmZiIsImZpbHRlciI6Il9rU296TTJKN2E1d3RVeGVXRG1aZWIxOWl4SmtPb09XcldMUWlhZUJ0cEkifQ",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/me",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/profile",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/profile",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/profile",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/profile",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/profile",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/profile",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/me",
+      "status": 401
+    },
+    {
+      "path": "/api/v1/me",
+      "status": 401
+    },
+    {
+      "path": "/api/v1/me",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/users/22222222-2222-4222-8222-222222222222/roles",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/users",
+      "status": 403
+    },
+    {
+      "path": "/api/v1/me",
+      "status": 200
+    }
+  ],
+  "cleanup": {
+    "browser": "closed",
+    "vite": "closed",
+    "backend": "closed",
+    "runtimePool": "closed",
+    "ownerPool": "closed",
+    "container": "removed with anonymous volumes"
+  },
+  "database": {
+    "host": "127.0.0.1",
+    "port": "64343",
+    "name": "soundpub_test_users_agent_e",
+    "image": "postgres:17-alpine",
+    "persistentVolume": false
+  },
+  "migrations": [
+    "0001_foundation.sql",
+    "0002_app_grants.sql",
+    "0003_restrict_runtime.sql",
+    "0004_runtime_least_privilege.sql",
+    "0005_role_authority_lock.sql",
+    "0006_user_profiles.sql"
+  ],
+  "runtimeRole": "soundpub_app",
+  "routing": {
+    "browser": "http://127.0.0.1:8181",
+    "backend": "http://127.0.0.1:62229",
+    "proxy": "/api",
+    "override": "Only target port changed to owned ephemeral backend; real repository Vite config loaded."
+  },
+  "audit": [
+    {
+      "action": "profile.updated",
+      "count": 1
+    },
+    {
+      "action": "user.roles_changed",
+      "count": 2
+    },
+    {
+      "action": "user.status_changed",
+      "count": 2
+    }
+  ],
+  "status": "PASS",
+  "finished": "2026-10-28T03:36:25.585Z"
+}

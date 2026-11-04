@@ -21,6 +21,7 @@ build
 # Environment variables
 .env
 .env.local
+.env copy
 .env.*.local
 .env-old
 *.env
@@ -49,11 +50,14 @@ temp-supabase
 
 # Data files
 *.csv
+!docs/migration/STORAGE_MANIFEST.csv
+!docs/migration/PHASE1F_STORAGE_SCOPE.csv
 
 # Lock files (keep only one)
 bun.lockb
 
 # Testing
+test-results/
 coverage
 .nyc_output
 
@@ -77,3 +81,7 @@ npm-cache/
 .codegraphy/*
 /.codegraph/
 /%SystemDrive%/
+
+!backend/.env.example
+
+/backup/

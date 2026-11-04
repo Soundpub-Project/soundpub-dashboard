@@ -1,3 +1,5 @@
+import { usesBackendDomain } from '@/api/routing';
+import { usesBackendReleases, releaseWorkflowUnavailable } from '@/services/releases';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -176,7 +178,7 @@ interface ReleaseFormDialogProps {
   lyricsOnlyMode?: boolean;
 }
 
-export function ReleaseFormDialog({
+function LegacyReleaseFormDialog({
   open,
   onOpenChange,
   release,
@@ -1690,4 +1692,10 @@ export function ReleaseFormDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+export function ReleaseFormDialog(props: Parameters<typeof LegacyReleaseFormDialog>[0]) {
+  if (usesBackendReleases()) return <p role="alert">{releaseWorkflowUnavailable}</p>;
+  if (usesBackendDomain('storage')) return <p role="alert">Mode storage memerlukan mode releases untuk alur release.</p>;
+  return <LegacyReleaseFormDialog {...props} />;
 }

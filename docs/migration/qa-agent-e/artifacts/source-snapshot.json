@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-10-28T03:31:24.285Z",
+  "files": [
+    {
+      "path": "src/hooks/useAuth.tsx",
+      "sha256": "d039fb7b13f1c3269c6b85afff50611abcc0014cabcd61d8810fdd6c1f3f3a4d"
+    },
+    {
+      "path": "src/pages/Users.tsx",
+      "sha256": "40e1970eaefd42ba5a18c90324bd990b58d6b8f78956a976092141e3211f4bfb"
+    },
+    {
+      "path": "src/pages/Settings.tsx",
+      "sha256": "4913921c77fd70be07b8fcef52469323812f1954e1e9e6c830e40aa226126bea"
+    },
+    {
+      "path": "src/services/users.ts",
+      "sha256": "4cff1f1a9699389c15797ae7e95e14fa0c76496dd5b018964b3274812a7b4e7c"
+    },
+    {
+      "path": "src/api/users.ts",
+      "sha256": "e27eabfb4f70fbc218ce48e32488df580c45d96cbbc790b63cc4bb7164f440d1"
+    },
+    {
+      "path": "src/api/routing.ts",
+      "sha256": "a490c6f51fde9affa339d6f8390f0995df88c7a91baab814486e91704ea5015b"
+    },
+    {
+      "path": "vite.config.ts",
+      "sha256": "a416794ed6673aadacaf08f68b7a4f8837415e6259ce26c9767abc5f296b662c"
+    }
+  ]
+}

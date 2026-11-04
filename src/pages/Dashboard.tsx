@@ -1,7 +1,10 @@
+import { usesBackendFinance } from '@/components/finance/mode';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { usesBackendReleases, listBackendReleases } from '@/services/releases';
+import { listBackendTracks } from '@/services/tracks';
 import { useRoyaltyStats, useRoyaltyMonthlySummary, useRoyaltyPlatformSummary } from '@/hooks/useRoyaltyData';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,8 +21,7 @@ import {
   Upload,
   ArrowRight,
   Wallet,
-  Clock,
-  CheckCircle
+  Clock
 } from 'lucide-react';
 import { ArtistOnboardingDialog } from '@/components/onboarding/ArtistOnboardingDialog';
 import { 
@@ -68,6 +70,61 @@ interface TopPlatform {
 }
 
 export default function Dashboard() {
+  const { isLabelCustom } = useAuth();
+  return isLabelCustom ? <LabelCustomDashboard /> : <StandardDashboard />;
+}
+
+function LabelCustomDashboard() {
+  const navigate = useNavigate();
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div>
+          <Badge variant="outline" className="mb-3">Label Custom</Badge>
+          <h1 className="text-2xl font-bold md:text-3xl">Dasbor Label Custom</h1>
+          <p className="mt-2 max-w-3xl text-muted-foreground">
+            Artis dikelola tanpa akun login. Release, media, royalti, saldo, dan payout berjalan atas kepemilikan PIC Label Custom.
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card className="border-emerald-500/30 bg-emerald-500/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" />Manajemen Artis</CardTitle>
+              <CardDescription>Sudah aktif pada backend mandiri.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">Tambah, edit, dan arsipkan artis tanpa membuat password atau akses dashboard.</p>
+              <Button onClick={() => navigate('/dashboard/my-artists')}>Buka Daftar Artis</Button>
+            </CardContent>
+          </Card>
+          <Card className="border-sky-500/30 bg-sky-500/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Disc3 className="h-5 w-5" />Distribusi Musik</CardTitle>
+              <CardDescription>Release dan track memakai artis katalog milik unit Anda.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">Buat release, kelola track, lalu unggah cover dan audio privat tanpa membuat akun artis.</p>
+              <Button onClick={() => navigate('/dashboard/releases')}>Buka Release</Button>
+            </CardContent>
+          </Card>
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Keuangan PIC</CardTitle>
+            <CardDescription>Royalti seluruh artis unit diakumulasi ke saldo PIC. Artis tidak memiliki wallet, akses dashboard, atau penerima payout sendiri.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button onClick={() => navigate('/dashboard/royalties')}>Lihat Royalti</Button>
+            <Button variant="outline" onClick={() => navigate('/dashboard/payouts')}>Kelola Payout</Button>
+            <Button variant="outline" onClick={() => navigate('/dashboard/settings')}>Pengaturan Akun</Button>
+          </CardContent>
+        </Card>
+      </div>
+    </DashboardLayout>
+  );
+}
+
+function StandardDashboard() {
   const navigate = useNavigate();
   const { profile, isAdmin, isLabel, isArtist, isWhitelabel, isSsoUser, isArtistProfileCompleted, refreshProfile } = useAuth();
   const [onboardingOpen, setOnboardingOpen] = useState(false);
@@ -122,6 +179,16 @@ export default function Dashboard() {
 
   const fetchBasicStats = async () => {
     try {
+      if (usesBackendReleases()) {
+        const [releases, tracks] = await Promise.all([listBackendReleases(), listBackendTracks()]);
+        setStats(previous => ({ ...previous, totalReleases: releases.length, totalTracks: tracks.length,
+          pendingReleases: releases.filter(release => release.status === 'pending').length }));
+        setRecentReleases(releases.sort((left, right) => right.created_at.localeCompare(left.created_at)).slice(0, 5).map(release => ({
+          id: release.id, title: release.title, artist_name: release.artist_name, cover_url: release.cover_url,
+          status: release.status, release_date: release.release_date, release_type: release.release_type ?? 'single',
+        })));
+        return;
+      }
       let releasesQuery = supabase.from('releases').select('*', { count: 'exact', head: true });
       let pendingQuery = supabase.from('releases').select('*', { count: 'exact', head: true }).eq('status', 'pending');
       let recentQuery = supabase
@@ -158,7 +225,7 @@ export default function Dashboard() {
       if (isAdmin) {
         const [userRes, payoutRes] = await Promise.all([
           supabase.from('profiles').select('*', { count: 'exact', head: true }),
-          supabase.from('payout_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+          usesBackendFinance() ? Promise.resolve({ count: null }) : supabase.from('payout_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
         ]);
         usersCount = userRes.count || 0;
         pendingPayoutsCount = payoutRes.count || 0;
@@ -167,9 +234,9 @@ export default function Dashboard() {
       let roleRevenue = isAdmin ? (royaltyStats?.totalRevenue || 0) : 0;
       let roleStreams = isAdmin ? (royaltyStats?.totalStreams || 0) : 0;
       let roleTrackCount = tracksRes.count || 0;
-      let roleBalance = Number(profile?.balance || 0);
+      let roleBalance = usesBackendFinance() ? 0 : Number(profile?.balance || 0);
 
-      if (profile?.id) {
+      if (profile?.id && !usesBackendFinance()) {
         const { data: dashboardStats, error: dashboardStatsError } = await supabase
           .rpc('get_dashboard_role_stats' as any)
           .single();
@@ -245,6 +312,7 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
+      {usesBackendFinance() && <p role="status">Ringkasan keuangan belum tersedia; saldo belum dikonfirmasi.</p>}
       <div className="space-y-6">
         {/* Welcome Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -348,7 +416,7 @@ export default function Dashboard() {
               ) : (
                 <>
                   <div className="text-2xl font-bold">
-                    {formatCurrency(stats.totalRevenue)}
+                    {usesBackendFinance() ? "—" : formatCurrency(stats.totalRevenue)}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     {isLabel || isWhitelabel ? 'Akumulasi semua artis label' : 'Dari semua royalties'}
@@ -373,7 +441,7 @@ export default function Dashboard() {
               ) : (
                 <>
                   <div className="text-2xl font-bold">
-                    {formatCurrency(stats.balance)}
+                    {usesBackendFinance() ? "—" : formatCurrency(stats.balance)}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     {isLabel || isWhitelabel ? 'Akumulasi saldo artis di bawah label' : 'Bisa ditarik kapan saja'}
@@ -431,7 +499,7 @@ export default function Dashboard() {
                   <Loader2 className="h-6 w-6 animate-spin" />
                 ) : (
                   <>
-                    <div className="text-2xl font-bold">{stats.pendingPayouts}</div>
+                    <div className="text-2xl font-bold">{usesBackendFinance() ? "—" : stats.pendingPayouts}</div>
                     <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/payouts')}>
                       Review
                       <ArrowRight className="h-4 w-4 ml-1" />

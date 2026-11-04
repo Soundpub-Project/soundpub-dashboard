@@ -13,6 +13,7 @@ build
 # Environment variables
 .env
 .env.*
+.env*
 *.env
 
 # Development files
@@ -54,3 +55,8 @@ docs/
 # Configuration files not required by production build
 eslint.config.js
 components.json
+
+/backup/
+/backups/
+/backend/
+/supabase/

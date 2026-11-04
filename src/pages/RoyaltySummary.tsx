@@ -1,4 +1,7 @@
-﻿import { useState, useMemo } from 'react';
+import { FinanceUnavailable } from '@/components/finance/FinanceUnavailable';
+import { BackendRoyalties } from '@/components/finance/BackendRoyalties';
+import { usesBackendFinance } from '@/components/finance/mode';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import {
   useRoyaltyPeriods,
@@ -69,7 +72,7 @@ const CHART_COLORS = [
   'hsl(40, 70%, 50%)',
 ];
 
-export default function RoyaltySummary() {
+function LegacyRoyaltySummary() {
   const { isArtist } = useAuth();
   const [selectedPeriod, setSelectedPeriod] = useState<string>('all');
   const [showRealData, setShowRealData] = useState(false);
@@ -733,3 +736,10 @@ export default function RoyaltySummary() {
 
 
 
+
+export default function RoyaltySummary() {
+  const { role } = useAuth();
+  if (role === 'label_custom' && !usesBackendFinance()) return <FinanceUnavailable />;
+  if (usesBackendFinance()) return <BackendRoyalties />;
+  return <LegacyRoyaltySummary />;
+}

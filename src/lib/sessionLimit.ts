@@ -34,6 +34,7 @@ function getAccessTokenIssuedAt(accessToken: string): number | null {
 }
 
 export function getSessionExpiresAt(session: Session): number {
+  if (!session.access_token && Number.isFinite(session.expires_at)) return session.expires_at! * 1000;
   const stored = getStoredSessionStart();
   const startedAt = stored?.userId === session.user.id
     ? stored.startedAt

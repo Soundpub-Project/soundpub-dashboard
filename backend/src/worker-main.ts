@@ -1,0 +1,45 @@
+import { writeFile } from 'node:fs/promises';
+import { loadConfig } from './config/index.js';
+import { createPool } from './db/index.js';
+import { createMockProviders } from './integrations/index.js';
+import { pollOutbox, type OutboxHandler } from './worker/index.js';
+import { createLogger, Metrics, poolMetrics, sampleQueue } from './observability/index.js';
+
+const config = loadConfig();
+const logger = createLogger(config.LOG_LEVEL);
+const metrics = new Metrics();
+let nextMetricsAt = 0;
+const pool = createPool({ connectionString: config.DATABASE_URL });
+const migrated = await pool.query("SELECT to_regclass('soundpub.schema_migrations') AS name");
+if (!migrated.rows[0]?.name) throw new Error('Database migration required before worker boot');
+pool.on('error', () => { console.error(JSON.stringify({ level: 'error', message: 'database idle connection failed' })); });
+const providers = createMockProviders();
+const handlers: Record<string, OutboxHandler> = {
+  'notification.requested': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-notification', payload: event.payload }); },
+  'audit.notification': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-audit-notification', payload: event.payload }); },
+  'webhook.received': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-webhook', payload: event.payload }); },
+};
+let stopping = false;
+await pool.query('SELECT 1');
+await writeFile('/tmp/worker-ready', new Date().toISOString(), 'utf8');
+process.on('SIGTERM', () => { stopping = true; });
+process.on('SIGINT', () => { stopping = true; });
+while (!stopping) {
+  const started = performance.now();
+  try {
+    const outcome = await pollOutbox(pool, handlers);
+    metrics.increment(`poll.${outcome}`);
+    await writeFile('/tmp/worker-ready', new Date().toISOString(), 'utf8');
+    if (outcome !== 'idle') console.log(JSON.stringify({ level: 'info', message: 'worker delivery', outcome }));
+  } catch { metrics.increment('poll.error'); logger.error('worker poll failed'); }
+  metrics.observe('pollMs', performance.now() - started);
+  if (Date.now() >= nextMetricsAt) {
+    nextMetricsAt = Date.now() + 30_000;
+    try {
+      logger.info({ metrics: metrics.snapshot(), dbPool: poolMetrics(pool), queue: await sampleQueue(pool) }, 'worker metrics');
+    } catch { metrics.increment('metrics.error'); logger.warn('queue metrics unavailable'); }
+  }
+  await new Promise(resolve => setTimeout(resolve, config.WORKER_POLL_MS));
+}
+await pool.end();
+

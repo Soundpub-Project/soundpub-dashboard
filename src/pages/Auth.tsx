@@ -1,3 +1,4 @@
+import { getPublicSettingsRows } from '@/services/settings';
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -64,12 +65,9 @@ export default function Auth() {
   useEffect(() => {
     const fetchLogo = async () => {
       try {
-        const { data, error } = await supabase
-          .from('app_settings')
-          .select('key, value')
-          .in('key', ['dashboard_logo_light', 'dashboard_logo_dark', 'dashboard_logo']);
+        const data = await getPublicSettingsRows(['dashboard_logo_light', 'dashboard_logo_dark', 'dashboard_logo']);
 
-        if (!error && data) {
+        if (data) {
           const settingsMap: Record<string, string | null> = {};
           data.forEach(row => {
             settingsMap[row.key] = row.value;
@@ -311,9 +309,8 @@ export default function Auth() {
           </CardHeader>
 
           <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid grid-cols-2 gap-2 mx-auto" style={{ maxWidth: "280px" }}>
+            <TabsList className="grid grid-cols-1 mx-auto" style={{ maxWidth: "280px" }}>
               <TabsTrigger value="login" className="flex-1">Login</TabsTrigger>
-              <TabsTrigger value="signup" className="flex-1">Daftar</TabsTrigger>
             </TabsList>
 
             <CardContent className="mt-6">
@@ -424,6 +421,9 @@ export default function Auth() {
                     Login dengan SSO (Label)
                   </Button>
                 </form>
+                <p className="text-center text-xs text-muted-foreground">
+                  Pembuatan akun baru dikelola administrator Soundpub.
+                </p>
               </TabsContent>
 
               <TabsContent value="signup" className="space-y-4">

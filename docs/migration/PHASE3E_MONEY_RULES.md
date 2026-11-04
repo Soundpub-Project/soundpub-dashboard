@@ -1,0 +1,10 @@
+# Phase3E exact money rules
+
+- Currency: IDR only. Accounting scale: 2, matching legacy `numeric(18,2)` adjustments and per-row royalty rounding. This is accounting precision, not an assumption about provider transfer precision.
+- Input: decimal strings only, optional minus for approved adjustment kinds, 1–16 integral digits, 0–2 fractional digits. No floats, exponents, commas, whitespace, excess precision, leading zeros or negative zero. Canonical serialization always two decimals.
+- Storage: signed bigint minor accounting units, magnitude at most 999999999999999999 per event. PostgreSQL SUM(bigint) is exact numeric; aggregate outputs convert to bigint in Node, then decimal strings. No JS Number arithmetic for money. Aggregate total may exceed individual event cap without truncation.
+- Calculation: bigint integer arithmetic. `roundRatio(minor,numerator,denominator)` performs exact half-away-from-zero; denominator positive. Ingestion never silently rounds malformed high-precision input. Source-specific conversions need explicit reviewed contract before posting.
+- Aggregation: validate/reconcile row allocations, round approved row-level split at its defined boundary, then sum integer allocations. Never round aggregate first. Legacy 9% and 70% splits round per row, with remainder allocated to label to preserve conservation; ledger accepts reconciled allocations rather than inventing split eligibility.
+- Display/API: canonical two-decimal strings. Existing IDR display without fractional digits is presentation only and cannot feed balances or settlement authority. Domain/provider adapter must reject unsupported provider precision rather than silently truncate.
+- Charges/refunds are distinct from royalty earnings. One full refund per settled charge currently; partial refund and multi-currency conversion fail closed pending business contract.
+- Zero-value events rejected; zero-share import rows may remain history without posting an event. Negative available or reserved values forbidden, including corrections after value has been spent. Such corrections require manual reconciliation rather than hidden debt.

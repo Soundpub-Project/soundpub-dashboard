@@ -1,3 +1,6 @@
+import { BackendPaymentStatus } from '@/components/finance/BackendPaymentStatus';
+import { usesBackendFinance } from '@/components/finance/mode';
+import { usesBackendReleases } from '@/services/releases';
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -35,7 +38,7 @@ interface Invoice {
   user_email?: string;
 }
 
-export default function Invoices() {
+function LegacyInvoices() {
   const { isAdmin, loading: authLoading } = useAuth();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -273,4 +276,10 @@ export default function Invoices() {
       </div>
     </DashboardLayout>
   );
+}
+
+export default function Invoices() {
+  if (usesBackendReleases()) return <BackendPaymentStatus />;
+  if (usesBackendFinance()) return <BackendPaymentStatus />;
+  return <LegacyInvoices />;
 }
