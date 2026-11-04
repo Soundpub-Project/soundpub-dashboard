@@ -45,6 +45,7 @@ import {
   X,
   Hash,
   UserX,
+  UsersRound,
 } from "lucide-react";
 import { ChangeRoleDialog } from "@/components/users/ChangeRoleDialog";
 import { AddUserDialog } from "@/components/users/AddUserDialog";
@@ -52,6 +53,10 @@ import { ChangePasswordDialog } from "@/components/users/ChangePasswordDialog";
 import { ChangeStatusDialog } from "@/components/users/ChangeStatusDialog";
 import { DeleteUserDialog } from "@/components/users/DeleteUserDialog";
 import { EditComposerCodeDialog } from "@/components/users/EditComposerCodeDialog";
+import {
+  LabelCustomArtistsAdminDialog,
+  type LabelCustomAdminOwner,
+} from "@/components/users/LabelCustomArtistsAdminDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -142,6 +147,8 @@ export default function Users() {
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [composerCodeDialogOpen, setComposerCodeDialogOpen] = useState(false);
+  const [labelCustomOwner, setLabelCustomOwner] = useState<UserProfile | null>(null);
+  const [labelCustomArtistsOpen, setLabelCustomArtistsOpen] = useState(false);
 
   useEffect(() => {
     // Only fetch users if user is logged in AND is admin
@@ -253,6 +260,17 @@ export default function Users() {
   const handleEditComposerCode = (user: UserProfile) => {
     setSelectedUser(user);
     setComposerCodeDialogOpen(true);
+  };
+
+  const handleManageLabelCustomArtists = (target: UserProfile) => {
+    setLabelCustomOwner(target);
+    setLabelCustomArtistsOpen(true);
+  };
+
+  const canMutateLabelCustomOwner = (target: UserProfile | null) => {
+    if (!target) return false;
+    if (isSuperadmin) return true;
+    return !(target.roles ?? [target.role]).some(role => role === "admin" || role === "superadmin");
   };
 
   const clearFilters = () => {
@@ -630,6 +648,12 @@ export default function Users() {
                                       Lihat Profil Artis
                                     </DropdownMenuItem>
                                   )}
+                                  {(user.role === "label_custom" || user.roles?.includes("label_custom")) && backendUsers && (
+                                    <DropdownMenuItem onClick={() => handleManageLabelCustomArtists(user)}>
+                                      <UsersRound className="mr-2 h-4 w-4" />
+                                      Kelola Artis
+                                    </DropdownMenuItem>
+                                  )}
                                   {user.role === "copyright" && (
                                     <DropdownMenuItem
                                       onClick={() =>
@@ -671,6 +695,17 @@ export default function Users() {
         </Tabs>
       </div>
 
+      <LabelCustomArtistsAdminDialog
+        open={labelCustomArtistsOpen}
+        onOpenChange={setLabelCustomArtistsOpen}
+        owner={labelCustomOwner ? {
+          id: labelCustomOwner.id,
+          fullName: labelCustomOwner.full_name,
+          email: labelCustomOwner.email,
+          status: labelCustomOwner.status,
+        } satisfies LabelCustomAdminOwner : null}
+        canMutate={canMutateLabelCustomOwner(labelCustomOwner)}
+      />
       <ChangeRoleDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
