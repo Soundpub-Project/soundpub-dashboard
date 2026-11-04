@@ -153,7 +153,7 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
             error_code=$2,updated_at=now() WHERE id=$1 RETURNING *`, [row.id,error.code])).rows[0]!;
           return { error, session: sessionDto(failed) };
         }
-        const uploaded = (await db.query<ImportSessionRow>(`UPDATE soundpub.royalty_import_sessions SET status='UPLOADED',phase='QUEUED',
+        const uploaded = (await db.query<ImportSessionRow>(`UPDATE soundpub.royalty_import_sessions SET status='QUEUED',phase='QUEUED',
           error_code=NULL,updated_at=now() WHERE id=$1 RETURNING *`, [row.id])).rows[0]!;
         await db.query(`INSERT INTO soundpub.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,metadata)
           VALUES ($1,'royalty.file_uploaded','royalty_import_session',$2,$3,$4::jsonb)`,
@@ -175,6 +175,51 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
         const row = (await db.query<ImportSessionRow>(`SELECT ${sessionProjection} FROM soundpub.royalty_import_sessions WHERE id=$1`, [sessionId])).rows[0];
         if (!row) throw new ApiError(404, 'NOT_FOUND');
         return sessionDto(row);
+      });
+    },
+    async commitFileSession(actor: Principal, sessionId: string, requestId: string) {
+      if (!files) throw new ApiError(503, 'NOT_READY');
+      parse(z.uuid(), sessionId);
+      const session = await authorized(actor, true, async db => {
+        const row = (await db.query<ImportSessionRow>(`SELECT * FROM soundpub.royalty_import_sessions WHERE id=$1 FOR UPDATE`, [sessionId])).rows[0];
+        if (!row) throw new ApiError(404, 'NOT_FOUND');
+        if (row.status === 'COMMITTED' && row.batch_id) return row;
+        if (!['PREVIEW_READY','COMMITTING'].includes(row.status) || !row.preview_checksum || !row.preview_result) {
+          throw new ApiError(409, 'ROYALTY_IMPORT_NOT_READY');
+        }
+        return (await db.query<ImportSessionRow>(`UPDATE soundpub.royalty_import_sessions SET status='COMMITTING',phase='COMMIT',
+          error_code=NULL,updated_at=clock_timestamp() WHERE id=$1 RETURNING *`, [sessionId])).rows[0]!;
+      });
+      if (session.status === 'COMMITTED' && session.batch_id) return { id: session.batch_id, replayed: true };
+      try {
+        const csv = await files.read(session);
+        const result = await this.commitCsv(actor, { csv, source: session.source, filename: session.filename,
+          expected_checksum: session.preview_checksum }, requestId);
+        await authorized(actor, true, async db => {
+          await db.query(`UPDATE soundpub.royalty_import_sessions SET status='COMMITTED',phase='DONE',batch_id=$2,
+            error_code=NULL,lease_owner=NULL,lease_expires_at=NULL,next_attempt_at=NULL,updated_at=clock_timestamp()
+            WHERE id=$1 AND status='COMMITTING'`, [sessionId,result.id]);
+        });
+        return result;
+      } catch (error) {
+        await authorized(actor, true, async db => {
+          await db.query(`UPDATE soundpub.royalty_import_sessions SET status='PREVIEW_READY',phase='PREVIEW',
+            error_code=$2,updated_at=clock_timestamp() WHERE id=$1 AND status='COMMITTING'`,
+          [sessionId,error instanceof ApiError ? error.code : 'ROYALTY_COMMIT_RETRY']);
+        });
+        throw error;
+      }
+    },
+    async retryFileSession(actor: Principal, sessionId: string) {
+      parse(z.uuid(), sessionId);
+      return authorized(actor, true, async db => {
+        const row = (await db.query<ImportSessionRow>(`SELECT * FROM soundpub.royalty_import_sessions WHERE id=$1 FOR UPDATE`, [sessionId])).rows[0];
+        if (!row) throw new ApiError(404, 'NOT_FOUND');
+        if (row.status !== 'FAILED' || !row.error_code?.startsWith('ROYALTY_PARSE_')) throw new ApiError(409, 'ROYALTY_IMPORT_RETRY_NOT_ALLOWED');
+        const queued = (await db.query<ImportSessionRow>(`UPDATE soundpub.royalty_import_sessions SET status='QUEUED',phase='QUEUED',
+          attempts=0,next_attempt_at=clock_timestamp(),error_code=NULL,lease_owner=NULL,lease_expires_at=NULL,updated_at=clock_timestamp()
+          WHERE id=$1 RETURNING *`, [sessionId])).rows[0]!;
+        return { session: sessionDto(queued) };
       });
     },
     async fileDownload(actor: Principal, sessionId: string) {

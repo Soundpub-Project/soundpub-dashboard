@@ -5,6 +5,8 @@ import { createMockProviders } from './integrations/index.js';
 import { pollOutbox, type OutboxHandler } from './worker/index.js';
 import { assertOutboxHandlers } from './worker/topics.js';
 import { createLogger, Metrics, poolMetrics, sampleQueue } from './observability/index.js';
+import { createRoyaltyImportObjectStore } from './royalties/store.js';
+import { createRoyaltyImportJobProcessor } from './royalties/jobs.js';
 
 const config = loadConfig();
 const logger = createLogger(config.LOG_LEVEL);
@@ -14,6 +16,14 @@ const pool = createPool({ connectionString: config.DATABASE_URL });
 const migrated = await pool.query("SELECT to_regclass('soundpub.schema_migrations') AS name");
 if (!migrated.rows[0]?.name) throw new Error('Database migration required before worker boot');
 pool.on('error', () => { console.error(JSON.stringify({ level: 'error', message: 'database idle connection failed' })); });
+const royaltyImportStore = await createRoyaltyImportObjectStore(pool, {
+  environment: config.NODE_ENV === 'test' ? 'test' : 'development',
+  endpoint: `${config.OBJECT_STORAGE_USE_SSL ? 'https' : 'http'}://${config.OBJECT_STORAGE_ENDPOINT}:${config.OBJECT_STORAGE_PORT}`,
+  publicEndpoint: config.OBJECT_STORAGE_PUBLIC_ENDPOINT,
+  credentials: { accessKeyId: config.OBJECT_STORAGE_ACCESS_KEY, secretAccessKey: config.OBJECT_STORAGE_SECRET_KEY },
+  bucket: config.OBJECT_STORAGE_BUCKET,
+});
+const royaltyJobs = createRoyaltyImportJobProcessor(pool, royaltyImportStore);
 const providers = createMockProviders();
 const handlers: Record<string, OutboxHandler> = {
   'notification.requested': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-notification', payload: event.payload }); },
@@ -33,7 +43,9 @@ process.on('SIGINT', () => { stopping = true; });
 while (!stopping) {
   const started = performance.now();
   try {
-    const outcome = await pollOutbox(pool, handlers);
+    const royaltyOutcome = await royaltyJobs.poll();
+    metrics.increment(`royalty.${royaltyOutcome}`);
+    const outcome = royaltyOutcome === 'idle' ? await pollOutbox(pool, handlers) : 'idle';
     metrics.increment(`poll.${outcome}`);
     await writeFile('/tmp/worker-ready', new Date().toISOString(), 'utf8');
     if (outcome !== 'idle') console.log(JSON.stringify({ level: 'info', message: 'worker delivery', outcome }));
@@ -47,6 +59,7 @@ while (!stopping) {
   }
   await new Promise(resolve => setTimeout(resolve, config.WORKER_POLL_MS));
 }
+royaltyImportStore.close();
 await pool.end();
 
 

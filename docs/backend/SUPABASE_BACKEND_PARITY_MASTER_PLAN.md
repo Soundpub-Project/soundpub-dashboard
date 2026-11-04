@@ -409,7 +409,8 @@ Gate: source total, accepted/rejected total, ledger posting, dan wallet balance 
 - Phase 6 inline CSV commit is atomic across batch, entries, allocations, ledger, audit, and outbox. Replay, stale preview, active source-period conflict, exact correction reversal, reporting, and readiness all use allocations.
 - Phase 9 royalty upload cutover is complete for backend mode: raw CSV preview, server diagnostics, checksum-bound commit, history, and allocation detail no longer write through Supabase. API errors preserve backend code, message, and request ID.
 - Private royalty upload records now use signed RustFS PUT, verified UTF-8/checksum promotion, durable status/progress/lease fields, admin history/detail, and short-lived download capabilities.
-- Remaining Phase 3/6 scope: async worker parsing, frontend file-session cutover, large-file commit, approval/replacement state machine, cleanup retention, and reconciliation workflow beyond current readiness approval.
+- Worker claims import sessions with expiring leases, rechecks requester authority, stores server preview diagnostics, retries transient failures, and session commit rereads the private file before checksum-bound atomic financial commit. Backend-mode frontend now uses this file-session flow.
+- Remaining Phase 3/6 scope: streaming parser/progress, 50k-100k row chunked commit, approval/replacement state machine, cleanup retention, and reconciliation workflow beyond current readiness approval.
 
 ### Phase 7 - Reporting dan permission parity
 

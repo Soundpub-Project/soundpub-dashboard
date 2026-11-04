@@ -27,6 +27,7 @@ export interface RoyaltyImportObjectStore {
     metadata: ObjectMetadata; url: string; method: 'PUT'; headers: Record<string, string>;
   }>;
   verify(row: RoyaltyImportFileRow): Promise<void>;
+  read(row: RoyaltyImportFileRow): Promise<string>;
   download(row: RoyaltyImportFileRow): Promise<string>;
   remove(row: RoyaltyImportFileRow): Promise<void>;
   isReady(): Promise<boolean>;
@@ -105,6 +106,11 @@ export async function createRoyaltyImportObjectStore(pool: Pool, options: Royalt
       try { await client.send(new HeadObjectCommand({ Bucket: options.bucket, Key: key(row.id) })); }
       catch (error) { if (missing(error)) throw new ApiError(404, 'NOT_FOUND'); throw error; }
       return storage.signedUrl({ id: row.requester_id }, row.id, 60);
+    },
+    async read(row) {
+      const object = await storage.download({ id: row.requester_id }, row.id);
+      try { return new TextDecoder('utf-8', { fatal: true }).decode(object.data); }
+      catch { throw new ApiError(400, 'ROYALTY_FILE_ENCODING_INVALID'); }
     },
     async remove(row) {
       await storage.delete({ id: row.requester_id }, row.id);

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import type { Principal } from '../src/auth/index.js';
 import { createRoyaltiesService } from '../src/royalties/index.js';
+import { createRoyaltyImportJobProcessor } from '../src/royalties/jobs.js';
 import type { RoyaltyImportObjectStore } from '../src/royalties/store.js';
 import { concurrencyPostgres, dockerTestsEnabled } from './support/concurrency-postgres.js';
 
@@ -26,6 +27,7 @@ test('royalty import file lifecycle persists private intent and refreshed admin 
       url: `http://127.0.0.1:9100/synthetic-private/royalty-imports/staging/${objectId}`,
       method: 'PUT', headers: { 'content-type': 'text/csv' } }),
       verify: async row => { assert.equal(row.id, objectId); verified++; },
+      read: async () => 'period,isrc,platform,country,sales_unit,net_revenue',
       download: async row => `http://127.0.0.1:9100/download/${row.id}`,
       remove: async () => undefined,
       isReady: async () => true,
@@ -41,12 +43,14 @@ test('royalty import file lifecycle persists private intent and refreshed admin 
     assert.equal(requested.method, 'PUT');
 
     const completed = await service.completeFileUpload(admin(userId), objectId, 'complete-file');
-    assert.equal(completed.session.status, 'UPLOADED');
+    assert.equal(completed.session.status, 'QUEUED');
     assert.equal(completed.session.phase, 'QUEUED');
     assert.equal(verified, 1);
-    assert.equal((await service.completeFileUpload(admin(userId), objectId, 'replay')).session.status, 'UPLOADED');
+    assert.equal((await service.completeFileUpload(admin(userId), objectId, 'replay')).session.status, 'QUEUED');
     assert.equal(verified, 1);
     assert.equal((await service.fileSessions(admin(userId))).items[0]?.id, objectId);
+    assert.equal(await createRoyaltyImportJobProcessor(database.runtime, store, 'synthetic-worker').poll(), 'processed');
+    assert.equal((await service.fileSession(admin(userId), objectId)).status, 'PREVIEW_READY');
     assert.equal((await service.fileSession(admin(userId), objectId)).filename, 'statement.csv');
     assert.match((await service.fileDownload(admin(userId), objectId)).url, new RegExp(objectId));
     assert.equal((await database.owner.query("SELECT count(*)::int AS count FROM soundpub.audit_logs WHERE resource_type='royalty_import_session' AND resource_id=$1", [objectId])).rows[0].count, 2);

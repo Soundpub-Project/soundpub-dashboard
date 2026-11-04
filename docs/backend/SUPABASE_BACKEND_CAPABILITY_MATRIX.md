@@ -62,13 +62,13 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Artist attribution | artist relation/history migration | stable artist ID, historical ISRC conflict guard, allocation snapshot | Backend CSV API available | VERIFIED | Add manual review workflow for legacy unresolved identities |
 | Label attribution | release label snapshot | immutable `label_owner_user_id`; ordinary and Label Custom split verified | Label Custom supported | PARTIAL | Add explicit whitelabel E2E and reporting cutover |
 | Preview | browser validation and split preview | `/royalties/imports/csv/preview` with checksum, matching, split totals | Backend-mode CSV preview cut over | VERIFIED | Add private-file progress and large-file diagnostics |
-| File upload | Edge Function receives parsed records | private RustFS upload intent, verified UTF-8/checksum snapshot, admin status/download API | Frontend still uses inline CSV | IMPLEMENTED | Cut frontend to file session and add cleanup retention job |
-| Async parse | Edge Function synchronous | no parser worker | Tidak tersedia | MISSING | Worker job, progress, retry, resume |
+| File upload | Edge Function receives parsed records | private RustFS upload intent, verified UTF-8/checksum snapshot, admin status/download API | Backend-mode signed upload cut over | VERIFIED | Add cleanup retention job and streaming browser hash |
+| Async parse | Edge Function synchronous | durable leased worker, preview result, bounded retry and authority revocation | Frontend polls session status | IMPLEMENTED | Streaming parser, heartbeat progress and manual retry UI |
 | Import history | `royalty_uploads` | import batches/history and immutable detail | Backend-mode history/detail cut over | VERIFIED | Add correction metadata and generic export |
 | Delete upload | `delete-royalty-upload` + balance rebuild | immutable correction endpoint | Legacy delete UI; backend correction API | PARTIAL | UI language and reversal/reconciliation parity |
 | Duplicate file | upload/source semantics | checksum replay protection | Backend checksum tersedia | IMPLEMENTED | Source-file checksum and provider-period key |
 | Duplicate row | source row key | source/period/source_row uniqueness | Backend tersedia | IMPLEMENTED | CSV row fingerprint compatibility |
-| Large file | browser memory + Edge Function | current max 1000 JSON rows | Tidak parity | MISSING | Streaming 100k-row target |
+| Large file | browser memory + Edge Function | private upload accepts 100 MB, but parser/commit remain capped at 1.000 rows | UI accepts private files up to 100 MB and reports row-limit issue | PARTIAL | Streaming 50k-100k row parser and chunked commit |
 
 ## Royalty calculation dan ownership
 
@@ -151,7 +151,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 
 ## Remaining blockers
 
-1. Private royalty file lifecycle and durable job-ready session schema are implemented; async parser, progress/retry worker, frontend file cutover, and large-file commit are not complete.
+1. Private royalty files, leased async preview worker, retry state, authority revocation, checksum-bound session commit, and frontend signed-upload cutover are implemented; streaming progress and large-file commit remain incomplete.
 2. Ordinary label and Label Custom split are verified; whitelabel still needs explicit E2E and frontend reporting cutover.
 3. Whitelabel royalty dashboard remains direct Supabase.
 4. Track detail, period list, and generic export are missing.

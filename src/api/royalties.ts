@@ -55,6 +55,35 @@ export interface RoyaltyCsvPreview {
   sample_rows: RoyaltyCsvSampleRow[];
 }
 
+export type RoyaltyImportSessionStatus = 'UPLOAD_PENDING' | 'UPLOADED' | 'QUEUED' | 'PARSING' | 'PREVIEW_READY' | 'FAILED' | 'COMMITTING' | 'COMMITTED' | 'DELETED';
+export interface RoyaltyImportSession {
+  id: string;
+  requester_id: string;
+  source: string;
+  filename: string;
+  mime_type: 'text/csv';
+  size_bytes: string;
+  source_checksum: string;
+  status: RoyaltyImportSessionStatus;
+  phase: 'UPLOAD' | 'QUEUED' | 'PARSE' | 'MATCH' | 'PREVIEW' | 'COMMIT' | 'DONE';
+  processed_rows: number;
+  total_rows: number | null;
+  attempts: number;
+  preview_checksum: string | null;
+  preview_result: RoyaltyCsvPreview | null;
+  error_code: string | null;
+  batch_id: string | null;
+  upload_expires_at: string;
+  created_at: string;
+  updated_at: string;
+}
+export interface RoyaltyFileUploadIntent {
+  session: RoyaltyImportSession;
+  url: string;
+  method: 'PUT';
+  headers: Record<string, string>;
+  expires_at: string;
+}
 export interface RoyaltyPreview {
   valid_rows: number; invalid_rows: number; total_amount: string; currency: 'IDR';
   unknown_mappings: number; duplicates: number; errors: { row: number; code: string }[];
@@ -118,7 +147,13 @@ export interface RoyaltyBreakdown {
 }
 
 export const royaltiesApi = {
-  breakdown: (query: RoyaltyBreakdownQuery = {}, signal?: AbortSignal) => {
+  requestFileUpload: (body: { source: string; filename: string; mime_type: 'text/csv'; size: number; checksum: string }) =>
+    apiRequest<RoyaltyFileUploadIntent>('/api/v1/royalties/import-files', { method: 'POST', body }),
+  completeFileUpload: (id: string) => apiRequest<{ session: RoyaltyImportSession }>(`/api/v1/royalties/import-files/${encodeURIComponent(id)}/complete`, { method: 'POST' }),
+  fileSession: (id: string, signal?: AbortSignal) => apiRequest<RoyaltyImportSession>(`/api/v1/royalties/import-files/${encodeURIComponent(id)}`, { signal }),
+  fileSessions: (offset = 0, signal?: AbortSignal) => apiRequest<{ items: RoyaltyImportSession[] }>(`/api/v1/royalties/import-files?limit=50&offset=${offset}`, { signal }),
+  retryFileSession: (id: string) => apiRequest<{ session: RoyaltyImportSession }>(`/api/v1/royalties/import-files/${encodeURIComponent(id)}/retry`, { method: 'POST' }),
+  commitFileSession: (id: string) => apiRequest<{ id: string; replayed: boolean }>(`/api/v1/royalties/import-files/${encodeURIComponent(id)}/commit`, { method: 'POST', timeoutMs: 120000 }),  breakdown: (query: RoyaltyBreakdownQuery = {}, signal?: AbortSignal) => {
     const params = new URLSearchParams({ limit: '50' });
     for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== '') params.set(key, String(value));
     return apiRequest<RoyaltyBreakdown>(`/api/v1/royalties/breakdown?${params}`, { signal });
