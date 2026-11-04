@@ -113,7 +113,8 @@ export async function createRoyaltyImportObjectStore(pool: Pool, options: Royalt
       catch { throw new ApiError(400, 'ROYALTY_FILE_ENCODING_INVALID'); }
     },
     async remove(row) {
-      await storage.delete({ id: row.requester_id }, row.id);
+      await client.send(new DeleteObjectCommand({ Bucket: options.bucket, Key: key(row.id) }));
+      await client.send(new DeleteObjectCommand({ Bucket: options.bucket, Key: stagingKey(row.id) }));
     },
     close() { storage.close(); client.destroy(); },
   };

@@ -6,7 +6,7 @@ import { pollOutbox, type OutboxHandler } from './worker/index.js';
 import { assertOutboxHandlers } from './worker/topics.js';
 import { createLogger, Metrics, poolMetrics, sampleQueue } from './observability/index.js';
 import { createRoyaltyImportObjectStore } from './royalties/store.js';
-import { createRoyaltyImportJobProcessor } from './royalties/jobs.js';
+import { createRoyaltyImportCleanupProcessor, createRoyaltyImportJobProcessor } from './royalties/jobs.js';
 
 const config = loadConfig();
 const logger = createLogger(config.LOG_LEVEL);
@@ -24,6 +24,7 @@ const royaltyImportStore = await createRoyaltyImportObjectStore(pool, {
   bucket: config.OBJECT_STORAGE_BUCKET,
 });
 const royaltyJobs = createRoyaltyImportJobProcessor(pool, royaltyImportStore);
+const royaltyCleanup = createRoyaltyImportCleanupProcessor(pool, royaltyImportStore);
 const providers = createMockProviders();
 const handlers: Record<string, OutboxHandler> = {
   'notification.requested': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-notification', payload: event.payload }); },
@@ -45,7 +46,9 @@ while (!stopping) {
   try {
     const royaltyOutcome = await royaltyJobs.poll();
     metrics.increment(`royalty.${royaltyOutcome}`);
-    const outcome = royaltyOutcome === 'idle' ? await pollOutbox(pool, handlers) : 'idle';
+    const cleanupOutcome = royaltyOutcome === 'idle' ? await royaltyCleanup.poll() : 'idle';
+    metrics.increment(`royaltyCleanup.${cleanupOutcome}`);
+    const outcome = royaltyOutcome === 'idle' && cleanupOutcome === 'idle' ? await pollOutbox(pool, handlers) : 'idle';
     metrics.increment(`poll.${outcome}`);
     await writeFile('/tmp/worker-ready', new Date().toISOString(), 'utf8');
     if (outcome !== 'idle') console.log(JSON.stringify({ level: 'info', message: 'worker delivery', outcome }));

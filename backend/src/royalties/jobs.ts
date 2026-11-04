@@ -82,3 +82,52 @@ export function createRoyaltyImportJobProcessor(pool: Pool, store: RoyaltyImport
     },
   };
 }
+
+export function createRoyaltyImportCleanupProcessor(pool: Pool, store: RoyaltyImportObjectStore,
+  workerId = randomUUID()) {
+  async function claim(): Promise<JobRow | null> {
+    const db = await pool.connect();
+    let discard = false;
+    try {
+      await db.query('BEGIN');
+      const row = (await db.query<JobRow>(`SELECT * FROM soundpub.royalty_import_sessions
+        WHERE cleanup_after<=clock_timestamp() AND (
+          (status IN ('UPLOAD_PENDING','FAILED') AND (next_attempt_at IS NULL OR next_attempt_at<=clock_timestamp()))
+          OR (status='CLEANING' AND (lease_expires_at IS NULL OR lease_expires_at<=clock_timestamp())
+            AND (next_attempt_at IS NULL OR next_attempt_at<=clock_timestamp())))
+        ORDER BY cleanup_after,created_at,id FOR UPDATE SKIP LOCKED LIMIT 1`)).rows[0];
+      if (!row) { await db.query('COMMIT'); return null; }
+      const claimed = (await db.query<JobRow>(`UPDATE soundpub.royalty_import_sessions
+        SET status='CLEANING',phase='DONE',attempts=attempts+1,lease_owner=$2,
+          lease_expires_at=clock_timestamp()+interval '5 minutes',next_attempt_at=NULL,updated_at=clock_timestamp()
+        WHERE id=$1 RETURNING *`, [row.id,workerId])).rows[0]!;
+      await db.query('COMMIT');
+      return claimed;
+    } catch (error) {
+      try { await db.query('ROLLBACK'); } catch { discard = true; }
+      throw error;
+    } finally { db.release(discard); }
+  }
+  return {
+    async poll(): Promise<RoyaltyJobOutcome> {
+      const row = await claim();
+      if (!row) return 'idle';
+      try {
+        await store.remove(row);
+        const result = await pool.query(`UPDATE soundpub.royalty_import_sessions SET status='DELETED',phase='DONE',
+          error_code=NULL,lease_owner=NULL,lease_expires_at=NULL,next_attempt_at=NULL,updated_at=clock_timestamp()
+          WHERE id=$1 AND status='CLEANING' AND lease_owner=$2`, [row.id,workerId]);
+        if (!result.rowCount) throw new Error('ROYALTY_CLEANUP_LEASE_LOST');
+        return 'processed';
+      } catch {
+        const delay = Math.min(3600, 2 ** Math.min(row.attempts, 11));
+        const result = await pool.query(`UPDATE soundpub.royalty_import_sessions SET
+          error_code='ROYALTY_CLEANUP_RETRY',lease_owner=NULL,lease_expires_at=NULL,
+          next_attempt_at=clock_timestamp()+($3*interval '1 second'),updated_at=clock_timestamp()
+          WHERE id=$1 AND status='CLEANING' AND lease_owner=$2`, [row.id,workerId,delay]);
+        if (!result.rowCount) throw new Error('ROYALTY_CLEANUP_LEASE_LOST');
+        return 'retry';
+      }
+    },
+  };
+}

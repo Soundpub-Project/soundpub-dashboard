@@ -411,7 +411,8 @@ Gate: source total, accepted/rejected total, ledger posting, dan wallet balance 
 - Private royalty upload records now use signed RustFS PUT, verified UTF-8/checksum promotion, durable status/progress/lease fields, admin history/detail, and short-lived download capabilities.
 - Worker claims import sessions with expiring leases, rechecks requester authority, stores server preview diagnostics, retries transient failures, and session commit rereads the private file before checksum-bound atomic financial commit. Backend-mode frontend now uses this file-session flow.
 - Role-scoped royalty report and period APIs now enforce admin-global, label/Whitelabel roster, artist-owner, and Label Custom PIC boundaries. Backend Royalti UI uses these APIs for filtering, pagination, totals, and CSV export without Supabase fallback.
-- Remaining Phase 3/6 scope: streaming parser/progress, 50k-100k row chunked commit, approval/replacement state machine, cleanup retention, and reconciliation workflow beyond current readiness approval.
+- Expired pending/failed royalty objects now enter a leased CLEANING state, delete both staging and immutable object keys idempotently, retry transient storage failures, and preserve preview-ready/committed originals.
+- Remaining Phase 3/6 scope: streaming parser/progress, 50k-100k row chunked commit, approval/replacement state machine and reconciliation workflow beyond current readiness approval.
 
 ### Phase 7 - Reporting dan permission parity
 

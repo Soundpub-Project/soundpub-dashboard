@@ -55,7 +55,7 @@ export interface RoyaltyCsvPreview {
   sample_rows: RoyaltyCsvSampleRow[];
 }
 
-export type RoyaltyImportSessionStatus = 'UPLOAD_PENDING' | 'UPLOADED' | 'QUEUED' | 'PARSING' | 'PREVIEW_READY' | 'FAILED' | 'COMMITTING' | 'COMMITTED' | 'DELETED';
+export type RoyaltyImportSessionStatus = 'UPLOAD_PENDING' | 'UPLOADED' | 'QUEUED' | 'PARSING' | 'PREVIEW_READY' | 'FAILED' | 'COMMITTING' | 'COMMITTED' | 'CLEANING' | 'DELETED';
 export interface RoyaltyImportSession {
   id: string;
   requester_id: string;
