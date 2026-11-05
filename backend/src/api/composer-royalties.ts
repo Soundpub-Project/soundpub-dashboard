@@ -2,25 +2,47 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Principal } from '../auth/index.js';
 import type { ComposerRoyaltiesService } from '../composer-royalties/index.js';
-import { composerStatement, composerStatementPreview } from '../composer-royalties/contracts.js';
+import { beneficiaryMapping, beneficiaryMappingCreate, beneficiaryMappingList, beneficiaryMappingQuery,
+  beneficiaryMappingRevoke, composerStatement, composerStatementPreview } from '../composer-royalties/contracts.js';
 
 export function registerComposerRoyaltiesRoutes(app: FastifyInstance, service: ComposerRoyaltiesService,
   authenticate: (request: FastifyRequest) => Promise<Principal>, paths: Record<string, Record<string, unknown>>,
   errorSchema: object) {
-  const path = '/api/v1/copyright/royalties/preview';
-  const body = z.toJSONSchema(composerStatement, { target: 'openapi-3.0', io: 'input' });
-  const response = z.toJSONSchema(composerStatementPreview, { target: 'openapi-3.0' });
-  const responses = Object.fromEntries([200, 400, 401, 403, 429, 500, 503].map(status => [status, {
-    description: status === 200 ? 'Success' : 'Error',
-    content: { 'application/json': { schema: status === 200 ? response : errorSchema } },
-  }]));
-  paths[path] = { post: {
-    operationId: 'previewComposerRoyalties',
-    security: [{ bearerAuth: [] }],
-    requestBody: { required: true, content: { 'application/json': { schema: body } } },
-    responses,
-  } };
-  app.post(path, { schema: { body, response: Object.fromEntries(
-    Object.entries(responses).map(([status, value]) => [status, value.content['application/json'].schema]),
-  ) } }, async request => service.preview(await authenticate(request), request.body));
+  const definitions = [
+    { method: 'POST' as const, url: '/api/v1/copyright/royalties/preview', operationId: 'previewComposerRoyalties',
+      body: composerStatement, response: composerStatementPreview },
+    { method: 'POST' as const, url: '/api/v1/admin/copyright/beneficiary-mappings', operationId: 'createCopyrightBeneficiaryMapping',
+      body: beneficiaryMappingCreate, response: beneficiaryMapping },
+    { method: 'GET' as const, url: '/api/v1/admin/copyright/beneficiary-mappings', operationId: 'listCopyrightBeneficiaryMappings',
+      query: beneficiaryMappingQuery, response: beneficiaryMappingList },
+    { method: 'POST' as const, url: '/api/v1/admin/copyright/beneficiary-mappings/:id/revoke', operationId: 'revokeCopyrightBeneficiaryMapping',
+      params: z.strictObject({ id: z.uuid() }), body: beneficiaryMappingRevoke, response: beneficiaryMapping },
+  ];
+  for (const def of definitions) {
+    const body = def.body ? z.toJSONSchema(def.body, { target: 'openapi-3.0', io: 'input' }) : undefined;
+    const query = def.query ? z.toJSONSchema(def.query, { target: 'openapi-3.0', io: 'input' }) : undefined;
+    const params = def.params ? z.toJSONSchema(def.params, { target: 'openapi-3.0', io: 'input' }) : undefined;
+    const response = z.toJSONSchema(def.response, { target: 'openapi-3.0' });
+    const responses = Object.fromEntries([200, 400, 401, 403, 404, 409, 429, 500, 503].map(status => [status, {
+      description: status === 200 ? 'Success' : 'Error', content: { 'application/json': { schema: status === 200 ? response : errorSchema } },
+    }]));
+    const openapiPath = def.url.replace(':id', '{id}');
+    paths[openapiPath] = { ...paths[openapiPath], [def.method.toLowerCase()]: {
+      operationId: def.operationId, security: [{ bearerAuth: [] }],
+      ...(body ? { requestBody: { required: true, content: { 'application/json': { schema: body } } } } : {}),
+      ...(query ? { parameters: Object.entries(query.properties ?? {}).map(([name, schema]) => ({ name, in: 'query', required: false, schema })) } : {}),
+      ...(params ? { parameters: [{ name: 'id', in: 'path', required: true, schema: params.properties!.id }] } : {}), responses,
+    } };
+    app.route({ method: def.method, url: def.url,
+      schema: { ...(body ? { body } : {}), ...(query ? { querystring: query } : {}), ...(params ? { params } : {}),
+        response: Object.fromEntries(Object.entries(responses).map(([status, value]) => [status, value.content['application/json'].schema])) },
+      handler: async request => {
+        const actor = await authenticate(request);
+        if (def.operationId === 'previewComposerRoyalties') return service.preview(actor, request.body);
+        if (def.operationId === 'createCopyrightBeneficiaryMapping') return service.createMapping(actor, request.body);
+        if (def.operationId === 'listCopyrightBeneficiaryMappings') return service.listMappings(actor, request.query);
+        return service.revokeMapping(actor, (request.params as { id: string }).id, request.body);
+      },
+    });
+  }
 }

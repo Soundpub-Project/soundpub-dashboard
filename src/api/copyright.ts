@@ -14,8 +14,17 @@ export interface CopyrightRoyaltyPreviewRequest {
   rows: CopyrightRoyaltyPreviewRow[];
 }
 
-export interface CopyrightRoyaltyPreview extends CopyrightRoyaltyPreviewRequest {
+export interface CopyrightRoyaltyPreviewRowResult extends CopyrightRoyaltyPreviewRow {
+  beneficiary_id: string | null;
+  canonical_name: string | null;
+  mapping_id: string | null;
+  status: 'MATCHED' | 'UNMATCHED';
+}
+
+export interface CopyrightRoyaltyPreview extends Omit<CopyrightRoyaltyPreviewRequest, 'rows'> {
+  rows: CopyrightRoyaltyPreviewRowResult[];
   total_amount: string;
+  checksum: string;
   status: 'UNRECONCILED';
   posting_allowed: false;
   blockers: string[];

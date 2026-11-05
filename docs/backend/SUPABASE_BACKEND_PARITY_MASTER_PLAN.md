@@ -554,7 +554,7 @@ Backend parity selesai hanya jika:
 ## 19. Copyright royalty checkpoint
 
 - Admin dan superadmin dapat mengirim batch komposer ke `POST /api/v1/copyright/royalties/preview`.
-- Backend memvalidasi kontrak ketat, kode komposer unik, period IDR, dan aritmetika exact minor-unit tanpa write database atau efek finansial.
+- Backend memvalidasi kontrak ketat, kode komposer unik, period IDR, aritmetika exact minor-unit, dan beneficiary mapping versioned tanpa write finansial.
 - Frontend backend-mode membaca CSV terstruktur, menolak format ambigu, dan menampilkan hasil normalisasi serta total tanpa Supabase fallback.
-- Preview selalu `UNRECONCILED`, `posting_allowed=false`, dengan blocker pemetaan identitas komposer dan kontrak alokasi karya.
+- Preview selalu `UNRECONCILED`, `posting_allowed=false`; mapping yang tidak ditemukan tetap dikarantina dan kontrak alokasi karya tetap menjadi blocker posting.
 - Tahap berikutnya wajib menambah identity mapping, work allocation, idempotent import/posting, immutable correction/reversal, ledger attribution, reconciliation, dan history sebelum kontrol posting diaktifkan.

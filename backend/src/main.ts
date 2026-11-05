@@ -78,7 +78,7 @@ const app = buildApp({
   users, artists, labels, labelCustom, releases, tracks,
   balance: createBalanceService(pool), royalties: createRoyaltiesService(pool, royaltyImportStore, reconciliationPool), payouts, payments,
   financeReconciliation: createFinanceReconciliationService(pool),
-  composerRoyalties: createComposerRoyaltiesService(),
+  composerRoyalties: createComposerRoyaltiesService(pool),
   submissions: createSubmissionService(pool, { media: createMediaReadinessAdapter(), payment: paymentSubmissionDependency, provider: new MockSubmissionProvider() }),
   notifications: createNotificationsService(pool),
   media,

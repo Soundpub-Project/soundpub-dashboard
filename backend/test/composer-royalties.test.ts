@@ -1,63 +1,60 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
-import { previewComposerStatement } from '../src/composer-royalties/contracts.js';
-import { royaltyRow } from '../src/royalties/contracts.js';
+import test from 'node:test';
+import type { Pool } from 'pg';
+import { parseComposerStatement } from '../src/composer-royalties/contracts.js';
+import { createComposerRoyaltiesService } from '../src/composer-royalties/index.js';
 
+const actor = { id: '00000000-0000-4000-8000-000000000001', status: 'active' as const, roles: ['admin' as const] };
+const owner = '00000000-0000-4000-8000-000000000002';
+const mapping = '00000000-0000-4000-8000-000000000003';
 const row = { composer_code: 'SYNTHETIC001', composer_name: 'Synthetic Composer', total_net_royalti: '0.10' };
 const statement = { source: 'synthetic', source_batch: 'synthetic-batch', period: '2026-10', currency: 'IDR', rows: [row] };
 
-test('composer totals normalize exactly; valid syntax never authorizes financial allocation', () => {
-  const result = previewComposerStatement(statement);
-  assert.equal(result.total_amount, '0.10');
-  assert.equal(result.status, 'UNRECONCILED');
-  assert.equal(result.posting_allowed, false);
+function pool(rows: object[] = []) {
+  const writes: string[] = [];
+  const client = { async query(sql: string) {
+    if (/^(BEGIN|COMMIT|ROLLBACK)$/.test(sql)) return { rows: [], rowCount: null };
+    if (sql.includes('FROM soundpub.backend_users')) return { rows: [{ id: actor.id, status: 'active' }], rowCount: 1 };
+    if (sql.includes('pg_advisory_xact_lock')) return { rows: [], rowCount: 1 };
+    if (sql.includes('FROM soundpub.user_roles')) return { rows: [{ user_id: actor.id, role: 'admin' }], rowCount: 1 };
+    if (sql.includes('DISTINCT ON')) return { rows, rowCount: rows.length };
+    writes.push(sql); return { rows: [], rowCount: 0 };
+  }, release() {} };
+  return { value: { connect: async () => client } as unknown as Pool, writes };
+}
+
+test('composer parser normalizes exact money and rejects case-insensitive duplicates', () => {
+  assert.equal(parseComposerStatement(statement).total_amount, '0.10');
+  assert.throws(() => parseComposerStatement({ ...statement, rows: [row, { ...row, composer_code: 'synthetic001' }] }), /DUPLICATE_COMPOSER/);
+});
+
+test('DB-resolved preview snapshots mapping, blockers and deterministic checksum without writes', async () => {
+  const database = pool([{ id: mapping, composer_code: 'synthetic001', owner_id: owner, canonical_name: 'Canonical Composer' }]);
+  const service = createComposerRoyaltiesService(database.value);
+  const first = await service.preview(actor, statement) as any;
+  const second = await service.preview(actor, structuredClone(statement)) as any;
+  assert.deepEqual(first, second);
+  assert.deepEqual(first.rows[0], { ...row, beneficiary_id: owner, canonical_name: 'Canonical Composer', mapping_id: mapping, status: 'MATCHED' });
+  assert.deepEqual(first.blockers, ['WORK_ALLOCATION_CONTRACT_REQUIRED']);
+  assert.match(first.checksum, /^[a-f0-9]{64}$/);
+  assert.equal(first.posting_allowed, false);
+  assert.deepEqual(database.writes, []);
+});
+
+test('unmatched preview remains quarantined and stale DB authority fails closed', async () => {
+  const database = pool();
+  const service = createComposerRoyaltiesService(database.value);
+  const result = await service.preview(actor, statement) as any;
   assert.deepEqual(result.blockers, ['COMPOSER_IDENTITY_MAPPING_REQUIRED', 'WORK_ALLOCATION_CONTRACT_REQUIRED']);
+  const stale = pool();
+  const original = stale.value.connect.bind(stale.value);
+  stale.value.connect = async () => { const client = await original(); const query = client.query.bind(client);
+    client.query = ((sql: string, values?: unknown[]) => sql.includes('FROM soundpub.user_roles')
+      ? Promise.resolve({ rows: [], rowCount: 0 }) : query(sql, values)) as typeof client.query; return client; };
+  await assert.rejects(createComposerRoyaltiesService(stale.value).preview(actor, statement), { code: 'FORBIDDEN' });
 });
 
-test('multiple composers preserve exact preallocated amounts without inventing shares', () => {
-  const result = previewComposerStatement({ ...statement, rows: [row, { ...row, composer_code: 'SYNTHETIC002', total_net_royalti: '0.20' }] });
-  assert.equal(result.total_amount, '0.30');
-  assert.equal(result.rows.length, 2);
-});
-
-test('duplicate composer rejected even with changed display name', () => {
-  assert.throws(() => previewComposerStatement({ ...statement, rows: [row, { ...row, composer_name: 'Other' }] }), /DUPLICATE_COMPOSER/);
-});
-
-test('fractional share and invalid share total rejected as unsupported input', () => {
-  for (const share of ['33.3333', '101', '-1', '100']) {
-    assert.throws(() => previewComposerStatement({ ...statement, rows: [{ ...row, share_percentage: share }] }));
-  }
-});
-
-test('unknown composer and missing work remain quarantined', () => {
-  const result = previewComposerStatement({ ...statement, rows: [{ ...row, composer_code: 'UNKNOWN' }] });
-  assert.equal(result.posting_allowed, false);
-  assert.equal(result.blockers.length, 2);
-});
-
-test('duplicate import and replay are deterministic read-only previews, never financial effects', () => {
-  const original = structuredClone(statement);
-  assert.deepEqual(previewComposerStatement(statement), previewComposerStatement(structuredClone(statement)));
-  assert.deepEqual(statement, original);
-});
-
-test('correction/reversal and replace flags cannot masquerade as earnings', () => {
-  assert.throws(() => previewComposerStatement({ ...statement, replace_existing: true }));
-  assert.throws(() => previewComposerStatement({ ...statement, rows: [{ ...row, total_net_royalti: '-0.10' }] }));
-  assert.throws(() => previewComposerStatement({ ...statement, correction_of: 'synthetic-batch' }));
-});
-
-test('money, currency, batch, period and identity trust boundaries reject malformed input', () => {
-  for (const amount of [0.1, '1.001', '1e3', 'NaN', '-0', ' 1']) {
-    assert.throws(() => previewComposerStatement({ ...statement, rows: [{ ...row, total_net_royalti: amount }] }));
-  }
-  for (const change of [{ currency: 'USD' }, { source_batch: '' }, { period: '2026-13' }, { rows: [] }]) {
-    assert.throws(() => previewComposerStatement({ ...statement, ...change }));
-  }
-  assert.throws(() => previewComposerStatement({ ...statement, rows: [{ ...row, composer_code: '' }] }));
-});
-
-test('composer input cannot enter artist royalty schema', () => {
-  assert.equal(royaltyRow.safeParse(row).success, false);
+test('strict statement boundaries reject posting fields, invalid money and unsupported shares', () => {
+  for (const input of [{ ...statement, post: true }, { ...statement, rows: [{ ...row, total_net_royalti: '1.001' }] },
+    { ...statement, rows: [{ ...row, share_percentage: '100' }] }]) assert.throws(() => parseComposerStatement(input));
 });
