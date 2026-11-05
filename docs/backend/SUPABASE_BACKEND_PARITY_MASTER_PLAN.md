@@ -550,3 +550,11 @@ Backend parity selesai hanya jika:
 8. Uji payout terhadap ledger hasil import.
 9. Jalankan full dev E2E pada `dashboard-sounpub-dev`.
 10. Susun migration dan production rollout plan terpisah.
+
+## 19. Copyright royalty checkpoint
+
+- Admin dan superadmin dapat mengirim batch komposer ke `POST /api/v1/copyright/royalties/preview`.
+- Backend memvalidasi kontrak ketat, kode komposer unik, period IDR, dan aritmetika exact minor-unit tanpa write database atau efek finansial.
+- Frontend backend-mode membaca CSV terstruktur, menolak format ambigu, dan menampilkan hasil normalisasi serta total tanpa Supabase fallback.
+- Preview selalu `UNRECONCILED`, `posting_allowed=false`, dengan blocker pemetaan identitas komposer dan kontrak alokasi karya.
+- Tahap berikutnya wajib menambah identity mapping, work allocation, idempotent import/posting, immutable correction/reversal, ledger attribution, reconciliation, dan history sebelum kontrol posting diaktifkan.

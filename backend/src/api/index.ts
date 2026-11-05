@@ -13,6 +13,7 @@ import { registerMediaRoutes } from './media.js';
 import { registerAuditSettingsRoutes } from './audit-settings.js';
 import { registerFinancialRoutes } from './financial.js';
 import { registerLocalAuthRoutes, sessionToken } from './local-auth.js';
+import { registerComposerRoyaltiesRoutes } from './composer-royalties.js';
 
 export { ApiError } from './types.js';
 export type { ApiDependencies, Principal, RateLimiter } from './types.js';
@@ -177,6 +178,7 @@ export function buildApp(deps: ApiDependencies) {
   if (deps.notifications) registerNotificationsRoutes(app, deps.notifications, authenticate, paths, errorSchema);
   if (deps.media) registerMediaRoutes(app, deps.media, authenticate, paths, errorSchema);
   if (deps.auditSettings) registerAuditSettingsRoutes(app, deps.auditSettings, authenticate, paths, errorSchema);
+  if (deps.composerRoyalties) registerComposerRoyaltiesRoutes(app, deps.composerRoyalties, authenticate, paths, errorSchema);
   if (deps.balance || deps.royalties || deps.payouts || deps.payments || deps.financeReconciliation) {
     registerFinancialRoutes(app, deps, authenticate, paths, errorSchema);
   }

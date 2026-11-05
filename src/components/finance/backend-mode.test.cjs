@@ -61,6 +61,31 @@ const dependencies = name => {
   assert.equal(calls.at(-1)[0], '/api/v1/admin/royalties/imports/batch%2Fid/reconciliation');
   await royalties.royaltiesApi.reconcile('batch/id', { expected_checksum: '0'.repeat(64), evidence: 'checked' });
   assert.equal(calls.at(-1)[1].method, 'POST');
+  const copyright = evaluate('src/api/copyright.ts', () => ({ apiRequest: async (...args) => { calls.push(args); return {}; } }));
+  const composerStatement = { source: 'copyright-dashboard', source_batch: 'batch.csv', period: '2026-10', currency: 'IDR', rows: [{ composer_code: 'C001', composer_name: 'Composer', total_net_royalti: '0.10' }] };
+  await copyright.copyrightApi.previewRoyalties(composerStatement);
+  assert.equal(calls.at(-1)[0], '/api/v1/copyright/royalties/preview');
+  assert.equal(calls.at(-1)[1].method, 'POST');
+  assert.deepEqual(calls.at(-1)[1].body, composerStatement);
+  const copyrightPreview = read('src/components/finance/BackendCopyrightRoyaltyPreview.tsx');
+  assert.doesNotMatch(copyrightPreview, /supabase/i);
+  assert.match(copyrightPreview, /parseCsvDocument/);
+  assert.match(copyrightPreview, /Posting dinonaktifkan/);
+  assert.match(copyrightPreview, /preview\.rows\.map/);
+  assert.match(copyrightPreview, /preview\.total_amount/);
+  assert.match(copyrightPreview, /preview\.blockers\.map/);
+  const copyrightPage = read('src/pages/CopyrightRoyaltyUpload.tsx');
+  const copyrightWrapper = copyrightPage.slice(copyrightPage.indexOf('export default function CopyrightRoyaltyUpload()'));
+  assert.match(copyrightWrapper, /usesBackendFinance\(\)[\s\S]*BackendCopyrightRoyaltyPreview/);
+  const csv = evaluate('src/lib/csv.ts', () => { throw Error('CSV parser must have no dependencies'); });
+  assert.deepEqual(Array.from(csv.parseCsvDocument('code,name,amount\r\nC1,"Doe, Jane",0.10\r\n'), row => Array.from(row)),
+    [['code', 'name', 'amount'], ['C1', 'Doe, Jane', '0.10']]);
+  assert.deepEqual(Array.from(csv.parseCsvDocument('code,name\nC1,"Line one\nLine ""two"""'), row => Array.from(row)),
+    [['code', 'name'], ['C1', 'Line one\nLine "two"']]);
+  assert.throws(() => csv.parseCsvDocument('code,name\nC1,"Unclosed'), /tidak ditutup/);
+  assert.throws(() => csv.parseCsvDocument('code,name\nC1,"Closed"junk'), /setelah tanda kutip/);
+  assert.throws(() => csv.parseCsvDocument('code,name\nC1,un"quoted'), /awal field/);
+  assert.match(copyrightPreview, /Header duplikat tidak diperbolehkan/);
   await royalties.royaltiesApi.approveFileSession('session/id', { expected_checksum: '0'.repeat(64), evidence: 'checked' });
   assert.equal(calls.at(-1)[0], '/api/v1/admin/royalties/import-files/session%2Fid/approve');
   assert.equal(calls.at(-1)[1].method, 'POST');

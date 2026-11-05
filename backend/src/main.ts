@@ -24,6 +24,7 @@ import { createPublicCatalogService } from './public-catalog/index.js';
 import { createConfiguredIdentityProvider, createIdentityAuthenticator } from './auth/providers.js';
 import { createLocalAuthService } from './local-auth/index.js';
 import { createFinanceReconciliationService } from './reconciliation/index.js';
+import { createComposerRoyaltiesService } from './composer-royalties/index.js';
 
 const config = loadConfig();
 const identityProvider = createConfiguredIdentityProvider(process.env);
@@ -77,6 +78,7 @@ const app = buildApp({
   users, artists, labels, labelCustom, releases, tracks,
   balance: createBalanceService(pool), royalties: createRoyaltiesService(pool, royaltyImportStore, reconciliationPool), payouts, payments,
   financeReconciliation: createFinanceReconciliationService(pool),
+  composerRoyalties: createComposerRoyaltiesService(),
   submissions: createSubmissionService(pool, { media: createMediaReadinessAdapter(), payment: paymentSubmissionDependency, provider: new MockSubmissionProvider() }),
   notifications: createNotificationsService(pool),
   media,

@@ -1,5 +1,5 @@
 import { usesBackendFinance } from '@/components/finance/mode';
-import { FinanceUnavailable } from '@/components/finance/FinanceUnavailable';
+import { BackendCopyrightRoyaltyPreview } from '@/components/finance/BackendCopyrightRoyaltyPreview';
 ﻿import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -465,6 +465,6 @@ function LegacyCopyrightRoyaltyUpload() {
   );
 }
 export default function CopyrightRoyaltyUpload() {
-  if (usesBackendFinance()) return <FinanceUnavailable title="Royalti komposer" />;
+  if (usesBackendFinance()) return <BackendCopyrightRoyaltyPreview />;
   return <LegacyCopyrightRoyaltyUpload />;
 }

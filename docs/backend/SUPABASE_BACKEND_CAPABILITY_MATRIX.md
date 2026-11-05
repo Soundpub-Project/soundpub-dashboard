@@ -79,7 +79,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | SoundPub share | 9% dari `net_revenue`, dibulatkan per row ke 2 desimal | immutable SOUNDPUB allocation, excluded from user wallet | Backend preview displays server total | VERIFIED | Add accounting destination/reporting for retained share |
 | Label share | Sisa row setelah SoundPub 9% dan artist 70%; efektif sekitar 21% | immutable LABEL allocation; ordinary label and Label Custom PIC verified | Backend preview displays server total | VERIFIED | Add contract-specific policy variants later |
 | Artist share | 70% dari `net_revenue`, dibulatkan per row ke 2 desimal | immutable ARTIST allocation; managed artist aggregates to PIC | Backend preview displays server total | VERIFIED | Add contract-specific policy variants later |
-| Composer share | composer royalty module | separate composer path | UI/module tersedia | PARTIAL | Integrate calculation and ledger attribution |
+| Composer share | composer royalty module | admin-only read-only preview with exact minor-unit normalization; posting remains blocked | Backend CSV preview cut over without Supabase fallback | PARTIAL | Implement identity mapping, work allocation, idempotent posting, immutable correction, ledger attribution, and reconciliation |
 | Rounding | SoundPub dan artist dibulatkan half-up per row; label menerima remainder row | integer minor units | Backend arithmetic safe | MAPPED | Golden production fixtures |
 | Policy effective date | implicit settings/current data | no generic versioned policy | Tidak terlihat | MISSING | Calculation policy schema |
 | Historical owner snapshot | royalty history guard migration | artist, label, ISRC, UPC, policy and component allocations snapshotted | Backend detail exposes trace | VERIFIED | Manual resolution for pre-snapshot unresolved rows |
@@ -154,6 +154,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 - Scoped royalty reporting now provides period discovery, filters, totals, pagination, and CSV export for admin, ordinary label, Whitelabel, artist, and Label Custom PIC. Disposable PostgreSQL proves no cross-owner leakage.
 - 2026-11-05: Whitelabel dashboard and managed-artist lifecycle are cut over in backend mode. Artist creation stores no credential; first login activation requires active Whitelabel subscription and verified ownership. Migration 0044 is applied only to the isolated dev Compose project.
 - 2026-11-05: Maintenance mode now returns 503 MAINTENANCE_MODE for protected non-admin requests, keeps health/auth/public/webhook routes available, limits toggle authority to superadmin, and presents a session-preserving frontend screen. Full Docker suite produced 334 tests, 328 pass, 0 fail, 6 skipped.
+- 2026-11-05: Copyright royalty CSV preview is backend-owned, admin-only, exact-money, read-only, and explicitly blocks posting until composer identity and work-allocation contracts exist. Frontend backend-mode parses CSV without Supabase fallback. Full Docker suite produced 337 tests, 331 pass, 0 fail, 6 skipped.
 
 ## Remaining blockers
 
@@ -163,4 +164,4 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 5. Payment provider, payout settlement provider, submission provider, and notification delivery remain partial or mock-oriented.
 6. Royalty upload is cut over when backend royalty/release domains are enabled, but frontend inventory still contains about 368 Supabase call chains in other domains; root production build does not enable backend domains.
 7. Keycloak adapter is implemented; production realm/client configuration and browser E2E remain.
-8. Copyright, takedown, provider invoice/settlement, and several release actions remain direct or fail-closed.
+8. Copyright royalty CSV preview is backend-owned and fail-closed for posting; copyright posting/history, takedown, provider invoice/settlement, and several release actions remain direct or unavailable.
