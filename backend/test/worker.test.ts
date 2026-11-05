@@ -104,4 +104,7 @@ test('outbox topic registry fails startup when a producer has no consumer', () =
   const missingTakedown = { ...complete };
   delete missingTakedown['takedown.status.changed'];
   assert.throws(() => assertOutboxHandlers(missingTakedown), /takedown\.status\.changed/);
+  const missingCopyrightRegistration = { ...complete };
+  delete missingCopyrightRegistration['copyright_registration.submitted'];
+  assert.throws(() => assertOutboxHandlers(missingCopyrightRegistration), /copyright_registration\.submitted/);
 });

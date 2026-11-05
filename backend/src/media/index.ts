@@ -16,7 +16,7 @@ function id(value: unknown) {
   return parsed.data;
 }
 function binding(row: Pick<MediaRow, 'category' | 'variant'>) {
-  if (row.category === 'TAKEDOWN_DOCUMENT') return null;
+  if (['TAKEDOWN_DOCUMENT','COPYRIGHT_REGISTRATION_DOCUMENT'].includes(row.category)) return null;
   if (row.category === 'OTHER') return { table: 'application_settings', column: row.variant === 'light' ? 'dashboard_logo_light'
     : row.variant === 'dark' ? 'dashboard_logo_dark' : 'favicon', url: '' };
   if (row.category === 'USER_AVATAR') return { table: 'profiles', column: 'avatar_media_id', url: 'avatar_url' };
@@ -31,8 +31,10 @@ function settingMedia(row: Pick<MediaRow, 'resource_type' | 'category'>) {
 }
 async function referenced(db: Pick<Pool, 'query'> | PoolClient, row: MediaRow) {
   const target = binding(row);
-  if (!target) return !!(await db.query(`SELECT id FROM soundpub.takedown_request_documents
-    WHERE media_object_id=$1`, [row.id])).rowCount;
+  if (!target) return row.category === 'COPYRIGHT_REGISTRATION_DOCUMENT'
+    ? !!(await db.query(`SELECT id FROM soundpub.copyright_registration_files
+      WHERE media_object_id=$1 AND detached_at IS NULL`, [row.id])).rowCount
+    : !!(await db.query(`SELECT id FROM soundpub.takedown_request_documents WHERE media_object_id=$1`, [row.id])).rowCount;
   return settingMedia(row)
     ? !!(await db.query(`SELECT id FROM soundpub.application_settings WHERE id=true AND settings->>$1=$2`, [target.column, row.id])).rowCount
     : !!(await db.query(`SELECT id FROM soundpub.${target.table} WHERE id=$1 AND ${target.column}=$2`, [row.resource_id, row.id])).rowCount;
@@ -59,11 +61,17 @@ export function createMediaService(pool: Pool, store: MediaObjectStore) {
     const parsed = id(objectId);
     return withTransaction(pool, async db => {
       const { row, current, releaseId } = await authorized(db, actor, parsed, true);
-      if (row.status === 'PENDING' && row.owner_user_id !== current.id) throw new ApiError(404, 'NOT_FOUND');
+      const copyrightAdmin = row.category === 'COPYRIGHT_REGISTRATION_DOCUMENT'
+        && current.roles.some(role => role === 'admin' || role === 'superadmin');
+      if (row.status === 'PENDING' && row.owner_user_id !== current.id && !copyrightAdmin) throw new ApiError(404, 'NOT_FOUND');
       if (row.status === 'DELETED') return { status: 'deleted' as const };
       const target = binding(row);
       if (!target) {
-        if (await referenced(db,row)) throw new ApiError(409, 'CONFLICT');
+        if (row.category === 'COPYRIGHT_REGISTRATION_DOCUMENT') {
+          const detached = await db.query(`UPDATE soundpub.copyright_registration_files SET detached_at=clock_timestamp()
+            WHERE media_object_id=$1 AND detached_at IS NULL AND frozen_at IS NULL RETURNING id`, [row.id]);
+          if (!detached.rowCount && await referenced(db,row)) throw new ApiError(409, 'MEDIA_RESOURCE_LOCKED');
+        } else if (await referenced(db,row)) throw new ApiError(409, 'CONFLICT');
       }
       if (settingMedia(row)) await db.query(`UPDATE soundpub.application_settings SET
         settings=jsonb_set(settings,ARRAY[$1], 'null'::jsonb),version=version+1
@@ -86,12 +94,13 @@ export function createMediaService(pool: Pool, store: MediaObjectStore) {
         const expiresAt = new Date(Date.now() + 300_000);
         const row = (await db.query<MediaRow>(`INSERT INTO soundpub.media_objects
           (id,bucket,object_key,owner_user_id,category,resource_type,resource_id,profile_id,release_id,track_id,
-          takedown_request_id,original_filename,variant,mime_type,size,checksum,expires_at,cleanup_after)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17::timestamptz+interval '60 seconds') RETURNING *`,
+          takedown_request_id,copyright_registration_id,copyright_document_type,original_filename,variant,mime_type,size,checksum,expires_at,cleanup_after)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$19::timestamptz+interval '60 seconds') RETURNING *`,
         [upload.metadata.id, store.bucket, store.key(upload.metadata.id), current.id, value.category, value.resource_type,
           value.resource_id, ['user','label'].includes(value.resource_type) ? value.resource_id : null,
           value.resource_type === 'release' ? value.resource_id : null, value.resource_type === 'track' ? value.resource_id : null,
-          value.resource_type === 'takedown' ? value.resource_id : null, value.filename,
+          value.resource_type === 'takedown' ? value.resource_id : null,
+          value.resource_type === 'copyright_registration' ? value.resource_id : null, value.document_type ?? null, value.filename,
           value.variant, value.mime_type, value.size, value.checksum, expiresAt])).rows[0]!;
         await audit(db, current, row, 'media.upload_requested', requestId);
         return { object: dto(row), url: upload.url, method: upload.method, headers: upload.headers, expires_at: expiresAt.toISOString() };
@@ -101,7 +110,9 @@ export function createMediaService(pool: Pool, store: MediaObjectStore) {
       const parsed = id(objectId);
       const result = await withTransaction(pool, async db => {
         const { row, current, releaseId } = await authorized(db, actor, parsed, true);
-        if (row.owner_user_id !== current.id) throw new ApiError(404, 'NOT_FOUND');
+        const copyrightAdmin = row.category === 'COPYRIGHT_REGISTRATION_DOCUMENT'
+          && current.roles.some(role => role === 'admin' || role === 'superadmin');
+        if (row.owner_user_id !== current.id && !copyrightAdmin) throw new ApiError(404, 'NOT_FOUND');
         if (row.status === 'ACTIVE') return { object: dto(row) };
         if (row.status !== 'PENDING' || new Date(row.expires_at).getTime() <= Date.now()) throw new ApiError(409, 'MEDIA_UPLOAD_EXPIRED');
         const target = binding(row);
@@ -130,6 +141,12 @@ export function createMediaService(pool: Pool, store: MediaObjectStore) {
             (id,request_id,uploaded_by,media_object_id,file_name,document_type)
             VALUES (gen_random_uuid(),$1,$2,$3,$4,'Pendukung') ON CONFLICT (media_object_id) DO NOTHING`,
           [active.resource_id,current.id,active.id,active.original_filename]);
+        }
+        if (active.category === 'COPYRIGHT_REGISTRATION_DOCUMENT') {
+          await db.query(`INSERT INTO soundpub.copyright_registration_files
+            (id,registration_id,media_object_id,file_type,uploaded_by)
+            VALUES (gen_random_uuid(),$1,$2,$3,$4) ON CONFLICT (media_object_id) DO NOTHING`,
+          [active.resource_id,active.id,active.copyright_document_type,current.id]);
         }
         await audit(db, current, active, 'media.finalized', requestId);
         return { object: dto(active) };
@@ -175,6 +192,8 @@ export function createMediaService(pool: Pool, store: MediaObjectStore) {
           SELECT 1 FROM soundpub.profiles p WHERE m.id IN (p.avatar_media_id,p.logo_media_id,p.logo_light_media_id,p.logo_dark_media_id)
           UNION ALL SELECT 1 FROM soundpub.releases r WHERE r.cover_media_id=m.id
           UNION ALL SELECT 1 FROM soundpub.tracks t WHERE t.audio_media_id=m.id
+          UNION ALL SELECT 1 FROM soundpub.copyright_registration_files f
+            WHERE f.media_object_id=m.id AND f.detached_at IS NULL
           UNION ALL SELECT 1 FROM soundpub.application_settings s WHERE s.settings->>'dashboard_logo_light'=m.id::text
           OR s.settings->>'dashboard_logo_dark'=m.id::text OR s.settings->>'favicon'=m.id::text))
         ORDER BY updated_at,id LIMIT $1`, [limit])).rows;

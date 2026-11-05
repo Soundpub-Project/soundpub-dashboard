@@ -26,6 +26,7 @@ import { createConfiguredIdentityProvider, createIdentityAuthenticator } from '.
 import { createLocalAuthService } from './local-auth/index.js';
 import { createFinanceReconciliationService } from './reconciliation/index.js';
 import { createComposerRoyaltiesService } from './composer-royalties/index.js';
+import { createCopyrightRegistrationsService } from './copyright-registrations/index.js';
 
 const config = loadConfig();
 const identityProvider = createConfiguredIdentityProvider(process.env);
@@ -41,7 +42,8 @@ const releaseMigration = await pool.query(`SELECT to_regclass('soundpub.releases
   to_regclass('soundpub.royalty_import_batches') AS royalties,
   to_regclass('soundpub.royalty_import_sessions') AS royalty_files,
   to_regclass('soundpub.payout_requests') AS payouts,
-  to_regclass('soundpub.payment_invoices') AS payments`);
+  to_regclass('soundpub.payment_invoices') AS payments,
+  to_regclass('soundpub.copyright_registrations') AS copyright_registrations`);
 if (Object.values(releaseMigration.rows[0] ?? {}).some(value => !value)) throw new Error('Phase 3E database migration required before API boot');
 const repositories = createRepositories(pool);
 const users = createUsersService(pool);
@@ -81,6 +83,7 @@ const app = buildApp({
   balance: createBalanceService(pool), royalties: createRoyaltiesService(pool, royaltyImportStore, reconciliationPool), payouts, payments,
   financeReconciliation: createFinanceReconciliationService(pool),
   composerRoyalties: createComposerRoyaltiesService(pool),
+  copyrightRegistrations: createCopyrightRegistrationsService(pool),
   submissions: createSubmissionService(pool, { media: createMediaReadinessAdapter(), payment: paymentSubmissionDependency, provider: new MockSubmissionProvider() }),
   notifications: createNotificationsService(pool),
   media,

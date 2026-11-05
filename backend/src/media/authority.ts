@@ -8,9 +8,25 @@ import { artistsRepository } from '../artists/repository.js';
 import { SETTINGS_MEDIA_RESOURCE_ID, type UploadInput } from './contracts.js';
 
 const allows = createAuthorizer();
-export async function mediaAuthority(db: PoolClient, actor: Principal, binding: Pick<UploadInput, 'resource_type' | 'resource_id'>, write: boolean) {
+export async function mediaAuthority(db: PoolClient, actor: Principal,
+  binding: { resource_type: UploadInput['resource_type']; resource_id: string; category: string;
+    document_type?: UploadInput['document_type'] | null; copyright_document_type?: UploadInput['document_type'] | null }, write: boolean) {
   if (!actor || !allows(actor, 'authenticated')) throw new ApiError(403, 'FORBIDDEN');
   const { resource_type: type, resource_id: id } = binding;
+  if (type === 'copyright_registration') {
+    const current = (await usersRepository(db).lock([actor.id], true)).get(actor.id);
+    if (!current || !allows(current, 'authenticated')) throw new ApiError(403, 'FORBIDDEN');
+    const registration = (await db.query<{ owner_id: string; status: string }>(
+      'SELECT owner_id,status FROM soundpub.copyright_registrations WHERE id=$1 FOR UPDATE', [id])).rows[0];
+    const admin = allows(current, 'admin');
+    if (!registration || !(admin || registration.owner_id === current.id)) throw new ApiError(404, 'NOT_FOUND');
+    const documentType = binding.document_type ?? binding.copyright_document_type;
+    const contractDocument = documentType?.startsWith('CONTRACT_') ?? false;
+    if (write && (contractDocument
+      ? !admin || !['APPROVED','CONTRACT_GENERATED','STAMPING_PENDING','STAMPED','CONTRACT_SIGNED'].includes(registration.status)
+      : !['DRAFT','REVISION_REQUESTED'].includes(registration.status))) throw new ApiError(409, 'MEDIA_RESOURCE_LOCKED');
+    return { current, releaseId: null };
+  }
   let releaseId: string | null = type === 'release' ? id : null;
   if (type === 'track') {
     releaseId = (await db.query('SELECT release_id FROM soundpub.tracks WHERE id=$1', [id])).rows[0]?.release_id ?? null;

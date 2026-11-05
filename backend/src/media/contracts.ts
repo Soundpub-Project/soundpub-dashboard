@@ -1,23 +1,28 @@
 import { z } from 'zod';
 import { ApiError } from '../api/types.js';
 
-export const categories = ['USER_AVATAR', 'LABEL_LOGO', 'RELEASE_COVER', 'TRACK_AUDIO', 'COPYRIGHT_DOCUMENT', 'TAKEDOWN_DOCUMENT', 'OTHER'] as const;
-export const uploadCategories = ['USER_AVATAR', 'LABEL_LOGO', 'RELEASE_COVER', 'TRACK_AUDIO', 'TAKEDOWN_DOCUMENT', 'OTHER'] as const;
+export const categories = ['USER_AVATAR', 'LABEL_LOGO', 'RELEASE_COVER', 'TRACK_AUDIO', 'COPYRIGHT_DOCUMENT',
+  'COPYRIGHT_REGISTRATION_DOCUMENT', 'TAKEDOWN_DOCUMENT', 'OTHER'] as const;
+export const uploadCategories = ['USER_AVATAR', 'LABEL_LOGO', 'RELEASE_COVER', 'TRACK_AUDIO',
+  'COPYRIGHT_REGISTRATION_DOCUMENT', 'TAKEDOWN_DOCUMENT', 'OTHER'] as const;
 export const SETTINGS_MEDIA_RESOURCE_ID = '00000000-0000-4000-8000-0000000003d0';
+export const copyrightDocumentType = z.enum(['IDENTITY','TAX','POWER_OF_ATTORNEY','AUDIO_DEMO','LYRICS','WORK_EVIDENCE',
+  'CONTRACT_GENERATED','CONTRACT_STAMPED','CONTRACT_SIGNED','OTHER']);
 export const uploadInput = z.strictObject({
-  category: z.enum(uploadCategories), resource_type: z.enum(['user', 'label', 'release', 'track', 'settings', 'takedown']),
+  category: z.enum(uploadCategories), resource_type: z.enum(['user', 'label', 'release', 'track', 'settings', 'takedown', 'copyright_registration']),
   resource_id: z.uuid(), mime_type: z.string().max(100), size: z.number().int().min(1),
   checksum: z.string().regex(/^[a-fA-F0-9]{64}$/).transform(v => v.toLowerCase()),
   filename: z.string().min(1).max(255).regex(/^[^/\\]+$/)
     .refine(value => [...value].every(character => character.charCodeAt(0) >= 32)),
   variant: z.enum(['default', 'light', 'dark']).default('default'),
+  document_type: copyrightDocumentType.optional(),
   visibility: z.literal('PRIVATE').default('PRIVATE'),
 });
 export type UploadInput = z.infer<typeof uploadInput>;
 export const mediaDto = z.strictObject({
-  id: z.uuid(), category: z.enum(categories), resource_type: z.enum(['user', 'label', 'release', 'track', 'settings', 'takedown']), resource_id: z.uuid(),
+  id: z.uuid(), category: z.enum(categories), resource_type: z.enum(['user', 'label', 'release', 'track', 'settings', 'takedown', 'copyright_registration']), resource_id: z.uuid(),
   variant: z.enum(['default', 'light', 'dark']), visibility: z.literal('PRIVATE'),
-  mime_type: z.string(), size: z.number(), checksum: z.string(),
+  mime_type: z.string(), size: z.number(), checksum: z.string(), document_type: copyrightDocumentType.nullable(),
   status: z.enum(['PENDING', 'ACTIVE', 'FAILED', 'REPLACED', 'DELETED']),
   created_at: z.string(), updated_at: z.string(),
 });
@@ -25,10 +30,13 @@ export type MediaDto = z.infer<typeof mediaDto>;
 export interface MediaRow extends MediaDto {
   owner_user_id: string; bucket: string; object_key: string; expires_at: Date;
   release_id: string | null; track_id: string | null; profile_id: string | null; takedown_request_id: string | null;
+  copyright_registration_id: string | null;
+  copyright_document_type: z.infer<typeof copyrightDocumentType> | null;
   original_filename: string | null;
 }
 export const limits = { USER_AVATAR: 5 * 1024 ** 2, LABEL_LOGO: 1024 ** 2,
-  RELEASE_COVER: 5 * 1024 ** 2, TRACK_AUDIO: 500 * 1024 ** 2, TAKEDOWN_DOCUMENT: 10 * 1024 ** 2,
+  RELEASE_COVER: 5 * 1024 ** 2, TRACK_AUDIO: 500 * 1024 ** 2, COPYRIGHT_REGISTRATION_DOCUMENT: 25 * 1024 ** 2,
+  TAKEDOWN_DOCUMENT: 10 * 1024 ** 2,
   OTHER: 5 * 1024 ** 2 } as const;
 const extensions: Record<string, string[]> = {
   'image/png': ['png'], 'image/jpeg': ['jpg', 'jpeg'], 'image/webp': ['webp'],
@@ -41,18 +49,22 @@ export function validateUpload(value: unknown): UploadInput {
   if (!parsed.success) throw new ApiError(400, 'BAD_REQUEST');
   const input = parsed.data;
   const type = { USER_AVATAR: 'user', LABEL_LOGO: 'label', RELEASE_COVER: 'release', TRACK_AUDIO: 'track',
-    TAKEDOWN_DOCUMENT: 'takedown', OTHER: 'settings' }[input.category as keyof typeof limits];
+    COPYRIGHT_REGISTRATION_DOCUMENT: 'copyright_registration', TAKEDOWN_DOCUMENT: 'takedown',
+    OTHER: 'settings' }[input.category as keyof typeof limits];
   if (!type) throw new ApiError(400, 'BAD_REQUEST');
   if (input.resource_type !== type || (!['LABEL_LOGO', 'OTHER'].includes(input.category) && input.variant !== 'default')
     || (input.category === 'OTHER' && input.resource_id !== SETTINGS_MEDIA_RESOURCE_ID)) throw new ApiError(400, 'BAD_REQUEST');
+  if ((input.category === 'COPYRIGHT_REGISTRATION_DOCUMENT') !== Boolean(input.document_type)) throw new ApiError(400, 'BAD_REQUEST');
   if (input.size > limits[input.category as keyof typeof limits]) throw new ApiError(400, 'MEDIA_SIZE_LIMIT');
   if (!(extensions[input.mime_type] ?? []).includes(input.filename.split('.').at(-1)!.toLowerCase())
     || !(input.category === 'TRACK_AUDIO' ? input.mime_type.startsWith('audio/')
-      : input.category === 'TAKEDOWN_DOCUMENT' ? input.mime_type === 'application/pdf' || input.mime_type.startsWith('image/')
+      : ['TAKEDOWN_DOCUMENT', 'COPYRIGHT_REGISTRATION_DOCUMENT'].includes(input.category)
+        ? input.mime_type === 'application/pdf' || input.mime_type.startsWith('image/') || input.mime_type.startsWith('audio/')
       : input.mime_type.startsWith('image/'))) throw new ApiError(400, 'MEDIA_MIME_INVALID');
   return input;
 }
 export function dto(row: MediaRow): MediaDto { return mediaDto.strip().parse({ ...row, size: Number(row.size),
+  document_type: row.copyright_document_type ?? null,
   created_at: new Date(row.created_at).toISOString(), updated_at: new Date(row.updated_at).toISOString() }); }
 
 export function assertMediaSignature(data: Uint8Array, mime: string): void {
