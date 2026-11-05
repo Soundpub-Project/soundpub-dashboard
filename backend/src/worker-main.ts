@@ -38,6 +38,10 @@ const handlers: Record<string, OutboxHandler> = {
   'payout.changed': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-payout-change', payload: event.payload }); },
   'payout.readiness': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-payout-readiness', payload: event.payload }); },
   'finance.reconciliation': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-finance-reconciliation', payload: event.payload }); },
+  'copyright.royalty.changed': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-copyright-royalty-change', payload: event.payload }); },
+  'takedown.submitted': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-takedown-submitted', payload: event.payload }); },
+  'takedown.status.changed': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-takedown-status-change', payload: event.payload }); },
+  'takedown.target.changed': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-takedown-target-change', payload: event.payload }); },
 };
 assertOutboxHandlers(handlers);
 let stopping = false;

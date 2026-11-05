@@ -101,4 +101,7 @@ test('outbox topic registry fails startup when a producer has no consumer', () =
   const incomplete = { ...complete };
   delete incomplete['royalty.changed'];
   assert.throws(() => assertOutboxHandlers(incomplete), /royalty\.changed/);
+  const missingTakedown = { ...complete };
+  delete missingTakedown['takedown.status.changed'];
+  assert.throws(() => assertOutboxHandlers(missingTakedown), /takedown\.status\.changed/);
 });

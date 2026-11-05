@@ -9,6 +9,10 @@ export const OUTBOX_TOPICS = [
   'payout.changed',
   'payout.readiness',
   'finance.reconciliation',
+  'copyright.royalty.changed',
+  'takedown.submitted',
+  'takedown.status.changed',
+  'takedown.target.changed',
 ] as const;
 
 export type OutboxTopic = typeof OUTBOX_TOPICS[number];
