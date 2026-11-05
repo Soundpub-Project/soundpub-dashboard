@@ -6,6 +6,7 @@ const valid = {
   NODE_ENV: 'test',
   DATABASE_URL: 'postgres://soundpub_app:synthetic-password@localhost:55432/soundpub_test',
   RECONCILIATION_DATABASE_URL: 'postgres://soundpub_reconciler:synthetic-password@localhost:55432/soundpub_test',
+  AUDIT_DATABASE_URL: 'postgres://soundpub_auditor:synthetic-password@localhost:55432/soundpub_test',
   OBJECT_STORAGE_ENDPOINT: 'object-storage',
   OBJECT_STORAGE_ACCESS_KEY: 'synthetic-access',
   OBJECT_STORAGE_SECRET_KEY: 'synthetic-storage-secret',
@@ -22,6 +23,9 @@ test('typed config accepts isolated development/test and applies safe defaults',
     assert.equal(config.OBJECT_STORAGE_PUBLIC_ENDPOINT, 'http://127.0.0.1:9100');
     assert.deepEqual(config.OBJECT_STORAGE_BROWSER_ORIGINS, ['http://localhost:8281', 'http://127.0.0.1:8281']);
     assert.equal(config.WORKER_BATCH_SIZE, 10);
+    assert.equal(config.FINANCE_RECONCILIATION_INTERVAL_MS, 300000);
+    assert.equal(config.FINANCE_RECONCILIATION_ISSUE_LIMIT, 500);
+    assert.equal(config.FINANCE_RECONCILIATION_TIMEOUT_MS, 5000);
   }
   for (const OBJECT_STORAGE_PUBLIC_ENDPOINT of ['http://127.0.0.1:9100', 'http://localhost:19000', 'http://[::1]:9100']) {
     assert.doesNotThrow(() => loadConfig({ ...valid, OBJECT_STORAGE_PUBLIC_ENDPOINT }));
@@ -70,6 +74,8 @@ test('invalid config fails without disclosing synthetic credentials', () => {
     { DATABASE_URL: 'postgres://%broken:synthetic-password@localhost/soundpub_dev' },
     { DATABASE_URL: 'synthetic-password' },
     { PORT: '0' }, { LOG_LEVEL: 'verbose' }, { WORKER_POLL_MS: '1' },
+    { FINANCE_RECONCILIATION_INTERVAL_MS: '9999' }, { FINANCE_RECONCILIATION_ISSUE_LIMIT: '0' },
+    { FINANCE_RECONCILIATION_TIMEOUT_MS: '999' },
     { OBJECT_STORAGE_SECRET_KEY: '' }, { OBJECT_STORAGE_USE_SSL: 'yes' },
     { DEV_AUTH_TOKENS_JSON: 'not-json' }, { DEV_AUTH_TOKENS_JSON: '[]' },
     { DEV_AUTH_TOKENS_JSON: '{"short":{"issuer":"local","subject":"one"}}' },

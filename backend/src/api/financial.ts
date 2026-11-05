@@ -5,6 +5,7 @@ import type { BalanceService } from '../finance/service.js';
 import type { RoyaltiesService } from '../royalties/index.js';
 import type { PayoutsService } from '../payouts/index.js';
 import type { PaymentsService } from '../payments/index.js';
+import type { FinanceReconciliationService } from '../reconciliation/index.js';
 
 const secured = [{ bearerAuth: [] }];
 const key = (request: FastifyRequest) => {
@@ -15,6 +16,7 @@ const key = (request: FastifyRequest) => {
 
 export function registerFinancialRoutes(app: FastifyInstance, services: {
   balance?: BalanceService; royalties?: RoyaltiesService; payouts?: PayoutsService; payments?: PaymentsService;
+  financeReconciliation?: FinanceReconciliationService;
 }, authenticate: (request: FastifyRequest) => Promise<Principal>, paths: Record<string, Record<string, unknown>>, errorSchema: object) {
   const add = (method: string, path: string, operationId: string) => {
     const normalized = path.replaceAll(':id', '{id}');
@@ -30,6 +32,14 @@ export function registerFinancialRoutes(app: FastifyInstance, services: {
   if (services.balance) {
     app.get('/api/v1/balance', async request => services.balance!.get(await authenticate(request), (request.query as { owner_id?: string }).owner_id));
     add('GET', '/api/v1/balance', 'getBalance');
+  }
+  if (services.financeReconciliation) {
+    app.get('/api/v1/admin/finance/reconciliation/latest', async request =>
+      services.financeReconciliation!.latest(await authenticate(request)));
+    app.get('/api/v1/admin/finance/reconciliation/runs', async request =>
+      services.financeReconciliation!.history(await authenticate(request), request.query));
+    add('GET', '/api/v1/admin/finance/reconciliation/latest', 'getLatestFinanceReconciliation');
+    add('GET', '/api/v1/admin/finance/reconciliation/runs', 'listFinanceReconciliationRuns');
   }
   if (services.royalties) {
     const service = services.royalties;

@@ -30,6 +30,7 @@ const schema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   DATABASE_URL: z.string().url(),
   RECONCILIATION_DATABASE_URL: z.string().url(),
+  AUDIT_DATABASE_URL: z.string().url(),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
   DEV_AUTH_TOKENS_JSON: z.string().refine((raw) => {
     try {
@@ -50,6 +51,9 @@ const schema = z.object({
   WEBHOOK_MOCK_SECRET: z.string().min(16),
   WORKER_POLL_MS: z.coerce.number().int().min(50).max(60000).default(1000),
   WORKER_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(10),
+  FINANCE_RECONCILIATION_INTERVAL_MS: z.coerce.number().int().min(10_000).max(86_400_000).default(300_000),
+  FINANCE_RECONCILIATION_ISSUE_LIMIT: z.coerce.number().int().min(1).max(5000).default(500),
+  FINANCE_RECONCILIATION_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30_000).default(5000),
   STORAGE_MAX_BYTES: z.coerce.number().int().positive().default(10 * 1024 * 1024),
 });
 
@@ -65,6 +69,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
   }
   parseIsolatedDatabaseUrl(environment.DATABASE_URL, ['soundpub_app']);
   parseIsolatedDatabaseUrl(environment.RECONCILIATION_DATABASE_URL, ['soundpub_reconciler']);
+  parseIsolatedDatabaseUrl(environment.AUDIT_DATABASE_URL, ['soundpub_auditor']);
   if (environment.OBJECT_STORAGE_PUBLIC_ENDPOINT) {
     let endpoint: URL;
     try { endpoint = new URL(environment.OBJECT_STORAGE_PUBLIC_ENDPOINT); }

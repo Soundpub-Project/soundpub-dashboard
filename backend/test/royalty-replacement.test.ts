@@ -63,6 +63,7 @@ test('CSV replacement atomically reverses old allocations and posts immutable re
     const originalDetail = await service.detail(admin, original.id);
     const replacementDetail = await service.detail(admin, replacement.id);
     assert.equal(originalDetail.status, 'VOIDED_WITH_OFFSET');
+    assert.equal((await owner.query('SELECT soundpub.royalty_correction_intact($1) AS intact', [original.id])).rows[0].intact, true);
     assert.equal(originalDetail.replacement_batch_id, replacement.id);
     assert.equal(originalDetail.change_reason, input.reason);
     assert.equal(replacementDetail.status, 'UNRECONCILED');

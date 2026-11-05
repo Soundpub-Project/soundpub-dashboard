@@ -8,6 +8,7 @@ test('financial OpenAPI preserves every method sharing a path', async () => {
     admin: { suspendUser: async () => undefined }, webhooks: { receive: async () => false },
     rateLimiter: { consume: async () => ({ allowed: true }) },
     royalties: {} as ApiDependencies['royalties'], payouts: {} as ApiDependencies['payouts'],
+    financeReconciliation: {} as ApiDependencies['financeReconciliation'],
   });
   try {
     const paths = (await app.inject('/openapi.json')).json().paths;
@@ -32,6 +33,8 @@ test('financial OpenAPI preserves every method sharing a path', async () => {
     assert.ok(paths['/api/v1/payouts/destination'].put);
     assert.ok(paths['/api/v1/payouts'].get);
     assert.ok(paths['/api/v1/payouts'].post);
+    assert.ok(paths['/api/v1/admin/finance/reconciliation/latest'].get);
+    assert.ok(paths['/api/v1/admin/finance/reconciliation/runs'].get);
     const operations = Object.values(paths).flatMap(path => Object.values(path as Record<string, unknown>))
       .filter(value => value && typeof value === 'object' && 'operationId' in value);
     assert.equal(operations.filter(operation => String((operation as { operationId: string }).operationId)

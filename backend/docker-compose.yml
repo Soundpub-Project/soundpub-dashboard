@@ -12,6 +12,7 @@ services:
       MIGRATION_DATABASE_PASSWORD: ${MIGRATION_DATABASE_PASSWORD:?Set a unique migration database password}
       APP_DATABASE_PASSWORD: ${APP_DATABASE_PASSWORD:?Set a unique application database password}
       RECONCILIATION_DATABASE_PASSWORD: ${RECONCILIATION_DATABASE_PASSWORD:?Set a unique reconciliation database password}
+      AUDIT_DATABASE_PASSWORD: ${AUDIT_DATABASE_PASSWORD:?Set a unique audit database password}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a unique development password}
     volumes:
       - pg_data:/var/lib/postgresql/data
@@ -54,6 +55,20 @@ services:
       timeout: 5s
       retries: 15
       start_period: 20s
+  provision-runtime-roles:
+    image: dashboard-sounpub-dev-postgres:17
+    command: ["/usr/local/bin/provision-runtime-roles"]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: soundpub_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a unique development password}
+      RECONCILIATION_DATABASE_PASSWORD: ${RECONCILIATION_DATABASE_PASSWORD:?Set a unique reconciliation database password}
+      AUDIT_DATABASE_PASSWORD: ${AUDIT_DATABASE_PASSWORD:?Set a unique audit database password}
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [isolated]
+    restart: "no"
   migrate:
     build: .
     command: ["node", "dist/src/db/cli.js", "up"]
@@ -61,7 +76,7 @@ services:
       NODE_ENV: development
       DATABASE_URL: postgres://soundpub_owner:${MIGRATION_DATABASE_PASSWORD:?Set a unique migration database password}@postgres:5432/soundpub_dev
     depends_on:
-      postgres: { condition: service_healthy }
+      provision-runtime-roles: { condition: service_completed_successfully }
     networks: [isolated]
     restart: "no"
   seed:
@@ -83,6 +98,7 @@ services:
       PORT: 3000
       DATABASE_URL: postgres://soundpub_app:${APP_DATABASE_PASSWORD:?Set a unique application database password}@postgres:5432/soundpub_dev
       RECONCILIATION_DATABASE_URL: postgres://soundpub_reconciler:${RECONCILIATION_DATABASE_PASSWORD:?Set a unique reconciliation database password}@postgres:5432/soundpub_dev
+      AUDIT_DATABASE_URL: postgres://soundpub_auditor:${AUDIT_DATABASE_PASSWORD:?Set a unique audit database password}@postgres:5432/soundpub_dev
       OBJECT_STORAGE_ENDPOINT: object-storage
       OBJECT_STORAGE_PORT: 9000
       OBJECT_STORAGE_PUBLIC_ENDPOINT: http://127.0.0.1:${SOUNDPUB_DEV_STORAGE_PORT:-9100}
@@ -92,6 +108,9 @@ services:
       OBJECT_STORAGE_BUCKET: soundpub-development
       WEBHOOK_MOCK_SECRET: ${WEBHOOK_MOCK_SECRET:?Set a unique mock webhook secret}
       DEV_AUTH_TOKENS_JSON: ${DEV_AUTH_TOKENS_JSON:-{}}
+      FINANCE_RECONCILIATION_INTERVAL_MS: ${FINANCE_RECONCILIATION_INTERVAL_MS:-300000}
+      FINANCE_RECONCILIATION_ISSUE_LIMIT: ${FINANCE_RECONCILIATION_ISSUE_LIMIT:-500}
+      FINANCE_RECONCILIATION_TIMEOUT_MS: ${FINANCE_RECONCILIATION_TIMEOUT_MS:-5000}
     ports:
       - "127.0.0.1:${SOUNDPUB_DEV_API_PORT:-3300}:3000"
     depends_on:

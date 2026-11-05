@@ -97,7 +97,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Reservation | payout reservation tables/RPC | finance reservation events | Backend payout API | IMPLEMENTED | Concurrency test |
 | Settlement | payout completion | settlement event + evidence | Backend payout API | IMPLEMENTED | Provider callback parity |
 | Batch reconciliation | production replacement validation | append-only server snapshot, mismatch diagnostics, independent reviewer approval through isolated `soundpub_reconciler` DB credential, semantic audit/outbox binding, live integrity recheck, derived `RECONCILED` status | Backend import detail exposes review and approval UI | VERIFIED | Add explicit revocation only if product requires reopening an active batch |
-| Global reconciliation | balance rebuild queries | ledger projection verification | CLI/test evidence | PARTIAL | Scheduled read-only reconciliation job |
+| Global reconciliation | balance rebuild queries | immutable scheduled ledger/domain verification with admin history API | Worker, Docker integration, checksum and drift evidence | VERIFIED | Monitor scale; repair remains separate and approval-gated |
 | Repair workflow | production repair functions | plan-first repair commands | Partial | PARTIAL | Dry-run artifact and approval gate |
 
 ## Reporting dan export

@@ -151,7 +151,9 @@ export function buildApp(deps: ApiDependencies) {
   if (deps.notifications) registerNotificationsRoutes(app, deps.notifications, authenticate, paths, errorSchema);
   if (deps.media) registerMediaRoutes(app, deps.media, authenticate, paths, errorSchema);
   if (deps.auditSettings) registerAuditSettingsRoutes(app, deps.auditSettings, authenticate, paths, errorSchema);
-  if (deps.balance || deps.royalties || deps.payouts || deps.payments) registerFinancialRoutes(app, deps, authenticate, paths, errorSchema);
+  if (deps.balance || deps.royalties || deps.payouts || deps.payments || deps.financeReconciliation) {
+    registerFinancialRoutes(app, deps, authenticate, paths, errorSchema);
+  }
   const uploadBody = { type: 'object', required: ['dataBase64', 'mimeType', 'checksum'], additionalProperties: false,
     properties: { dataBase64: { type: 'string', minLength: 1, description: 'Base64-encoded file bytes' }, mimeType: { type: 'string', minLength: 1, maxLength: 255 }, checksum: { type: 'string', pattern: '^[0-9a-f]{64}$', description: 'Lowercase SHA-256 hex digest of file bytes' } } };
   const signedUploadBody = { type: 'object', required: ['mimeType', 'size', 'checksum'], additionalProperties: false,

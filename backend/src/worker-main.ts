@@ -7,15 +7,18 @@ import { assertOutboxHandlers } from './worker/topics.js';
 import { createLogger, Metrics, poolMetrics, sampleQueue } from './observability/index.js';
 import { createRoyaltyImportObjectStore } from './royalties/store.js';
 import { createRoyaltyImportCleanupProcessor, createRoyaltyImportJobProcessor } from './royalties/jobs.js';
+import { runFinanceReconciliation } from './reconciliation/index.js';
 
 const config = loadConfig();
 const logger = createLogger(config.LOG_LEVEL);
 const metrics = new Metrics();
 let nextMetricsAt = 0;
 const pool = createPool({ connectionString: config.DATABASE_URL });
+const reconciliationPool = createPool({ connectionString: config.AUDIT_DATABASE_URL, max: 2 });
 const migrated = await pool.query("SELECT to_regclass('soundpub.schema_migrations') AS name");
 if (!migrated.rows[0]?.name) throw new Error('Database migration required before worker boot');
 pool.on('error', () => { console.error(JSON.stringify({ level: 'error', message: 'database idle connection failed' })); });
+reconciliationPool.on('error', () => { console.error(JSON.stringify({ level: 'error', message: 'reconciliation database idle connection failed' })); });
 const royaltyImportStore = await createRoyaltyImportObjectStore(pool, {
   environment: config.NODE_ENV === 'test' ? 'test' : 'development',
   endpoint: `${config.OBJECT_STORAGE_USE_SSL ? 'https' : 'http'}://${config.OBJECT_STORAGE_ENDPOINT}:${config.OBJECT_STORAGE_PORT}`,
@@ -34,9 +37,11 @@ const handlers: Record<string, OutboxHandler> = {
   'royalty.changed': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-royalty-change', payload: event.payload }); },
   'payout.changed': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-payout-change', payload: event.payload }); },
   'payout.readiness': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-payout-readiness', payload: event.payload }); },
+  'finance.reconciliation': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-finance-reconciliation', payload: event.payload }); },
 };
 assertOutboxHandlers(handlers);
 let stopping = false;
+let nextFinanceReconciliationAt = 0;
 await pool.query('SELECT 1');
 await writeFile('/tmp/worker-ready', new Date().toISOString(), 'utf8');
 process.on('SIGTERM', () => { stopping = true; });
@@ -50,6 +55,18 @@ while (!stopping) {
     metrics.increment(`royaltyCleanup.${cleanupOutcome}`);
     const outcome = royaltyOutcome === 'idle' && cleanupOutcome === 'idle' ? await pollOutbox(pool, handlers) : 'idle';
     metrics.increment(`poll.${outcome}`);
+    if (Date.now() >= nextFinanceReconciliationAt) {
+      nextFinanceReconciliationAt = Date.now() + config.FINANCE_RECONCILIATION_INTERVAL_MS;
+      const reconciliation = await runFinanceReconciliation(reconciliationPool, { runner: 'worker',
+        issueLimit: config.FINANCE_RECONCILIATION_ISSUE_LIMIT,
+        minimumIntervalMs: config.FINANCE_RECONCILIATION_INTERVAL_MS,
+        timeoutMs: config.FINANCE_RECONCILIATION_TIMEOUT_MS });
+      metrics.increment(`financeReconciliation.${reconciliation.outcome}`);
+      if (reconciliation.outcome === 'recorded' && reconciliation.changed && reconciliation.run.status === 'FAIL') {
+        logger.warn({ runId: reconciliation.run.id, issueCount: reconciliation.run.issue_count,
+          snapshotChecksum: reconciliation.run.snapshot_checksum }, 'finance reconciliation failed');
+      }
+    }
     await writeFile('/tmp/worker-ready', new Date().toISOString(), 'utf8');
     if (outcome !== 'idle') console.log(JSON.stringify({ level: 'info', message: 'worker delivery', outcome }));
   } catch { metrics.increment('poll.error'); logger.error('worker poll failed'); }
@@ -63,6 +80,6 @@ while (!stopping) {
   await new Promise(resolve => setTimeout(resolve, config.WORKER_POLL_MS));
 }
 royaltyImportStore.close();
-await pool.end();
+await Promise.all([pool.end(), reconciliationPool.end()]);
 
 
