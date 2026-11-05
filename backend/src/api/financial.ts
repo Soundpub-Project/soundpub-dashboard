@@ -23,6 +23,10 @@ export function registerFinancialRoutes(app: FastifyInstance, services: {
     const pagination = method === 'GET' && path === '/api/v1/royalties/imports/:id' ? { parameters: [
       { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 500, default: 100 } },
       { name: 'offset', in: 'query', required: false, schema: { type: 'integer', minimum: 0, maximum: 100000, default: 0 } },
+    ] } : method === 'GET' && path === '/api/v1/royalties/import-files/:id/rows' ? { parameters: [
+      { name: 'status', in: 'query', required: false, schema: { type: 'string', enum: ['ALL','MATCHED','INVALID'], default: 'ALL' } },
+      { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 } },
+      { name: 'offset', in: 'query', required: false, schema: { type: 'integer', minimum: 0, maximum: 100000, default: 0 } },
     ] } : {};
     paths[normalized] = { ...paths[normalized], [method.toLowerCase()]: { operationId, security: secured, ...pagination,
       responses: Object.fromEntries([200,400,401,403,404,409,429,500,503].map(status => [status, {
@@ -58,6 +62,10 @@ export function registerFinancialRoutes(app: FastifyInstance, services: {
     app.post('/api/v1/royalties/import-files/:id/complete', async request => service.completeFileUpload(await authenticate(request), (request.params as { id: string }).id, request.id));
     app.get('/api/v1/royalties/import-files', async request => service.fileSessions(await authenticate(request), request.query));
     app.get('/api/v1/royalties/import-files/:id', async request => service.fileSession(await authenticate(request), (request.params as { id: string }).id));
+    app.get('/api/v1/royalties/import-files/:id/rows', async request => service.fileSessionRows(await authenticate(request),
+      (request.params as { id: string }).id, request.query));
+    app.post('/api/v1/admin/royalties/import-files/:id/approve', async request => service.approveFileSession(await authenticate(request),
+      (request.params as { id: string }).id, request.body, request.id));
     app.post('/api/v1/royalties/import-files/:id/retry', async request => service.retryFileSession(await authenticate(request), (request.params as { id: string }).id));
     app.post('/api/v1/royalties/import-files/:id/commit', async request => service.commitFileSession(await authenticate(request), (request.params as { id: string }).id, request.id));
     app.get('/api/v1/royalties/import-files/:id/download', async request => service.fileDownload(await authenticate(request), (request.params as { id: string }).id));
@@ -76,7 +84,7 @@ export function registerFinancialRoutes(app: FastifyInstance, services: {
     add('GET', '/api/v1/royalties/periods', 'listRoyaltyPeriods');
     add('GET', '/api/v1/royalties/report', 'getRoyaltyReport');
     add('GET', '/api/v1/royalties/releases/:id', 'getReleaseRoyaltyBreakdown');
-    for (const [method,path,id] of [['GET','/api/v1/royalties/summary','getRoyaltySummary'],['POST','/api/v1/royalties/imports/csv/preview','previewRoyaltyCsvImport'],['POST','/api/v1/royalties/imports/csv/commit','commitRoyaltyCsvImport'],['POST','/api/v1/royalties/import-files','requestRoyaltyFileUpload'],['POST','/api/v1/royalties/imports/:id/replacement-file-sessions','requestRoyaltyReplacementFileUpload'],['POST','/api/v1/royalties/import-files/:id/complete','completeRoyaltyFileUpload'],['GET','/api/v1/royalties/import-files','listRoyaltyFileUploads'],['GET','/api/v1/royalties/import-files/:id','getRoyaltyFileUpload'],['POST','/api/v1/royalties/import-files/:id/retry','retryRoyaltyFileUpload'],['POST','/api/v1/royalties/import-files/:id/commit','commitRoyaltyFileUpload'],['GET','/api/v1/royalties/import-files/:id/download','downloadRoyaltyFileUpload'],['POST','/api/v1/royalties/imports/preview','previewRoyaltyImport'],['POST','/api/v1/royalties/imports/commit','commitRoyaltyImport'],['GET','/api/v1/royalties/imports','listRoyaltyImports'],['GET','/api/v1/royalties/imports/:id','getRoyaltyImport'],['GET','/api/v1/admin/royalties/imports/:id/reconciliation','getRoyaltyReconciliation'],['POST','/api/v1/admin/royalties/imports/:id/reconciliation','approveRoyaltyReconciliation'],['POST','/api/v1/royalties/imports/:id/correction','correctRoyaltyImport'],['POST','/api/v1/royalties/imports/:id/replacement/csv','replaceRoyaltyCsvImport']]) add(method!,path!,id!);
+    for (const [method,path,id] of [['GET','/api/v1/royalties/summary','getRoyaltySummary'],['POST','/api/v1/royalties/imports/csv/preview','previewRoyaltyCsvImport'],['POST','/api/v1/royalties/imports/csv/commit','commitRoyaltyCsvImport'],['POST','/api/v1/royalties/import-files','requestRoyaltyFileUpload'],['POST','/api/v1/royalties/imports/:id/replacement-file-sessions','requestRoyaltyReplacementFileUpload'],['POST','/api/v1/royalties/import-files/:id/complete','completeRoyaltyFileUpload'],['GET','/api/v1/royalties/import-files','listRoyaltyFileUploads'],['GET','/api/v1/royalties/import-files/:id','getRoyaltyFileUpload'],['GET','/api/v1/royalties/import-files/:id/rows','listRoyaltyFileRows'],['POST','/api/v1/admin/royalties/import-files/:id/approve','approveRoyaltyFilePreview'],['POST','/api/v1/royalties/import-files/:id/retry','retryRoyaltyFileUpload'],['POST','/api/v1/royalties/import-files/:id/commit','commitRoyaltyFileUpload'],['GET','/api/v1/royalties/import-files/:id/download','downloadRoyaltyFileUpload'],['POST','/api/v1/royalties/imports/preview','previewRoyaltyImport'],['POST','/api/v1/royalties/imports/commit','commitRoyaltyImport'],['GET','/api/v1/royalties/imports','listRoyaltyImports'],['GET','/api/v1/royalties/imports/:id','getRoyaltyImport'],['GET','/api/v1/admin/royalties/imports/:id/reconciliation','getRoyaltyReconciliation'],['POST','/api/v1/admin/royalties/imports/:id/reconciliation','approveRoyaltyReconciliation'],['POST','/api/v1/royalties/imports/:id/correction','correctRoyaltyImport'],['POST','/api/v1/royalties/imports/:id/replacement/csv','replaceRoyaltyCsvImport']]) add(method!,path!,id!);
   }
   if (services.payouts) {
     const service = services.payouts;

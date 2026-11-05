@@ -35,11 +35,13 @@ const reconciliationEnvelope = z.strictObject({
   expected_checksum: z.string().regex(/^[0-9a-f]{64}$/),
   evidence: z.string().trim().min(1).max(500),
 });
+const previewApprovalEnvelope = reconciliationEnvelope;
 type ImportSessionRow = RoyaltyImportFileRow & { source: string; filename: string; status: string; phase: string;
   processed_rows: number; total_rows: number | null; attempts: number; preview_checksum: string | null;
   staging_checksum: string | null; preview_result: unknown; error_code: string | null; batch_id: string | null; upload_expires_at: Date;
   operation_kind: 'IMPORT' | 'REPLACEMENT'; replaces_batch_id: string | null; replacement_reason: string | null;
-  request_key: string | null; created_at: Date; updated_at: Date };
+  request_key: string | null; approval_id?: string | null; approval_actor_id?: string | null;
+  approval_evidence?: string | null; approved_at?: Date | null; created_at: Date; updated_at: Date };
 export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectStore, reconciliationPool: Pool = pool) {
   async function authorized<T>(actor: Principal, admin: boolean, work: (db: PoolClient) => Promise<T>,
     targetPool = pool, lockAuthority = true) {
@@ -159,8 +161,13 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
     LEFT JOIN soundpub.royalty_import_replacements new_replacement ON new_replacement.new_batch_id=b.id`;
   const sessionProjection = `id,requester_id,source,filename,mime_type,size_bytes::text,source_checksum,operation_kind,
     replaces_batch_id,replacement_reason,request_key,status,phase,
-    processed_rows,total_rows,attempts,preview_checksum,staging_checksum,preview_result,error_code,batch_id,upload_expires_at,created_at,updated_at`;
+    processed_rows,total_rows,attempts,preview_checksum,staging_checksum,preview_result,error_code,batch_id,upload_expires_at,created_at,updated_at,
+    (SELECT approval.id FROM soundpub.royalty_import_session_approvals approval WHERE approval.session_id=royalty_import_sessions.id) AS approval_id,
+    (SELECT approval.actor_id FROM soundpub.royalty_import_session_approvals approval WHERE approval.session_id=royalty_import_sessions.id) AS approval_actor_id,
+    (SELECT approval.evidence FROM soundpub.royalty_import_session_approvals approval WHERE approval.session_id=royalty_import_sessions.id) AS approval_evidence,
+    (SELECT approval.created_at FROM soundpub.royalty_import_session_approvals approval WHERE approval.session_id=royalty_import_sessions.id) AS approved_at`;
   const sessionDto = (row: ImportSessionRow) => ({ ...row, upload_expires_at: new Date(row.upload_expires_at).toISOString(),
+    approved_at: row.approved_at ? new Date(row.approved_at).toISOString() : null,
     created_at: new Date(row.created_at).toISOString(), updated_at: new Date(row.updated_at).toISOString() });
   async function stagedSummary(db: PoolClient, session: ImportSessionRow) {
     const summary = (await db.query<{ total_rows: number; matched_rows: number; invalid_rows: number;
@@ -351,6 +358,66 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
         return sessionDto(row);
       });
     },
+    async fileSessionRows(actor: Principal, sessionId: string, input: unknown = {}) {
+      parse(z.uuid(), sessionId);
+      const query = parse(z.strictObject({ status: z.enum(['ALL','MATCHED','INVALID']).default('ALL'),
+        limit: z.coerce.number().int().min(1).max(200).default(50),
+        offset: z.coerce.number().int().min(0).max(100000).default(0) }), input);
+      return authorized(actor, true, async db => {
+        if (!(await db.query('SELECT 1 FROM soundpub.royalty_import_sessions WHERE id=$1', [sessionId])).rowCount)
+          throw new ApiError(404, 'NOT_FOUND');
+        const where = query.status === 'ALL' ? 'session_id=$1' : 'session_id=$1 AND row_status=$4';
+        const values = query.status === 'ALL' ? [sessionId,query.limit,query.offset]
+          : [sessionId,query.limit,query.offset,query.status];
+        const countWhere = query.status === 'ALL' ? 'session_id=$1' : 'session_id=$1 AND row_status=$2';
+        const countValues = query.status === 'ALL' ? [sessionId] : [sessionId,query.status];
+        const items = (await db.query(`SELECT source_row_number,row_status,issue,period,source_isrc,source_upc,title,
+          artist_name,label_name,platform,country,sales_type,sales_unit,net_amount::text,track_id,release_id,artist_id,
+          financial_owner_user_id,label_owner_user_id,artist_amount::text,label_amount::text,soundpub_amount::text,
+          calculation_policy_code FROM soundpub.royalty_import_session_rows WHERE ${where}
+          ORDER BY source_row_number LIMIT $2 OFFSET $3`, values)).rows;
+        const total = Number((await db.query<{ count: string }>(`SELECT count(*)::text AS count
+          FROM soundpub.royalty_import_session_rows WHERE ${countWhere}`, countValues)).rows[0]!.count);
+        return { items, total, limit: query.limit, offset: query.offset, status: query.status };
+      });
+    },
+    async approveFileSession(actor: Principal, sessionId: string, input: unknown, requestId: string) {
+      parse(z.uuid(), sessionId);
+      const value = parse(previewApprovalEnvelope, input);
+      return authorized(actor, true, async db => {
+        const session = (await db.query<ImportSessionRow>(`SELECT * FROM soundpub.royalty_import_sessions
+          WHERE id=$1 FOR UPDATE`, [sessionId])).rows[0];
+        if (!session) throw new ApiError(404, 'NOT_FOUND');
+        const existing = (await db.query<{ id: string; actor_id: string; preview_checksum: string;
+          staging_checksum: string; evidence: string; created_at: Date }>(`SELECT id,actor_id,preview_checksum,
+          staging_checksum,evidence,created_at FROM soundpub.royalty_import_session_approvals WHERE session_id=$1`,
+        [sessionId])).rows[0];
+        if (existing) {
+          if (existing.preview_checksum !== value.expected_checksum || existing.evidence !== value.evidence)
+            throw new ApiError(409, 'ROYALTY_PREVIEW_APPROVAL_CONFLICT');
+          return { ...existing, created_at: new Date(existing.created_at).toISOString(), replayed: true };
+        }
+        if (session.status !== 'PREVIEW_READY' || !session.preview_checksum || !session.staging_checksum ||
+            session.preview_checksum !== value.expected_checksum) throw new ApiError(409, 'ROYALTY_PREVIEW_STALE');
+        const metadata = { preview_checksum: session.preview_checksum, staging_checksum: session.staging_checksum,
+          evidence: value.evidence };
+        const auditLogId = (await db.query<{ id: string }>(`INSERT INTO soundpub.audit_logs
+          (actor_user_id,action,resource_type,resource_id,request_id,metadata)
+          VALUES($1,'royalty.preview_approved','royalty_import_session',$2,$3,$4::jsonb) RETURNING id`,
+        [actor.id,session.id,requestId,JSON.stringify(metadata)])).rows[0]!.id;
+        const payload = { session_id: session.id, action: 'royalty.preview_approved',
+          preview_checksum: session.preview_checksum, staging_checksum: session.staging_checksum };
+        const outboxId = (await db.query<{ id: string }>(`INSERT INTO soundpub.outbox_events(topic,payload,idempotency_key)
+          VALUES('royalty.changed',$1::jsonb,$2) RETURNING id`,
+        [JSON.stringify(payload),`royalty.preview_approved:${session.id}`])).rows[0]!.id;
+        const row = (await db.query<{ id: string; actor_id: string; preview_checksum: string;
+          staging_checksum: string; evidence: string; created_at: Date }>(`INSERT INTO soundpub.royalty_import_session_approvals
+          (session_id,actor_id,preview_checksum,staging_checksum,evidence,audit_log_id,outbox_id)
+          VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,actor_id,preview_checksum,staging_checksum,evidence,created_at`,
+        [session.id,actor.id,session.preview_checksum,session.staging_checksum,value.evidence,auditLogId,outboxId])).rows[0]!;
+        return { ...row, created_at: new Date(row.created_at).toISOString(), replayed: false };
+      });
+    },
     async commitFileSession(actor: Principal, sessionId: string, requestId: string) {
       if (!files) throw new ApiError(503, 'NOT_READY');
       parse(z.uuid(), sessionId);
@@ -367,6 +434,10 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
           if (session.status !== 'PREVIEW_READY' || !session.preview_checksum || !session.preview_result) {
             throw new ApiError(409, 'ROYALTY_IMPORT_NOT_READY');
           }
+          const approval = (await db.query<{ preview_checksum: string; staging_checksum: string }>(`SELECT preview_checksum,
+            staging_checksum FROM soundpub.royalty_import_session_approvals WHERE session_id=$1`, [session.id])).rows[0];
+          if (!approval || approval.preview_checksum !== session.preview_checksum ||
+              approval.staging_checksum !== session.staging_checksum) throw new ApiError(409, 'ROYALTY_IMPORT_APPROVAL_REQUIRED');
           await db.query(`UPDATE soundpub.royalty_import_sessions SET status='COMMITTING',phase='COMMIT',
             error_code=NULL,updated_at=clock_timestamp() WHERE id=$1`, [session.id]);
           claimed = true;

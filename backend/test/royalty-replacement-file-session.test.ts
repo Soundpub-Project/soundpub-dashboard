@@ -83,6 +83,10 @@ test('private replacement file session is idempotent, requester-bound and commit
     await assert.rejects(service.commitFileSession(principal(ids.otherAdmin), requested.session.id, 'foreign-commit'),
       { code: 'NOT_FOUND' });
     await assert.rejects(service.fileDownload(principal(ids.otherAdmin), requested.session.id), { code: 'NOT_FOUND' });
+    const preview = await service.fileSession(principal(ids.admin), requested.session.id);
+    await service.approveFileSession(principal(ids.otherAdmin), requested.session.id, {
+      expected_checksum: preview.preview_checksum, evidence: 'Replacement ownership and totals reviewed',
+    }, 'replacement-approve');
     const committed = await service.commitFileSession(principal(ids.admin), requested.session.id, 'commit');
     assert.equal(committed.replaced_id, original.id);
     assert.equal((await service.fileSession(principal(ids.admin), requested.session.id)).status, 'COMMITTED');

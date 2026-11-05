@@ -19,6 +19,8 @@ test('financial OpenAPI preserves every method sharing a path', async () => {
     assert.ok(paths['/api/v1/royalties/import-files'].get);
     assert.ok(paths['/api/v1/royalties/import-files/{id}/complete'].post);
     assert.ok(paths['/api/v1/royalties/import-files/{id}'].get);
+    assert.ok(paths['/api/v1/royalties/import-files/{id}/rows'].get);
+    assert.ok(paths['/api/v1/admin/royalties/import-files/{id}/approve'].post);
     assert.ok(paths['/api/v1/royalties/import-files/{id}/retry'].post);
     assert.ok(paths['/api/v1/royalties/import-files/{id}/commit'].post);
     assert.ok(paths['/api/v1/royalties/import-files/{id}/download'].get);
@@ -38,7 +40,7 @@ test('financial OpenAPI preserves every method sharing a path', async () => {
     const operations = Object.values(paths).flatMap(path => Object.values(path as Record<string, unknown>))
       .filter(value => value && typeof value === 'object' && 'operationId' in value);
     assert.equal(operations.filter(operation => String((operation as { operationId: string }).operationId)
-      .match(/Royalty|Payout/)).length, 33);
+      .match(/Royalty|Payout/)).length, 35);
   } finally { await app.close(); }
 });
 

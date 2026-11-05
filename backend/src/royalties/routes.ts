@@ -18,6 +18,10 @@ export function registerRoyaltiesRoutes(app: FastifyInstance, service: Royalties
   app.post<{ Params: { id: string } }>('/api/v1/royalties/import-files/:id/complete', async request => service.completeFileUpload(await authenticate(request), request.params.id, request.id));
   app.get('/api/v1/royalties/import-files', async request => service.fileSessions(await authenticate(request), request.query));
   app.get<{ Params: { id: string } }>('/api/v1/royalties/import-files/:id', async request => service.fileSession(await authenticate(request), request.params.id));
+  app.get<{ Params: { id: string } }>('/api/v1/royalties/import-files/:id/rows', async request =>
+    service.fileSessionRows(await authenticate(request), request.params.id, request.query));
+  app.post<{ Params: { id: string } }>('/api/v1/admin/royalties/import-files/:id/approve', async request =>
+    service.approveFileSession(await authenticate(request), request.params.id, request.body, request.id));
   app.post<{ Params: { id: string } }>('/api/v1/royalties/import-files/:id/retry', async request => service.retryFileSession(await authenticate(request), request.params.id));
   app.post<{ Params: { id: string } }>('/api/v1/royalties/import-files/:id/commit', async request => service.commitFileSession(await authenticate(request), request.params.id, request.id));
   app.get<{ Params: { id: string } }>('/api/v1/royalties/import-files/:id/download', async request => service.fileDownload(await authenticate(request), request.params.id));

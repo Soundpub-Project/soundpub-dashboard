@@ -68,18 +68,49 @@ export interface RoyaltyImportSession {
   replaces_batch_id: string | null;
   replacement_reason: string | null;
   request_key: string | null;
+  approval_id: string | null;
+  approval_actor_id: string | null;
+  approval_evidence: string | null;
+  approved_at: string | null;
   status: RoyaltyImportSessionStatus;
   phase: 'UPLOAD' | 'QUEUED' | 'PARSE' | 'MATCH' | 'PREVIEW' | 'COMMIT' | 'DONE';
   processed_rows: number;
   total_rows: number | null;
   attempts: number;
   preview_checksum: string | null;
+  staging_checksum: string | null;
   preview_result: RoyaltyCsvPreview | null;
   error_code: string | null;
   batch_id: string | null;
   upload_expires_at: string;
   created_at: string;
   updated_at: string;
+}
+export type RoyaltyStagedRowStatus = 'ALL' | 'MATCHED' | 'INVALID';
+export interface RoyaltyStagedRow {
+  source_row_number: number;
+  row_status: Exclude<RoyaltyStagedRowStatus, 'ALL'>;
+  issue: RoyaltyCsvIssue | null;
+  period: string | null;
+  source_isrc: string | null;
+  source_upc: string | null;
+  title: string | null;
+  artist_name: string | null;
+  label_name: string | null;
+  platform: string | null;
+  country: string | null;
+  sales_type: string | null;
+  sales_unit: number | null;
+  net_amount: string | null;
+  track_id: string | null;
+  release_id: string | null;
+  artist_id: string | null;
+  financial_owner_user_id: string | null;
+  label_owner_user_id: string | null;
+  artist_amount: string | null;
+  label_amount: string | null;
+  soundpub_amount: string | null;
+  calculation_policy_code: string | null;
 }
 export interface RoyaltyFileUploadIntent {
   session: RoyaltyImportSession;
@@ -200,8 +231,15 @@ export const royaltiesApi = {
       { method: 'POST', body, idempotencyKey }),
   completeFileUpload: (id: string) => apiRequest<{ session: RoyaltyImportSession }>(`/api/v1/royalties/import-files/${encodeURIComponent(id)}/complete`, { method: 'POST' }),
   fileSession: (id: string, signal?: AbortSignal) => apiRequest<RoyaltyImportSession>(`/api/v1/royalties/import-files/${encodeURIComponent(id)}`, { signal }),
+  fileSessionRows: (id: string, status: RoyaltyStagedRowStatus, offset = 0, signal?: AbortSignal) =>
+    apiRequest<{ items: RoyaltyStagedRow[]; total: number; limit: number; offset: number; status: RoyaltyStagedRowStatus }>(
+      `/api/v1/royalties/import-files/${encodeURIComponent(id)}/rows?status=${status}&limit=50&offset=${offset}`, { signal }),
   fileSessions: (offset = 0, signal?: AbortSignal) => apiRequest<{ items: RoyaltyImportSession[] }>(`/api/v1/royalties/import-files?limit=50&offset=${offset}`, { signal }),
   retryFileSession: (id: string) => apiRequest<{ session: RoyaltyImportSession }>(`/api/v1/royalties/import-files/${encodeURIComponent(id)}/retry`, { method: 'POST' }),
+  approveFileSession: (id: string, body: { expected_checksum: string; evidence: string }) => apiRequest<{
+    id: string; actor_id: string; preview_checksum: string; staging_checksum: string; evidence: string;
+    created_at: string; replayed: boolean;
+  }>(`/api/v1/admin/royalties/import-files/${encodeURIComponent(id)}/approve`, { method: 'POST', body }),
   commitFileSession: (id: string) => apiRequest<{ id: string; replaced_id?: string; replayed: boolean }>(`/api/v1/royalties/import-files/${encodeURIComponent(id)}/commit`, { method: 'POST', timeoutMs: 120000 }),
   periods: (signal?: AbortSignal) => apiRequest<{ items: string[] }>('/api/v1/royalties/periods', { signal }),
   report: (query: RoyaltyReportQuery = {}, signal?: AbortSignal) => {

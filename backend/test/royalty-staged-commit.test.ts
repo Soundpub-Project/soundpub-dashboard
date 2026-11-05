@@ -69,6 +69,25 @@ test(`private session commits ${rowCount} staged rows set-wise without rereading
     const preview = await service.fileSession(principal(ids.admin), ids.session);
     assert.equal(preview.total_rows, rowCount);
     assert.equal(preview.processed_rows, rowCount);
+    const staged = await service.fileSessionRows(principal(ids.otherAdmin), ids.session,
+      { status: 'MATCHED', limit: '2', offset: '1' });
+    assert.equal(staged.total, rowCount);
+    assert.equal(staged.items.length, Math.min(2, Math.max(0, rowCount - 1)));
+    assert.equal(staged.items[0]?.source_row_number, 3);
+    assert.equal(staged.items[0]?.row_status, 'MATCHED');
+    assert.equal(staged.items[0]?.artist_amount, '0.70');
+    assert.equal((await service.fileSessionRows(principal(ids.admin), ids.session,
+      { status: 'INVALID', limit: 10, offset: 0 })).total, 0);
+    await assert.rejects(service.fileSessionRows(principal(ids.admin), randomUUID(), {}), { code: 'NOT_FOUND' });
+    await assert.rejects(service.commitFileSession(principal(ids.admin), ids.session, 'unapproved'),
+      { code: 'ROYALTY_IMPORT_APPROVAL_REQUIRED' });
+    const approval = await service.approveFileSession(principal(ids.otherAdmin), ids.session, {
+      expected_checksum: preview.preview_checksum, evidence: 'Staged totals and ownership reviewed',
+    }, 'approve');
+    assert.equal(approval.replayed, false);
+    assert.equal((await service.approveFileSession(principal(ids.otherAdmin), ids.session, {
+      expected_checksum: preview.preview_checksum, evidence: 'Staged totals and ownership reviewed',
+    }, 'approve-replay')).replayed, true);
     if (!performanceOnly) {
       await assert.rejects(service.commitFileSession(principal(ids.otherAdmin), ids.session, 'foreign'), { code: 'NOT_FOUND' });
       assert.equal((await database.owner.query('SELECT error_code FROM soundpub.royalty_import_sessions WHERE id=$1', [ids.session])).rows[0].error_code, null);
@@ -90,7 +109,8 @@ test(`private session commits ${rowCount} staged rows set-wise without rereading
         (SELECT count(*)::int FROM soundpub.royalty_import_entries entry JOIN soundpub.royalty_import_batches batch ON batch.id=entry.batch_id WHERE batch.source='provider') AS entries,
         (SELECT count(*)::int FROM soundpub.royalty_import_allocations allocation JOIN soundpub.royalty_import_entries entry ON entry.id=allocation.entry_id JOIN soundpub.royalty_import_batches batch ON batch.id=entry.batch_id WHERE batch.source='provider') AS allocations,
         (SELECT count(*)::int FROM soundpub.audit_logs WHERE action='royalty.csv_imported') AS audits,
-        (SELECT count(*)::int FROM soundpub.outbox_events WHERE topic='royalty.changed') AS outbox`)).rows[0],
+        (SELECT count(*)::int FROM soundpub.outbox_events WHERE topic='royalty.changed'
+          AND payload->>'action'='royalty.csv_imported') AS outbox`)).rows[0],
       { batches: 0, entries: 0, allocations: 0, audits: 0, outbox: 0 });
       assert.deepEqual((await database.owner.query('SELECT status,error_code FROM soundpub.royalty_import_sessions WHERE id=$1', [ids.session])).rows[0],
         { status: 'PREVIEW_READY', error_code: 'ROYALTY_COMMIT_RETRY' });
