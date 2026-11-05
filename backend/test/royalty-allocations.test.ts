@@ -41,12 +41,11 @@ test('royalty allocation PostgreSQL constraints preserve exact owner totals', {
     await owner.query(`INSERT INTO soundpub.tracks(id,release_id,artist_id,artist_user_id,title,artist_name,position)
       VALUES($1,$2,$3,$4,'Synthetic Track','Synthetic Artist',1)`,
     [ids.track, ids.release, ids.artist, ids.artistUser]);
-    await owner.query(`INSERT INTO soundpub.royalty_import_batches
+    await runtime.query('BEGIN');
+    await runtime.query(`INSERT INTO soundpub.royalty_import_batches
       (id,source,period,currency,checksum,filename,uploader_id,row_count,total_amount,validation_result)
       VALUES($1,'allocation-test','2026-10','IDR',$2,'synthetic.csv',$3,1,'100.00','{}')`,
     [ids.batch, 'a'.repeat(64), ids.admin]);
-
-    await runtime.query('BEGIN');
     await runtime.query(`INSERT INTO soundpub.royalty_import_entries
       (id,batch_id,source,period,source_row_id,beneficiary_id,release_id,track_id,gross_amount,deduction_amount,
         net_amount,artist_id,financial_owner_user_id,label_owner_user_id,calculation_policy_code)

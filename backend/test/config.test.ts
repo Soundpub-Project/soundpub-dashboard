@@ -5,6 +5,7 @@ import { loadConfig } from '../src/config/index.js';
 const valid = {
   NODE_ENV: 'test',
   DATABASE_URL: 'postgres://soundpub_app:synthetic-password@localhost:55432/soundpub_test',
+  RECONCILIATION_DATABASE_URL: 'postgres://soundpub_reconciler:synthetic-password@localhost:55432/soundpub_test',
   OBJECT_STORAGE_ENDPOINT: 'object-storage',
   OBJECT_STORAGE_ACCESS_KEY: 'synthetic-access',
   OBJECT_STORAGE_SECRET_KEY: 'synthetic-storage-secret',

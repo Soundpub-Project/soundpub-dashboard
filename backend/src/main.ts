@@ -27,6 +27,7 @@ import { createLocalAuthService } from './local-auth/index.js';
 const config = loadConfig();
 const identityProvider = createConfiguredIdentityProvider(process.env);
 const pool = createPool({ connectionString: config.DATABASE_URL });
+const reconciliationPool = createPool({ connectionString: config.RECONCILIATION_DATABASE_URL });
 const migrated = await pool.query("SELECT to_regclass('soundpub.schema_migrations') AS name");
 if (!migrated.rows[0]?.name) throw new Error('Database migration required before API boot');
 const releaseMigration = await pool.query(`SELECT to_regclass('soundpub.releases') AS releases,
@@ -72,7 +73,7 @@ const app = buildApp({
   publicCatalog: createPublicCatalogService(pool),
   localAuth,
   users, artists, labels, labelCustom, releases, tracks,
-  balance: createBalanceService(pool), royalties: createRoyaltiesService(pool, royaltyImportStore), payouts, payments,
+  balance: createBalanceService(pool), royalties: createRoyaltiesService(pool, royaltyImportStore, reconciliationPool), payouts, payments,
   submissions: createSubmissionService(pool, { media: createMediaReadinessAdapter(), payment: paymentSubmissionDependency, provider: new MockSubmissionProvider() }),
   notifications: createNotificationsService(pool),
   media,
@@ -131,7 +132,8 @@ const app = buildApp({
   },
 });
 
-const shutdown = async () => { await app.close(); mediaStore.close(); royaltyImportStore.close(); await pool.end(); process.exit(0); };
+const shutdown = async () => { await app.close(); mediaStore.close(); royaltyImportStore.close();
+  await Promise.all([pool.end(), reconciliationPool.end()]); process.exit(0); };
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 instrumentApi(app, pool);

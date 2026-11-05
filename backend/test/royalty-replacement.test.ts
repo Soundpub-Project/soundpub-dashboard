@@ -88,13 +88,14 @@ test('CSV replacement atomically reverses old allocations and posts immutable re
     { code: 'ROYALTY_REPLACEMENT_PERIOD_MISMATCH' });
 
     const historicalBatchId = randomUUID(), historicalEntryId = randomUUID();
-    await owner.query(`INSERT INTO soundpub.royalty_import_batches
-      (id,source,period,currency,checksum,filename,uploader_id,row_count,total_amount,validation_result)
-      VALUES($1,'historical-owner','2026-09','IDR',$2,'historical.csv',$3,1,'1.00',
-        '{"policy_code":"SOUNDPUB_LEGACY_70_21_9"}'::jsonb)`, [historicalBatchId,'e'.repeat(64),admin.id]);
     await owner.query('ALTER TABLE soundpub.royalty_import_entries DISABLE TRIGGER royalty_attribution_guard');
     await owner.query('ALTER TABLE soundpub.royalty_import_entries DISABLE TRIGGER royalty_label_owner_guard');
     await runtime.query('BEGIN');
+    await runtime.query(`INSERT INTO soundpub.royalty_import_batches
+      (id,source,period,currency,checksum,filename,uploader_id,row_count,total_amount,validation_result)
+      VALUES($1,'historical-owner','2026-09','IDR',$2,'historical.csv',$3,1,'1.00',
+        '{"policy_code":"SOUNDPUB_LEGACY_70_21_9","artist_amount":"1.00","label_amount":"0.00","soundpub_amount":"0.00"}'::jsonb)`,
+    [historicalBatchId,'e'.repeat(64),admin.id]);
     await runtime.query(`INSERT INTO soundpub.royalty_import_entries
       (id,batch_id,source,period,source_row_id,beneficiary_id,release_id,track_id,platform,gross_amount,deduction_amount,
         net_amount,artist_id,financial_owner_user_id,label_owner_user_id,calculation_policy_code,source_isrc,country,sales_unit)
@@ -113,11 +114,21 @@ test('CSV replacement atomically reverses old allocations and posts immutable re
       expected_checksum: '0'.repeat(64), reason: 'owner drift' }, 'owner-drift'),
     { code: 'ROYALTY_REPLACEMENT_OWNER_MISMATCH' });
 
-    const genericBatchId = randomUUID();
-    await owner.query(`INSERT INTO soundpub.royalty_import_batches
+    const genericBatchId = randomUUID(), genericEntryId = randomUUID();
+    await runtime.query('BEGIN');
+    await runtime.query(`INSERT INTO soundpub.royalty_import_batches
       (id,source,period,currency,checksum,filename,uploader_id,row_count,total_amount,validation_result)
-      VALUES($1,'generic','2026-10','IDR',$2,'generic.json',$3,1,'0',
+      VALUES($1,'generic','2026-10','IDR',$2,'generic.json',$3,1,'1.00',
         '{"policy_code":"BACKEND_SINGLE_OWNER_V1"}'::jsonb)`, [genericBatchId,'f'.repeat(64),admin.id]);
+    await runtime.query(`INSERT INTO soundpub.royalty_import_entries
+      (id,batch_id,source,period,source_row_id,beneficiary_id,release_id,track_id,gross_amount,deduction_amount,
+        net_amount,artist_id,financial_owner_user_id,label_owner_user_id,calculation_policy_code)
+      VALUES($1,$2,'generic','2026-10','generic-row',$3,$4,$5,'1.00','0','1.00',$6,$3,$7,
+        'BACKEND_SINGLE_OWNER_V1')`,
+    [genericEntryId,genericBatchId,artist.id,releaseId,trackId,artistId,label.id]);
+    await runtime.query(`INSERT INTO soundpub.royalty_import_allocations(entry_id,component,owner_id,amount,policy_code)
+      VALUES($1,'LEGACY_OWNER',$2,'1.00','BACKEND_SINGLE_OWNER_V1')`, [genericEntryId,artist.id]);
+    await runtime.query('COMMIT');
     await assert.rejects(service.replaceCsv(admin, genericBatchId, input, 'wrong-policy'),
       { code: 'ROYALTY_REPLACEMENT_POLICY_MISMATCH' });
 

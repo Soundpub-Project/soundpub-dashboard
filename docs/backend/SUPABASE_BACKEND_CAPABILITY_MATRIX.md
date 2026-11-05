@@ -92,11 +92,11 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Capability | Supabase reference | Backend target/current | Frontend state | Status | Next evidence/work |
 | --- | --- | --- | --- | --- | --- |
 | Balance authority | mutable profile balance + rebuild | immutable finance events | Backend balance API | IMPLEMENTED | Legacy values migrate through reconstructed ledger only |
-| Royalty posting | upload inserts + balance rebuild | `ROYALTY_EARNING` event | Only after reconciliation | IMPLEMENTED | Verify batch atomicity and exact amounts |
+| Royalty posting | upload inserts + balance rebuild | `ROYALTY_EARNING` event with per-entry allocation, owner-set, finance audit/outbox, and correction-adjustment DB guards | Available only after independent batch reconciliation | VERIFIED | Preserve reviewer separation and immutable evidence |
 | Manual adjustment | balance adjustment patterns | immutable adjustment event | Admin UI status unknown | PARTIAL | Approval and UI workflow |
 | Reservation | payout reservation tables/RPC | finance reservation events | Backend payout API | IMPLEMENTED | Concurrency test |
 | Settlement | payout completion | settlement event + evidence | Backend payout API | IMPLEMENTED | Provider callback parity |
-| Batch reconciliation | production replacement validation | reconciliation flow | Backend import says unreconciled | IMPLEMENTED | UI progress and failure recovery |
+| Batch reconciliation | production replacement validation | append-only server snapshot, mismatch diagnostics, independent reviewer approval through isolated `soundpub_reconciler` DB credential, semantic audit/outbox binding, live integrity recheck, derived `RECONCILED` status | Backend import detail exposes review and approval UI | VERIFIED | Add explicit revocation only if product requires reopening an active batch |
 | Global reconciliation | balance rebuild queries | ledger projection verification | CLI/test evidence | PARTIAL | Scheduled read-only reconciliation job |
 | Repair workflow | production repair functions | plan-first repair commands | Partial | PARTIAL | Dry-run artifact and approval gate |
 
@@ -146,6 +146,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 - 2026-11-04: isolated Docker `dashboard-sounpub-dev` rebuilt successfully.
 - 2026-11-04: `RUN_DOCKER_TESTS=1 npm test` produced 295 tests, 289 pass, 0 fail, 6 skipped after reporting and retention checkpoints.
 - 2026-11-05: backend unit suite produced 274 tests, 230 pass, 0 fail, 44 skipped; frontend TypeScript, chunked SHA-256 contract, finance backend-mode contract, and production build pass.
+- 2026-11-05: disposable PostgreSQL verifies cross-entry allocation drift rejection, empty-batch rejection, exact earning-plus-correction enforcement, forged approval rejection, stale evidence payout closure, uploader self-review denial, batch reconciliation replay, balance unlock, correction precedence, and Label Custom batch-plus-owner approval flow.
 - Durable PASS includes PostgreSQL concurrency, finance ledger, payout, payment, historical ownership, release/track, RustFS media, Label Custom E2E, and deferred immutable royalty-allocation constraints.
 - Royalty entries now carry calculation policy, artist, label, ISRC, UPC, and statement-dimension snapshots. Immutable child allocations support ARTIST, LABEL, SOUNDPUB, COMPOSER, and LEGACY_OWNER components. Existing rows backfill exactly as one LEGACY_OWNER allocation. Ledger, reporting, readiness, balance gates, earnings, and corrections aggregate allocation owners, not mutable current catalog ownership.
 - Inline CSV preview/commit now reparses and rematches server-side, verifies expected checksum, blocks active source-period conflicts, writes 70/21/9 allocations atomically, and proves ordinary-label plus Label Custom behavior on disposable PostgreSQL.
@@ -154,7 +155,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 
 ## Remaining blockers
 
-1. Private royalty files, streaming leased preview worker, immutable checksum-bound staging, heartbeat progress, retry state, authority revocation, current-owner revalidation, set-based atomic session commit, chunked browser hashing, paged batch detail, and frontend signed-upload cutover are verified. Disposable PostgreSQL processes and commits 100.000 rows with 300.000 allocations in 110,5 seconds.
+1. Private royalty files, streaming leased preview worker, immutable checksum-bound staging, heartbeat progress, retry state, authority revocation, current-owner revalidation, set-based atomic session commit, chunked browser hashing, paged batch detail, independent reconciliation approval, and frontend signed-upload cutover are verified. Disposable PostgreSQL processes and commits 100.000 rows with 300.000 allocations in 110,5 seconds.
 2. Ordinary label, Whitelabel, artist, and Label Custom reporting scopes are verified; standalone WhitelabelDashboard roster/release widgets remain direct Supabase.
 3. Dedicated aggregate track endpoint remains optional; generic scoped report already supports `track_id`.
 5. Payment provider, payout settlement provider, submission provider, and notification delivery remain partial or mock-oriented.

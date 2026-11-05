@@ -21,17 +21,18 @@ test('Label Custom Docker E2E: login-free artist, canonical royalties, admin rea
 }, async t => {
   const database = await concurrencyPostgres();
   t.after(() => database.close());
-  const { owner, runtime } = database;
+  const { owner, runtime, reconciler } = database;
   const pic: Principal = { id: randomUUID(), roles: ['label_custom'], status: 'active' };
   const admin: Principal = { id: randomUUID(), roles: ['admin'], status: 'active' };
+  const reviewer: Principal = { id: randomUUID(), roles: ['admin'], status: 'active' };
 
   // Only authority roots are seeded directly. Domain writes use real services
   // and the least-privileged soundpub_app pool, including real ledger triggers.
-  for (const actor of [pic, admin]) {
+  for (const actor of [pic, admin, reviewer]) {
     await owner.query(`INSERT INTO soundpub.backend_users(id,status,email_verified_at)
       VALUES($1,'active',now())`, [actor.id]);
     await owner.query('INSERT INTO soundpub.profiles(id,full_name) VALUES($1,$2)',
-      [actor.id, actor.id === pic.id ? 'Synthetic PIC' : 'Synthetic Reviewer']);
+      [actor.id, actor.id === pic.id ? 'Synthetic PIC' : actor.id === admin.id ? 'Synthetic Importer' : 'Synthetic Reviewer']);
     await owner.query(`INSERT INTO soundpub.user_roles(user_id,role,verified_at)
       VALUES($1,$2,now())`, [actor.id, actor.roles[0]]);
   }
@@ -44,7 +45,7 @@ test('Label Custom Docker E2E: login-free artist, canonical royalties, admin rea
   const catalog = createLabelCustomService(runtime);
   const releases = createReleasesService(runtime);
   const tracks = createTracksService(runtime);
-  const royalties = createRoyaltiesService(runtime);
+  const royalties = createRoyaltiesService(runtime, undefined, reconciler);
   const payouts = createPayoutsService(runtime, createPgPayoutFinance(databasePayoutPolicy));
   const balances = createBalanceService(runtime);
 
@@ -74,7 +75,7 @@ test('Label Custom Docker E2E: login-free artist, canonical royalties, admin rea
       (SELECT count(*)::int FROM soundpub.external_identities) AS identities,
       (SELECT count(*)::int FROM soundpub.local_auth_credentials) AS credentials,
       (SELECT count(*)::int FROM soundpub.auth_sessions) AS sessions`)).rows, [{
-      users: 2, profiles: 2, artist_roles: 0, identities: 0, credentials: 0, sessions: 0,
+      users: 3, profiles: 3, artist_roles: 0, identities: 0, credentials: 0, sessions: 0,
     }]);
   }
   await assertNoArtistLogin();
@@ -184,6 +185,13 @@ test('Label Custom Docker E2E: login-free artist, canonical royalties, admin rea
   assert.deepEqual(unreconciled.reasons, ['RECONCILIATION_REQUIRED']);
   await assert.rejects(payouts.request(pic, request, 'label-custom-e2e-unreconciled'),
     { code: 'PAYOUT_INELIGIBLE' });
+  const batchReport = await royalties.reconciliation(reviewer, batch.id);
+  assert.equal(batchReport.matched, true);
+  const batchApproval = await royalties.reconcile(reviewer, batch.id, {
+    expected_checksum: batchReport.snapshot.batch.checksum, evidence: 'synthetic batch and ledger review',
+  }, 'batch-reconciliation');
+  assert.equal(batchApproval.matched, true);
+  assert.equal((await royalties.detail(admin, batch.id)).status, 'RECONCILED');
   const approval = await payouts.reviewReadiness(admin, pic.id, {
     action: 'approve_reconciliation', evidence: 'synthetic-import-ledger-reviewed',
   }, 'approve-reconciliation');

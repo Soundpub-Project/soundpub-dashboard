@@ -106,6 +106,10 @@ export interface RoyaltyBatch {
   validation_result: Record<string, unknown>;
   checksum: string;
   status: 'UNRECONCILED' | 'VOIDED_WITH_OFFSET' | string;
+  reconciliation_id: string | null;
+  reconciliation_actor_id: string | null;
+  reconciliation_evidence: string | null;
+  reconciled_at: string | null;
   replacement_batch_id: string | null;
   replaces_batch_id: string | null;
   change_reason: string | null;
@@ -150,6 +154,23 @@ export interface RoyaltyImportDetail extends RoyaltyBatch {
   entry_total: number;
   entry_limit: number;
   entry_offset: number;
+}
+
+export interface RoyaltyReconciliation {
+  batch_id: string;
+  matched: boolean;
+  issues: string[];
+  checksum: string;
+  snapshot: {
+    batch: { id: string; uploader_id: string; row_count: number; total_amount: string; checksum: string };
+    entries: { count: number; total: string };
+    allocations: { count: number; total: string; user_total: string };
+    owners: { owner_id: string; expected_minor: string; actual_minor: string }[];
+    ledger: { count: number; total_minor: string; broken: number; unexpected: number };
+    evidence: { audits: number; events: number };
+  };
+  approval: { id: string; actor_id: string; evidence: string; snapshot_checksum: string; created_at: string } | null;
+  replayed?: boolean;
 }
 
 export interface RoyaltyBreakdownQuery { artist_id?: string; release_id?: string; period?: string; offset?: number }
@@ -197,6 +218,10 @@ export const royaltiesApi = {
   history: (offset = 0, signal?: AbortSignal) => apiRequest<{ items: RoyaltyBatch[] }>(`/api/v1/royalties/imports?limit=50&offset=${offset}`, { signal }),
   detail: (id: string, offset = 0, signal?: AbortSignal) => apiRequest<RoyaltyImportDetail>(
     `/api/v1/royalties/imports/${encodeURIComponent(id)}?limit=100&offset=${offset}`, { signal }),
+  reconciliation: (id: string, signal?: AbortSignal) => apiRequest<RoyaltyReconciliation>(
+    `/api/v1/admin/royalties/imports/${encodeURIComponent(id)}/reconciliation`, { signal }),
+  reconcile: (id: string, body: { expected_checksum: string; evidence: string }) => apiRequest<RoyaltyReconciliation>(
+    `/api/v1/admin/royalties/imports/${encodeURIComponent(id)}/reconciliation`, { method: 'POST', body, timeoutMs: 120000 }),
   correct: (id: string, reason: string) => apiRequest<{ id: string; replayed: boolean }>(`/api/v1/royalties/imports/${encodeURIComponent(id)}/correction`, {
     method: 'POST', body: { reason }, timeoutMs: 120000,
   }),

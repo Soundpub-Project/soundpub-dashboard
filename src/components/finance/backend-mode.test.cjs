@@ -57,6 +57,10 @@ const dependencies = name => {
   assert.equal(calls.at(-1)[0], '/api/v1/royalties/imports/commit');
   await royalties.royaltiesApi.detail('batch/id', 200);
   assert.equal(calls.at(-1)[0], '/api/v1/royalties/imports/batch%2Fid?limit=100&offset=200');
+  await royalties.royaltiesApi.reconciliation('batch/id');
+  assert.equal(calls.at(-1)[0], '/api/v1/admin/royalties/imports/batch%2Fid/reconciliation');
+  await royalties.royaltiesApi.reconcile('batch/id', { expected_checksum: '0'.repeat(64), evidence: 'checked' });
+  assert.equal(calls.at(-1)[1].method, 'POST');
   const royaltyImport = read('src/components/finance/BackendRoyaltyImport.tsx');
   assert(royaltyImport.includes('selected.entries.map'));
   assert(royaltyImport.includes('selected.entry_total'));

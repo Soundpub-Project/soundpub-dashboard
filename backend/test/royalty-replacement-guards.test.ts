@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import type { PoolClient } from 'pg';
+import { postEvent } from '../src/finance/index.js';
 import { concurrencyPostgres, dockerTestsEnabled } from './support/concurrency-postgres.js';
 
 const migration = readFileSync(new URL('../migrations/0034_royalty_replacement_guards.sql', import.meta.url), 'utf8');
@@ -26,6 +27,10 @@ test('royalty replacement relation commits only with correction, matching dimens
   const fixture = await concurrencyPostgres();
   const { owner, runtime } = fixture;
   const actorId = randomUUID();
+  const labelId = randomUUID();
+  const artistId = randomUUID();
+  const releaseId = randomUUID();
+  const trackId = randomUUID();
   let sequence = 0;
 
   type Relation = {
@@ -50,10 +55,12 @@ test('royalty replacement relation commits only with correction, matching dimens
     const newPeriod = relation.newPeriod ?? oldPeriod;
     const oldCurrency = relation.oldCurrency ?? 'IDR';
     const newCurrency = relation.newCurrency ?? oldCurrency;
-    const oldPolicy = relation.oldPolicy ?? 'SOUNDPUB_LEGACY_70_21_9';
+    const oldPolicy = relation.oldPolicy ?? 'BACKEND_SINGLE_OWNER_V1';
     const newPolicy = relation.newPolicy ?? oldPolicy;
     const index = sequence++;
     const checksum = (offset: number) => (index * 2 + offset).toString(16).padStart(64, '0');
+    const oldEntryId = randomUUID();
+    const newEntryId = randomUUID();
 
     await client.query(`INSERT INTO soundpub.royalty_import_batches
       (id,source,period,currency,checksum,filename,uploader_id,row_count,total_amount,validation_result)
@@ -65,7 +72,23 @@ test('royalty replacement relation commits only with correction, matching dimens
       newBatchId, newSource, newPeriod, newCurrency, checksum(1), `new-${index}.csv`,
       JSON.stringify({ policy_code: newPolicy, replaces_batch_id: relation.provenance ?? oldBatchId }),
     ]);
+    await client.query(`INSERT INTO soundpub.royalty_import_entries
+      (id,batch_id,source,period,source_row_id,beneficiary_id,release_id,track_id,gross_amount,deduction_amount,
+        net_amount,artist_id,financial_owner_user_id,label_owner_user_id,calculation_policy_code)
+      VALUES
+      ($1,$2,$3,$4,$5,$6,$7,$8,'100.00','0','100.00',$9,$6,$10,$11),
+      ($12,$13,$14,$15,$16,$6,$7,$8,'120.00','0','120.00',$9,$6,$10,$17)`, [
+      oldEntryId, oldBatchId, oldSource, oldPeriod, `old-row-${index}`, actorId, releaseId, trackId, artistId, labelId, oldPolicy,
+      newEntryId, newBatchId, newSource, newPeriod, `new-row-${index}`, newPolicy,
+    ]);
+    await client.query(`INSERT INTO soundpub.royalty_import_allocations(entry_id,component,owner_id,amount,policy_code)
+      VALUES($1,'LEGACY_OWNER',$2,'100.00',$3),($4,'LEGACY_OWNER',$2,'120.00',$5)`,
+    [oldEntryId, actorId, oldPolicy, newEntryId, newPolicy]);
     if (relation.correction !== false) {
+      await postEvent(client, { ownerId: actorId, kind: 'ROYALTY_EARNING', amount: '100.00',
+        businessReference: `royalty:${oldBatchId}`, idempotencyKey: `fixture:earning:${oldBatchId}`, actorId });
+      await postEvent(client, { ownerId: actorId, kind: 'ROYALTY_ADJUSTMENT', amount: '-100.00',
+        businessReference: `royalty:${oldBatchId}`, idempotencyKey: `fixture:correction:${oldBatchId}`, actorId });
       await client.query(`INSERT INTO soundpub.royalty_import_corrections(batch_id,actor_id,reason)
         VALUES($1,$2,'provider correction')`, [oldBatchId, actorId]);
     }
@@ -98,7 +121,16 @@ test('royalty replacement relation commits only with correction, matching dimens
   }
 
   try {
-    await owner.query(`INSERT INTO soundpub.backend_users(id,status) VALUES($1,'active')`, [actorId]);
+    await owner.query(`INSERT INTO soundpub.backend_users(id,status) VALUES($1,'active'),($2,'active')`, [actorId,labelId]);
+    await owner.query(`INSERT INTO soundpub.profiles(id,parent_label_id) VALUES($1,NULL),($2,$1)`, [labelId,actorId]);
+    await owner.query(`INSERT INTO soundpub.artists(id,artist_user_id,label_id,name,management_mode)
+      VALUES($1,$2,$3,'Replacement Guard Artist','LOGIN_ACCOUNT')`, [artistId, actorId, labelId]);
+    await owner.query(`INSERT INTO soundpub.releases(id,artist_id,artist_user_id,label_id,created_by,title,artist_name,status)
+      VALUES($1,$2,$3,$4,$4,'Replacement Guard Release','Replacement Guard Artist','draft')`,
+    [releaseId, artistId, actorId, labelId]);
+    await owner.query(`INSERT INTO soundpub.tracks(id,release_id,artist_id,artist_user_id,title,artist_name,position)
+      VALUES($1,$2,$3,$4,'Replacement Guard Track','Replacement Guard Artist',1)`,
+    [trackId, releaseId, artistId, actorId]);
     await owner.query('CREATE ROLE royalty_replacement_guard_probe NOLOGIN');
 
     const validClient = await runtime.connect();

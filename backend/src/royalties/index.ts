@@ -12,6 +12,7 @@ import { postEvent } from '../finance/index.js';
 import { prepareLegacyRoyaltyCsv, previewLegacyRoyaltyCsv } from './legacy-preview.js';
 import { LEGACY_ROYALTY_POLICY } from './split.js';
 import type { RoyaltyImportFileRow, RoyaltyImportObjectStore } from './store.js';
+import { inspectRoyaltyBatch } from './reconciliation.js';
 
 const allows = createAuthorizer();
 const csvCommitEnvelope = z.strictObject({
@@ -30,16 +31,26 @@ const fileUploadEnvelope = z.strictObject({
 const replacementFileUploadEnvelope = fileUploadEnvelope.omit({ source: true }).extend({
   reason: z.string().trim().min(1).max(1000),
 });
+const reconciliationEnvelope = z.strictObject({
+  expected_checksum: z.string().regex(/^[0-9a-f]{64}$/),
+  evidence: z.string().trim().min(1).max(500),
+});
 type ImportSessionRow = RoyaltyImportFileRow & { source: string; filename: string; status: string; phase: string;
   processed_rows: number; total_rows: number | null; attempts: number; preview_checksum: string | null;
   staging_checksum: string | null; preview_result: unknown; error_code: string | null; batch_id: string | null; upload_expires_at: Date;
   operation_kind: 'IMPORT' | 'REPLACEMENT'; replaces_batch_id: string | null; replacement_reason: string | null;
   request_key: string | null; created_at: Date; updated_at: Date };
-export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectStore) {
-  async function authorized<T>(actor: Principal, admin: boolean, work: (db: PoolClient) => Promise<T>) {
+export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectStore, reconciliationPool: Pool = pool) {
+  async function authorized<T>(actor: Principal, admin: boolean, work: (db: PoolClient) => Promise<T>,
+    targetPool = pool, lockAuthority = true) {
     if (!allows(actor, admin ? 'admin' : 'authenticated')) throw new ApiError(403, 'FORBIDDEN');
-    return withTransaction(pool, async db => {
-      const current = (await usersRepository(db).lock([actor.id], false)).get(actor.id);
+    return withTransaction(targetPool, async db => {
+      const current = lockAuthority ? (await usersRepository(db).lock([actor.id], false)).get(actor.id) : {
+        id: actor.id,
+        status: (await db.query<{ status: Principal['status'] }>('SELECT status FROM soundpub.backend_users WHERE id=$1', [actor.id])).rows[0]?.status,
+        roles: (await db.query<{ role: Principal['roles'][number] }>(`SELECT role FROM soundpub.user_roles
+          WHERE user_id=$1 AND tenant_id IS NULL AND verified_at IS NOT NULL ORDER BY role`, [actor.id])).rows.map(row => row.role),
+      } as Principal;
       if (!allows(current ?? null, admin ? 'admin' : 'authenticated')) throw new ApiError(403, 'FORBIDDEN');
       return work(db);
     });
@@ -130,7 +141,10 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
   }
   const batchProjection = `b.id,b.source,b.period,b.currency,b.filename,b.uploader_id,b.row_count,
     b.total_amount::text,b.validation_result,b.checksum,b.created_at,
-    CASE WHEN c.id IS NULL THEN b.status ELSE 'VOIDED_WITH_OFFSET' END AS status,
+    CASE WHEN c.id IS NOT NULL THEN 'VOIDED_WITH_OFFSET'
+      WHEN reconciliation.id IS NOT NULL THEN 'RECONCILED' ELSE b.status END AS status,
+    reconciliation.id AS reconciliation_id,reconciliation.actor_id AS reconciliation_actor_id,
+    reconciliation.evidence AS reconciliation_evidence,reconciliation.created_at AS reconciled_at,
     old_replacement.new_batch_id AS replacement_batch_id,
     new_replacement.old_batch_id AS replaces_batch_id,
     COALESCE(old_replacement.reason,new_replacement.reason) AS change_reason,
@@ -138,6 +152,9 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
     COALESCE(old_replacement.created_at,new_replacement.created_at) AS changed_at`;
   const batchJoin = `FROM soundpub.royalty_import_batches b
     LEFT JOIN soundpub.royalty_import_corrections c ON c.batch_id=b.id
+    LEFT JOIN soundpub.royalty_import_reconciliations reconciliation
+      ON reconciliation.batch_id=b.id AND reconciliation.result='MATCHED'
+        AND soundpub.royalty_reconciliation_intact(b.id)
     LEFT JOIN soundpub.royalty_import_replacements old_replacement ON old_replacement.old_batch_id=b.id
     LEFT JOIN soundpub.royalty_import_replacements new_replacement ON new_replacement.new_batch_id=b.id`;
   const sessionProjection = `id,requester_id,source,filename,mime_type,size_bytes::text,source_checksum,operation_kind,
@@ -714,6 +731,58 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
         [id,query.limit,query.offset])).rows;
         return { ...batch, entries, entry_total: batch.row_count, entry_limit: query.limit, entry_offset: query.offset };
       });
+    },
+    async reconciliation(actor: Principal, id: string) {
+      parse(z.uuid(), id);
+      return authorized(actor, true, async db => {
+        const report = await inspectRoyaltyBatch(db, id);
+        const approval = (await db.query(`SELECT id,actor_id,evidence,snapshot_checksum,created_at
+          FROM soundpub.royalty_import_reconciliations WHERE batch_id=$1 AND result='MATCHED'
+            AND soundpub.royalty_reconciliation_intact(batch_id)`, [id])).rows[0] ?? null;
+        return { batch_id: id, ...report, approval };
+      });
+    },
+    async reconcile(actor: Principal, id: string, input: unknown, requestId: string) {
+      parse(z.uuid(), id);
+      const value = parse(reconciliationEnvelope, input);
+      return authorized(actor, true, async db => {
+        await db.query("SELECT pg_advisory_xact_lock(hashtextextended('royalty-reconciliation:'||$1::text,0))", [id]);
+        const report = await inspectRoyaltyBatch(db, id);
+        if (report.snapshot.batch.checksum !== value.expected_checksum) throw new ApiError(409, 'ROYALTY_RECONCILIATION_STALE');
+        if (report.snapshot.batch.uploader_id === actor.id) throw new ApiError(403, 'ROYALTY_RECONCILIATION_REVIEWER_REQUIRED');
+        const prior = (await db.query(`SELECT id,actor_id,evidence,snapshot_checksum,created_at
+          FROM soundpub.royalty_import_reconciliations WHERE batch_id=$1 AND result='MATCHED'`, [id])).rows[0];
+        if (prior) {
+          const intact = (await db.query<{ intact: boolean }>(
+            'SELECT soundpub.royalty_reconciliation_intact($1) AS intact', [id])).rows[0]?.intact === true;
+          if (!intact) throw new ApiError(409, 'ROYALTY_RECONCILIATION_INTEGRITY_MISMATCH');
+          return { batch_id: id, ...report, approval: prior, replayed: true };
+        }
+        const result = report.matched ? 'MATCHED' : 'MISMATCH';
+        const action = report.matched ? 'royalty.reconciled' : 'royalty.reconciliation_mismatch';
+        const auditLogId = (await db.query<{ id: string }>(`INSERT INTO soundpub.audit_logs
+          (actor_user_id,action,resource_type,resource_id,request_id,metadata)
+          VALUES($1,$2,'royalty_import',$3,$4,$5::jsonb) RETURNING id`,
+        [actor.id,action,id,requestId,JSON.stringify({ amount: report.snapshot.batch.total_amount, currency: 'IDR',
+          old_state: 'UNRECONCILED', new_state: report.matched ? 'RECONCILED' : 'RECONCILIATION_MISMATCH',
+          evidence: value.evidence, idempotency_reference: report.checksum })])).rows[0]!.id;
+        const outboxId = (await db.query<{ id: string }>(`INSERT INTO soundpub.outbox_events(topic,payload,idempotency_key)
+          VALUES('royalty.changed',$1::jsonb,$2) RETURNING id`,
+        [JSON.stringify({ batch_id: id, reconciliation_checksum: report.checksum, result }), report.matched
+          ? `royalty.reconciled:${id}` : `royalty.reconciliation-mismatch:${id}:${report.checksum}`])).rows[0]!.id;
+        let row = (await db.query(`INSERT INTO soundpub.royalty_import_reconciliations
+          (batch_id,actor_id,result,evidence,snapshot_checksum,snapshot,issues,audit_log_id,outbox_id)
+          VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9)
+          ON CONFLICT(batch_id,snapshot_checksum,result) DO NOTHING
+          RETURNING id,actor_id,evidence,snapshot_checksum,created_at`,
+        [id,actor.id,result,value.evidence,report.checksum,JSON.stringify(report.snapshot),JSON.stringify(report.issues),
+          auditLogId,outboxId])).rows[0];
+        row ??= (await db.query(`SELECT id,actor_id,evidence,snapshot_checksum,created_at
+          FROM soundpub.royalty_import_reconciliations WHERE batch_id=$1 AND snapshot_checksum=$2 AND result=$3`,
+        [id,report.checksum,result])).rows[0]!;
+        return { batch_id: id, ...report,
+          approval: report.matched ? row : null, replayed: false };
+      }, reconciliationPool, false);
     },
     async correct(actor: Principal, id: string, input: unknown, requestId: string) {
       parse(z.uuid(), id);

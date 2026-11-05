@@ -31,6 +31,8 @@ test('owned fresh PostgreSQL: scan, dry run, repair, ambiguity, atomic audit, id
     }
     await owner.query('CREATE ROLE soundpub_app');
     await owner.query('CREATE ROLE soundpub_owner');
+    await owner.query('CREATE ROLE soundpub_reconciler');
+    await owner.query('GRANT soundpub_app TO soundpub_reconciler');
     await migrate(owner);
     await assert.rejects(repairOrphans({ databaseUrl }), /DISPOSABLE_MARKER_REQUIRED/);
     await owner.query(`COMMENT ON DATABASE ${database} IS 'soundpub synthetic orphan repair'`);

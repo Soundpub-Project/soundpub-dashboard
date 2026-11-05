@@ -29,6 +29,7 @@ const schema = z.object({
   HOST: z.enum(['127.0.0.1', 'localhost', '::1', '0.0.0.0', '::']).default('127.0.0.1'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   DATABASE_URL: z.string().url(),
+  RECONCILIATION_DATABASE_URL: z.string().url(),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
   DEV_AUTH_TOKENS_JSON: z.string().refine((raw) => {
     try {
@@ -63,6 +64,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     throw new Error(`Phase 2 isolation violation: ${forbidden[0]} references a forbidden production target`);
   }
   parseIsolatedDatabaseUrl(environment.DATABASE_URL, ['soundpub_app']);
+  parseIsolatedDatabaseUrl(environment.RECONCILIATION_DATABASE_URL, ['soundpub_reconciler']);
   if (environment.OBJECT_STORAGE_PUBLIC_ENDPOINT) {
     let endpoint: URL;
     try { endpoint = new URL(environment.OBJECT_STORAGE_PUBLIC_ENDPOINT); }

@@ -18,7 +18,8 @@ export const databasePayoutPolicy: PayoutPolicy = async (db: PoolClient, ownerId
           JOIN soundpub.royalty_import_entries entry ON entry.id=allocation.entry_id
     JOIN soundpub.royalty_import_batches batch ON batch.id=entry.batch_id
     LEFT JOIN soundpub.royalty_import_corrections correction ON correction.batch_id=batch.id
-    WHERE allocation.owner_id=ANY($1::uuid[]) AND batch.status='UNRECONCILED' AND correction.id IS NULL LIMIT 1`,
+    WHERE allocation.owner_id=ANY($1::uuid[]) AND correction.id IS NULL
+      AND NOT soundpub.royalty_reconciliation_intact(batch.id) LIMIT 1`,
   [[...new Set([ownerId, ...scope])]])).rowCount);
   return { minimum: minimum ?? '0.00', destinationReady: true, reconciled: !custom && !unresolved };
 };

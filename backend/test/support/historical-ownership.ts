@@ -25,7 +25,7 @@ export async function historicalDatabase() {
       catch { await setTimeout(250); }
     }
     assert.ok(ready, 'Owned disposable PostgreSQL must become ready');
-    await owner.query("CREATE ROLE soundpub_owner; CREATE ROLE soundpub_app LOGIN PASSWORD 'synthetic-history-only'");
+    await owner.query("CREATE ROLE soundpub_owner; CREATE ROLE soundpub_app LOGIN PASSWORD 'synthetic-history-only'; CREATE ROLE soundpub_reconciler; GRANT soundpub_app TO soundpub_reconciler");
     assert.ok((await migrate(owner)).includes('0007_artists_labels.sql'));
     assert.deepEqual(await migrate(owner), []);
     await owner.query(`CREATE SCHEMA historical_fixture;

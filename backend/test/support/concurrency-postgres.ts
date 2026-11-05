@@ -54,6 +54,7 @@ export async function concurrencyPostgres() {
   const resource = testComposeResource('test-postgres');
   let owner: pg.Pool | undefined;
   let runtime: pg.Pool | undefined;
+  let reconciler: pg.Pool | undefined;
   try {
     const address = resource.start();
     const config = { host: '127.0.0.1', port: Number(address.split(':')[1]), database: 'soundpub_test',
@@ -64,18 +65,21 @@ export async function concurrencyPostgres() {
       try { await owner.query('SELECT 1'); break; }
       catch (error) { if (Date.now() >= deadline) throw error; await setTimeout(100); }
     }
-    await owner.query('CREATE ROLE soundpub_owner; CREATE ROLE soundpub_app LOGIN');
+    await owner.query(`CREATE ROLE soundpub_owner; CREATE ROLE soundpub_app LOGIN; CREATE ROLE soundpub_reconciler LOGIN;
+      GRANT soundpub_app TO soundpub_reconciler`);
     await migrate(owner);
     assert.deepEqual(await migrate(owner), []);
     runtime = new pg.Pool({ ...config, user: 'soundpub_app' });
+    reconciler = new pg.Pool({ ...config, user: 'soundpub_reconciler' });
     assert.equal((await runtime.query('SELECT current_user')).rows[0].current_user, 'soundpub_app');
-    const ownerPool = owner, runtimePool = runtime;
-    return { owner: ownerPool, runtime: runtimePool, async close() {
-      try { await Promise.allSettled([runtimePool.end(), ownerPool.end()]); }
+    assert.equal((await reconciler.query('SELECT current_user')).rows[0].current_user, 'soundpub_reconciler');
+    const ownerPool = owner, runtimePool = runtime, reconcilerPool = reconciler;
+    return { owner: ownerPool, runtime: runtimePool, reconciler: reconcilerPool, async close() {
+      try { await Promise.allSettled([reconcilerPool.end(), runtimePool.end(), ownerPool.end()]); }
       finally { resource.close(); }
     } };
   } catch (error) {
-    try { await Promise.allSettled([runtime?.end(), owner?.end()]); }
+    try { await Promise.allSettled([reconciler?.end(), runtime?.end(), owner?.end()]); }
     finally { resource.close(); }
     throw error;
   }

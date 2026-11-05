@@ -11,6 +11,7 @@ services:
       POSTGRES_USER: postgres
       MIGRATION_DATABASE_PASSWORD: ${MIGRATION_DATABASE_PASSWORD:?Set a unique migration database password}
       APP_DATABASE_PASSWORD: ${APP_DATABASE_PASSWORD:?Set a unique application database password}
+      RECONCILIATION_DATABASE_PASSWORD: ${RECONCILIATION_DATABASE_PASSWORD:?Set a unique reconciliation database password}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a unique development password}
     volumes:
       - pg_data:/var/lib/postgresql/data
@@ -81,6 +82,7 @@ services:
       HOST: 0.0.0.0
       PORT: 3000
       DATABASE_URL: postgres://soundpub_app:${APP_DATABASE_PASSWORD:?Set a unique application database password}@postgres:5432/soundpub_dev
+      RECONCILIATION_DATABASE_URL: postgres://soundpub_reconciler:${RECONCILIATION_DATABASE_PASSWORD:?Set a unique reconciliation database password}@postgres:5432/soundpub_dev
       OBJECT_STORAGE_ENDPOINT: object-storage
       OBJECT_STORAGE_PORT: 9000
       OBJECT_STORAGE_PUBLIC_ENDPOINT: http://127.0.0.1:${SOUNDPUB_DEV_STORAGE_PORT:-9100}

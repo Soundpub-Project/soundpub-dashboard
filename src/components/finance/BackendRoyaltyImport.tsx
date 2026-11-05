@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, CheckCircle2, FileSpreadsheet, Loader2, RefreshCw, Upload } from 'lucide-react';
 import { SoundpubApiError } from '@/api/client';
-import { royaltiesApi, type RoyaltyBatch, type RoyaltyCsvPreview, type RoyaltyImportDetail, type RoyaltyImportSession } from '@/api/royalties';
+import { royaltiesApi, type RoyaltyBatch, type RoyaltyCsvPreview, type RoyaltyImportDetail, type RoyaltyImportSession, type RoyaltyReconciliation } from '@/api/royalties';
 import { useAuth } from '@/hooks/useAuth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Badge } from '@/components/ui/badge';
@@ -51,6 +51,8 @@ function errorMessage(error: unknown) {
     ROYALTY_REPLACEMENT_CONFLICT: 'Batch sudah dikoreksi/diganti atau replacement berbeda sudah tercatat.',
     ROYALTY_REPLACEMENT_POLICY_MISMATCH: 'Batch ini bukan impor CSV legacy dan tidak dapat diganti melalui alur ini.',
     ROYALTY_REPLACEMENT_OWNER_MISMATCH: 'Replacement mengubah pemilik historis track. Periksa katalog atau gunakan rekonsiliasi manual.',
+    ROYALTY_RECONCILIATION_STALE: 'Batch berubah atau checksum tidak lagi cocok. Muat ulang detail sebelum menyetujui.',
+    ROYALTY_RECONCILIATION_REVIEWER_REQUIRED: 'Pengunggah batch tidak boleh menyetujui rekonsiliasinya sendiri. Gunakan admin reviewer lain.',
     FORBIDDEN: 'Akun ini tidak memiliki izin admin untuk impor royalti.',
     UNAUTHORIZED: 'Sesi berakhir. Silakan login kembali.',
   };
@@ -69,7 +71,7 @@ function downloadTemplate() {
 
 function StatusBadge({ batch }: { batch: RoyaltyBatch }) {
   const voided = batch.status === 'VOIDED_WITH_OFFSET';
-  const label = batch.replacement_batch_id ? 'Diganti' : voided ? 'Dikoreksi' : 'Belum direkonsiliasi';
+  const label = batch.replacement_batch_id ? 'Diganti' : voided ? 'Dikoreksi' : batch.status === 'RECONCILED' ? 'Direkonsiliasi' : 'Belum direkonsiliasi';
   return <Badge variant={voided ? 'secondary' : 'outline'}>{label}</Badge>;
 }
 
@@ -82,8 +84,10 @@ export function BackendRoyaltyImport() {
   const [source, setSource] = useState('soundpub-dashboard');
   const [preview, setPreview] = useState<RoyaltyCsvPreview | null>(null);
   const [selected, setSelected] = useState<RoyaltyImportDetail | null>(null);
+  const [reconciliation, setReconciliation] = useState<RoyaltyReconciliation | null>(null);
+  const [reconciliationEvidence, setReconciliationEvidence] = useState('Batch totals and ledger verified');
   const [detailOffset, setDetailOffset] = useState(0);
-  const [busy, setBusy] = useState<'preview' | 'commit' | 'detail' | 'replace-preview' | 'replace-commit' | null>(null);
+  const [busy, setBusy] = useState<'preview' | 'commit' | 'detail' | 'reconcile' | 'replace-preview' | 'replace-commit' | null>(null);
   const [error, setError] = useState('');
   const [result, setResult] = useState('');
   const [offset, setOffset] = useState(0);
@@ -102,6 +106,7 @@ export function BackendRoyaltyImport() {
   const selectFile = (selectedFile: File) => {
     resetPreview();
     setSelected(null);
+    setReconciliation(null);
     setDetailOffset(0);
     if (!selectedFile.name.toLowerCase().endsWith('.csv')) { setFile(null); setError('File wajib berformat CSV.'); return; }
     if (!selectedFile.size || selectedFile.size > MAX_CSV_BYTES) { setFile(null); setError('CSV maksimum 100 MB.'); return; }
@@ -151,10 +156,27 @@ export function BackendRoyaltyImport() {
     if (inFlight.current) return;
     inFlight.current = true; setBusy('detail'); setError('');
     try {
-      setSelected(await royaltiesApi.detail(id, nextOffset));
+      const detail = await royaltiesApi.detail(id, nextOffset);
+      setSelected(detail);
+      setReconciliation(detail.status === 'VOIDED_WITH_OFFSET' ? null : await royaltiesApi.reconciliation(id));
       setDetailOffset(nextOffset);
     }
     catch (failure) { setError(errorMessage(failure)); }
+    finally { inFlight.current = false; setBusy(null); }
+  };
+
+  const reconcileSelected = async () => {
+    if (!selected || !reconciliation?.matched || !reconciliationEvidence.trim() || inFlight.current) return;
+    inFlight.current = true; setBusy('reconcile'); setError(''); setResult('');
+    try {
+      const report = await royaltiesApi.reconcile(selected.id, {
+        expected_checksum: selected.checksum, evidence: reconciliationEvidence.trim(),
+      });
+      setReconciliation(report);
+      setSelected(await royaltiesApi.detail(selected.id, detailOffset));
+      setResult(report.replayed ? 'Batch sudah direkonsiliasi.' : 'Batch berhasil direkonsiliasi dan saldo terkait dapat digunakan.');
+      await history.refetch();
+    } catch (failure) { setError(errorMessage(failure)); }
     finally { inFlight.current = false; setBusy(null); }
   };
 
@@ -235,6 +257,11 @@ export function BackendRoyaltyImport() {
       </CardContent></Card>}
       {selected && <Card><CardHeader><CardTitle>Detail batch {selected.id}</CardTitle><CardDescription>{selected.filename} · {selected.period} · {selected.row_count} baris</CardDescription></CardHeader><CardContent className="space-y-3">
         {(selected.replacement_batch_id || selected.replaces_batch_id) && <div className="rounded-lg border bg-muted/30 p-3 text-sm"><p className="font-medium">{selected.replacement_batch_id ? `Diganti oleh batch ${selected.replacement_batch_id}` : `Menggantikan batch ${selected.replaces_batch_id}`}</p>{selected.change_reason && <p className="mt-1 text-muted-foreground">Alasan: {selected.change_reason}</p>}</div>}
+        {selected.status !== 'VOIDED_WITH_OFFSET' && reconciliation && <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="font-medium">Rekonsiliasi batch</p><p className="text-sm text-muted-foreground">Entry, allocation, ledger, audit, dan outbox diperiksa dari backend.</p></div><Badge variant={selected.status === 'RECONCILED' ? 'default' : reconciliation.matched ? 'outline' : 'destructive'}>{selected.status === 'RECONCILED' ? 'Reconciled' : reconciliation.matched ? 'Siap disetujui' : 'Mismatch'}</Badge></div>
+          {reconciliation.issues.length > 0 && <ul className="list-disc pl-5 text-sm text-destructive">{reconciliation.issues.map(issue => <li key={issue}>{issue}</li>)}</ul>}
+          {selected.status === 'RECONCILED' ? <p className="text-sm">Bukti: {selected.reconciliation_evidence ?? '-'}</p> : <div className="flex flex-col gap-2 sm:flex-row"><Input value={reconciliationEvidence} maxLength={500} disabled={!!busy} onChange={event => setReconciliationEvidence(event.target.value)} /><Button disabled={!reconciliation.matched || !reconciliationEvidence.trim() || !!busy} onClick={() => void reconcileSelected()}>{busy === 'reconcile' ? 'Menyimpan...' : 'Setujui rekonsiliasi'}</Button></div>}
+        </div>}
         <div className="overflow-x-auto rounded-lg border"><Table><TableHeader><TableRow><TableHead>Baris</TableHead><TableHead>ISRC</TableHead><TableHead>Platform</TableHead><TableHead>Komponen</TableHead><TableHead className="text-right">Net</TableHead></TableRow></TableHeader><TableBody>{selected.entries.map(entry => <TableRow key={entry.id}><TableCell>{entry.source_row_number ?? entry.source_row_id}</TableCell><TableCell className="font-mono">{entry.source_isrc ?? '-'}</TableCell><TableCell>{entry.platform ?? '-'}</TableCell><TableCell>{entry.allocations.map(allocation => `${allocation.component} ${formatIdr(allocation.amount)}`).join(' · ')}</TableCell><TableCell className="text-right">{formatIdr(entry.net_amount)}</TableCell></TableRow>)}</TableBody></Table></div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">Baris {selected.entry_total === 0 ? 0 : selected.entry_offset + 1}–{selected.entry_offset + selected.entries.length} dari {selected.entry_total}</p>
