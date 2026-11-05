@@ -6,6 +6,7 @@ import { createAuthorizer, type Principal } from '../auth/index.js';
 import { createRepositories } from '../db/repositories.js';
 import { withTransaction } from '../db/pool.js';
 import { usersRepository } from '../users/repository.js';
+import { receiveWebhook, type WebhookInput } from '../integrations/webhook.js';
 import * as contracts from './contracts.js';
 export * from './contracts.js';
 
@@ -93,7 +94,11 @@ const projection = `r.id,r.owner_id AS user_id,lower(r.status) AS status,r.legal
     'download_reference',COALESCE(c.signed_media_id,c.stamped_media_id,c.generated_media_id)::text)
     FROM soundpub.copyright_contracts c WHERE c.registration_id=r.id) AS contract`;
 
-export function createCopyrightRegistrationsService(pool: Pool) {
+export interface CopyrightRegistrationPaymentOptions {
+  environment: 'development' | 'test' | 'staging' | 'production'; callbackSecret: string
+}
+
+export function createCopyrightRegistrationsService(pool: Pool, paymentOptions?: CopyrightRegistrationPaymentOptions) {
   async function currentActor(db: PoolClient, actor: Principal, write: boolean) {
     const value = (await usersRepository(db).lock([actor.id], write)).get(actor.id);
     requireActor(value);
@@ -133,6 +138,10 @@ export function createCopyrightRegistrationsService(pool: Pool) {
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,[randomUUID(),id,from,to,actorId,note ?? null,key,
       hash({id,from,to,actorId,note:note ?? null})]);
   }
+  const invoiceResponse = (row: Input) => ({ registration_id:row.registration_id,payment_id:row.id,
+    provider:'mock-copyright-registration' as const,provider_invoice_id:row.provider_invoice_id,
+    provider_invoice_url:row.provider_invoice_url,amount:(Number(row.amount_minor)/100).toFixed(2),currency:'IDR' as const,
+    payment_status:String(row.status)==='PAID'?'paid' as const:'pending' as const });
 
   return {
     async create(actor: Principal, value: unknown, idempotencyKey: string, requestId: string) {
@@ -233,6 +242,83 @@ export function createCopyrightRegistrationsService(pool: Pool) {
           nextStatus==='IN_REVIEW' ? 'Revised registration resubmitted.' : 'Registration submitted for payment.');
         await emit(db,current,'copyright_registration.submitted',id,requestId,{version:input.version+1},'copyright_registration.submitted');
         const response=(await find(db,current,id)).row; await complete(db,scope,idempotencyKey,response); return response;
+      });
+    },
+    async requestPaymentInvoice(actor:Principal,id:string,value:unknown,idempotencyKey:string,requestId:string) {
+      const input=parse(['copyrightRegistrationInvoiceRequest'],value); requireKey(idempotencyKey);
+      if(!paymentOptions || !['development','test'].includes(paymentOptions.environment)) {
+        throw new ApiError(503,'PAYMENT_PROVIDER_UNAVAILABLE');
+      }
+      return withTransaction(pool,async db=>{
+        const {current,row}=await find(db,actor,id,true);
+        if(row.user_id!==current.id || String(row.status).toUpperCase()!=='AWAITING_PAYMENT') throw new ApiError(404,'NOT_FOUND');
+        const scope=`copyright-registration.payment-invoice:${id}`;
+        const replay=await claim(db,scope,idempotencyKey,input); if(replay) return replay;
+        const payment=(await db.query(`SELECT * FROM soundpub.copyright_registration_payments
+          WHERE registration_id=$1 AND owner_id=$2 FOR UPDATE`,[id,current.id])).rows[0];
+        if(!payment || payment.status!=='INTENT' || payment.currency!=='IDR') throw new ApiError(409,'CONFLICT');
+        const invoiceId=`cr_mock_${payment.id}`; const externalId=`copyright-registration:${id}`;
+        const invoiceUrl=`https://copyright-registration-payments.invalid/invoices/${invoiceId}`;
+        await db.query(`INSERT INTO soundpub.copyright_registration_mock_invoices
+          (payment_id,provider_external_id,provider_invoice_id,invoice_url,amount_minor,currency,request_idempotency_key,request_hash)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,[payment.id,externalId,invoiceId,invoiceUrl,payment.amount_minor,payment.currency,
+          idempotencyKey,hash(input)]);
+        const updated=(await db.query(`UPDATE soundpub.copyright_registration_payments SET status='PROVIDER_PENDING',
+          provider='mock-copyright-registration',provider_external_id=$2,provider_invoice_id=$3,provider_invoice_url=$4,
+          provider_status='PENDING' WHERE id=$1 RETURNING *`,[payment.id,externalId,invoiceId,invoiceUrl])).rows[0];
+        await emit(db,current,'copyright_registration.payment_invoice_requested',id,requestId,
+          {paymentId:payment.id,providerInvoiceId:invoiceId,amountMinor:String(payment.amount_minor),currency:'IDR'});
+        const response=invoiceResponse(updated); await complete(db,scope,idempotencyKey,response); return response;
+      });
+    },
+    async paymentCallback(input:WebhookInput) {
+      if(!paymentOptions || !['development','test'].includes(paymentOptions.environment) ||
+        input.provider!=='mock-copyright-registration') throw new Error('Copyright payment callback unavailable');
+      return receiveWebhook(pool,input,paymentOptions.callbackSecret,async(payload,db)=>{
+        const body=parse(['copyrightRegistrationPaymentCallback'],payload);
+        const digest=createHash('sha256').update(input.rawBody).digest('hex');
+        const payment=(await db.query<Input>(`SELECT * FROM soundpub.copyright_registration_payments
+          WHERE provider=$1 AND provider_invoice_id=$2 FOR UPDATE`,[input.provider,body.provider_invoice_id])).rows[0];
+        if(!payment) {
+          await db.query(`INSERT INTO soundpub.copyright_registration_payment_callback_receipts
+            (provider,event_id,provider_invoice_id,callback_status,amount_minor,currency,payload_sha256,disposition)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,'UNKNOWN_INVOICE')`,[input.provider,input.eventId,body.provider_invoice_id,
+            body.status,body.amount_minor,body.currency,digest]); return;
+        }
+        if(String(payment.amount_minor)!==String(body.amount_minor) || payment.currency!==body.currency) {
+          await db.query(`INSERT INTO soundpub.copyright_registration_payment_callback_receipts
+            (provider,event_id,payment_id,provider_invoice_id,callback_status,amount_minor,currency,payload_sha256,disposition)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'AMOUNT_MISMATCH')`,[input.provider,input.eventId,payment.id,
+            body.provider_invoice_id,body.status,body.amount_minor,body.currency,digest]); return;
+        }
+        if(payment.status!=='PROVIDER_PENDING') {
+          await db.query(`INSERT INTO soundpub.copyright_registration_payment_callback_receipts
+            (provider,event_id,payment_id,provider_invoice_id,callback_status,amount_minor,currency,payload_sha256,disposition)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'INVALID_TRANSITION')`,[input.provider,input.eventId,payment.id,
+            body.provider_invoice_id,body.status,body.amount_minor,body.currency,digest]); return;
+        }
+        const registration=(await db.query<Input>(`SELECT * FROM soundpub.copyright_registrations WHERE id=$1 FOR UPDATE`,[payment.registration_id])).rows[0];
+        if(!registration || registration.status!=='AWAITING_PAYMENT') throw new Error('Copyright registration payment state mismatch');
+        const paid=body.status==='PAID';
+        await db.query(`UPDATE soundpub.copyright_registration_payments SET status=$2,provider_status=$2,
+          paid_at=CASE WHEN $2='PAID' THEN clock_timestamp() ELSE NULL END WHERE id=$1`,[payment.id,body.status]);
+        if(paid) await db.query(`UPDATE soundpub.copyright_registrations SET status='PAID_PENDING_REVIEW' WHERE id=$1`,[payment.registration_id]);
+        if(paid) await db.query(`INSERT INTO soundpub.copyright_registration_status_history
+          (id,registration_id,old_status,new_status,system_actor,note,idempotency_key,request_hash)
+          VALUES ($1,$2,'AWAITING_PAYMENT','PAID_PENDING_REVIEW','mock-copyright-registration','Verified payment callback',$3,$4)`,
+        [randomUUID(),payment.registration_id,`callback:${input.eventId}`,digest]);
+        const audit=(await db.query<{id:string}>(`INSERT INTO soundpub.audit_logs
+          (action,resource_type,resource_id,request_id,metadata) VALUES
+          ('copyright_registration.payment_callback','copyright_registration',$1,$2,$3::jsonb) RETURNING id`,
+        [payment.registration_id,input.eventId,JSON.stringify({paymentId:payment.id,status:body.status,providerInvoiceId:body.provider_invoice_id})])).rows[0]!;
+        const outbox=(await db.query<{id:string}>(`INSERT INTO soundpub.outbox_events(topic,payload,idempotency_key)
+          VALUES ('copyright_registration.payment_changed',$1::jsonb,$2) RETURNING id`,
+        [JSON.stringify({registrationId:payment.registration_id,paymentId:payment.id,status:body.status}),
+          `copyright-registration-payment:${input.eventId}`])).rows[0]!;
+        await db.query(`INSERT INTO soundpub.copyright_registration_payment_callback_receipts
+          (provider,event_id,payment_id,provider_invoice_id,callback_status,amount_minor,currency,payload_sha256,disposition,audit_log_id,outbox_id)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'APPLIED',$9,$10)`,[input.provider,input.eventId,payment.id,
+          body.provider_invoice_id,body.status,body.amount_minor,body.currency,digest,audit.id,outbox.id]);
       });
     },
     async review(actor:Principal,id:string,value:unknown,idempotencyKey:string,requestId:string) {

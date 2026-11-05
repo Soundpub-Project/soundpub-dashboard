@@ -3,4 +3,5 @@ const backendDomains = new Set(
 );
 
 export const usesBackendDomain = (domain: string) => backendDomains.has(domain);
+export const usesBackendCopyrightRegistration = () => usesBackendDomain('copyright-registration');
 

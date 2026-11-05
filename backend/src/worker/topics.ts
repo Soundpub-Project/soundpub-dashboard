@@ -15,6 +15,7 @@ export const OUTBOX_TOPICS = [
   'copyright_registration.submitted',
   'copyright_registration.reviewed',
   'copyright_contract.changed',
+  'copyright_registration.payment_changed',
   'takedown.submitted',
   'takedown.status.changed',
   'takedown.target.changed',

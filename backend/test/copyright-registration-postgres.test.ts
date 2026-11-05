@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { createCopyrightRegistrationsService } from '../src/copyright-registrations/index.js';
+import { webhookSignature } from '../src/integrations/webhook.js';
 import { createMediaService, type MediaObjectStore } from '../src/media/index.js';
 import { concurrencyPostgres } from './support/concurrency-postgres.js';
 
@@ -18,7 +19,8 @@ integration('copyright registration draft, evidence, payment gate, review, and c
     await db.owner.query("INSERT INTO soundpub.user_roles(user_id,role,verified_at) VALUES ($1,'user',now()),($2,'admin',now())",[ownerId,adminId]);
     const owner = { id: ownerId, status: 'active' as const, roles: ['user'] as const };
     const admin = { id: adminId, status: 'active' as const, roles: ['admin'] as const };
-    const service = createCopyrightRegistrationsService(db.runtime);
+    const callbackSecret='copyright-registration-test-secret';
+    const service = createCopyrightRegistrationsService(db.runtime,{environment:'test',callbackSecret});
     const store: MediaObjectStore = {
       bucket:'synthetic', key:id=>`media/objects/${id}`,
       async request(requesterId,value) { const id=randomUUID(); return { metadata:{ id,ownerId:requesterId,mimeType:value.mime_type,
@@ -50,12 +52,17 @@ integration('copyright registration draft, evidence, payment gate, review, and c
     assert.equal(submitted.status,'awaiting_payment');
     await assert.rejects(service.review(admin,created.id,{ version:submitted.version,status:'in_review' },'review-before-payment','request-review'),
       (error:any)=>error?.code==='CONFLICT');
-    await db.owner.query(`UPDATE soundpub.copyright_registration_payments SET status='PROVIDER_PENDING',provider='synthetic',
-      provider_external_id='copyright-registration:test',provider_invoice_id='invoice-test',provider_invoice_url='https://example.test/invoice'
-      WHERE registration_id=$1`,[created.id]);
-    await db.owner.query("UPDATE soundpub.copyright_registration_payments SET status='PAID',paid_at=clock_timestamp(),provider_status='PAID' WHERE registration_id=$1",[created.id]);
-    await db.owner.query("UPDATE soundpub.copyright_registrations SET status='PAID_PENDING_REVIEW' WHERE id=$1",[created.id]);
-    let reviewed = await service.review(admin,created.id,{ version:submitted.version+1,status:'in_review' },'review-paid-1','request-review-paid') as any;
+    const invoice=await service.requestPaymentInvoice(owner,created.id,{},'invoice-request-1','request-invoice') as any;
+    const rawBody=Buffer.from(JSON.stringify({provider_invoice_id:invoice.provider_invoice_id,status:'PAID',
+      amount_minor:Math.round(Number(invoice.amount)*100),currency:invoice.currency}));
+    const timestamp=String(Math.floor(Date.now()/1000)), eventId='copyright-payment-paid-1';
+    const signature=webhookSignature(callbackSecret,{timestamp,eventId,rawBody});
+    assert.equal(await service.paymentCallback({provider:'mock-copyright-registration',timestamp,eventId,signature,rawBody}),'accepted');
+    assert.equal(await service.paymentCallback({provider:'mock-copyright-registration',timestamp,eventId,signature,rawBody}),'duplicate');
+    const paid=await service.get(owner,created.id) as any;
+    assert.equal(paid.status,'paid_pending_review');
+    assert.equal(paid.payment.payment_status,'paid');
+    let reviewed = await service.review(admin,created.id,{ version:paid.version,status:'in_review' },'review-paid-1','request-review-paid') as any;
     reviewed = await service.review(admin,created.id,{ version:reviewed.version,status:'approved',composer_code:'CMP001' },'approve-1','request-approve') as any;
     assert.equal(reviewed.status,'approved');
     const contractBytes=Buffer.from('%PDF-1.4 contract');

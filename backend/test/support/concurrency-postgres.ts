@@ -59,7 +59,8 @@ export async function concurrencyPostgres() {
   try {
     const address = resource.start();
     const config = { host: '127.0.0.1', port: Number(address.split(':')[1]), database: 'soundpub_test',
-      connectionTimeoutMillis: 1000, options: '-c statement_timeout=15000 -c lock_timeout=10000' };
+      connectionTimeoutMillis: 1000,
+      options: '-c search_path=soundpub,public -c statement_timeout=15000 -c lock_timeout=10000' };
     owner = new pg.Pool({ ...config, user: 'postgres' });
     const deadline = Date.now() + 30_000;
     for (;;) {

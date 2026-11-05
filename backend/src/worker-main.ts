@@ -44,6 +44,7 @@ const handlers: Record<string, OutboxHandler> = {
   'copyright_registration.submitted': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-copyright-registration-submitted', payload: event.payload }); },
   'copyright_registration.reviewed': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-copyright-registration-review', payload: event.payload }); },
   'copyright_contract.changed': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-copyright-contract-change', payload: event.payload }); },
+  'copyright_registration.payment_changed': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-copyright-registration-payment-change', payload: event.payload }); },
   'takedown.submitted': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-takedown-submitted', payload: event.payload }); },
   'takedown.status.changed': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-takedown-status-change', payload: event.payload }); },
   'takedown.target.changed': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-takedown-target-change', payload: event.payload }); },

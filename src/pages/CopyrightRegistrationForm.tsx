@@ -16,6 +16,8 @@ import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { usesBackendCopyrightRegistration } from '@/api/routing';
+import { BackendCopyrightRegistration } from '@/components/copyright/BackendCopyrightRegistration';
 
 type ApplicantType = 'personal' | 'band_representative' | 'company_label';
 type ReleaseStatus = 'unreleased' | 'released' | 'unknown';
@@ -83,7 +85,7 @@ const steps = [
   'Review',
 ];
 
-export default function CopyrightRegistrationForm() {
+function LegacyCopyrightRegistrationForm() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const [step, setStep] = useState(1);
@@ -836,5 +838,9 @@ export default function CopyrightRegistrationForm() {
       </div>
     </DashboardLayout>
   );
+}
+
+export default function CopyrightRegistrationForm() {
+  return usesBackendCopyrightRegistration() ? <BackendCopyrightRegistration mode="form" /> : <LegacyCopyrightRegistrationForm />;
 }
 

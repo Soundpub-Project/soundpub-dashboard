@@ -5,6 +5,7 @@ import {
   copyrightContractTransition, copyrightRegistrationCreateDraft, copyrightRegistrationDetailDto,
   copyrightRegistrationDraftReplace, copyrightRegistrationListDto, copyrightRegistrationListQuery,
   copyrightRegistrationReviewTransition, copyrightRegistrationSubmit,
+  copyrightRegistrationInvoiceRequest, copyrightRegistrationInvoiceDto, copyrightRegistrationPaymentCallbackResult,
 } from '../copyright-registrations/contracts.js';
 import { ApiError, type ApiDependencies, type Principal } from './types.js';
 
@@ -72,6 +73,9 @@ export function registerCopyrightRegistrationRoutes(app: FastifyInstance, deps: 
   route('POST', '/api/v1/copyright/registrations/:id/submit', 'submitCopyrightRegistration', copyrightRegistrationDetailDto,
     (actor, request) => service.submit(actor, id(request), request.body, key(request), request.id),
     copyrightRegistrationSubmit, undefined, true);
+  route('POST', '/api/v1/copyright/registrations/:id/payment/invoice', 'requestCopyrightRegistrationPaymentInvoice',
+    copyrightRegistrationInvoiceDto,(actor,request)=>service.requestPaymentInvoice(actor,id(request),request.body,key(request),request.id),
+    copyrightRegistrationInvoiceRequest,undefined,true);
   route('GET', '/api/v1/admin/copyright/registrations', 'listCopyrightRegistrations', copyrightRegistrationListDto,
     (actor, request) => service.list(actor, request.query), undefined, copyrightRegistrationListQuery);
   route('POST', '/api/v1/admin/copyright/registrations/:id/review', 'reviewCopyrightRegistration', copyrightRegistrationDetailDto,
@@ -81,4 +85,30 @@ export function registerCopyrightRegistrationRoutes(app: FastifyInstance, deps: 
     copyrightRegistrationDetailDto,
     (actor, request) => service.transitionContract(actor, id(request), request.body, key(request), request.id),
     copyrightContractTransition, undefined, true);
+
+  app.register(async scope=>{
+    scope.removeContentTypeParser('application/json');
+    scope.addContentTypeParser('application/json',{parseAs:'buffer'},(_request,body,done)=>done(null,body));
+    scope.post('/api/v1/webhooks/copyright-registration-payments/mock',async request=>{
+      const envelope=request.headers['x-webhook-signature'];
+      const match=typeof envelope==='string' ? /^t=(\d{1,12}),id=([A-Za-z0-9_:-]{1,200}),v1=([a-fA-F0-9]{64})$/.exec(envelope) : null;
+      if(!match || !Buffer.isBuffer(request.body)) throw new ApiError(401,'UNAUTHORIZED');
+      try { return {status:await service.paymentCallback({provider:'mock-copyright-registration',timestamp:match[1]!,
+        eventId:match[2]!,signature:match[3]!,rawBody:request.body})}; }
+      catch(error) {
+        if(error instanceof ApiError) throw error;
+        const message=error instanceof Error ? error.message : '';
+        if(message==='Webhook event ID reused with different body') throw new ApiError(409,'CONFLICT');
+        if(message.includes('signature') || message.includes('timestamp') || message.includes('callback unavailable')) {
+          throw new ApiError(401,'UNAUTHORIZED');
+        }
+        throw new ApiError(400,'BAD_REQUEST');
+      }
+    });
+  });
+  paths['/api/v1/webhooks/copyright-registration-payments/mock']={post:{operationId:'receiveCopyrightRegistrationPaymentCallback',
+    security:[{webhookSignature:[]}],requestBody:{required:true,content:{'application/json':{schema:{type:'object',required:
+      ['provider_invoice_id','status','amount_minor','currency']}}}},responses:{200:{description:'Accepted',content:{'application/json':{
+      schema:z.toJSONSchema(copyrightRegistrationPaymentCallbackResult,{target:'openapi-3.0'})}}},400:{description:'Error',content:{'application/json':{schema:errorSchema}}},
+      401:{description:'Error',content:{'application/json':{schema:errorSchema}}},409:{description:'Error',content:{'application/json':{schema:errorSchema}}}}}};
 }

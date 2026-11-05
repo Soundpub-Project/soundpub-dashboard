@@ -9,6 +9,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { usesBackendCopyrightRegistration } from '@/api/routing';
+import { BackendCopyrightRegistration } from '@/components/copyright/BackendCopyrightRegistration';
 
 interface Registration {
   id: string;
@@ -53,7 +55,7 @@ const statusLabels: Record<string, string> = {
 const formatDate = (value: string | null) => value ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'long', timeStyle: 'short' }).format(new Date(value)) : '-';
 const formatCurrency = (amount: number, currency: string) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: currency || 'IDR', maximumFractionDigits: 0 }).format(amount);
 
-export default function CopyrightRegistrationStatus() {
+function LegacyCopyrightRegistrationStatus() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [registration, setRegistration] = useState<Registration | null>(null);
@@ -127,4 +129,8 @@ export default function CopyrightRegistrationStatus() {
       </div>
     </DashboardLayout>
   );
+}
+
+export default function CopyrightRegistrationStatus() {
+  return usesBackendCopyrightRegistration() ? <BackendCopyrightRegistration mode="status" /> : <LegacyCopyrightRegistrationStatus />;
 }

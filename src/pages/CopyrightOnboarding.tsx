@@ -11,11 +11,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { usesBackendCopyrightRegistration } from '@/api/routing';
+import { BackendCopyrightRegistration } from '@/components/copyright/BackendCopyrightRegistration';
 
 type ApplicantType = 'personal' | 'company' | 'label' | 'representative';
 const nextStepStatuses = new Set(['draft', 'revision_requested', 'awaiting_payment']);
 
-export default function CopyrightOnboarding() {
+function LegacyCopyrightOnboarding() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -92,4 +94,8 @@ export default function CopyrightOnboarding() {
       </div>
     </DashboardLayout>
   );
+}
+
+export default function CopyrightOnboarding() {
+  return usesBackendCopyrightRegistration() ? <BackendCopyrightRegistration mode="onboarding" /> : <LegacyCopyrightOnboarding />;
 }

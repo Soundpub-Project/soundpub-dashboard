@@ -107,4 +107,6 @@ test('outbox topic registry fails startup when a producer has no consumer', () =
   const missingCopyrightRegistration = { ...complete };
   delete missingCopyrightRegistration['copyright_registration.submitted'];
   assert.throws(() => assertOutboxHandlers(missingCopyrightRegistration), /copyright_registration\.submitted/);
+  delete missingCopyrightRegistration['copyright_registration.payment_changed'];
+  assert.throws(() => assertOutboxHandlers(missingCopyrightRegistration), /copyright_registration\.payment_changed/);
 });

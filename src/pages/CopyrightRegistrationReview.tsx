@@ -12,6 +12,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ArrowLeft, CheckCircle2, Clock3, Download, FileText, Loader2, Search, Shield, Sparkles, Upload, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { usesBackendDomain } from '@/api/routing';
+import { BackendCopyrightRegistrationReview } from '@/components/copyright/BackendCopyrightRegistrationReview';
 
 interface CopyrightRegistration {
   id: string;
@@ -128,7 +130,7 @@ const statusStyles: Record<string, string> = {
   active: 'bg-primary/20 text-primary',
 };
 
-export default function CopyrightRegistrationReview() {
+function LegacyCopyrightRegistrationReview() {
   const { registrationId } = useParams<{ registrationId?: string }>();
   const navigate = useNavigate();
   const isDetailPage = Boolean(registrationId);
@@ -613,6 +615,12 @@ export default function CopyrightRegistrationReview() {
       </div>
     </DashboardLayout>
   );
+}
+
+export default function CopyrightRegistrationReview() {
+  return usesBackendDomain('copyright-registration')
+    ? <BackendCopyrightRegistrationReview />
+    : <LegacyCopyrightRegistrationReview />;
 }
 
 

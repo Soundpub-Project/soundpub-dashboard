@@ -1,0 +1,33 @@
+const fs = require('node:fs');
+const assert = require('node:assert/strict');
+
+const api = fs.readFileSync('src/api/copyright-registrations.ts', 'utf8');
+const component = fs.readFileSync('src/components/copyright/BackendCopyrightRegistration.tsx', 'utf8');
+const adminComponent = fs.readFileSync('src/components/copyright/BackendCopyrightRegistrationReview.tsx', 'utf8');
+const routing = fs.readFileSync('src/api/routing.ts', 'utf8');
+
+assert.match(routing, /usesBackendDomain\('copyright-registration'\)/);
+assert.match(api, /\/api\/v1\/copyright\/registrations\/current/);
+assert.match(api, /\/draft`/);
+assert.match(api, /declaration_version: 'copyright-registration-terms-v1'/);
+assert.match(api, /category: 'COPYRIGHT_REGISTRATION_DOCUMENT'/);
+assert.match(api, /document_type: documentType/);
+assert.match(api, /crypto\.subtle\.digest\('SHA-256'/);
+assert.match(api, /\/api\/v1\/admin\/copyright\/registrations/);
+assert.match(api, /\/review`/);
+assert.match(api, /\/contract\/transitions`/);
+assert.match(api, /\/payment\/invoice`/);
+assert.match(api, /downloadEvidence/);
+for (const type of ['CONTRACT_GENERATED', 'CONTRACT_STAMPED', 'CONTRACT_SIGNED']) assert.match(api, new RegExp(type));
+assert.match(component, /copyrightRegistrationsApi\.saveDraft/);
+assert.match(component, /copyrightRegistrationsApi\.uploadEvidence/);
+assert.match(component, /copyrightRegistrationsApi\.submit/);
+assert.match(component, /copyrightRegistrationsApi\.requestInvoice/);
+assert.doesNotMatch(component, /supabase|\.from\(/);
+assert.match(adminComponent, /copyrightRegistrationsApi\.list/);
+assert.match(adminComponent, /copyrightRegistrationsApi\.review/);
+assert.match(adminComponent, /copyrightRegistrationsApi\.transitionContract/);
+assert.match(adminComponent, /version: selected\.contract\.version/);
+assert.match(adminComponent, /copyrightRegistrationsApi\.downloadEvidence/);
+assert.doesNotMatch(adminComponent, /supabase|pdfServiceUrl|\.from\(/);
+console.log('copyright registration frontend contract passed');

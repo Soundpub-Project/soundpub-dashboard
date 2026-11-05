@@ -90,6 +90,22 @@ export const copyrightRegistrationSubmit = z.strictObject({
   declaration_version: z.literal('copyright-registration-terms-v1'),
 });
 
+export const copyrightRegistrationInvoiceRequest = z.strictObject({});
+export const copyrightRegistrationPaymentCallback = z.strictObject({
+  provider_invoice_id: requiredText(200),
+  status: z.enum(['PAID', 'FAILED', 'EXPIRED', 'CANCELLED']),
+  amount_minor: z.number().int().positive().max(9007199254740991),
+  currency: z.literal('IDR'),
+});
+export const copyrightRegistrationInvoiceDto = z.strictObject({
+  registration_id: z.uuid(), payment_id: z.uuid(), provider: z.literal('mock-copyright-registration'),
+  provider_invoice_id: z.string(), provider_invoice_url: z.url(), amount: z.string(), currency: z.literal('IDR'),
+  payment_status: copyrightPaymentStatus,
+});
+export const copyrightRegistrationPaymentCallbackResult = z.strictObject({
+  status: z.enum(['accepted', 'duplicate']),
+});
+
 export const copyrightRegistrationListQuery = z.strictObject({
   limit: z.string().regex(/^(?:[1-9]|[1-9]\d|100)$/).optional(),
   cursor: z.string().min(1).max(500).optional(),
@@ -171,6 +187,8 @@ export type CopyrightCowriterInput = z.infer<typeof copyrightCowriterInput>;
 export type CopyrightWorkInput = z.infer<typeof copyrightWorkInput>;
 export type CopyrightRegistrationDraftReplace = z.infer<typeof copyrightRegistrationDraftReplace>;
 export type CopyrightRegistrationSubmit = z.infer<typeof copyrightRegistrationSubmit>;
+export type CopyrightRegistrationInvoiceRequest = z.infer<typeof copyrightRegistrationInvoiceRequest>;
+export type CopyrightRegistrationPaymentCallback = z.infer<typeof copyrightRegistrationPaymentCallback>;
 export type CopyrightRegistrationListQuery = z.infer<typeof copyrightRegistrationListQuery>;
 export type CopyrightRegistrationReviewTransition = z.infer<typeof copyrightRegistrationReviewTransition>;
 export type CopyrightContractTransition = z.infer<typeof copyrightContractTransition>;

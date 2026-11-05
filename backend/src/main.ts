@@ -83,7 +83,9 @@ const app = buildApp({
   balance: createBalanceService(pool), royalties: createRoyaltiesService(pool, royaltyImportStore, reconciliationPool), payouts, payments,
   financeReconciliation: createFinanceReconciliationService(pool),
   composerRoyalties: createComposerRoyaltiesService(pool),
-  copyrightRegistrations: createCopyrightRegistrationsService(pool),
+  copyrightRegistrations: createCopyrightRegistrationsService(pool, {
+    environment: config.NODE_ENV, callbackSecret: config.WEBHOOK_MOCK_SECRET,
+  }),
   submissions: createSubmissionService(pool, { media: createMediaReadinessAdapter(), payment: paymentSubmissionDependency, provider: new MockSubmissionProvider() }),
   notifications: createNotificationsService(pool),
   media,
