@@ -15,6 +15,7 @@ import type { PayoutsService } from '../payouts/index.js';
 import type { PaymentsService } from '../payments/index.js';
 import type { FinanceReconciliationService } from '../reconciliation/index.js';
 import type { ComposerRoyaltiesService } from '../composer-royalties/index.js';
+import type { TakedownsService } from '../takedowns/index.js';
 export interface Principal {
   id: string;
   roles: readonly Role[];
@@ -48,6 +49,7 @@ export interface ApiDependencies {
   payments?: PaymentsService;
   financeReconciliation?: FinanceReconciliationService;
   composerRoyalties?: ComposerRoyaltiesService;
+  takedowns?: TakedownsService;
   auth: { authenticate(token: string): Promise<Principal | null> };
   readiness: { check(): Promise<boolean> };
   admin: {

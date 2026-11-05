@@ -15,6 +15,7 @@ import { createArtistsService } from './artists/index.js';
 import { createLabelsService } from './labels/index.js';
 import { createLabelCustomService } from './label-custom/index.js';
 import { createReleasesService } from './releases/index.js';
+import { createTakedownsService } from './takedowns/index.js';
 import { createTracksService } from './tracks/index.js';
 import { createSubmissionService, MockSubmissionProvider } from './submissions/index.js';
 import { createNotificationsService } from './notifications/index.js';
@@ -49,6 +50,7 @@ const artists = createArtistsService(pool);
 const labels = createLabelsService(pool);
 const labelCustom = createLabelCustomService(pool);
 const releases = createReleasesService(pool);
+const takedowns = createTakedownsService(pool);
 const tracks = createTracksService(pool);
 const payments = createPaymentsService(pool, { callbackSecret: config.WEBHOOK_MOCK_SECRET });
 const payouts = createPayoutsService(pool, createPgPayoutFinance(databasePayoutPolicy));
@@ -75,7 +77,7 @@ const windows = new Map<string, { count: number; resetAt: number }>();
 const app = buildApp({
   publicCatalog: createPublicCatalogService(pool),
   localAuth,
-  users, artists, labels, labelCustom, releases, tracks,
+  users, artists, labels, labelCustom, releases, tracks, takedowns,
   balance: createBalanceService(pool), royalties: createRoyaltiesService(pool, royaltyImportStore, reconciliationPool), payouts, payments,
   financeReconciliation: createFinanceReconciliationService(pool),
   composerRoyalties: createComposerRoyaltiesService(pool),
