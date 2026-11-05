@@ -27,7 +27,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Capability | Supabase reference | Backend target/current | Frontend state | Status | Next evidence/work |
 | --- | --- | --- | --- | --- | --- |
 | Label account | profiles/user_roles/managed relationships | labels module | Backend route tersedia | IMPLEMENTED | Production field/default comparison |
-| Whitelabel scope | whitelabel profile + artist creation | tenant-scoped labels/users | UI masih punya direct Supabase reads | PARTIAL | Tenant model dan dashboard cutover |
+| Whitelabel scope | whitelabel profile + artist creation | verified ownership, managed artist tanpa credential, explicit login activation, scoped dashboard | Backend roster/dashboard aktif tanpa Supabase fallback | VERIFIED | Production field/default comparison dan browser role E2E |
 | Artist login | Auth user + artist profile | users/artists | Backend route tersedia | IMPLEMENTED | Profile field parity |
 | Managed artist | legacy managed artist conventions | label-custom unit artist | Backend UI tersedia | VERIFIED | Pertahankan no-login invariant |
 | Label Custom PIC | Tidak ada role canonical lama | label-custom module | Backend UI tersedia | VERIFIED | Compatibility hanya untuk shared resource behavior |
@@ -132,7 +132,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | App email | `send-app-email` | notifications/outbox | Backend module exists | PARTIAL | Template/delivery parity and provider adapter |
 | Royalty notification | Edge Function | outbox event after reconciliation | Belum dibuktikan | PARTIAL | Event contract and retry |
 | App settings | table + update function | audit-settings module | Backend settings UI | IMPLEMENTED | Full key/type compatibility |
-| Maintenance mode | app setting | backend setting/enforcement | UI tersedia | PARTIAL | Request gate behavior |
+| Maintenance mode | app setting | global protected-route gate; active admin/superadmin bypass; public/auth/webhook exceptions | Global maintenance screen mempertahankan session | VERIFIED | Multi-instance propagation strategy before production scale-out |
 | Storage backup | backup Edge Function | scoped worker | Tidak diperlukan frontend | DEFERRED | Recovery design after parity |
 | Audit log | table triggers/function logs | backend audit events | Partial admin visibility | PARTIAL | Unified viewer and retention |
 | Observability | container/function logs | structured logs/metrics | Dev only | PARTIAL | Import/payout SLO and alert design |
@@ -152,11 +152,13 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 - Inline CSV preview/commit now reparses and rematches server-side, verifies expected checksum, blocks active source-period conflicts, writes 70/21/9 allocations atomically, and proves ordinary-label plus Label Custom behavior on disposable PostgreSQL.
 - Backend-mode frontend now uploads raw CSV to server preview, displays authoritative diagnostics and 70/21/9 totals, commits with the preview checksum, and reads immutable backend history/detail without Supabase fallback. Frontend TypeScript and production build pass.
 - Scoped royalty reporting now provides period discovery, filters, totals, pagination, and CSV export for admin, ordinary label, Whitelabel, artist, and Label Custom PIC. Disposable PostgreSQL proves no cross-owner leakage.
+- 2026-11-05: Whitelabel dashboard and managed-artist lifecycle are cut over in backend mode. Artist creation stores no credential; first login activation requires active Whitelabel subscription and verified ownership. Migration 0044 is applied only to the isolated dev Compose project.
+- 2026-11-05: Maintenance mode now returns 503 MAINTENANCE_MODE for protected non-admin requests, keeps health/auth/public/webhook routes available, limits toggle authority to superadmin, and presents a session-preserving frontend screen. Full Docker suite produced 334 tests, 328 pass, 0 fail, 6 skipped.
 
 ## Remaining blockers
 
 1. Private royalty files, streaming leased preview worker, immutable checksum-bound staging, heartbeat progress, retry state, authority revocation, current-owner revalidation, set-based atomic session commit, chunked browser hashing, paged batch detail, independent reconciliation approval, and frontend signed-upload cutover are verified. Disposable PostgreSQL processes and commits 100.000 rows with 300.000 allocations in 110,5 seconds.
-2. Ordinary label, Whitelabel, artist, and Label Custom reporting scopes are verified; standalone WhitelabelDashboard roster/release widgets remain direct Supabase.
+2. Ordinary label, Whitelabel, artist, and Label Custom reporting scopes are verified; Whitelabel dashboard and managed-artist lifecycle are cut over in backend mode. Production field/default comparison and browser role E2E remain.
 3. Dedicated aggregate track endpoint remains optional; generic scoped report already supports `track_id`.
 5. Payment provider, payout settlement provider, submission provider, and notification delivery remain partial or mock-oriented.
 6. Royalty upload is cut over when backend royalty/release domains are enabled, but frontend inventory still contains about 368 Supabase call chains in other domains; root production build does not enable backend domains.

@@ -131,8 +131,10 @@ test('audit/settings: restricted local DB, HTTP allowlists, no secrets, concurre
         assert.equal((await call('admin', 'PATCH', 'admin/settings', { version: 1, settings })).statusCode, 400);
       }
       assert.equal((await call('user', 'PATCH', 'admin/settings', { version: 1, settings: { maintenance_enabled: true } })).statusCode, 403);
-      assert.equal((await call('admin', 'PATCH', 'admin/settings', { version: 1, settings: { maintenance_enabled: true } })).statusCode, 200);
-      assert.equal((await call('admin', 'PATCH', 'admin/settings', { version: 1, settings: { maintenance_enabled: false } })).statusCode, 409);
+      assert.equal((await call('admin', 'PATCH', 'admin/settings', { version: 1, settings: { maintenance_enabled: true } })).statusCode, 403);
+      assert.equal((await call('admin', 'PATCH', 'admin/settings', { version: 1, settings: { min_payout_amount: '10.00' } })).statusCode, 200);
+      assert.equal((await call('superadmin', 'PATCH', 'admin/settings', { version: 2, settings: { maintenance_enabled: true } })).statusCode, 200);
+      assert.equal((await call('admin', 'PATCH', 'admin/settings', { version: 3, settings: { release_price_per_track: '1.00', maintenance_enabled: false } })).statusCode, 403);
       assert.ok(!(await call('admin', 'GET', 'admin/settings')).body.includes(marker));
       const saved = (await database.owner.query('SELECT settings FROM soundpub.application_settings')).rows[0].settings;
       assert.ok(!JSON.stringify(saved).includes(marker));
@@ -143,7 +145,7 @@ test('audit/settings: restricted local DB, HTTP allowlists, no secrets, concurre
       assert.deepEqual(writes.map(value => value.statusCode).sort(), [200, 409]);
       await database.owner.query('DELETE FROM soundpub.user_roles WHERE user_id=$1', [admin.id]);
       assert.equal((await call('admin', 'GET', 'admin/audit')).statusCode, 403);
-      assert.equal((await call('admin', 'PATCH', 'admin/settings', { version: 2, settings: { maintenance_enabled: false } })).statusCode, 403);
+      assert.equal((await call('admin', 'PATCH', 'admin/settings', { version: 3, settings: { min_payout_amount: '20.00' } })).statusCode, 403);
     });
     await t.test('audit failure rolls back setting writes', async () => {
       await database.owner.query(`CREATE FUNCTION soundpub.reject_settings_audit() RETURNS trigger LANGUAGE plpgsql AS $$

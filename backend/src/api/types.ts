@@ -40,6 +40,7 @@ export interface ApiDependencies {
   notifications?: NotificationsService;
   media?: MediaService;
   auditSettings?: AuditSettingsService;
+  maintenance?: { isEnabled(): Promise<boolean> };
   balance?: BalanceService;
   royalties?: RoyaltiesService;
   payouts?: PayoutsService;

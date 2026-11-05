@@ -18,6 +18,12 @@ export class SoundpubApiError extends Error {
 let tokenProvider: () => Promise<string | null> = async () => null;
 let csrfToken: string | null = null;
 
+export const maintenanceModeEvent = 'soundpub:maintenance-mode';
+
+function notifyMaintenanceMode() {
+  window.dispatchEvent(new CustomEvent(maintenanceModeEvent));
+}
+
 export function setApiTokenProvider(provider: () => Promise<string | null>) {
   tokenProvider = provider;
 }
@@ -61,6 +67,7 @@ export async function apiRequest<T>(
       const requestId = response.headers.get('x-request-id') ?? payload?.error?.requestId;
       const code = typeof payload?.error?.code === 'string' ? payload.error.code : categories[response.status] ?? 'INTERNAL_ERROR';
       const message = typeof payload?.error?.message === 'string' ? payload.error.message : code;
+      if (response.status === 503 && code === 'MAINTENANCE_MODE') notifyMaintenanceMode();
       throw new SoundpubApiError(categories[response.status] ?? 'INTERNAL_ERROR', response.status, requestId, code, message);
     }
     return payload as T;

@@ -144,6 +144,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
     void authApi.session().then(applyLocalSession).catch(async error => {
+      if (error instanceof SoundpubApiError && error.status === 503 && error.code === 'MAINTENANCE_MODE') {
+        restoringSession.current = false;
+        setLoading(false);
+        return;
+      }
       if (!(error instanceof SoundpubApiError) || error.status !== 401) console.error('Error restoring local session:', error);
       const { data: { session: nextSession } } = await supabase.auth.getSession();
       restoringSession.current = false;

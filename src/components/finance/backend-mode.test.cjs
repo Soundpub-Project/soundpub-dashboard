@@ -103,5 +103,32 @@ const dependencies = name => {
   await api.paymentsApi.create('release');
   assert.equal(calls.at(-1)[1].body.idempotency_key, 'release-invoice:release');
   assert(!read('src/components/finance/BackendPaymentStatus.tsx').includes("params.get('status')"));
-  console.log('Financial flags, all royalty query guards, helpers, mount guards and payment status contract passed; 0 Supabase accesses.');
+  const clientSource = read('src/api/client.ts').replace(/import\.meta\.env\.VITE_SOUNDPUB_API_URL/g, "'https://api.soundpub.test'");
+  const clientOutput = ts.transpileModule(clientSource, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const client = {};
+  const maintenanceEvents = [];
+  vm.runInNewContext(clientOutput, {
+    exports: client,
+    fetch: async () => ({ ok: false, status: 503, headers: { get: () => 'request-maintenance' }, json: async () => ({ error: { code: 'MAINTENANCE_MODE', message: 'Maintenance' } }) }),
+    window: { location: { origin: 'https://dashboard.soundpub.test' }, dispatchEvent: event => maintenanceEvents.push(event.type) },
+    CustomEvent: class CustomEvent { constructor(type) { this.type = type; } }, URL, AbortController, setTimeout, clearTimeout,
+  });
+  await assert.rejects(client.apiRequest('/api/v1/profile'), error => error.status === 503 && error.code === 'MAINTENANCE_MODE');
+  assert.deepEqual(maintenanceEvents, [client.maintenanceModeEvent]);
+  const maintenanceScreen = read('src/components/maintenance/MaintenanceModeScreen.tsx');
+  assert.match(maintenanceScreen, /role === 'admin' \|\| role === 'superadmin'/);
+  assert.match(maintenanceScreen, /Sesi Anda tetap aman/);
+  assert.match(maintenanceScreen, /Coba lagi/);
+  assert.match(maintenanceScreen, /window\.location\.reload\(\)/);
+  assert.doesNotMatch(maintenanceScreen, /supabase|signOut/i);
+  const auth = read('src/hooks/useAuth.tsx');
+  const maintenanceBranchStart = auth.indexOf("error.status === 503 && error.code === 'MAINTENANCE_MODE'");
+  const maintenanceBranch = auth.slice(maintenanceBranchStart, auth.indexOf('if (!(error instanceof SoundpubApiError)', maintenanceBranchStart));
+  assert.doesNotMatch(maintenanceBranch, /supabase|signOut|logout/i);
+  assert.match(read('src/App.tsx'), /<MaintenanceModeScreen>[\s\S]*<Routes>/);
+  const backendSettings = read('src/components/settings/BackendSettings.tsx');
+  assert.match(backendSettings, /canManageMaintenance=\{role === 'superadmin'\}/);
+  assert.match(backendSettings, /\.\.\.\(canManageMaintenance \? \{ maintenance_enabled \} : \{\}\)/);
+  assert.match(backendSettings, /disabled=\{!canManageMaintenance\}/);
+  console.log('Financial guards and maintenance mode contract passed; session preserved and 0 new Supabase accesses.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -56,11 +56,11 @@ function UserSettingsForm() {
 }
 
 export function BackendAdminSettings() {
-  const { user, isAdmin } = useAuth();
-  return user && isAdmin ? <AdminSettingsForm key={user.id} /> : null;
+  const { user, isAdmin, role } = useAuth();
+  return user && isAdmin ? <AdminSettingsForm key={user.id} canManageMaintenance={role === 'superadmin'} /> : null;
 }
 
-function AdminSettingsForm() {
+function AdminSettingsForm({ canManageMaintenance }: { canManageMaintenance: boolean }) {
   const [row, setRow] = useState<VersionedSettings<AdminSettings> | null>(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -79,7 +79,9 @@ function AdminSettingsForm() {
     }
     setBusy(true); setError(''); setMessage('');
     try {
-      setRow(await settingsApi.updateAdmin(row.version, { ...row.settings,
+      const { maintenance_enabled, ...sharedSettings } = row.settings;
+      setRow(await settingsApi.updateAdmin(row.version, { ...sharedSettings,
+        ...(canManageMaintenance ? { maintenance_enabled } : {}),
         min_payout_amount: minimumPayout, release_price_per_track: releasePrice }));
       setMessage('Pengaturan berhasil disimpan.');
     }
@@ -170,8 +172,8 @@ function AdminSettingsForm() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="flex flex-col gap-4 rounded-lg border bg-background/60 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div><div className="flex flex-wrap items-center gap-2"><Label htmlFor="maintenance-mode" className="text-sm font-medium">Mode maintenance</Label><Badge variant="outline" className="text-amber-600 dark:text-amber-400">Belum diberlakukan</Badge></div><p className="mt-1 text-sm text-muted-foreground">Saat ini hanya menyimpan status persiapan dan belum memblokir login atau akses pengguna.</p></div>
-              <Switch id="maintenance-mode" checked={row.settings.maintenance_enabled} onCheckedChange={value => setRow({ ...row, settings: { ...row.settings, maintenance_enabled: value } })} />
+              <div><div className="flex flex-wrap items-center gap-2"><Label htmlFor="maintenance-mode" className="text-sm font-medium">Mode maintenance</Label><Badge variant="outline" className="text-amber-600 dark:text-amber-400">Khusus Super Admin</Badge></div><p className="mt-1 text-sm text-muted-foreground">Saat aktif, akses API pengguna dibatasi sementara. Admin dan Super Admin tetap dapat masuk untuk pemulihan layanan.</p></div>
+              <Switch id="maintenance-mode" checked={row.settings.maintenance_enabled} disabled={!canManageMaintenance} onCheckedChange={value => setRow({ ...row, settings: { ...row.settings, maintenance_enabled: value } })} />
             </div>
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               <div className="space-y-2"><Label htmlFor="minimum-payout" className="flex items-center gap-2"><WalletCards className="h-4 w-4" />Minimum payout</Label><div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">IDR</span><Input id="minimum-payout" className="pl-12" inputMode="numeric" placeholder="100000" pattern="[1-9][0-9]{0,15}" value={displayMoneyValue(row.settings.min_payout_amount)} onChange={event => { const value = event.target.value.replace(/\D/g, ''); setRow({ ...row, settings: { ...row.settings, min_payout_amount: value || null } }); }} /></div><p className="text-xs text-muted-foreground">Masukkan angka saja. Contoh Rp 100.000 ditulis 100000.</p></div>

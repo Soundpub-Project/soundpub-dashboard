@@ -27,7 +27,7 @@ const errorSchema = {
 const messages: Record<string, string> = {
   BAD_REQUEST: 'Invalid request', UNAUTHORIZED: 'Authentication required', FORBIDDEN: 'Access denied',
   NOT_FOUND: 'Resource not found', CONFLICT: 'Conflict', RATE_LIMITED: 'Too many requests',
-  NOT_READY: 'Service unavailable', INTERNAL_ERROR: 'Internal server error',
+  NOT_READY: 'Service unavailable', MAINTENANCE_MODE: 'Service unavailable', INTERNAL_ERROR: 'Internal server error',
   SUBMISSION_BLOCKED: 'Submission prerequisites are not satisfied',
 };
 const developmentOrigins = new Set([
@@ -49,6 +49,7 @@ export function buildApp(deps: ApiDependencies) {
   });
   const paths: Record<string, Record<string, unknown>> = {};
   const authorize = createAuthorizer();
+  const principals = new WeakMap<FastifyRequest, Promise<Principal | null>>();
   function fail(reply: FastifyReply, status: number, code: string, requestId: string) {
     return reply.code(status).send({ error: { code, message: messages[code] ?? 'Request failed', requestId } });
   }
@@ -66,6 +67,14 @@ export function buildApp(deps: ApiDependencies) {
     .header('access-control-allow-headers', 'Authorization, Content-Type, Idempotency-Key, X-CSRF-Token')
     .code(204).send());
   app.addHook('preHandler', async (request, reply) => {
+    if (!maintenanceExempt(request) && await deps.maintenance?.isEnabled()) {
+      const principal = await resolvePrincipal(request);
+      if (!authorize(principal, 'admin')) {
+        reply.header('retry-after', 60);
+        reply.header('cache-control', 'no-store');
+        return fail(reply, 503, 'MAINTENANCE_MODE', request.id);
+      }
+    }
     if (request.routeOptions.url === '/health' || request.routeOptions.url === '/ready' || request.routeOptions.url === '/openapi.json') return;
     const denied = await limited(request);
     if (denied) {
@@ -95,12 +104,29 @@ export function buildApp(deps: ApiDependencies) {
     if (!result.allowed) return result;
     return null;
   }
-  async function authenticate(request: FastifyRequest): Promise<Principal> {
+  function maintenanceExempt(request: FastifyRequest) {
+    if (request.method === 'OPTIONS') return true;
+    return new Set([
+      '/health', '/ready', '/openapi.json',
+      '/api/v1/auth/login', '/api/v1/auth/session', '/api/v1/auth/logout',
+      '/api/v1/settings/public', '/api/v1/settings/public-media/:key',
+      '/api/v1/public/releases', '/api/v1/public/releases/:id',
+      '/api/v1/webhooks/events',
+    ]).has(request.routeOptions.url ?? '');
+  }
+  function resolvePrincipal(request: FastifyRequest): Promise<Principal | null> {
+    const existing = principals.get(request);
+    if (existing) return existing;
     const match = /^Bearer ([^\s]+)$/i.exec(request.headers.authorization ?? '');
     const cookieToken = deps.localAuth ? sessionToken(request) : null;
-    const principal = match ? await deps.auth.authenticate(match[1]!) : cookieToken ? await deps.localAuth!.authenticate(
+    const resolved = match ? deps.auth.authenticate(match[1]!) : cookieToken ? deps.localAuth!.authenticate(
       cookieToken, String(request.headers['x-csrf-token'] ?? ''), !['GET','HEAD','OPTIONS'].includes(request.method),
-    ) : null;
+    ) : Promise.resolve(null);
+    principals.set(request, resolved);
+    return resolved;
+  }
+  async function authenticate(request: FastifyRequest): Promise<Principal> {
+    const principal = await resolvePrincipal(request);
     if (!principal) throw new ApiError(401, 'UNAUTHORIZED');
     if (!authorize(principal, 'authenticated')) throw new ApiError(403, 'FORBIDDEN');
     return principal;

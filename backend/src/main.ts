@@ -60,6 +60,7 @@ const mediaStore = await createMediaObjectStore(pool, {
   allowedOrigins: config.OBJECT_STORAGE_BROWSER_ORIGINS,
 });
 const media = createMediaService(pool, mediaStore);
+const auditSettings = createAuditSettingsService(pool);
 const royaltyImportStore = await createRoyaltyImportObjectStore(pool, {
   environment: config.NODE_ENV === 'test' ? 'test' : 'development',
   endpoint: `${config.OBJECT_STORAGE_USE_SSL ? 'https' : 'http'}://${config.OBJECT_STORAGE_ENDPOINT}:${config.OBJECT_STORAGE_PORT}`,
@@ -79,7 +80,8 @@ const app = buildApp({
   submissions: createSubmissionService(pool, { media: createMediaReadinessAdapter(), payment: paymentSubmissionDependency, provider: new MockSubmissionProvider() }),
   notifications: createNotificationsService(pool),
   media,
-  auditSettings: createAuditSettingsService(pool),
+  auditSettings,
+  maintenance: { isEnabled: () => auditSettings.isMaintenanceEnabled() },
   auth: createIdentityAuthenticator(identityProvider, repositories.principals),
   readiness: { async check() { await pool.query('SELECT 1'); return (await mediaStore.isReady()) && (await royaltyImportStore.isReady()); } },
   rateLimiter: {

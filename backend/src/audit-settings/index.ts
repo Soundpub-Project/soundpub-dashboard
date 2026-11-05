@@ -40,7 +40,7 @@ const auditProjection = `id, actor_user_id, action, resource_type, resource_id,
   to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at`;
 
 export function createAuditSettingsService(pool: Pool) {
-  async function authorized<T>(actor: Principal, policy: 'admin' | 'authenticated', work: (db: PoolClient) => Promise<T>) {
+  async function authorized<T>(actor: Principal, policy: 'admin' | 'superadmin' | 'authenticated', work: (db: PoolClient) => Promise<T>) {
     if (!allows(actor, policy)) throw new ApiError(403, 'FORBIDDEN');
     return withTransaction(pool, async db => {
       const current = (await usersRepository(db).lock([actor.id], false)).get(actor.id);
@@ -53,6 +53,10 @@ export function createAuditSettingsService(pool: Pool) {
       'SELECT settings, version FROM soundpub.application_settings WHERE id = true')).rows[0]!;
   }
   return {
+    async isMaintenanceEnabled() {
+      const row = await readApplication(pool);
+      return projectSettings(adminSettings, adminDefaults, row.settings).maintenance_enabled;
+    },
     async publicSettings() {
       const row = await readApplication(pool);
       return { settings: projectSettings(publicSettings, publicDefaults, row.settings) };
@@ -83,7 +87,8 @@ export function createAuditSettingsService(pool: Pool) {
     },
     async updateAdminSettings(actor: Principal, input: unknown, requestId: string) {
       const patch = parse(settingsPatch, input);
-      return authorized(actor, 'admin', async db => {
+      const policy = Object.hasOwn(patch.settings, 'maintenance_enabled') ? 'superadmin' : 'admin';
+      return authorized(actor, policy, async db => {
         const row = (await db.query('SELECT settings, version FROM soundpub.application_settings WHERE id = true FOR UPDATE')).rows[0]!;
         if (row.version !== patch.version) throw new ApiError(409, 'CONFLICT');
         for (const [key, variant] of Object.entries({ dashboard_logo_light: 'light', dashboard_logo_dark: 'dark', favicon: 'default' })) {

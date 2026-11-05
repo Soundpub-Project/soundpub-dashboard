@@ -9,6 +9,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { SsoAuthProvider } from "@/context/SsoAuthContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { MaintenanceModeScreen } from "@/components/maintenance/MaintenanceModeScreen";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -90,7 +91,8 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
             <SsoAuthProvider>
-              <Routes>
+              <MaintenanceModeScreen>
+                <Routes>
                 {/* Public routes */}
                 <Route path="/" element={<Auth />} />
                 <Route path="/auth" element={<Auth />} />
@@ -524,7 +526,8 @@ const App = () => (
 
                 {/* 404 */}
                 <Route path="*" element={<NotFound />} />
-              </Routes>
+                </Routes>
+              </MaintenanceModeScreen>
             </SsoAuthProvider>
           </AuthProvider>
         </BrowserRouter>
