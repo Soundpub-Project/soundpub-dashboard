@@ -52,6 +52,7 @@ test('allocation invariant runs once per batch and closes append window after co
 test('royalty detail pagination index matches stable source-row ordering', () => {
   assert.match(detailPagination, /CREATE INDEX royalty_import_entries_batch_detail_order/);
   assert.match(detailPagination, /\(batch_id,\(source_row_number IS NULL\),source_row_number,source_row_id,id\)/);
+  assert.doesNotMatch(detailPagination, /\b(?:BEGIN|COMMIT|ROLLBACK)\b/i);
 });
 
 test('preview staging is checksum-bound and frozen outside worker leases', () => {
