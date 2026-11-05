@@ -1,6 +1,6 @@
 # Supabase to Backend Capability Matrix
 
-Snapshot: 2026-11-05. Baseline commit: `f275d74`.
+Snapshot: 2026-11-05. Baseline commit: `f58cd80`.
 
 Dokumen ini adalah evidence tracker Phase 0. Status berubah hanya setelah source, contract, dan test evidence tersedia.
 
@@ -53,6 +53,17 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Takedown review | unrestricted enum updates | strict reviewer state machine, optimistic version, terminal states, and requester cancellation approval | Backend reviewer actions use dedicated endpoints | VERIFIED | Add reviewer workload filters and SLA dashboard |
 | Takedown DSP progress | free-form target updates | target state machine and server-derived aggregate request status | Backend detail updates each DSP target | VERIFIED | Provider adapter integration |
 | Takedown documents | Supabase private bucket | private upload intent, MIME/checksum/signature verification, scoped metadata, signed download | Backend upload and authorized download available | VERIFIED | Malware scanning provider before production rollout |
+
+## Copyright registration dan contract lifecycle
+
+| Capability | Supabase reference | Backend target/current | Frontend state | Status | Next evidence/work |
+| --- | --- | --- | --- | --- | --- |
+| Registration draft | browser multi-table writes | one owner aggregate, atomic draft replacement, optimistic version, strict applicant/work validation | Backend onboarding dan form cut over | VERIFIED | Browser role E2E |
+| Evidence upload | Supabase private storage | registration-bound private media, MIME/size/checksum verification, evidence freeze after submit | Owner dan admin memakai signed upload/download | VERIFIED | Malware scanning provider before production rollout |
+| Submission | non-atomic form/payment creation | completeness gate, exact terms acceptance, payment intent, history, audit, outbox in one transaction | Backend submit flow cut over | VERIFIED | Legacy data import policy |
+| Registration payment | `create-copyright-invoice` | owner-only idempotent invoice, server-derived amount/currency, raw-body HMAC callback, replay evidence | Owner dapat membuat invoice dan melihat status | PARTIAL | Replace dev mock with production payment provider and settlement reconciliation |
+| Admin review | direct status updates | payment-gated reviewer state machine, optimistic version, notes, composer code | Backend admin list/detail/review cut over | VERIFIED | Browser reviewer E2E |
+| Contract lifecycle | browser PDF service and storage writes | private generated/stamped/signed artifacts, advisory-locked number, strict transitions, audit/outbox | Backend admin contract workflow cut over | VERIFIED | Production template/stamping provider integration |
 
 ## Royalty upload dan ingestion
 
@@ -161,6 +172,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 - 2026-11-05: Copyright royalty CSV preview is backend-owned, admin-only, exact-money, read-only, and explicitly blocks posting until composer identity and work-allocation contracts exist. Frontend backend-mode parses CSV without Supabase fallback. Full Docker suite produced 337 tests, 331 pass, 0 fail, 6 skipped.
 - 2026-11-05: Versioned copyright beneficiary mappings are append-only, period-scoped, case-insensitive, overlap-guarded, revocable, and restricted to active copyright users. Preview resolves and snapshots mapping IDs/owners while remaining write-free; posting requires every row to resolve.
 - 2026-11-05: Copyright royalty posting now preserves production's aggregate final-amount semantics: each composer row posts 100% to its period-resolved copyright beneficiary. Source/period replay is idempotent, changed payload conflicts, finance events are exact minor units, correction is full-batch append-only reversal, and independent reconciliation binds snapshot, audit, and outbox evidence. Frontend backend-mode supports posting, history/detail, mapping administration, own-role royalty history, correction, and reconciliation without Supabase fallback. Full Docker suite produced 346 tests, 340 pass, 0 fail, 6 skipped.
+- 2026-11-05: Copyright registration is backend-owned in dev. Draft, private evidence, submit/payment gate, admin review, contract artifacts, contract numbering, lifecycle, audit, and outbox are transactional. Frontend owner/admin flows no longer call Supabase in backend mode. Full Docker suite produced 379 tests, 373 pass, 0 fail, 6 skipped. Migration `0052`-`0054` is applied only to `dashboard-sounpub-dev`; production provider remains intentionally deferred.
 
 ## Remaining blockers
 
@@ -170,4 +182,4 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 5. Payment provider, payout settlement provider, submission provider, and notification delivery remain partial or mock-oriented.
 6. Royalty upload is cut over when backend royalty/release domains are enabled, but frontend inventory still contains about 368 Supabase call chains in other domains; root production build does not enable backend domains.
 7. Keycloak adapter is implemented; production realm/client configuration and browser E2E remain.
-8. Copyright royalty preview/posting/history and takedown are backend-owned; copyright registration, provider invoice/settlement, and several release actions remain direct or unavailable.
+8. Copyright royalty, takedown, and copyright registration are backend-owned in dev. Production payment/stamping providers and several release actions remain partial or unavailable.

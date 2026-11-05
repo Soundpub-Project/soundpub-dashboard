@@ -572,3 +572,13 @@ Backend parity selesai hanya jika:
 - Dokumen memakai media pipeline private yang sama: PDF/image allowlist, batas 10 MiB, checksum dan signature validation, attachment metadata atomik saat completion, serta signed download berotorisasi.
 - Frontend backend-mode memiliki list, submission, partial-track selection, contact snapshot, multi-DSP progress, reviewer actions, cancellation, document upload/download, dan timeline tanpa Supabase fallback.
 - PostgreSQL disposable integration membuktikan scope label/artist/admin, IDOR denial, exact replay, changed-payload conflict, duplicate active scope, transition sequence, DSP aggregation, cancellation, document attachment, audit, dan outbox.
+
+## 21. Copyright registration checkpoint
+
+- Backend memiliki aggregate pemohon, karya, pembayaran, status history, kontrak, dan dokumen private dengan optimistic version serta satu registrasi per owner.
+- Draft replacement atomik. Submit memvalidasi identitas, bank, minimal satu karya, bukti identitas, bukti karya, dan terms version/checksum sebelum membuat payment intent.
+- Invoice hanya dapat dibuat owner saat `AWAITING_PAYMENT`; amount/currency ditentukan server. Mock provider hanya aktif di development/test dan callback memakai exact raw-body HMAC, freshness window, event replay guard, audit, outbox, dan receipt append-only.
+- Review admin tidak dapat melewati payment gate. Transisi review dan kontrak memakai state machine eksplisit, version check, catatan wajib untuk revisi/reject/void, serta artifact type yang terikat ke registrasi.
+- Nomor kontrak memakai advisory lock bulanan. Generated, stamped, dan signed memakai private media artifact terverifikasi; activation menambahkan role copyright secara idempotent.
+- Frontend backend-mode memiliki onboarding, draft, private upload, submit, invoice request, status, admin list/detail, review, artifact download/upload, dan contract lifecycle tanpa Supabase/PDF service fallback.
+- Migration `0052`-`0054` hanya diterapkan pada `dashboard-sounpub-dev`. Full Docker suite: 379 tests, 373 pass, 0 fail, 6 skipped. Production payment dan stamping provider tetap deferred.
