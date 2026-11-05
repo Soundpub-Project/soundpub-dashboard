@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { AlertCircle, FileText, Loader2, ShieldAlert } from 'lucide-react';
+import { AlertCircle, CheckCircle, FileText, Loader2, ShieldAlert } from 'lucide-react';
 import { copyrightApi, type CopyrightRoyaltyPreview, type CopyrightRoyaltyPreviewRequest } from '@/api/copyright';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -9,7 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { parseCsvDocument } from '@/lib/csv';
+import { toast } from 'sonner';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_ROWS = 1000;
@@ -70,10 +72,14 @@ export function BackendCopyrightRoyaltyPreview() {
   const [preview, setPreview] = useState<CopyrightRoyaltyPreview | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [postedBatchId, setPostedBatchId] = useState('');
 
   const selectFile = async (selected: File) => {
     abortRef.current?.abort();
     setPreview(null);
+    setPostedBatchId('');
     setStatement(null);
     setError('');
     setFile(selected);
@@ -83,6 +89,22 @@ export function BackendCopyrightRoyaltyPreview() {
       setStatement(parseStatement(await selected.text(), selected.name));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'CSV tidak dapat dibaca.');
+    }
+  };
+
+  const postImport = async () => {
+    if (!statement || !preview?.posting_allowed || posting) return;
+    setPosting(true);
+    setError('');
+    try {
+      const result = await copyrightApi.postImport({ expected_checksum: preview.checksum, statement });
+      setPostedBatchId(result.batch.id);
+      setConfirmOpen(false);
+      toast.success(result.replayed ? 'Batch sudah pernah diposting.' : 'Royalti berhasil diposting.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Posting royalti gagal.');
+    } finally {
+      setPosting(false);
     }
   };
 
@@ -105,18 +127,20 @@ export function BackendCopyrightRoyaltyPreview() {
 
   return <DashboardLayout><div className="space-y-6">
     <div><h1 className="text-3xl font-bold tracking-tight">Preview Royalti Hak Cipta</h1><p className="mt-1 text-muted-foreground">Validasi satu batch CSV melalui backend tanpa membuat posting keuangan.</p></div>
-    <Alert><ShieldAlert className="h-4 w-4" /><AlertTitle>Mode preview saja</AlertTitle><AlertDescription>Posting dan upload final dinonaktifkan. Kontrak pemetaan identitas komposer dan alokasi karya belum siap.</AlertDescription></Alert>
+    <Alert><ShieldAlert className="h-4 w-4" /><AlertTitle>Validasi sebelum posting</AlertTitle><AlertDescription>Posting dinonaktifkan sampai semua kode komposer memiliki mapping penerima aktif untuk periode batch.</AlertDescription></Alert>
     <Card><CardHeader><CardTitle>Pilih batch CSV</CardTitle><CardDescription>Kolom wajib: composer_code, composer_name, total_net_royalti, period. Maksimal 1.000 baris dan satu period per batch.</CardDescription></CardHeader><CardContent className="space-y-4">
       <div className="space-y-2"><Label htmlFor="copyright-royalty-csv">File CSV</Label><Input ref={inputRef} id="copyright-royalty-csv" type="file" accept=".csv,text/csv" disabled={loading} onChange={event => { const selected = event.target.files?.[0]; if (selected) void selectFile(selected); }} /></div>
       {file && <Badge variant="secondary"><FileText className="mr-2 h-3 w-3" />{file.name} ({Math.ceil(file.size / 1024)} KB)</Badge>}
       {statement && <div className="grid gap-3 rounded-lg border bg-muted/30 p-4 sm:grid-cols-3"><div><p className="text-xs text-muted-foreground">Period</p><p className="font-medium">{statement.period}</p></div><div><p className="text-xs text-muted-foreground">Baris</p><p className="font-medium">{statement.rows.length}</p></div><div><p className="text-xs text-muted-foreground">Mata uang</p><p className="font-medium">IDR</p></div></div>}
       {error && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Preview tidak tersedia</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
-      <div className="flex flex-wrap gap-2"><Button onClick={() => void submitPreview()} disabled={!statement || loading}>{loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{loading ? 'Memvalidasi...' : 'Kirim preview ke backend'}</Button><Button variant="outline" disabled>Posting dinonaktifkan</Button></div>
+      <div className="flex flex-wrap gap-2"><Button onClick={() => void submitPreview()} disabled={!statement || loading || posting}>{loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{loading ? 'Memvalidasi...' : 'Kirim preview ke backend'}</Button></div>
     </CardContent></Card>
     {preview && <Card><CardHeader><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><CardTitle>Hasil preview backend</CardTitle><CardDescription>{preview.rows.length} baris dinormalisasi. Status {preview.status}.</CardDescription></div><Badge variant="outline">Total {formatIdr(preview.total_amount)}</Badge></div></CardHeader><CardContent className="space-y-5">
-      <Alert variant="destructive"><ShieldAlert className="h-4 w-4" /><AlertTitle>Posting diblokir</AlertTitle><AlertDescription><ul className="mt-1 list-disc space-y-1 pl-5">{preview.blockers.map(blocker => <li key={blocker}>{blockerLabels[blocker] ?? blocker}</li>)}</ul></AlertDescription></Alert>
+      {preview.posting_allowed ? <Alert><CheckCircle className="h-4 w-4" /><AlertTitle>Siap diposting</AlertTitle><AlertDescription>Semua mapping lengkap. Periksa total dan penerima sebelum konfirmasi.</AlertDescription></Alert> : <Alert variant="destructive"><ShieldAlert className="h-4 w-4" /><AlertTitle>Posting diblokir</AlertTitle><AlertDescription><ul className="mt-1 list-disc space-y-1 pl-5">{preview.blockers.map(blocker => <li key={blocker}>{blockerLabels[blocker] ?? blocker}</li>)}</ul></AlertDescription></Alert>}
+      <div className="grid gap-3 rounded-lg border bg-muted/20 p-4 sm:grid-cols-2"><div><p className="text-xs text-muted-foreground">Kebijakan posting</p><p className="break-all text-sm font-medium">{preview.policy_code}</p></div><div><p className="text-xs text-muted-foreground">Checksum kebijakan</p><p className="break-all font-mono text-xs">{preview.policy_checksum}</p></div></div>
       <div className="overflow-x-auto rounded-lg border"><Table><TableHeader><TableRow><TableHead>Kode komposer</TableHead><TableHead>Nama komposer</TableHead><TableHead>Penerima backend</TableHead><TableHead>Status mapping</TableHead><TableHead className="text-right">Royalti bersih</TableHead></TableRow></TableHeader><TableBody>{preview.rows.map(row => <TableRow key={row.composer_code}><TableCell className="font-mono text-sm">{row.composer_code}</TableCell><TableCell>{row.composer_name}</TableCell><TableCell>{row.canonical_name ?? "-"}</TableCell><TableCell><Badge variant={row.status === "MATCHED" ? "default" : "destructive"}>{row.status}</Badge></TableCell><TableCell className="text-right tabular-nums">{formatIdr(row.total_net_royalti)}</TableCell></TableRow>)}</TableBody></Table></div>
-      <Button className="w-full sm:w-auto" disabled>Upload dan posting belum tersedia</Button>
+      {postedBatchId ? <Alert><CheckCircle className="h-4 w-4" /><AlertTitle>Posting selesai</AlertTitle><AlertDescription>ID batch: <span className="font-mono">{postedBatchId}</span></AlertDescription></Alert> : <Button className="w-full sm:w-auto" disabled={!preview.posting_allowed || posting} onClick={() => setConfirmOpen(true)}>{posting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Posting batch royalti</Button>}
     </CardContent></Card>}
+    <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Posting batch royalti?</AlertDialogTitle><AlertDialogDescription>Tindakan ini membuat posting keuangan untuk {preview?.rows.length ?? 0} baris senilai {preview ? formatIdr(preview.total_amount) : '-'}. Mapping dan checksum preview akan divalidasi ulang oleh backend.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={posting}>Batal</AlertDialogCancel><AlertDialogAction disabled={posting || !preview?.posting_allowed} onClick={event => { event.preventDefault(); void postImport(); }}>{posting ? 'Memposting...' : 'Ya, posting batch'}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
   </div></DashboardLayout>;
 }

@@ -556,5 +556,8 @@ Backend parity selesai hanya jika:
 - Admin dan superadmin dapat mengirim batch komposer ke `POST /api/v1/copyright/royalties/preview`.
 - Backend memvalidasi kontrak ketat, kode komposer unik, period IDR, aritmetika exact minor-unit, dan beneficiary mapping versioned tanpa write finansial.
 - Frontend backend-mode membaca CSV terstruktur, menolak format ambigu, dan menampilkan hasil normalisasi serta total tanpa Supabase fallback.
-- Preview selalu `UNRECONCILED`, `posting_allowed=false`; mapping yang tidak ditemukan tetap dikarantina dan kontrak alokasi karya tetap menjadi blocker posting.
-- Tahap berikutnya wajib menambah identity mapping, work allocation, idempotent import/posting, immutable correction/reversal, ledger attribution, reconciliation, dan history sebelum kontrol posting diaktifkan.
+- Preview selalu read-only dan `UNRECONCILED`; `posting_allowed=true` hanya ketika seluruh kode komposer memiliki mapping beneficiary aktif untuk period batch.
+- Posting memakai policy `LEGACY_AGGREGATE_100_PERCENT_TO_RESOLVED_BENEFICIARY_V1`: nilai final legacy dialokasikan 100% ke beneficiary hasil mapping tanpa mengarang work split yang tidak ada di production.
+- Import source/batch/period idempotent, payload berbeda konflik, batch dan entry immutable, ledger exact minor-unit, dan audit/outbox berada dalam transaksi yang sama.
+- Koreksi membalik penuh semua beneficiary secara append-only. Rekonsiliasi membutuhkan admin independen dari uploader dan mengikat snapshot checksum, issue list, audit, serta outbox.
+- Frontend backend-mode menyediakan preview/posting, history/detail, status corrected/reconciled, mapping administration, own-role royalty history, koreksi, dan rekonsiliasi tanpa fallback Supabase.

@@ -1,5 +1,5 @@
 import { usesBackendFinance } from '@/components/finance/mode';
-import { FinanceUnavailable } from '@/components/finance/FinanceUnavailable';
+import { BackendComposerRoyalties } from '@/components/finance/BackendComposerRoyalties';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -366,6 +366,6 @@ function LegacyComposerRoyalties() {
 
 
 export default function ComposerRoyalties() {
-  if (usesBackendFinance()) return <FinanceUnavailable />;
+  if (usesBackendFinance()) return <DashboardLayout><BackendComposerRoyalties /></DashboardLayout>;
   return <LegacyComposerRoyalties />;
 }

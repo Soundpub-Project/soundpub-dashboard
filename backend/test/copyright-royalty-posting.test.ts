@@ -78,6 +78,7 @@ test('copyright royalty posting is atomic, idempotent, isolated, reconcilable an
     ]);
     await assert.rejects(service.correct(reviewer, posted.batch.id, { reason: 'duplicate' }, 'correct-again'),
       { code: 'COPYRIGHT_ROYALTY_ALREADY_CORRECTED' });
+    assert.equal(((await service.getImport(uploader, posted.batch.id)) as any).status, 'CORRECTED');
     const correctedBalance = await createBalanceService(runtime).get(beneficiary);
     assert.equal(correctedBalance.status, 'RECONCILED');
     assert.equal(correctedBalance.available, '0.00');

@@ -45,13 +45,13 @@ export const copyrightRoyaltyListQuery = z.strictObject({
 });
 export const copyrightRoyaltyEntry = z.strictObject({
   id: uuid, batch_id: uuid, composer_code: text, composer_name: text, beneficiary_id: uuid,
-  canonical_name: text, mapping_id: uuid, amount: money, policy_code: z.literal(COPYRIGHT_ROYALTY_POLICY_CODE),
+  canonical_name: text, mapping_id: uuid, period: month, amount: money, policy_code: z.literal(COPYRIGHT_ROYALTY_POLICY_CODE),
   created_at: z.iso.datetime(),
 });
 export const copyrightRoyaltyBatch = z.strictObject({
   id: uuid, source: text, source_batch: text, period: month, currency: z.literal('IDR'), uploader_id: uuid,
   row_count: z.number().int().min(1), total_amount: money, checksum, policy_code: z.literal(COPYRIGHT_ROYALTY_POLICY_CODE),
-  policy_checksum: checksum, status: z.enum(['UNRECONCILED', 'RECONCILED']), created_at: z.iso.datetime(),
+  policy_checksum: checksum, status: z.enum(['UNRECONCILED', 'RECONCILED', 'CORRECTED']), created_at: z.iso.datetime(),
 });
 export const copyrightRoyaltyImportDetail = copyrightRoyaltyBatch.extend({ entries: z.array(copyrightRoyaltyEntry) });
 export const copyrightRoyaltyImportList = z.strictObject({ items: z.array(copyrightRoyaltyBatch), next_offset: z.number().int().nullable() });

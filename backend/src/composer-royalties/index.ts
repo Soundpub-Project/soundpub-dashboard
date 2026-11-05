@@ -70,9 +70,10 @@ export function createComposerRoyaltiesService(pool: Pool): ComposerRoyaltiesSer
   }
   const batchProjection = `b.id,b.source,b.source_batch,b.period,b.currency,b.uploader_id,b.row_count,
     b.total_amount::numeric(24,2)::text AS total_amount,b.checksum,b.policy_code,b.policy_checksum,
-    CASE WHEN soundpub.copyright_royalty_reconciliation_intact(b.id) THEN 'RECONCILED' ELSE 'UNRECONCILED' END AS status,
+    CASE WHEN soundpub.copyright_royalty_correction_intact(b.id) THEN 'CORRECTED'
+      WHEN soundpub.copyright_royalty_reconciliation_intact(b.id) THEN 'RECONCILED' ELSE 'UNRECONCILED' END AS status,
     to_char(b.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at`;
-  const entryProjection = `e.id,e.batch_id,e.composer_code,e.composer_name,e.beneficiary_id,e.canonical_name,e.mapping_id,
+  const entryProjection = `e.id,e.batch_id,e.composer_code,e.composer_name,e.beneficiary_id,e.canonical_name,e.mapping_id,b.period,
     e.amount::numeric(24,2)::text AS amount,e.policy_code,
     to_char(e.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at`;
   async function detail(db: PoolClient, id: string, beneficiaryId?: string) {
@@ -81,6 +82,7 @@ export function createComposerRoyaltiesService(pool: Pool): ComposerRoyaltiesSer
     [id, beneficiaryId ?? null])).rows[0];
     if (!batch) throw new ApiError(404, 'NOT_FOUND');
     const entries = (await db.query(`SELECT ${entryProjection} FROM soundpub.copyright_royalty_entries e
+      JOIN soundpub.copyright_royalty_batches b ON b.id=e.batch_id
       WHERE e.batch_id=$1 AND ($2::uuid IS NULL OR e.beneficiary_id=$2) ORDER BY e.created_at,e.id`, [id, beneficiaryId ?? null])).rows;
     return { ...batch, entries };
   }
@@ -159,6 +161,7 @@ export function createComposerRoyaltiesService(pool: Pool): ComposerRoyaltiesSer
         if (!admin && !current.roles.includes('copyright')) throw new ApiError(403, 'FORBIDDEN');
         const limit = Number(query.limit ?? 50), offset = Number(query.offset ?? 0);
         const rows = (await db.query(`SELECT ${entryProjection} FROM soundpub.copyright_royalty_entries e
+          JOIN soundpub.copyright_royalty_batches b ON b.id=e.batch_id
           WHERE ($1::uuid IS NULL OR e.beneficiary_id=$1) ORDER BY e.created_at DESC,e.id DESC LIMIT $2 OFFSET $3`,
         [admin ? null : current.id, limit + 1, offset])).rows;
         return { items: rows.slice(0, limit), next_offset: rows.length > limit ? offset + limit : null };

@@ -1,5 +1,5 @@
 import { usesBackendFinance } from '@/components/finance/mode';
-import { FinanceUnavailable } from '@/components/finance/FinanceUnavailable';
+import { BackendCopyrightRoyaltyHistory } from '@/components/finance/BackendCopyrightRoyaltyHistory';
 ﻿import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -318,6 +318,6 @@ function LegacyCopyrightRoyaltyUploadHistory() {
   );
 }
 export default function CopyrightRoyaltyUploadHistory() {
-  if (usesBackendFinance()) return <FinanceUnavailable title="Royalti komposer" />;
+  if (usesBackendFinance()) return <DashboardLayout><BackendCopyrightRoyaltyHistory /></DashboardLayout>;
   return <LegacyCopyrightRoyaltyUploadHistory />;
 }
