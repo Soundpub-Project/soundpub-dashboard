@@ -71,6 +71,30 @@ export const takedownEligibleReleaseQuery = z.strictObject({
   cursor: z.string().min(1).max(300).optional(),
   search: z.string().trim().min(1).max(200).optional(),
 });
+export const takedownTransition = z.strictObject({
+  version: z.number().int().min(1), status: z.enum(['UNDER_REVIEW', 'NEED_DOCUMENT', 'APPROVED', 'SENT_TO_DSP', 'REJECTED', 'CANCELLED']),
+  note: z.string().trim().max(10_000).nullable().optional(),
+}).superRefine((value, context) => {
+  if (['NEED_DOCUMENT', 'REJECTED'].includes(value.status) && !value.note) {
+    context.addIssue({ code: 'custom', path: ['note'], message: 'Transition note required' });
+  }
+});
+export const takedownCancellation = z.strictObject({
+  version: z.number().int().min(1), reason: requiredText(2_000),
+});
+export const takedownTargetTransition = z.strictObject({
+  version: z.number().int().min(1), status: z.enum(['SUBMITTED', 'PROCESSING', 'COMPLETED', 'REJECTED']),
+  external_reference: z.string().trim().min(1).max(1_000).nullable().optional(),
+  failure_reason: z.string().trim().min(1).max(10_000).nullable().optional(),
+  admin_note: z.string().trim().max(10_000).nullable().optional(),
+}).superRefine((value, context) => {
+  if (value.status === 'SUBMITTED' && !value.external_reference) {
+    context.addIssue({ code: 'custom', path: ['external_reference'], message: 'External reference required' });
+  }
+  if (value.status === 'REJECTED' && !value.failure_reason) {
+    context.addIssue({ code: 'custom', path: ['failure_reason'], message: 'Failure reason required' });
+  }
+});
 
 export const takedownItemDto = z.strictObject({
   id: z.uuid(), release_id: z.uuid(), track_id: z.uuid().nullable(), title_snapshot: z.string(),
@@ -93,7 +117,8 @@ export const takedownDto = z.strictObject({
   declaration_version: z.string(), declaration_checksum: z.string(), declaration_accepted_at: z.string(),
   reviewer_id: z.uuid().nullable(), review_note: z.string().nullable(),
   rejection_reason: z.string().nullable(), submitted_at: z.string(), reviewed_at: z.string().nullable(),
-  sent_to_dsp_at: z.string().nullable(), completed_at: z.string().nullable(), version: z.number().int().min(1),
+  sent_to_dsp_at: z.string().nullable(), completed_at: z.string().nullable(), status_before_cancel: takedownStatus.nullable(),
+  version: z.number().int().min(1),
   created_at: z.string(), updated_at: z.string(), items: z.array(takedownItemDto),
   targets: z.array(takedownTargetDto), history: z.array(takedownHistoryDto),
 });
@@ -106,3 +131,6 @@ export const takedownEligibleReleaseDto = z.strictObject({
 export type TakedownCreate = z.infer<typeof takedownCreate>;
 export type TakedownListQuery = z.infer<typeof takedownListQuery>;
 export type TakedownEligibleReleaseQuery = z.infer<typeof takedownEligibleReleaseQuery>;
+export type TakedownTransition = z.infer<typeof takedownTransition>;
+export type TakedownCancellation = z.infer<typeof takedownCancellation>;
+export type TakedownTargetTransition = z.infer<typeof takedownTargetTransition>;

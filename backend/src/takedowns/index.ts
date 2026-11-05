@@ -8,7 +8,9 @@ import { withTransaction } from '../db/pool.js';
 import { usersRepository } from '../users/repository.js';
 import {
   takedownCreate, takedownEligibleReleaseQuery, takedownListQuery,
-  type TakedownCreate, type TakedownEligibleReleaseQuery, type TakedownListQuery,
+  takedownCancellation, takedownTargetTransition, takedownTransition,
+  type TakedownCancellation, type TakedownCreate, type TakedownEligibleReleaseQuery,
+  type TakedownListQuery, type TakedownTargetTransition, type TakedownTransition,
 } from './contracts.js';
 export * from './contracts.js';
 
@@ -48,7 +50,7 @@ const requestProjection = `r.id,r.request_code,r.requester_id,r.label_id,r.reque
   r.status,r.priority,r.contact_name,r.contact_position,r.contact_phone,r.contact_email,r.contact_address,
   r.declaration_version,r.declaration_checksum,
   to_char(r.declaration_accepted_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS declaration_accepted_at,
-  r.reviewer_id,r.review_note,r.rejection_reason,
+  r.reviewer_id,r.review_note,r.rejection_reason,r.status_before_cancel,
   to_char(r.submitted_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS submitted_at,
   to_char(r.reviewed_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS reviewed_at,
   to_char(r.sent_to_dsp_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS sent_to_dsp_at,
@@ -74,15 +76,15 @@ export function createTakedownsService(pool: Pool) {
     return current;
   }
   function accessSql(admin: boolean) {
-    return admin ? 'TRUE' : '(r.requester_id=$1 OR r.label_id=$1)';
+    return admin ? '($1::uuid IS NOT NULL)' : '(r.requester_id=$1 OR r.label_id=$1)';
   }
-  async function find(db: PoolClient, actor: Principal, id: string) {
-    const current = await lockedActor(db, actor, false);
+  async function find(db: PoolClient, actor: Principal, id: string, lock = false) {
+    const current = await lockedActor(db, actor, lock);
     const admin = allows(current, 'admin');
     const row = (await db.query(`SELECT ${requestProjection} FROM soundpub.takedown_requests r
-      WHERE r.id=$2 AND ${accessSql(admin)}`, [current.id, id])).rows[0];
+      WHERE r.id=$2 AND ${accessSql(admin)} ${lock ? 'FOR UPDATE OF r' : ''}`, [current.id, id])).rows[0];
     if (!row) throw new ApiError(404, 'NOT_FOUND');
-    return row;
+    return { current, row };
   }
   async function eligibleRelease(db: PoolClient, current: Principal, releaseId: string, write: boolean) {
     const row = (await db.query<ReleaseRow>(`SELECT r.id,r.title,r.artist_name,r.upc,r.label_id,r.artist_id,r.artist_user_id,r.created_by,r.status,
@@ -120,7 +122,7 @@ export function createTakedownsService(pool: Pool) {
       });
     },
     async get(actor: Principal, id: string) {
-      return withTransaction(pool, db => find(db, actor, id));
+      return withTransaction(pool, async db => (await find(db, actor, id)).row);
     },
     async eligibleReleases(actor: Principal, value: TakedownEligibleReleaseQuery) {
       const query = parse(takedownEligibleReleaseQuery, value);
@@ -202,7 +204,7 @@ export function createTakedownsService(pool: Pool) {
           resourceId: id, metadata: { releaseId: release.id, labelId: release.label_id, targets: normalized.targets } });
         await repository.outbox.enqueue({ topic: 'takedown.submitted', payload: { requestId: id, requesterId: current.id,
           releaseId: release.id, labelId: release.label_id }, idempotencyKey: `takedown.submitted:${id}` });
-        const response = await find(db, current, id);
+        const response = (await find(db, current, id)).row;
         if (!await repository.idempotency.complete({ scope, key: idempotencyKey, responseStatus: 200, responseBody: response })) {
           throw new ApiError(409, 'CONFLICT');
         }
@@ -211,6 +213,138 @@ export function createTakedownsService(pool: Pool) {
         if (error && typeof error === 'object' && 'code' in error && error.code === '23505') throw new ApiError(409, 'CONFLICT');
         throw error;
       }
+    },
+    async transition(actor: Principal, id: string, value: TakedownTransition, idempotencyKey: string, requestId: string) {
+      const input = parse(takedownTransition, value);
+      if (!idempotencyKey || idempotencyKey.length > 200) throw new ApiError(400, 'BAD_REQUEST');
+      const requestHash = createHash('sha256').update(JSON.stringify(input)).digest('hex');
+      return withTransaction(pool, async db => {
+        const { current, row } = await find(db, actor, id, true);
+        if (!allows(current, 'admin')) throw new ApiError(404, 'NOT_FOUND');
+        const repository = createRepositories(db);
+        const scope = `takedown.transition:${id}`;
+        const claim = await repository.idempotency.begin({ scope, key: idempotencyKey, requestHash,
+          expiresAt: new Date(Date.now() + 7 * 86_400_000) });
+        if (claim.state === 'completed') return claim.responseBody;
+        if (claim.state !== 'new') throw new ApiError(409, 'CONFLICT');
+        const transitions: Record<string, readonly string[]> = {
+          SUBMITTED: ['UNDER_REVIEW'], UNDER_REVIEW: ['NEED_DOCUMENT', 'APPROVED', 'REJECTED'],
+          NEED_DOCUMENT: ['UNDER_REVIEW', 'REJECTED'], APPROVED: ['SENT_TO_DSP'], CANCEL_REQUESTED: ['CANCELLED'],
+        };
+        if (!transitions[row.status]?.includes(input.status)) throw new ApiError(409, 'CONFLICT');
+        const completed = input.status === 'CANCELLED';
+        const result = await db.query(`UPDATE soundpub.takedown_requests SET status=$3,reviewer_id=$4,
+          review_note=CASE WHEN $3='REJECTED' THEN review_note ELSE $5 END,
+          rejection_reason=CASE WHEN $3='REJECTED' THEN $5 ELSE rejection_reason END,
+          reviewed_at=CASE WHEN $3 IN ('UNDER_REVIEW','NEED_DOCUMENT','APPROVED','REJECTED') THEN clock_timestamp() ELSE reviewed_at END,
+          sent_to_dsp_at=CASE WHEN $3='SENT_TO_DSP' THEN clock_timestamp() ELSE sent_to_dsp_at END,
+          completed_at=CASE WHEN $6::boolean THEN clock_timestamp() ELSE completed_at END,updated_at=clock_timestamp()
+          WHERE id=$1 AND version=$2 RETURNING id`, [id,input.version,input.status,current.id,input.note ?? null,completed]);
+        if (result.rowCount !== 1) throw new ApiError(409, 'CONFLICT');
+        await db.query(`INSERT INTO soundpub.takedown_status_history(id,request_id,old_status,new_status,changed_by,note)
+          VALUES ($1,$2,$3,$4,$5,$6)`, [randomUUID(),id,row.status,input.status,current.id,input.note ?? null]);
+        await repository.audit.append({ actorUserId: current.id, action: 'takedown.transitioned', resourceType: 'takedown',
+          resourceId: id, metadata: { requestId, from: row.status, to: input.status, version: input.version } });
+        await repository.outbox.enqueue({ topic: 'takedown.status.changed', payload: { requestId: id,
+          requesterId: row.requester_id, from: row.status, to: input.status },
+        idempotencyKey: `takedown.status.changed:${id}:${input.version + 1}` });
+        const response = (await find(db, current, id)).row;
+        if (!await repository.idempotency.complete({ scope, key: idempotencyKey, responseStatus: 200, responseBody: response })) {
+          throw new ApiError(409, 'CONFLICT');
+        }
+        return response;
+      });
+    },
+    async requestCancellation(actor: Principal, id: string, value: TakedownCancellation,
+      idempotencyKey: string, requestId: string) {
+      const input = parse(takedownCancellation, value);
+      if (!idempotencyKey || idempotencyKey.length > 200) throw new ApiError(400, 'BAD_REQUEST');
+      const requestHash = createHash('sha256').update(JSON.stringify(input)).digest('hex');
+      return withTransaction(pool, async db => {
+        const { current, row } = await find(db, actor, id, true);
+        if (row.requester_id !== current.id || !['SUBMITTED','UNDER_REVIEW','NEED_DOCUMENT','APPROVED'].includes(row.status)) {
+          throw new ApiError(404, 'NOT_FOUND');
+        }
+        const repository = createRepositories(db);
+        const scope = `takedown.cancel:${id}`;
+        const claim = await repository.idempotency.begin({ scope, key: idempotencyKey, requestHash,
+          expiresAt: new Date(Date.now() + 7 * 86_400_000) });
+        if (claim.state === 'completed') return claim.responseBody;
+        if (claim.state !== 'new') throw new ApiError(409, 'CONFLICT');
+        const result = await db.query(`UPDATE soundpub.takedown_requests
+          SET status_before_cancel=status,status='CANCEL_REQUESTED',updated_at=clock_timestamp()
+          WHERE id=$1 AND version=$2 RETURNING id`, [id,input.version]);
+        if (result.rowCount !== 1) throw new ApiError(409, 'CONFLICT');
+        await db.query(`INSERT INTO soundpub.takedown_status_history(id,request_id,old_status,new_status,changed_by,note)
+          VALUES ($1,$2,$3,'CANCEL_REQUESTED',$4,$5)`, [randomUUID(),id,row.status,current.id,input.reason]);
+        await repository.audit.append({ actorUserId: current.id, action: 'takedown.cancellation_requested', resourceType: 'takedown',
+          resourceId: id, metadata: { requestId, from: row.status, version: input.version } });
+        await repository.outbox.enqueue({ topic: 'takedown.status.changed', payload: { requestId: id,
+          requesterId: current.id, from: row.status, to: 'CANCEL_REQUESTED' },
+        idempotencyKey: `takedown.status.changed:${id}:${input.version + 1}` });
+        const response = (await find(db, current, id)).row;
+        if (!await repository.idempotency.complete({ scope, key: idempotencyKey, responseStatus: 200, responseBody: response })) {
+          throw new ApiError(409, 'CONFLICT');
+        }
+        return response;
+      });
+    },
+    async transitionTarget(actor: Principal, id: string, targetId: string, value: TakedownTargetTransition,
+      idempotencyKey: string, requestId: string) {
+      const input = parse(takedownTargetTransition, value);
+      if (!idempotencyKey || idempotencyKey.length > 200) throw new ApiError(400, 'BAD_REQUEST');
+      const requestHash = createHash('sha256').update(JSON.stringify(input)).digest('hex');
+      return withTransaction(pool, async db => {
+        const { current, row } = await find(db, actor, id, true);
+        if (!allows(current, 'admin') || !['SENT_TO_DSP','PROCESSING_DSP','PARTIALLY_COMPLETED'].includes(row.status)) {
+          throw new ApiError(404, 'NOT_FOUND');
+        }
+        const target = (await db.query<{ id: string; status: string; version: number }>(
+          'SELECT id,status,version FROM soundpub.takedown_request_targets WHERE id=$1 AND request_id=$2 FOR UPDATE',
+          [targetId,id])).rows[0];
+        if (!target) throw new ApiError(404, 'NOT_FOUND');
+        const transitions: Record<string, readonly string[]> = { PENDING: ['SUBMITTED'],
+          SUBMITTED: ['PROCESSING','COMPLETED','REJECTED'], PROCESSING: ['COMPLETED','REJECTED'] };
+        if (!transitions[target.status]?.includes(input.status)) throw new ApiError(409, 'CONFLICT');
+        const repository = createRepositories(db);
+        const scope = `takedown.target.transition:${targetId}`;
+        const claim = await repository.idempotency.begin({ scope, key: idempotencyKey, requestHash,
+          expiresAt: new Date(Date.now() + 7 * 86_400_000) });
+        if (claim.state === 'completed') return claim.responseBody;
+        if (claim.state !== 'new') throw new ApiError(409, 'CONFLICT');
+        const changed = await db.query(`UPDATE soundpub.takedown_request_targets SET status=$3,
+          external_reference=COALESCE($4,external_reference),failure_reason=CASE WHEN $3='REJECTED' THEN $5 ELSE NULL END,
+          admin_note=$6,submitted_at=CASE WHEN $3='SUBMITTED' THEN clock_timestamp() ELSE submitted_at END,
+          completed_at=CASE WHEN $3 IN ('COMPLETED','REJECTED') THEN clock_timestamp() ELSE NULL END,updated_at=clock_timestamp()
+          WHERE id=$1 AND version=$2 RETURNING id`, [targetId,input.version,input.status,input.external_reference ?? null,
+          input.failure_reason ?? null,input.admin_note ?? null]);
+        if (changed.rowCount !== 1) throw new ApiError(409, 'CONFLICT');
+        const counts = (await db.query<{ total: number; completed: number; rejected: number; processing: number; submitted: number }>(
+          `SELECT count(*)::int AS total,count(*) FILTER (WHERE status='COMPLETED')::int AS completed,
+            count(*) FILTER (WHERE status='REJECTED')::int AS rejected,count(*) FILTER (WHERE status='PROCESSING')::int AS processing,
+            count(*) FILTER (WHERE status='SUBMITTED')::int AS submitted
+           FROM soundpub.takedown_request_targets WHERE request_id=$1`, [id])).rows[0]!;
+        const aggregate = counts.completed === counts.total ? 'COMPLETED'
+          : counts.completed + counts.rejected > 0 ? 'PARTIALLY_COMPLETED'
+          : counts.processing > 0 ? 'PROCESSING_DSP' : 'SENT_TO_DSP';
+        if (aggregate !== row.status) {
+          await db.query(`UPDATE soundpub.takedown_requests SET status=$2,
+            completed_at=CASE WHEN $2='COMPLETED' THEN clock_timestamp() ELSE NULL END,updated_at=clock_timestamp()
+            WHERE id=$1`, [id,aggregate]);
+          await db.query(`INSERT INTO soundpub.takedown_status_history(id,request_id,old_status,new_status,changed_by,note)
+            VALUES ($1,$2,$3,$4,$5,$6)`, [randomUUID(),id,row.status,aggregate,current.id,'Status dihitung dari target DSP.']);
+        }
+        await repository.audit.append({ actorUserId: current.id, action: 'takedown.target.transitioned', resourceType: 'takedown',
+          resourceId: id, metadata: { requestId, targetId, from: target.status, to: input.status, aggregate } });
+        await repository.outbox.enqueue({ topic: 'takedown.target.changed', payload: { requestId: id,targetId,
+          requesterId: row.requester_id,targetStatus: input.status,requestStatus: aggregate },
+        idempotencyKey: `takedown.target.changed:${targetId}:${input.version + 1}` });
+        const response = (await find(db, current, id)).row;
+        if (!await repository.idempotency.complete({ scope, key: idempotencyKey, responseStatus: 200, responseBody: response })) {
+          throw new ApiError(409, 'CONFLICT');
+        }
+        return response;
+      });
     },
   };
 }

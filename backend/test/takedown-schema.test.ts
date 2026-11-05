@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 const sql = readFileSync(new URL('../migrations/0049_takedowns.sql', import.meta.url), 'utf8');
+const stateSql = readFileSync(new URL('../migrations/0050_takedown_state_machine.sql', import.meta.url), 'utf8');
 
 test('takedown schema enforces immutable ownership, unique targets, and least privilege', () => {
   assert.match(sql, /takedown submission is immutable/);
@@ -13,4 +14,12 @@ test('takedown schema enforces immutable ownership, unique targets, and least pr
   assert.match(sql, /REVOKE ALL ON soundpub\.takedown_requests/);
   assert.doesNotMatch(sql, /GRANT (?:ALL|DELETE) ON soundpub\.takedown_requests/);
   assert.match(sql, /storage_asset_id uuid NOT NULL UNIQUE REFERENCES soundpub\.storage_assets/);
+});
+
+test('takedown state machine rejects arbitrary request and target jumps', () => {
+  assert.match(stateSql, /OLD\.status='SUBMITTED' AND NEW\.status IN \('UNDER_REVIEW','CANCEL_REQUESTED'\)/);
+  assert.match(stateSql, /OLD\.status='CANCEL_REQUESTED' AND NEW\.status='CANCELLED'/);
+  assert.match(stateSql, /OLD\.status='PENDING' AND NEW\.status='SUBMITTED'/);
+  assert.doesNotMatch(stateSql, /OLD\.status='COMPLETED'/);
+  assert.doesNotMatch(stateSql, /OLD\.status='REJECTED'/);
 });

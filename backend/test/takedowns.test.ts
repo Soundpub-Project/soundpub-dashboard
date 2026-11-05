@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { takedownCreate } from '../src/takedowns/contracts.js';
+import { takedownCancellation, takedownCreate, takedownTargetTransition, takedownTransition } from '../src/takedowns/contracts.js';
 
 const valid = {
   release_id: '00000000-0000-4000-8000-000000000001', request_type: 'standard' as const,
@@ -29,4 +29,15 @@ test('takedown submission requires declaration and complete contact fields', () 
   assert.equal(takedownCreate.safeParse({ ...valid, declaration_version: 'future-version' }).success, false);
   assert.equal(takedownCreate.safeParse({ ...valid, contact_phone: ' ' }).success, false);
   assert.equal(takedownCreate.safeParse({ ...valid, contact_email: 'invalid' }).success, false);
+});
+
+test('takedown transition contracts require optimistic version and evidence', () => {
+  assert.equal(takedownTransition.safeParse({ version: 1, status: 'UNDER_REVIEW' }).success, true);
+  assert.equal(takedownTransition.safeParse({ version: 1, status: 'NEED_DOCUMENT' }).success, false);
+  assert.equal(takedownTransition.safeParse({ version: 1, status: 'REJECTED', note: 'Hak tidak valid' }).success, true);
+  assert.equal(takedownTransition.safeParse({ version: 1, status: 'COMPLETED' }).success, false);
+  assert.equal(takedownCancellation.safeParse({ version: 1, reason: 'Pemilik meminta pembatalan' }).success, true);
+  assert.equal(takedownTargetTransition.safeParse({ version: 1, status: 'SUBMITTED' }).success, false);
+  assert.equal(takedownTargetTransition.safeParse({ version: 1, status: 'SUBMITTED', external_reference: 'DSP-1' }).success, true);
+  assert.equal(takedownTargetTransition.safeParse({ version: 1, status: 'REJECTED' }).success, false);
 });
