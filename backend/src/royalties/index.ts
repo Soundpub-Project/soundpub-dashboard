@@ -695,8 +695,10 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
       return authorized(actor, true, async db => ({ items: (await db.query(`SELECT ${batchProjection} ${batchJoin}
         ORDER BY b.created_at DESC,b.id DESC LIMIT $1 OFFSET $2`, [query.limit,query.offset])).rows }));
     },
-    async detail(actor: Principal, id: string) {
+    async detail(actor: Principal, id: string, input: unknown = {}) {
       parse(z.uuid(), id);
+      const query = parse(z.strictObject({ limit: z.coerce.number().int().min(1).max(500).default(100),
+        offset: z.coerce.number().int().min(0).max(100000).default(0) }), input);
       return authorized(actor, true, async db => {
         const batch = (await db.query(`SELECT ${batchProjection} ${batchJoin} WHERE b.id=$1`, [id])).rows[0];
         if (!batch) throw new ApiError(404, 'NOT_FOUND');
@@ -707,8 +709,10 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
           COALESCE((SELECT jsonb_agg(jsonb_build_object('id',a.id,'component',a.component,'owner_id',a.owner_id,
             'amount',a.amount::text,'policy_code',a.policy_code) ORDER BY a.component,a.id)
             FROM soundpub.royalty_import_allocations a WHERE a.entry_id=e.id),'[]'::jsonb) AS allocations
-          FROM soundpub.royalty_import_entries e WHERE e.batch_id=$1 ORDER BY e.source_row_id,e.id`, [id])).rows;
-        return { ...batch, entries };
+           FROM soundpub.royalty_import_entries e WHERE e.batch_id=$1
+           ORDER BY (e.source_row_number IS NULL),e.source_row_number,e.source_row_id,e.id LIMIT $2 OFFSET $3`,
+        [id,query.limit,query.offset])).rows;
+        return { ...batch, entries, entry_total: batch.row_count, entry_limit: query.limit, entry_offset: query.offset };
       });
     },
     async correct(actor: Principal, id: string, input: unknown, requestId: string) {

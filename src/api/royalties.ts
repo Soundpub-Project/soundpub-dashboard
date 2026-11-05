@@ -147,6 +147,9 @@ export interface RoyaltyImportEntry {
 
 export interface RoyaltyImportDetail extends RoyaltyBatch {
   entries: RoyaltyImportEntry[];
+  entry_total: number;
+  entry_limit: number;
+  entry_offset: number;
 }
 
 export interface RoyaltyBreakdownQuery { artist_id?: string; release_id?: string; period?: string; offset?: number }
@@ -192,7 +195,8 @@ export const royaltiesApi = {
   },
   summary: (signal?: AbortSignal) => apiRequest<RoyaltySummary>('/api/v1/royalties/summary', { signal }),
   history: (offset = 0, signal?: AbortSignal) => apiRequest<{ items: RoyaltyBatch[] }>(`/api/v1/royalties/imports?limit=50&offset=${offset}`, { signal }),
-  detail: (id: string, signal?: AbortSignal) => apiRequest<RoyaltyImportDetail>(`/api/v1/royalties/imports/${encodeURIComponent(id)}`, { signal }),
+  detail: (id: string, offset = 0, signal?: AbortSignal) => apiRequest<RoyaltyImportDetail>(
+    `/api/v1/royalties/imports/${encodeURIComponent(id)}?limit=100&offset=${offset}`, { signal }),
   correct: (id: string, reason: string) => apiRequest<{ id: string; replayed: boolean }>(`/api/v1/royalties/imports/${encodeURIComponent(id)}/correction`, {
     method: 'POST', body: { reason }, timeoutMs: 120000,
   }),

@@ -62,14 +62,14 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Artist attribution | artist relation/history migration | stable artist ID, historical ISRC conflict guard, allocation snapshot | Backend CSV API available | VERIFIED | Add manual review workflow for legacy unresolved identities |
 | Label attribution | release label snapshot | immutable `label_owner_user_id`; ordinary, Whitelabel, and Label Custom scope verified | Backend role-scoped report | VERIFIED | Preserve historical label snapshot during future tenant expansion |
 | Preview | browser validation and split preview | inline preview plus durable chunk staging, capped diagnostics, exact progress, and compatible checksum | Backend-mode CSV preview cut over | VERIFIED | Add staged-row pagination and review UI |
-| File upload | Edge Function receives parsed records | private RustFS upload intent, verified UTF-8/checksum snapshot, admin status/download API | Backend-mode signed upload cut over | VERIFIED | Add streaming browser hash |
+| File upload | Edge Function receives parsed records | private RustFS upload intent, verified UTF-8/checksum snapshot, admin status/download API | Backend-mode signed upload uses chunked browser SHA-256 without buffering the full file | VERIFIED | Preserve checksum compatibility across supported browsers |
 | Async parse | Edge Function synchronous | streaming object reader, 1.000-row matcher/staging chunks, lease heartbeat, exact progress, bounded diagnostics/retry, and authority revocation | Frontend polls session status | VERIFIED | Add manual retry/takeover UI and long-running dual-worker QA |
 | File retention | implicit function/storage lifecycle | leased CLEANING state removes final and staging objects for expired pending/failed sessions; committed/preview originals retained | No destructive frontend action | VERIFIED | Add configurable long-term archive policy for committed statements |
 | Import history | `royalty_uploads` | import batches/history and immutable detail with correction/replacement provenance | Backend-mode history/detail cut over | VERIFIED | Add cursor pagination for large history |
 | Delete upload | `delete-royalty-upload` + balance rebuild | immutable correction plus atomic CSV replacement; old batch retained and offset | Backend history uses requester-bound private replacement file sessions and immutable provenance | VERIFIED | Add superadmin takeover workflow for abandoned sessions |
 | Duplicate file | upload/source semantics | checksum replay protection | Backend checksum tersedia | IMPLEMENTED | Source-file checksum and provider-period key |
 | Duplicate row | source row key | source/period/source_row uniqueness | Backend tersedia | IMPLEMENTED | CSV row fingerprint compatibility |
-| Large file | browser memory + Edge Function | private upload/preview accept up to 100 MB/100.000 rows; checksum-bound staging, current-owner revalidation, set-based entries/allocations, ledger, audit, outbox, and session finalization share one transaction | UI accepts private files up to 100 MB | VERIFIED | Browser streaming hash and detail pagination |
+| Large file | browser memory + Edge Function | private upload/preview accept up to 100 MB/100.000 rows; checksum-bound staging, current-owner revalidation, set-based entries/allocations, ledger, audit, outbox, and session finalization share one transaction | UI hashes 4 MB slices and pages immutable batch detail 100 rows at a time | VERIFIED | Add long-running browser E2E on minimum supported devices |
 
 ## Royalty calculation dan ownership
 
@@ -145,6 +145,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 - 2026-11-04: focused royalty and worker tests PASS.
 - 2026-11-04: isolated Docker `dashboard-sounpub-dev` rebuilt successfully.
 - 2026-11-04: `RUN_DOCKER_TESTS=1 npm test` produced 295 tests, 289 pass, 0 fail, 6 skipped after reporting and retention checkpoints.
+- 2026-11-05: backend unit suite produced 274 tests, 230 pass, 0 fail, 44 skipped; frontend TypeScript, chunked SHA-256 contract, finance backend-mode contract, and production build pass.
 - Durable PASS includes PostgreSQL concurrency, finance ledger, payout, payment, historical ownership, release/track, RustFS media, Label Custom E2E, and deferred immutable royalty-allocation constraints.
 - Royalty entries now carry calculation policy, artist, label, ISRC, UPC, and statement-dimension snapshots. Immutable child allocations support ARTIST, LABEL, SOUNDPUB, COMPOSER, and LEGACY_OWNER components. Existing rows backfill exactly as one LEGACY_OWNER allocation. Ledger, reporting, readiness, balance gates, earnings, and corrections aggregate allocation owners, not mutable current catalog ownership.
 - Inline CSV preview/commit now reparses and rematches server-side, verifies expected checksum, blocks active source-period conflicts, writes 70/21/9 allocations atomically, and proves ordinary-label plus Label Custom behavior on disposable PostgreSQL.
@@ -153,7 +154,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 
 ## Remaining blockers
 
-1. Private royalty files, streaming leased preview worker, immutable checksum-bound staging, heartbeat progress, retry state, authority revocation, current-owner revalidation, set-based atomic session commit, and frontend signed-upload cutover are verified. Disposable PostgreSQL processes and commits 100.000 rows with 300.000 allocations in 110,5 seconds.
+1. Private royalty files, streaming leased preview worker, immutable checksum-bound staging, heartbeat progress, retry state, authority revocation, current-owner revalidation, set-based atomic session commit, chunked browser hashing, paged batch detail, and frontend signed-upload cutover are verified. Disposable PostgreSQL processes and commits 100.000 rows with 300.000 allocations in 110,5 seconds.
 2. Ordinary label, Whitelabel, artist, and Label Custom reporting scopes are verified; standalone WhitelabelDashboard roster/release widgets remain direct Supabase.
 3. Dedicated aggregate track endpoint remains optional; generic scoped report already supports `track_id`.
 5. Payment provider, payout settlement provider, submission provider, and notification delivery remain partial or mock-oriented.

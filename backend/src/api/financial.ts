@@ -18,7 +18,11 @@ export function registerFinancialRoutes(app: FastifyInstance, services: {
 }, authenticate: (request: FastifyRequest) => Promise<Principal>, paths: Record<string, Record<string, unknown>>, errorSchema: object) {
   const add = (method: string, path: string, operationId: string) => {
     const normalized = path.replaceAll(':id', '{id}');
-    paths[normalized] = { ...paths[normalized], [method.toLowerCase()]: { operationId, security: secured,
+    const pagination = method === 'GET' && path === '/api/v1/royalties/imports/:id' ? { parameters: [
+      { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 500, default: 100 } },
+      { name: 'offset', in: 'query', required: false, schema: { type: 'integer', minimum: 0, maximum: 100000, default: 0 } },
+    ] } : {};
+    paths[normalized] = { ...paths[normalized], [method.toLowerCase()]: { operationId, security: secured, ...pagination,
       responses: Object.fromEntries([200,400,401,403,404,409,429,500,503].map(status => [status, {
         description: status === 200 ? 'Success' : 'Error', content: { 'application/json': { schema: status === 200 ? { type: 'object' } : errorSchema } },
       }])) } };
@@ -50,7 +54,8 @@ export function registerFinancialRoutes(app: FastifyInstance, services: {
     app.post('/api/v1/royalties/imports/preview', async request => service.preview(await authenticate(request), request.body));
     app.post('/api/v1/royalties/imports/commit', async request => service.commit(await authenticate(request), request.body, request.id));
     app.get('/api/v1/royalties/imports', async request => service.history(await authenticate(request), request.query));
-    app.get('/api/v1/royalties/imports/:id', async request => service.detail(await authenticate(request), (request.params as { id: string }).id));
+    app.get('/api/v1/royalties/imports/:id', async request => service.detail(await authenticate(request),
+      (request.params as { id: string }).id, request.query));
     app.post('/api/v1/royalties/imports/:id/correction', async request => service.correct(await authenticate(request), (request.params as { id: string }).id, request.body, request.id));
     app.post('/api/v1/royalties/imports/:id/replacement/csv', async request => service.replaceCsv(await authenticate(request), (request.params as { id: string }).id, request.body, request.id));
     add('GET', '/api/v1/royalties/breakdown', 'getRoyaltyBreakdown');

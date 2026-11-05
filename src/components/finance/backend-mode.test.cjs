@@ -55,6 +55,12 @@ const dependencies = name => {
   const royalties = evaluate('src/api/royalties.ts', () => ({ apiRequest: async (...args) => { calls.push(args); return {}; } }));
   await royalties.royaltiesApi.commit({ source: 'synthetic', rows: [] });
   assert.equal(calls.at(-1)[0], '/api/v1/royalties/imports/commit');
+  await royalties.royaltiesApi.detail('batch/id', 200);
+  assert.equal(calls.at(-1)[0], '/api/v1/royalties/imports/batch%2Fid?limit=100&offset=200');
+  const royaltyImport = read('src/components/finance/BackendRoyaltyImport.tsx');
+  assert(royaltyImport.includes('selected.entries.map'));
+  assert(royaltyImport.includes('selected.entry_total'));
+  assert(!royaltyImport.includes('selected.entries.slice(0, 100)'));
   const payouts = evaluate('src/api/payouts.ts', () => ({ apiRequest: async (...args) => { calls.push(args); return {}; } }));
   await payouts.payoutsApi.request({ amount: '100.00', idempotency_key: 'retry-key' });
   assert.equal(calls.at(-1)[1].idempotencyKey, 'retry-key');

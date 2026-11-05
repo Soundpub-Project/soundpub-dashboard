@@ -10,20 +10,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { sha256File } from '@/lib/fileChecksum';
 
 const MAX_CSV_BYTES = 100 * 1024 ** 2;
 const PAGE_SIZE = 50;
+const DETAIL_PAGE_SIZE = 100;
 const TEMPLATE = `period,isrc,upc,title,artist,label_name,platform,country,sales_type,sales_unit,net_revenue\n2026-01,IDABC2600001,123456789012,Judul Lagu,Nama Artis,Nama Label,Spotify,ID,stream,1,1000.00\n`;
 
 function capabilityUrl(value: string) {
   const url = new URL(value);
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('Kapabilitas upload tidak valid.');
   return url.href;
-}
-
-async function fileChecksum(file: File) {
-  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()));
-  return Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
 async function waitForPreview(id: string): Promise<RoyaltyImportSession> {
@@ -85,6 +82,7 @@ export function BackendRoyaltyImport() {
   const [source, setSource] = useState('soundpub-dashboard');
   const [preview, setPreview] = useState<RoyaltyCsvPreview | null>(null);
   const [selected, setSelected] = useState<RoyaltyImportDetail | null>(null);
+  const [detailOffset, setDetailOffset] = useState(0);
   const [busy, setBusy] = useState<'preview' | 'commit' | 'detail' | 'replace-preview' | 'replace-commit' | null>(null);
   const [error, setError] = useState('');
   const [result, setResult] = useState('');
@@ -104,6 +102,7 @@ export function BackendRoyaltyImport() {
   const selectFile = (selectedFile: File) => {
     resetPreview();
     setSelected(null);
+    setDetailOffset(0);
     if (!selectedFile.name.toLowerCase().endsWith('.csv')) { setFile(null); setError('File wajib berformat CSV.'); return; }
     if (!selectedFile.size || selectedFile.size > MAX_CSV_BYTES) { setFile(null); setError('CSV maksimum 100 MB.'); return; }
     setFile(selectedFile);
@@ -116,7 +115,7 @@ export function BackendRoyaltyImport() {
     inFlight.current = true; setBusy('preview'); setError(''); setResult('');
     try {
       const intent = await royaltiesApi.requestFileUpload({ source: normalizedSource, filename: file.name,
-        mime_type: 'text/csv', size: file.size, checksum: await fileChecksum(file) });
+        mime_type: 'text/csv', size: file.size, checksum: await sha256File(file) });
       if (!intent.url || !intent.method || !intent.headers) throw new Error('Kapabilitas upload tidak tersedia.');
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 300_000);
@@ -148,10 +147,13 @@ export function BackendRoyaltyImport() {
     finally { inFlight.current = false; setBusy(null); }
   };
 
-  const loadDetail = async (id: string) => {
+  const loadDetail = async (id: string, nextOffset = 0) => {
     if (inFlight.current) return;
     inFlight.current = true; setBusy('detail'); setError('');
-    try { setSelected(await royaltiesApi.detail(id)); }
+    try {
+      setSelected(await royaltiesApi.detail(id, nextOffset));
+      setDetailOffset(nextOffset);
+    }
     catch (failure) { setError(errorMessage(failure)); }
     finally { inFlight.current = false; setBusy(null); }
   };
@@ -164,7 +166,7 @@ export function BackendRoyaltyImport() {
       setReplacementRequestKey(requestKey);
       const intent = await royaltiesApi.requestReplacementFileUpload(replacementTarget.id, {
         filename: replacementFile.name, mime_type: 'text/csv', size: replacementFile.size,
-        checksum: await fileChecksum(replacementFile), reason: replacementReason.trim(),
+        checksum: await sha256File(replacementFile), reason: replacementReason.trim(),
       }, requestKey);
       let session = intent.session;
       if (session.status === 'UPLOAD_PENDING') {
@@ -206,7 +208,7 @@ export function BackendRoyaltyImport() {
   return <DashboardLayout><div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-6">
     <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between"><div><h1 className="text-2xl font-bold tracking-tight">Impor royalti</h1><p className="text-sm text-muted-foreground">File disimpan private, diverifikasi checksum, lalu diproses worker backend. Tidak ada fallback ke Supabase.</p></div><Button type="button" variant="outline" onClick={downloadTemplate}>Unduh template CSV</Button></div>
     {!isAdmin ? <Card><CardContent className="pt-6"><p role="alert">Akses admin diperlukan.</p></CardContent></Card> : <>
-      <Card><CardHeader><CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5" />Pilih pernyataan royalti</CardTitle><CardDescription>Maksimum 100 MB. Commit masih dibatasi 1.000 baris sampai parser streaming selesai.</CardDescription></CardHeader><CardContent className="space-y-4">
+      <Card><CardHeader><CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5" />Pilih pernyataan royalti</CardTitle><CardDescription>Maksimum 100 MB atau 100.000 baris. File di-hash dan diproses bertahap tanpa memuat seluruh isi ke memori.</CardDescription></CardHeader><CardContent className="space-y-4">
         <div className="grid gap-4 md:grid-cols-[1fr_2fr]"><label className="space-y-2 text-sm font-medium">Kode sumber<Input value={source} maxLength={200} disabled={!!busy} onChange={event => { setSource(event.target.value); setResult(''); }} placeholder="contoh: spotify-fuga" /></label><label className="space-y-2 text-sm font-medium">File CSV<Input ref={fileInput} type="file" accept=".csv,text/csv" disabled={!!busy} onChange={event => { const selectedFile = event.target.files?.[0]; if (selectedFile) selectFile(selectedFile); }} /></label></div>
         {file && <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3 text-sm"><FileSpreadsheet className="h-5 w-5" /><span className="font-medium">{file.name}</span><span className="text-muted-foreground">{file.size.toLocaleString('id-ID')} byte</span></div>}
         <div className="flex flex-wrap gap-2"><Button disabled={!file || !!busy} onClick={() => void runPreview()}>{busy === 'preview' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Upload dan preview</Button><Button disabled={!readyToCommit || !!busy} onClick={() => void runCommit()}>{busy === 'commit' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Simpan batch tervalidasi</Button><Button type="button" variant="ghost" disabled={!!busy || (!file && !preview)} onClick={() => { setFile(null); resetPreview(); if (fileInput.current) fileInput.current.value = ''; }}>Bersihkan</Button></div>
@@ -233,7 +235,14 @@ export function BackendRoyaltyImport() {
       </CardContent></Card>}
       {selected && <Card><CardHeader><CardTitle>Detail batch {selected.id}</CardTitle><CardDescription>{selected.filename} · {selected.period} · {selected.row_count} baris</CardDescription></CardHeader><CardContent className="space-y-3">
         {(selected.replacement_batch_id || selected.replaces_batch_id) && <div className="rounded-lg border bg-muted/30 p-3 text-sm"><p className="font-medium">{selected.replacement_batch_id ? `Diganti oleh batch ${selected.replacement_batch_id}` : `Menggantikan batch ${selected.replaces_batch_id}`}</p>{selected.change_reason && <p className="mt-1 text-muted-foreground">Alasan: {selected.change_reason}</p>}</div>}
-        <div className="overflow-x-auto rounded-lg border"><Table><TableHeader><TableRow><TableHead>Baris</TableHead><TableHead>ISRC</TableHead><TableHead>Platform</TableHead><TableHead>Komponen</TableHead><TableHead className="text-right">Net</TableHead></TableRow></TableHeader><TableBody>{selected.entries.slice(0, 100).map(entry => <TableRow key={entry.id}><TableCell>{entry.source_row_number ?? entry.source_row_id}</TableCell><TableCell className="font-mono">{entry.source_isrc ?? '-'}</TableCell><TableCell>{entry.platform ?? '-'}</TableCell><TableCell>{entry.allocations.map(allocation => `${allocation.component} ${formatIdr(allocation.amount)}`).join(' · ')}</TableCell><TableCell className="text-right">{formatIdr(entry.net_amount)}</TableCell></TableRow>)}</TableBody></Table></div>
+        <div className="overflow-x-auto rounded-lg border"><Table><TableHeader><TableRow><TableHead>Baris</TableHead><TableHead>ISRC</TableHead><TableHead>Platform</TableHead><TableHead>Komponen</TableHead><TableHead className="text-right">Net</TableHead></TableRow></TableHeader><TableBody>{selected.entries.map(entry => <TableRow key={entry.id}><TableCell>{entry.source_row_number ?? entry.source_row_id}</TableCell><TableCell className="font-mono">{entry.source_isrc ?? '-'}</TableCell><TableCell>{entry.platform ?? '-'}</TableCell><TableCell>{entry.allocations.map(allocation => `${allocation.component} ${formatIdr(allocation.amount)}`).join(' · ')}</TableCell><TableCell className="text-right">{formatIdr(entry.net_amount)}</TableCell></TableRow>)}</TableBody></Table></div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">Baris {selected.entry_total === 0 ? 0 : selected.entry_offset + 1}–{selected.entry_offset + selected.entries.length} dari {selected.entry_total}</p>
+          <div className="flex gap-2">
+            <Button variant="outline" disabled={detailOffset === 0 || !!busy} onClick={() => void loadDetail(selected.id, Math.max(0, detailOffset - DETAIL_PAGE_SIZE))}>Sebelumnya</Button>
+            <Button variant="outline" disabled={detailOffset + selected.entries.length >= selected.entry_total || !!busy} onClick={() => void loadDetail(selected.id, detailOffset + DETAIL_PAGE_SIZE)}>Berikutnya</Button>
+          </div>
+        </div>
       </CardContent></Card>}
     </>}
   </div></DashboardLayout>;

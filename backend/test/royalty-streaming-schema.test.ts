@@ -6,6 +6,7 @@ const migration = readFileSync(new URL('../migrations/0036_royalty_import_stream
 const guards = readFileSync(new URL('../migrations/0037_royalty_streaming_guards.sql', import.meta.url), 'utf8');
 const allocationGuard = readFileSync(new URL('../migrations/0038_royalty_batch_allocation_guard.sql', import.meta.url), 'utf8');
 const stagingIntegrity = readFileSync(new URL('../migrations/0039_royalty_staging_integrity.sql', import.meta.url), 'utf8');
+const detailPagination = readFileSync(new URL('../migrations/0040_royalty_detail_pagination.sql', import.meta.url), 'utf8');
 
 test('streaming migration raises only durable file-session row capacity', () => {
   assert.match(migration, /row_count BETWEEN 1 AND 100000/);
@@ -46,6 +47,11 @@ test('allocation invariant runs once per batch and closes append window after co
   assert.match(allocationGuard, /REFERENCING NEW TABLE AS new_entries FOR EACH STATEMENT/);
   assert.match(allocationGuard, /REFERENCING NEW TABLE AS new_allocations FOR EACH STATEMENT/);
   assert.match(allocationGuard, /ROYALTY_BATCH_CLOSED/);
+});
+
+test('royalty detail pagination index matches stable source-row ordering', () => {
+  assert.match(detailPagination, /CREATE INDEX royalty_import_entries_batch_detail_order/);
+  assert.match(detailPagination, /\(batch_id,\(source_row_number IS NULL\),source_row_number,source_row_id,id\)/);
 });
 
 test('preview staging is checksum-bound and frozen outside worker leases', () => {

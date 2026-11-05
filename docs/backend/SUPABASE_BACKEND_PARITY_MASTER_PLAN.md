@@ -415,7 +415,8 @@ Gate: source total, accepted/rejected total, ledger posting, dan wallet balance 
 - Staged rows are frozen outside an active parse/cleanup lease and bound to the preview through per-row plus aggregate checksums. Commit revalidates active catalog/payee ownership, isolates requester recovery, and uses one deferred batch-level allocation invariant with closed-batch append guards. The final 100.000-row gate writes 100.000 entries and 300.000 allocations in 110,5 seconds on disposable PostgreSQL.
 - Role-scoped royalty report and period APIs now enforce admin-global, label/Whitelabel roster, artist-owner, and Label Custom PIC boundaries. Backend Royalti UI uses these APIs for filtering, pagination, totals, and CSV export without Supabase fallback.
 - Expired pending/failed royalty objects now enter a leased CLEANING state, delete both staging and immutable object keys idempotently, retry transient storage failures, and preserve preview-ready/committed originals.
-- Remaining Phase 3/6 scope: staged/detail pagination, browser streaming hash, optional approval gate, and reconciliation workflow beyond current readiness approval. Import and replacement share private signed file sessions; inline replacement remains compatibility-only.
+- Browser upload hashing now processes 4 MB slices through incremental SHA-256, and immutable batch detail is server-paginated with stable source-row ordering and bounded `limit`/`offset`. Backend, frontend contract, TypeScript, and production-build checks pass.
+- Remaining Phase 3/6 scope: staged preview review UI, optional approval gate, superadmin session takeover, and reconciliation workflow beyond current readiness approval. Import and replacement share private signed file sessions; inline replacement remains compatibility-only.
 
 ### Phase 7 - Reporting dan permission parity
 

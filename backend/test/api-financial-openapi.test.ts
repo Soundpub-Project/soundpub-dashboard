@@ -24,6 +24,8 @@ test('financial OpenAPI preserves every method sharing a path', async () => {
     assert.ok(paths['/api/v1/royalties/periods'].get);
     assert.ok(paths['/api/v1/royalties/report'].get);
     assert.ok(paths['/api/v1/royalties/imports/{id}/replacement/csv'].post);
+    assert.deepEqual(paths['/api/v1/royalties/imports/{id}'].get.parameters.map((parameter: { name: string }) => parameter.name),
+      ['limit', 'offset']);
     assert.ok(paths['/api/v1/payouts/destination'].get);
     assert.ok(paths['/api/v1/payouts/destination'].put);
     assert.ok(paths['/api/v1/payouts'].get);
@@ -32,5 +34,22 @@ test('financial OpenAPI preserves every method sharing a path', async () => {
       .filter(value => value && typeof value === 'object' && 'operationId' in value);
     assert.equal(operations.filter(operation => String((operation as { operationId: string }).operationId)
       .match(/Royalty|Payout/)).length, 31);
+  } finally { await app.close(); }
+});
+
+test('royalty detail route forwards validated pagination input to service', async () => {
+  let captured: unknown[] = [];
+  const app = buildApp({
+    auth: { authenticate: async () => ({ id: '00000000-0000-4000-8000-000000000001', status: 'active', roles: ['admin'] }) },
+    readiness: { check: async () => true }, admin: { suspendUser: async () => undefined },
+    webhooks: { receive: async () => false }, rateLimiter: { consume: async () => ({ allowed: true }) },
+    royalties: { detail: async (...args: unknown[]) => { captured = args; return { id: args[1] }; } } as ApiDependencies['royalties'],
+  });
+  try {
+    const response = await app.inject({ method: 'GET', url: '/api/v1/royalties/imports/00000000-0000-4000-8000-000000000002?limit=25&offset=50',
+      headers: { authorization: 'Bearer admin' } });
+    assert.equal(response.statusCode, 200);
+    assert.equal(captured[1], '00000000-0000-4000-8000-000000000002');
+    assert.deepEqual({ ...(captured[2] as Record<string, unknown>) }, { limit: '25', offset: '50' });
   } finally { await app.close(); }
 });
