@@ -39,7 +39,8 @@ export async function listLabelArtists(labelId: string): Promise<ArtistAccount[]
       const page = await labelsApi.artists(labelId, cursor ?? undefined);
       items.push(...page.items.map(item => ({
         id: item.artistId, full_name: item.fullName, status: item.status, parent_label_id: item.labelId,
-        email: null, phone: null, address: null, created_at: null, artist_profile: { artist_name: item.name },
+        email: item.email, phone: item.phone, address: item.address, password_set: item.passwordSet,
+        created_at: item.createdAt, artist_profile: { artist_name: item.name },
       })));
       cursor = page.nextCursor;
       if (cursor && visited.has(cursor)) throw new Error('Invalid artists pagination');

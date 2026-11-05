@@ -602,10 +602,10 @@ function LegacyMyArtists() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Nama</TableHead>
-                      {!backendArtists && <TableHead>Email</TableHead>}
-                      {!backendArtists && <TableHead>Telepon</TableHead>}
+                        <TableHead>Email</TableHead>
+                        <TableHead>Telepon</TableHead>
                       <TableHead>Status</TableHead>
-                      {!backendArtists && <TableHead>Bergabung</TableHead>}
+                        <TableHead>Bergabung</TableHead>
                       <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -615,8 +615,8 @@ function LegacyMyArtists() {
                         <TableCell className="font-medium">
                           {artist.full_name}
                         </TableCell>
-                        {!backendArtists && <TableCell>{artist.email || "—"}</TableCell>}
-                        {!backendArtists && <TableCell>{artist.phone || "-"}</TableCell>}
+                        <TableCell>{artist.email || "—"}</TableCell>
+                        <TableCell>{artist.phone || "-"}</TableCell>
                         <TableCell>
                           <Badge
                             variant={getStatusBadge(artist.status)}
@@ -625,11 +625,11 @@ function LegacyMyArtists() {
                             {artist.status}
                           </Badge>
                         </TableCell>
-                        {!backendArtists && <TableCell>
+                        <TableCell>
                           {artist.created_at ? new Date(artist.created_at).toLocaleDateString(
                             "id-ID",
                           ) : "—"}
-                        </TableCell>}
+                        </TableCell>
                         <TableCell>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -648,12 +648,10 @@ function LegacyMyArtists() {
                                 <Pencil className="mr-2 h-4 w-4" />
                                 Edit
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                disabled={backendArtists}
-                                onClick={() => handlePasswordClick(artist)}
-                              >
+                              <DropdownMenuItem disabled={backendArtists && (!isWhitelabel || artist.password_set === true || profile?.subscription_status !== 'active')}
+                                onClick={() => handlePasswordClick(artist)}>
                                 <KeyRound className="mr-2 h-4 w-4" />
-                                Ubah Password
+                                {backendArtists && isWhitelabel ? 'Aktifkan Login' : 'Ubah Password'}
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => handleDeleteClick(artist)}
@@ -681,7 +679,7 @@ function LegacyMyArtists() {
         onSuccess={fetchArtists}
         allowedRoles={["artist"]}
         defaultParentLabelId={backendArtists ? profile?.id || user?.id : undefined}
-        isWhitelabelMode={backendArtists ? false : isWhitelabel}
+        isWhitelabelMode={isWhitelabel}
       />}
 
       <LabelAddArtistDialog
@@ -711,11 +709,12 @@ function LegacyMyArtists() {
         onSuccess={fetchArtists}
       />
 
-      {!backendArtists && <ChangePasswordDialog
+      {(!backendArtists || isWhitelabel) && <ChangePasswordDialog
         open={passwordDialogOpen}
         onOpenChange={setPasswordDialogOpen}
         user={selectedArtist}
         onSuccess={fetchArtists}
+        mode={backendArtists ? 'whitelabel-enable' : 'admin-reset'}
       />}
     </DashboardLayout>
   );

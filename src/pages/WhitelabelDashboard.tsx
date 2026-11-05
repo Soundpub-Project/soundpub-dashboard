@@ -6,6 +6,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { usesBackendArtistLabels } from "@/services/labels";
+import { usesBackendDomain } from '@/api/routing';
+import { BackendWhitelabelDashboard } from '@/components/whitelabel/BackendWhitelabelDashboard';
 import MyArtists from './MyArtists';
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import {
@@ -619,6 +621,7 @@ function LegacyWhitelabelDashboard() {
 }
 
 export default function WhitelabelDashboard() {
+  if (usesBackendArtistLabels() && usesBackendDomain('users')) return <BackendWhitelabelDashboard />;
   if (usesBackendFinance()) return <FinanceUnavailable />;
   if (usesBackendReleases()) return <main role="alert" className="p-6">Dashboard whitelabel belum terhubung dengan metadata Release backend.</main>;
   return <LegacyWhitelabelDashboard />;

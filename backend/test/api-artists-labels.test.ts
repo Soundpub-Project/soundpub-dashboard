@@ -21,7 +21,8 @@ test('domain routes authenticate, validate and expose OpenAPI', async () => {
     listDeletionRequests: async () => ({ items: [], nextCursor: null }), reviewDeletionRequest: async () => artist } as unknown as ArtistsService;
   const labels = { list: async () => ({ items: [label], nextCursor: null }), get: async () => label,
     roster: async () => ({ items: [{ membershipId: actor.id, artistId: artist.id, labelId: actor.id,
-      name: 'Artist', fullName: 'Artist', status: 'active' }], nextCursor: null }),
+      name: 'Artist', fullName: 'Artist', status: 'active', email: 'artist@example.test', phone: null,
+      address: null, passwordSet: false, createdAt: timestamp }], nextCursor: null }),
     currentParent: async () => ({ artistId: artist.id, parentLabelId: actor.id, membershipId: actor.id }),
     assign: async () => ({ artistId: artist.id, parentLabelId: actor.id, membershipId: actor.id, changed: true }),
     transfer: async () => ({ artistId: artist.id, parentLabelId: actor.id, membershipId: actor.id, changed: true }),

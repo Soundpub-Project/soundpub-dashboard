@@ -1,5 +1,6 @@
 ﻿import { useState } from 'react';
 import { usersApi } from '@/api/users';
+import { labelsApi } from '@/api/labels';
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,7 @@ interface ChangePasswordDialogProps {
     full_name: string;
   } | null;
   onSuccess?: () => void;
+  mode?: 'admin-reset' | 'whitelabel-enable';
 }
 
 export function ChangePasswordDialog({
@@ -30,6 +32,7 @@ export function ChangePasswordDialog({
   onOpenChange,
   user,
   onSuccess,
+  mode = 'admin-reset',
 }: ChangePasswordDialogProps) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -51,7 +54,8 @@ export function ChangePasswordDialog({
 
     setLoading(true);
     try {
-      await usersApi.resetPassword(user.id, newPassword);
+      if (mode === 'whitelabel-enable') await labelsApi.enableWhitelabelArtistLogin(user.id, newPassword);
+      else await usersApi.resetPassword(user.id, newPassword);
 
       toast.success(`Password untuk ${user.full_name} berhasil diubah`);
       onOpenChange(false);
@@ -84,7 +88,7 @@ export function ChangePasswordDialog({
             Ubah Password
           </DialogTitle>
           <DialogDescription>
-            Ubah password untuk user berikut
+            {mode === 'whitelabel-enable' ? 'Aktifkan akses login artist berikut' : 'Ubah password untuk user berikut'}
           </DialogDescription>
         </DialogHeader>
 

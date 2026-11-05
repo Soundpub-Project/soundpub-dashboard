@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { usesBackendDomain } from '@/api/routing';
 import { usersApi } from '@/api/users';
+import { labelsApi } from '@/api/labels';
 import { SoundpubApiError } from '@/api/client';
 import { listLabels as listBackendLabels, type AppRole } from '@/services/users';
 import { usesBackendArtistLabels, artistLabelApiReady, artistAuthUnavailable } from '@/services/labels';
@@ -233,10 +234,14 @@ export function AddUserDialog({
       }
 
       if (backendUsers) {
-        await usersApi.create({
-          email, password, fullName, phone: phone || null, role: selectedRole,
-          parentLabelId: selectedRole === 'artist' ? parentLabelId : null,
-        });
+        if (isWhitelabelMode && selectedRole === 'artist') {
+          await labelsApi.createWhitelabelArtist({ email, fullName, phone: phone || null });
+        } else {
+          await usersApi.create({
+            email, password, fullName, phone: phone || null, role: selectedRole,
+            parentLabelId: selectedRole === 'artist' ? parentLabelId : null,
+          });
+        }
       } else {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('Not authenticated');

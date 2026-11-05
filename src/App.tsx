@@ -33,6 +33,7 @@ import AuditLogs from "./pages/AuditLogs";
 import Settings from "./pages/Settings";
 import UploadRoyalty from "./pages/UploadRoyalty";
 import MyArtists from "./pages/MyArtists";
+import WhitelabelDashboard from "./pages/WhitelabelDashboard";
 import Export from "./pages/Export";
 import ComposerRoyalties from "./pages/ComposerRoyalties";
 import CopyrightDashboard from "./pages/CopyrightDashboard";
@@ -284,7 +285,7 @@ const App = () => (
                   path="/dashboard/whitelabel"
                   element={
                     <ProtectedRoute requireWhitelabel>
-                      <MyArtists />
+                      <WhitelabelDashboard />
                     </ProtectedRoute>
                   }
                 />

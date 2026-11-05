@@ -11,6 +11,17 @@ export const profilePatch = z.strictObject({
 }).refine(value => Object.keys(value).length > 0);
 export const statusPatch = z.strictObject({ status: z.enum(['active', 'inactive', 'suspended']) });
 export const passwordReset = z.strictObject({ newPassword: z.string().min(12).max(1024) });
+export const whitelabelArtistCreate = z.strictObject({
+  email: z.string().trim().toLowerCase().email().max(320),
+  fullName: z.string().trim().min(1).max(200),
+  phone: z.string().trim().max(50).nullable().optional(),
+});
+export const whitelabelDashboardDto = z.strictObject({
+  label_id: z.uuid(), subscription_status: z.string().nullable(), currency: z.literal('IDR'),
+  total_artists: z.number().int().nonnegative(), total_releases: z.number().int().nonnegative(),
+  total_revenue: z.string(), artists_with_access: z.number().int().nonnegative(),
+  artists_without_access: z.number().int().nonnegative(),
+});
 export const composerCodePut = z.strictObject({ composerCode: z.string().trim().toUpperCase().regex(/^[A-Z0-9_-]+$/).max(100).nullable() });
 export const userCreate = z.strictObject({
   email: z.string().trim().toLowerCase().email().max(320),
@@ -49,3 +60,4 @@ export type ListQuery = z.infer<typeof listQuery>;
 export type ComposerCodePut = z.infer<typeof composerCodePut>;
 export type PasswordReset = z.infer<typeof passwordReset>;
 export type UserCreate = z.infer<typeof userCreate>;
+export type WhitelabelArtistCreate = z.infer<typeof whitelabelArtistCreate>;

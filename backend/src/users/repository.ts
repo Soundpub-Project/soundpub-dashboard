@@ -50,8 +50,8 @@ export function usersRepository(db: PoolClient) {
     async createAccount(id: string, input: UserCreate, passwordHash: string) {
       await db.query("INSERT INTO soundpub.backend_users(id,status) VALUES ($1,'active')", [id]);
       await db.query('UPDATE soundpub.backend_users SET email=$2,updated_at=now() WHERE id=$1', [id, input.email]);
-      await db.query(`INSERT INTO soundpub.profiles(id,full_name,phone,parent_label_id)
-        VALUES ($1,$2,$3,$4)`, [id, input.fullName, input.phone ?? null, input.parentLabelId ?? null]);
+      await db.query(`INSERT INTO soundpub.profiles(id,full_name,phone,parent_label_id,password_set)
+        VALUES ($1,$2,$3,$4,true)`, [id, input.fullName, input.phone ?? null, input.parentLabelId ?? null]);
       await db.query('INSERT INTO soundpub.user_roles(user_id,role,verified_at) VALUES ($1,$2,now())', [id, input.role]);
       await db.query(`INSERT INTO soundpub.local_auth_credentials(user_id,login_email,password_hash)
         VALUES ($1,$2,$3)`, [id, input.email, passwordHash]);
@@ -60,6 +60,17 @@ export function usersRepository(db: PoolClient) {
         await db.query(`INSERT INTO soundpub.artists(label_id,artist_user_id,name,verified_at)
           VALUES ($1,$2,$3,now())`, [input.parentLabelId, id, input.fullName]);
       }
+    },
+    async createWhitelabelArtist(id: string, labelId: string,
+      input: { email: string; fullName: string; phone?: string | null }) {
+      await db.query("INSERT INTO soundpub.backend_users(id,status) VALUES ($1,'active')", [id]);
+      await db.query('UPDATE soundpub.backend_users SET email=lower($2),updated_at=now() WHERE id=$1', [id,input.email]);
+      await db.query(`INSERT INTO soundpub.profiles(id,full_name,phone,parent_label_id,password_set)
+        VALUES ($1,$2,$3,$4,false)`, [id, input.fullName, input.phone ?? null, labelId]);
+      await db.query("INSERT INTO soundpub.user_roles(user_id,role,verified_at) VALUES ($1,'artist',now())", [id]);
+      await db.query('INSERT INTO soundpub.artist_profiles(user_id,artist_name) VALUES ($1,$2)', [id, input.fullName]);
+      await db.query(`INSERT INTO soundpub.artists(label_id,artist_user_id,name,verified_at)
+        VALUES ($1,$2,$3,now())`, [labelId, id, input.fullName]);
     },
     async updateProfile(id: string, patch: ProfilePatch) {
       // Keys come only from validated profilePatch; values always use bound parameters.

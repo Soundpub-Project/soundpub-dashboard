@@ -29,6 +29,11 @@ export interface RosterItem {
   name: string;
   fullName: string;
   status: 'active' | 'inactive' | 'suspended';
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  passwordSet: boolean;
+  createdAt: string;
 }
 export interface LabelDto {
   id: string;

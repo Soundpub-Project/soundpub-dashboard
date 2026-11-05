@@ -35,7 +35,10 @@ export function labelsRepository(db: PoolClient) {
     },
     async roster(labelId: string, query: RosterQuery, after: string | null, limit: number) {
       return (await db.query<RosterItem>(`SELECT a.id AS "membershipId", p.id AS "artistId",
-        a.label_id AS "labelId", a.name, p.full_name AS "fullName", u.status
+        a.label_id AS "labelId", a.name, p.full_name AS "fullName", u.status,u.email,p.phone,p.address,
+        (p.password_set=true AND EXISTS (SELECT 1 FROM soundpub.local_auth_credentials credential
+          WHERE credential.user_id=p.id)) AS "passwordSet",
+        to_char(u.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "createdAt"
         FROM soundpub.artists a JOIN soundpub.profiles p ON p.id = a.artist_user_id AND p.parent_label_id = a.label_id
         JOIN soundpub.backend_users u ON u.id = p.id
         WHERE a.label_id = $1 AND a.verified_at IS NOT NULL AND ($2::uuid IS NULL OR a.id > $2)

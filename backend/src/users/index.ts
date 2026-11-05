@@ -5,8 +5,9 @@ import { ApiError } from '../api/types.js';
 import { createAuthorizer, type Principal, type Role } from '../auth/index.js';
 import { withTransaction } from '../db/pool.js';
 import { hashPassword } from '../auth/local-crypto.js';
-import { composerCodePut, listQuery, passwordReset, profilePatch, rolesPut, statusPatch, userCreate, type ComposerCodePut,
-  type ListQuery, type PasswordReset, type ProfilePatch, type RolesPut, type UserCreate } from './contracts.js';
+import { composerCodePut, listQuery, passwordReset, profilePatch, rolesPut, statusPatch, userCreate,
+  whitelabelArtistCreate, type ComposerCodePut, type ListQuery, type PasswordReset, type ProfilePatch,
+  type RolesPut, type UserCreate, type WhitelabelArtistCreate } from './contracts.js';
 import { usersRepository } from './repository.js';
 
 const allows = createAuthorizer();
@@ -18,6 +19,9 @@ function parse<T>(schema: z.ZodType<T>, value: unknown): T {
 }
 function requirePolicy(actor: Principal | undefined, policy: 'authenticated' | 'admin') {
   if (!allows(actor ?? null, policy)) throw new ApiError(403, 'FORBIDDEN');
+}
+function requireWhitelabel(actor: Principal | undefined): asserts actor is Principal {
+  if (!allows(actor ?? null, 'authenticated') || !actor?.roles.includes('whitelabel')) throw new ApiError(403, 'FORBIDDEN');
 }
 export function canManageUser(actor: Principal, targetId: string, targetRoles: readonly Role[], nextRoles: readonly Role[] = []) {
   const protectedRoles = actor.roles.includes('superadmin') ? [] : ['admin', 'superadmin'];
@@ -111,6 +115,100 @@ export function createUsersService(pool: Pool) {
         if ((error as { code?: string }).code === '23505') throw new ApiError(409, 'CONFLICT');
         throw error;
       }
+    },
+    async whitelabelDashboard(actor: Principal) {
+      return withTransaction(pool, async db => {
+        const repo = usersRepository(db);
+        const current = (await repo.lock([actor.id], false)).get(actor.id);
+        requireWhitelabel(current);
+        const row = (await db.query<{
+          subscription_status: string | null; total_artists: number; total_releases: number;
+          total_revenue: string; artists_with_access: number; artists_without_access: number;
+        }>(`SELECT p.subscription_status,
+          (SELECT count(*)::int FROM soundpub.artists a
+            JOIN soundpub.profiles artist_profile ON artist_profile.id=a.artist_user_id AND artist_profile.parent_label_id=a.label_id
+            JOIN soundpub.backend_users artist_user ON artist_user.id=a.artist_user_id AND artist_user.status='active'
+            WHERE a.label_id=$1 AND a.verified_at IS NOT NULL
+              AND EXISTS (SELECT 1 FROM soundpub.user_roles role WHERE role.user_id=a.artist_user_id
+                AND role.role='artist' AND role.tenant_id IS NULL AND role.verified_at IS NOT NULL)) AS total_artists,
+          (SELECT count(*)::int FROM soundpub.releases release WHERE release.label_id=$1) AS total_releases,
+          (SELECT COALESCE(sum(CASE WHEN correction.id IS NULL THEN entry.net_amount ELSE 0 END),0)::numeric(24,2)::text
+            FROM soundpub.royalty_import_entries entry
+            LEFT JOIN soundpub.royalty_import_corrections correction ON correction.batch_id=entry.batch_id
+            WHERE entry.label_owner_user_id=$1) AS total_revenue,
+          (SELECT count(*)::int FROM soundpub.artists a JOIN soundpub.profiles artist_profile
+            ON artist_profile.id=a.artist_user_id AND artist_profile.parent_label_id=a.label_id
+            JOIN soundpub.backend_users artist_user ON artist_user.id=a.artist_user_id AND artist_user.status='active'
+            WHERE a.label_id=$1 AND a.verified_at IS NOT NULL AND artist_profile.password_set=true
+              AND EXISTS (SELECT 1 FROM soundpub.user_roles role WHERE role.user_id=a.artist_user_id
+                AND role.role='artist' AND role.tenant_id IS NULL AND role.verified_at IS NOT NULL)
+              AND EXISTS (SELECT 1 FROM soundpub.local_auth_credentials credential WHERE credential.user_id=a.artist_user_id)) AS artists_with_access,
+          (SELECT count(*)::int FROM soundpub.artists a JOIN soundpub.profiles artist_profile
+            ON artist_profile.id=a.artist_user_id AND artist_profile.parent_label_id=a.label_id
+            JOIN soundpub.backend_users artist_user ON artist_user.id=a.artist_user_id AND artist_user.status='active'
+            WHERE a.label_id=$1 AND a.verified_at IS NOT NULL
+              AND EXISTS (SELECT 1 FROM soundpub.user_roles role WHERE role.user_id=a.artist_user_id
+                AND role.role='artist' AND role.tenant_id IS NULL AND role.verified_at IS NOT NULL)
+              AND NOT (artist_profile.password_set=true
+              AND EXISTS (SELECT 1 FROM soundpub.local_auth_credentials credential WHERE credential.user_id=a.artist_user_id))) AS artists_without_access
+          FROM soundpub.profiles p WHERE p.id=$1`, [current.id])).rows[0];
+        if (!row) throw new ApiError(404, 'NOT_FOUND');
+        return { label_id: current.id, currency: 'IDR' as const, ...row };
+      });
+    },
+    async createWhitelabelArtist(actor: Principal, input: WhitelabelArtistCreate, requestId: string) {
+      const value = parse(whitelabelArtistCreate, input);
+      const id = randomUUID();
+      try {
+        return await withTransaction(pool, async db => {
+          const repo = usersRepository(db);
+          const current = (await repo.lock([actor.id], true)).get(actor.id);
+          requireWhitelabel(current);
+          if ((await db.query(`SELECT 1 FROM soundpub.backend_users WHERE lower(email)=lower($1)
+            UNION ALL SELECT 1 FROM soundpub.local_auth_credentials WHERE lower(login_email)=lower($1) LIMIT 1`, [value.email])).rowCount) {
+            throw new ApiError(409, 'CONFLICT');
+          }
+          await repo.createWhitelabelArtist(id, current.id, { ...value, phone: value.phone ?? null });
+          await repo.audit(current.id, id, requestId, 'whitelabel.artist_created', { parentLabelId: current.id, loginEnabled: false });
+          return (await repo.find(id))!;
+        });
+      } catch (error) {
+        if ((error as { code?: string }).code === '23505') throw new ApiError(409, 'CONFLICT');
+        throw error;
+      }
+    },
+    async setWhitelabelArtistPassword(actor: Principal, id: string, input: PasswordReset, requestId: string) {
+      requireWhitelabel(actor);
+      parse(z.uuid(), id);
+      const value = parse(passwordReset, input);
+      const passwordHash = await hashPassword(value.newPassword);
+      return withTransaction(pool, async db => {
+        const repo = usersRepository(db);
+        const principals = await repo.lock([actor.id, id], true);
+        const current = principals.get(actor.id);
+        requireWhitelabel(current);
+        const target = principals.get(id);
+        if (!target) throw new ApiError(404, 'NOT_FOUND');
+        const ownership = (await db.query<{ email: string | null; subscription_status: string | null; password_set: boolean | null }>(`SELECT artist.email,pic.subscription_status,profile.password_set
+          FROM soundpub.backend_users artist JOIN soundpub.profiles profile ON profile.id=artist.id
+          JOIN soundpub.artists membership ON membership.artist_user_id=artist.id AND membership.label_id=$1
+            AND membership.verified_at IS NOT NULL
+          JOIN soundpub.profiles pic ON pic.id=$1
+          WHERE artist.id=$2 AND profile.parent_label_id=$1
+            AND EXISTS (SELECT 1 FROM soundpub.user_roles role WHERE role.user_id=artist.id
+              AND role.role='artist' AND role.tenant_id IS NULL AND role.verified_at IS NOT NULL)`, [current.id,id])).rows[0];
+        if (!ownership) throw new ApiError(404, 'NOT_FOUND');
+        if (ownership.subscription_status !== 'active') throw new ApiError(409, 'WHITELABEL_SUBSCRIPTION_REQUIRED');
+        if (!ownership.email || ownership.password_set === true || (await db.query(
+          'SELECT 1 FROM soundpub.local_auth_credentials WHERE user_id=$1', [id])).rowCount) throw new ApiError(409, 'CONFLICT');
+        if ((await db.query('SELECT 1 FROM soundpub.local_auth_credentials WHERE lower(login_email)=lower($1) AND user_id<>$2',
+          [ownership.email,id])).rowCount) throw new ApiError(409, 'CONFLICT');
+        await db.query(`INSERT INTO soundpub.local_auth_credentials(user_id,login_email,password_hash)
+          VALUES ($1,lower($2),$3)`, [id,ownership.email,passwordHash]);
+        await db.query('UPDATE soundpub.profiles SET password_set=true,updated_at=now() WHERE id=$1', [id]);
+        await repo.audit(current.id, id, requestId, 'whitelabel.artist_login_enabled', {});
+        return { status: 'ok' as const };
+      });
     },
     async setStatus(actor: Principal, id: string, input: { status: Principal['status'] }, requestId: string, reason?: string) {
       requirePolicy(actor, 'admin');

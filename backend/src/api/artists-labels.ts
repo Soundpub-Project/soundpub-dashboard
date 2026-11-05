@@ -11,7 +11,9 @@ const id = z.strictObject({ id: z.uuid() });
 
 const page = <T extends z.ZodType>(item: T) => z.strictObject({ items: z.array(item), nextCursor: z.string().nullable() });
 const rosterItem = z.strictObject({ membershipId: z.uuid(), artistId: z.uuid(), labelId: z.uuid(),
-  name: z.string(), fullName: z.string(), status: z.enum(['active', 'inactive', 'suspended']) });
+  name: z.string(), fullName: z.string(), status: z.enum(['active', 'inactive', 'suspended']),
+  email: z.string().nullable(), phone: z.string().nullable(), address: z.string().nullable(),
+  passwordSet: z.boolean(), createdAt: z.string() });
 const parent = z.strictObject({ artistId: z.uuid(), parentLabelId: z.uuid().nullable(), membershipId: z.uuid().nullable() });
 const change = parent.extend({ changed: z.boolean() });
 const labelDto = z.strictObject({ id: z.uuid(), ownerId: z.uuid(), full_name: z.string(),
