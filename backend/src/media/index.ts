@@ -16,6 +16,7 @@ function id(value: unknown) {
   return parsed.data;
 }
 function binding(row: Pick<MediaRow, 'category' | 'variant'>) {
+  if (row.category === 'TAKEDOWN_DOCUMENT') return null;
   if (row.category === 'OTHER') return { table: 'application_settings', column: row.variant === 'light' ? 'dashboard_logo_light'
     : row.variant === 'dark' ? 'dashboard_logo_dark' : 'favicon', url: '' };
   if (row.category === 'USER_AVATAR') return { table: 'profiles', column: 'avatar_media_id', url: 'avatar_url' };
@@ -30,6 +31,8 @@ function settingMedia(row: Pick<MediaRow, 'resource_type' | 'category'>) {
 }
 async function referenced(db: Pick<Pool, 'query'> | PoolClient, row: MediaRow) {
   const target = binding(row);
+  if (!target) return !!(await db.query(`SELECT id FROM soundpub.takedown_request_documents
+    WHERE media_object_id=$1`, [row.id])).rowCount;
   return settingMedia(row)
     ? !!(await db.query(`SELECT id FROM soundpub.application_settings WHERE id=true AND settings->>$1=$2`, [target.column, row.id])).rowCount
     : !!(await db.query(`SELECT id FROM soundpub.${target.table} WHERE id=$1 AND ${target.column}=$2`, [row.resource_id, row.id])).rowCount;
@@ -59,10 +62,13 @@ export function createMediaService(pool: Pool, store: MediaObjectStore) {
       if (row.status === 'PENDING' && row.owner_user_id !== current.id) throw new ApiError(404, 'NOT_FOUND');
       if (row.status === 'DELETED') return { status: 'deleted' as const };
       const target = binding(row);
+      if (!target) {
+        if (await referenced(db,row)) throw new ApiError(409, 'CONFLICT');
+      }
       if (settingMedia(row)) await db.query(`UPDATE soundpub.application_settings SET
         settings=jsonb_set(settings,ARRAY[$1], 'null'::jsonb),version=version+1
-        WHERE id=true AND settings->>$1=$2`, [target.column,row.id]);
-      else await db.query(`UPDATE soundpub.${target.table} SET ${target.column}=NULL,${target.url}=NULL,updated_at=now()
+        WHERE id=true AND settings->>$1=$2`, [target!.column,row.id]);
+      else if (target) await db.query(`UPDATE soundpub.${target.table} SET ${target.column}=NULL,${target.url}=NULL,updated_at=now()
         WHERE id=$1 AND ${target.column}=$2`, [row.resource_id, row.id]);
       if (releaseId && row.resource_type === 'track' && row.status === 'ACTIVE') await db.query('UPDATE soundpub.releases SET updated_at=now() WHERE id=$1', [releaseId]);
       await db.query(`UPDATE soundpub.media_objects SET status='DELETED',updated_at=now(),
@@ -80,11 +86,12 @@ export function createMediaService(pool: Pool, store: MediaObjectStore) {
         const expiresAt = new Date(Date.now() + 300_000);
         const row = (await db.query<MediaRow>(`INSERT INTO soundpub.media_objects
           (id,bucket,object_key,owner_user_id,category,resource_type,resource_id,profile_id,release_id,track_id,
-          variant,mime_type,size,checksum,expires_at,cleanup_after)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15::timestamptz+interval '60 seconds') RETURNING *`,
+          takedown_request_id,original_filename,variant,mime_type,size,checksum,expires_at,cleanup_after)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17::timestamptz+interval '60 seconds') RETURNING *`,
         [upload.metadata.id, store.bucket, store.key(upload.metadata.id), current.id, value.category, value.resource_type,
           value.resource_id, ['user','label'].includes(value.resource_type) ? value.resource_id : null,
           value.resource_type === 'release' ? value.resource_id : null, value.resource_type === 'track' ? value.resource_id : null,
+          value.resource_type === 'takedown' ? value.resource_id : null, value.filename,
           value.variant, value.mime_type, value.size, value.checksum, expiresAt])).rows[0]!;
         await audit(db, current, row, 'media.upload_requested', requestId);
         return { object: dto(row), url: upload.url, method: upload.method, headers: upload.headers, expires_at: expiresAt.toISOString() };
@@ -98,9 +105,9 @@ export function createMediaService(pool: Pool, store: MediaObjectStore) {
         if (row.status === 'ACTIVE') return { object: dto(row) };
         if (row.status !== 'PENDING' || new Date(row.expires_at).getTime() <= Date.now()) throw new ApiError(409, 'MEDIA_UPLOAD_EXPIRED');
         const target = binding(row);
-        const previous = (await db.query<MediaRow>(`SELECT * FROM soundpub.media_objects WHERE category=$1
+        const previous = target ? (await db.query<MediaRow>(`SELECT * FROM soundpub.media_objects WHERE category=$1
           AND resource_type=$2 AND resource_id=$3 AND variant=$4 AND status='ACTIVE' FOR UPDATE`,
-        [row.category, row.resource_type, row.resource_id, row.variant])).rows[0];
+        [row.category, row.resource_type, row.resource_id, row.variant])).rows[0] : undefined;
         if (previous && (await db.query(`SELECT 1 FROM soundpub.media_objects newer, soundpub.media_objects older
           WHERE newer.id=$1 AND older.id=$2 AND newer.request_order > older.request_order`, [previous.id,row.id])).rowCount) throw new ApiError(409, 'CONFLICT');
         try { await store.verify(row); }
@@ -113,11 +120,17 @@ export function createMediaService(pool: Pool, store: MediaObjectStore) {
           cleanup_after=GREATEST(expires_at+interval '60 seconds',now()+interval '60 seconds') WHERE id=$1`, [previous.id]);
         // Persist stable authenticated API reference, never S3 URL or signed capability.
         if (settingMedia(row)) await db.query(`UPDATE soundpub.application_settings SET
-          settings=jsonb_set(settings,ARRAY[$1],to_jsonb($2::text)),version=version+1 WHERE id=true`, [target.column,row.id]);
-        else await db.query(`UPDATE soundpub.${target.table} SET ${target.column}=$2,${target.url}=$3,updated_at=now() WHERE id=$1`,
+          settings=jsonb_set(settings,ARRAY[$1],to_jsonb($2::text)),version=version+1 WHERE id=true`, [target!.column,row.id]);
+        else if (target) await db.query(`UPDATE soundpub.${target.table} SET ${target.column}=$2,${target.url}=$3,updated_at=now() WHERE id=$1`,
           [row.resource_id, row.id, `/api/v1/storage/objects/${row.id}/download`]);
         if (releaseId && row.resource_type === 'track') await db.query('UPDATE soundpub.releases SET updated_at=now() WHERE id=$1', [releaseId]);
         const active = (await db.query<MediaRow>("UPDATE soundpub.media_objects SET status='ACTIVE',updated_at=now() WHERE id=$1 RETURNING *", [row.id])).rows[0]!;
+        if (active.category === 'TAKEDOWN_DOCUMENT') {
+          await db.query(`INSERT INTO soundpub.takedown_request_documents
+            (id,request_id,uploaded_by,media_object_id,file_name,document_type)
+            VALUES (gen_random_uuid(),$1,$2,$3,$4,'Pendukung') ON CONFLICT (media_object_id) DO NOTHING`,
+          [active.resource_id,current.id,active.id,active.original_filename]);
+        }
         await audit(db, current, active, 'media.finalized', requestId);
         return { object: dto(active) };
       });
@@ -172,7 +185,7 @@ export function createMediaService(pool: Pool, store: MediaObjectStore) {
         if (candidate.resource_type === 'track') await db.query(`SELECT r.id FROM soundpub.releases r JOIN soundpub.tracks t
           ON t.release_id=r.id WHERE t.id=$1 FOR UPDATE OF r`, [candidate.resource_id]);
         if (settingMedia(candidate)) await db.query('SELECT id FROM soundpub.application_settings WHERE id=true FOR UPDATE');
-        else await db.query(`SELECT ${target.column} AS media_id FROM soundpub.${target.table} WHERE id=$1 FOR UPDATE`, [candidate.resource_id]);
+        else if (target) await db.query(`SELECT ${target.column} AS media_id FROM soundpub.${target.table} WHERE id=$1 FOR UPDATE`, [candidate.resource_id]);
         const row = await find(db, candidate.id, true);
         if (row.status !== 'ACTIVE') return;
         if (!(await referenced(db,row))) await db.query(`UPDATE soundpub.media_objects SET status='REPLACED',

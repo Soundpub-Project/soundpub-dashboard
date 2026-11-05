@@ -109,6 +109,11 @@ export const takedownHistoryDto = z.strictObject({
   id: z.uuid(), old_status: takedownStatus.nullable(), new_status: takedownStatus,
   changed_by: z.uuid(), note: z.string().nullable(), created_at: z.string(),
 });
+export const takedownDocumentDto = z.strictObject({
+  id: z.uuid(), media_object_id: z.uuid(), file_name: z.string(), document_type: z.string().nullable(),
+  mime_type: z.string(), file_size: z.number().int().nonnegative(), created_at: z.string(),
+  download_reference: z.string(),
+});
 export const takedownDto = z.strictObject({
   id: z.uuid(), request_code: z.string(), requester_id: z.uuid(), label_id: z.uuid(), request_type: takedownRequestType,
   reason_category: z.string(), reason_detail: z.string(), other_reason: z.string().nullable(),
@@ -120,7 +125,7 @@ export const takedownDto = z.strictObject({
   sent_to_dsp_at: z.string().nullable(), completed_at: z.string().nullable(), status_before_cancel: takedownStatus.nullable(),
   version: z.number().int().min(1),
   created_at: z.string(), updated_at: z.string(), items: z.array(takedownItemDto),
-  targets: z.array(takedownTargetDto), history: z.array(takedownHistoryDto),
+  targets: z.array(takedownTargetDto), history: z.array(takedownHistoryDto), documents: z.array(takedownDocumentDto),
 });
 export const takedownEligibleReleaseDto = z.strictObject({
   id: z.uuid(), title: z.string(), artist_name: z.string(), upc: z.string().nullable(),

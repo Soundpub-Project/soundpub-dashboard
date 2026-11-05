@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { createTakedownsService } from '../src/takedowns/index.js';
+import { createMediaService, type MediaObjectStore } from '../src/media/index.js';
 import { concurrencyPostgres } from './support/concurrency-postgres.js';
 
 const integration = process.env.RUN_DOCKER_TESTS === '1' ? test : test.skip;
@@ -40,6 +41,15 @@ integration('takedown submission is scoped, atomic, replayable, and server-deriv
     [releaseId, labelId, artistId, ownedArtist, otherReleaseId, otherLabelId, otherArtistId, otherArtist]);
 
     const service = createTakedownsService(db.runtime);
+    const mediaStore: MediaObjectStore = {
+      bucket: 'synthetic', key: id => `media/objects/${id}`,
+      async request(ownerId, value) { const id = randomUUID(); return { metadata: { id, ownerId, mimeType: value.mime_type,
+        size: value.size, checksum: value.checksum, visibility: 'private', createdAt: new Date().toISOString() },
+      url: `http://localhost/${id}`, method: 'PUT', headers: {} }; },
+      async verify() {}, async download(row) { return `http://localhost/download/${row.id}`; }, async remove() {},
+      async removeStaging() {}, async inspect() { return 'ok'; }, async listKeys() { return []; }, close() {}, async isReady() { return true; },
+    };
+    const media = createMediaService(db.runtime, mediaStore);
     const label = { id: labelId, status: 'active' as const, roles: ['label'] as const };
     const artist = { id: artistId, status: 'active' as const, roles: ['artist'] as const };
     const admin = { id: adminId, status: 'active' as const, roles: ['admin'] as const };
@@ -52,6 +62,12 @@ integration('takedown submission is scoped, atomic, replayable, and server-deriv
     assert.equal(created.items.length, 1);
     assert.equal(created.targets.length, 2);
     assert.equal(created.history.length, 1);
+    const pdf = Buffer.from('%PDF-1.4 synthetic');
+    const upload = await media.requestUpload(label, { category: 'TAKEDOWN_DOCUMENT', resource_type: 'takedown',
+      resource_id: created.id, mime_type: 'application/pdf', size: pdf.length,
+      checksum: createHash('sha256').update(pdf).digest('hex'), filename: 'evidence.pdf' }, 'request-document');
+    await media.completeUpload(label, upload.object.id, 'complete-document');
+    assert.equal((await service.get(label, created.id) as any).documents[0].file_name, 'evidence.pdf');
     assert.equal((await service.create(label, input(releaseId), 'label-submit-1', 'request-replay') as { id: string }).id, created.id);
     await assert.rejects(service.create(label, { ...input(releaseId), reason_detail: 'Changed payload' }, 'label-submit-1', 'request-conflict'),
       (error: any) => error?.statusCode === 409);
@@ -79,6 +95,10 @@ integration('takedown submission is scoped, atomic, replayable, and server-deriv
     reviewed = await service.transitionTarget(admin, created.id, refreshedSecond.id,
       { version: refreshedSecond.version, status: 'COMPLETED' }, 'target-5', 'request-target-5') as any;
     assert.equal(reviewed.status, 'COMPLETED');
+    await assert.rejects(media.requestUpload(label, { category: 'TAKEDOWN_DOCUMENT', resource_type: 'takedown',
+      resource_id: created.id, mime_type: 'application/pdf', size: pdf.length,
+      checksum: createHash('sha256').update(pdf).digest('hex'), filename: 'late.pdf' }, 'late-document'),
+    (error: any) => error?.statusCode === 404);
     const artistCreated = await service.create(artist, input(releaseId), 'artist-submit-1', 'request-artist') as any;
     assert.equal(artistCreated.requester_id, artistId);
     const cancellation = await service.requestCancellation(artist, artistCreated.id,

@@ -561,3 +561,14 @@ Backend parity selesai hanya jika:
 - Import source/batch/period idempotent, payload berbeda konflik, batch dan entry immutable, ledger exact minor-unit, dan audit/outbox berada dalam transaksi yang sama.
 - Koreksi membalik penuh semua beneficiary secara append-only. Rekonsiliasi membutuhkan admin independen dari uploader dan mengikat snapshot checksum, issue list, audit, serta outbox.
 - Frontend backend-mode menyediakan preview/posting, history/detail, status corrected/reconciled, mapping administration, own-role royalty history, koreksi, dan rekonsiliasi tanpa fallback Supabase.
+
+## 20. Takedown checkpoint
+
+- Backend memiliki schema request, item release/track, DSP target, history, dokumen privat, immutable ownership/snapshot, request code, TOR checksum, dan active-scope uniqueness.
+- Submission memakai idempotency key dan satu transaksi untuk request, item, expanded DSP targets, initial history, audit, serta outbox. Actor, label, snapshot, timestamp, dan priority ditentukan server.
+- `partial` wajib memilih track valid dalam release. `Semua DSP` hanya input convenience dan selalu diperluas server menjadi registry DSP konkret.
+- Reviewer memakai transition matrix dan optimistic version. `COMPLETED`, `REJECTED`, dan `CANCELLED` terminal. Requester hanya dapat meminta pembatalan; admin menyetujui menjadi `CANCELLED`.
+- Target DSP memakai transition matrix sendiri. Status aggregate request dihitung server dari seluruh target, bukan dikirim browser.
+- Dokumen memakai media pipeline private yang sama: PDF/image allowlist, batas 10 MiB, checksum dan signature validation, attachment metadata atomik saat completion, serta signed download berotorisasi.
+- Frontend backend-mode memiliki list, submission, partial-track selection, contact snapshot, multi-DSP progress, reviewer actions, cancellation, document upload/download, dan timeline tanpa Supabase fallback.
+- PostgreSQL disposable integration membuktikan scope label/artist/admin, IDOR denial, exact replay, changed-payload conflict, duplicate active scope, transition sequence, DSP aggregation, cancellation, document attachment, audit, dan outbox.

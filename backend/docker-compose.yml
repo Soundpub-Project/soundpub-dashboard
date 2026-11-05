@@ -145,7 +145,7 @@ services:
     environment:
       VITE_DEV_PORT: 8281
       VITE_DEV_API_PROXY_TARGET: http://backend:3000
-      VITE_SOUNDPUB_BACKEND_DOMAINS: users,artists,labels,releases,storage,notifications,audit,settings,royalties,payouts,payments
+      VITE_SOUNDPUB_BACKEND_DOMAINS: users,artists,labels,releases,takedowns,storage,notifications,audit,settings,royalties,payouts,payments
       VITE_SUPABASE_URL: http://supabase.invalid
       VITE_SUPABASE_PUBLISHABLE_KEY: local-development-placeholder
       VITE_DATABASE_SCHEMA: Soundpub

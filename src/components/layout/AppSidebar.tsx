@@ -100,7 +100,7 @@ const musicDashboardItems: NavItem[] = [
     title: 'Takedown',
     url: '/dashboard/takedown',
     icon: ShieldAlert,
-    roles: ['superadmin', 'admin', 'label', 'artist'],
+    roles: ['superadmin', 'admin', 'label', 'label_custom', 'artist', 'whitelabel'],
   },
 ];
 

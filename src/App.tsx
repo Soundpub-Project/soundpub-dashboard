@@ -170,7 +170,7 @@ const App = () => (
                   path="/dashboard/takedown/:id"
                   element={
                     <ProtectedRoute
-                      allowedRoles={["superadmin", "admin", "label", "artist"]}
+                      allowedRoles={usesBackendDomain('takedowns') ? ["superadmin", "admin", "label", "label_custom", "artist", "whitelabel"] : ["superadmin", "admin", "label", "artist"]}
                     >
                       <TakedownDetail />
                     </ProtectedRoute>
@@ -180,7 +180,7 @@ const App = () => (
                   path="/dashboard/takedown"
                   element={
                     <ProtectedRoute
-                      allowedRoles={["superadmin", "admin", "label", "artist"]}
+                      allowedRoles={usesBackendDomain('takedowns') ? ["superadmin", "admin", "label", "label_custom", "artist", "whitelabel"] : ["superadmin", "admin", "label", "artist"]}
                     >
                       <Takedown />
                     </ProtectedRoute>

@@ -49,6 +49,10 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Master audio upload | Supabase Storage | private media capability | Backend adapter tersedia | IMPLEMENTED | Full browser and cleanup tests |
 | Catalog projection | `get-catalog-tracks` | public catalog module | Backend adapter tersedia | IMPLEMENTED | DTO parity; master URL intentionally REJECTED |
 | Invoice PDF/download | storage/function | authorized storage adapter | Belum dinyatakan parity | PARTIAL | Consumer and authorization test |
+| Takedown submission | browser multi-table writes | atomic request/item/target/history/audit/outbox with idempotency and immutable snapshots | Backend form/list/detail cut over by independent `takedowns` flag | VERIFIED | Browser role E2E and legacy data import policy |
+| Takedown review | unrestricted enum updates | strict reviewer state machine, optimistic version, terminal states, and requester cancellation approval | Backend reviewer actions use dedicated endpoints | VERIFIED | Add reviewer workload filters and SLA dashboard |
+| Takedown DSP progress | free-form target updates | target state machine and server-derived aggregate request status | Backend detail updates each DSP target | VERIFIED | Provider adapter integration |
+| Takedown documents | Supabase private bucket | private upload intent, MIME/checksum/signature verification, scoped metadata, signed download | Backend upload and authorized download available | VERIFIED | Malware scanning provider before production rollout |
 
 ## Royalty upload dan ingestion
 
@@ -166,4 +170,4 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 5. Payment provider, payout settlement provider, submission provider, and notification delivery remain partial or mock-oriented.
 6. Royalty upload is cut over when backend royalty/release domains are enabled, but frontend inventory still contains about 368 Supabase call chains in other domains; root production build does not enable backend domains.
 7. Keycloak adapter is implemented; production realm/client configuration and browser E2E remain.
-8. Copyright royalty preview/posting/history is backend-owned; copyright registration/takedown, provider invoice/settlement, and several release actions remain direct or unavailable.
+8. Copyright royalty preview/posting/history and takedown are backend-owned; copyright registration, provider invoice/settlement, and several release actions remain direct or unavailable.

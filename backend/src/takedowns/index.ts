@@ -67,7 +67,13 @@ const requestProjection = `r.id,r.request_code,r.requester_id,r.label_id,r.reque
     FROM soundpub.takedown_request_targets t WHERE t.request_id=r.id),'[]'::jsonb) AS targets,
   COALESCE((SELECT jsonb_agg(jsonb_build_object('id',h.id,'old_status',h.old_status,'new_status',h.new_status,
     'changed_by',h.changed_by,'note',h.note,'created_at',to_char(h.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'))
-    ORDER BY h.created_at,h.id) FROM soundpub.takedown_status_history h WHERE h.request_id=r.id),'[]'::jsonb) AS history`;
+    ORDER BY h.created_at,h.id) FROM soundpub.takedown_status_history h WHERE h.request_id=r.id),'[]'::jsonb) AS history,
+  COALESCE((SELECT jsonb_agg(jsonb_build_object('id',d.id,'media_object_id',m.id,'file_name',d.file_name,
+    'document_type',d.document_type,'mime_type',m.mime_type,'file_size',m.size,
+    'created_at',to_char(d.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+    'download_reference','/api/v1/storage/objects/'||m.id::text||'/download') ORDER BY d.created_at,d.id)
+    FROM soundpub.takedown_request_documents d JOIN soundpub.media_objects m ON m.id=d.media_object_id
+    WHERE d.request_id=r.id AND m.status='ACTIVE'),'[]'::jsonb) AS documents`;
 
 export function createTakedownsService(pool: Pool) {
   async function lockedActor(db: PoolClient, actor: Principal, write: boolean) {

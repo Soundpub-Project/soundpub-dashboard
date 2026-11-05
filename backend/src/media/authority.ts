@@ -21,9 +21,16 @@ export async function mediaAuthority(db: PoolClient, actor: Principal, binding: 
   if (releaseId && !catalog) throw new ApiError(404, 'NOT_FOUND');
   const targetId: string | null = releaseId ? (catalog.management_mode === 'LABEL_CUSTOM_MANAGED' ? catalog.label_id : catalog.artist_user_id) : id;
   const users = usersRepository(db);
-  const principals = await users.lock([actor.id, ...(targetId ? [targetId] : [])], true);
+  const principals = await users.lock([actor.id, ...(targetId && type !== 'takedown' ? [targetId] : [])], true);
   const current = principals.get(actor.id);
   if (!current || !allows(current, 'authenticated')) throw new ApiError(403, 'FORBIDDEN');
+  if (type === 'takedown') {
+    const request = (await db.query<{ requester_id: string; label_id: string; status: string }>(
+      'SELECT requester_id,label_id,status FROM soundpub.takedown_requests WHERE id=$1 FOR UPDATE', [id])).rows[0];
+    if (!request || !(allows(current, 'admin') || request.requester_id === current.id || request.label_id === current.id)
+      || write && ['COMPLETED','REJECTED','CANCELLED'].includes(request.status)) throw new ApiError(404, 'NOT_FOUND');
+    return { current, releaseId: null };
+  }
   if (type === 'settings') {
     if (id !== SETTINGS_MEDIA_RESOURCE_ID || !allows(current, 'admin')) throw new ApiError(404, 'NOT_FOUND');
     await db.query('SELECT id FROM soundpub.application_settings WHERE id=true FOR UPDATE');

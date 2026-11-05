@@ -21,8 +21,10 @@ export async function resolveMediaDownload(reference: string) {
 }
 export async function uploadBackendMedia(file: File, binding: MediaBinding) {
   if (!usesBackendDomain('storage')) throw new Error('Backend storage mode required');
-  const max = { USER_AVATAR: 5, LABEL_LOGO: 1, RELEASE_COVER: 5, TRACK_AUDIO: 500, OTHER: 5 }[binding.category] * 1024 ** 2;
-  const types = binding.category === 'TRACK_AUDIO' ? ['audio/wav', 'audio/x-wav', 'audio/flac', 'audio/aiff', 'audio/x-aiff', 'audio/mpeg'] : ['image/png', 'image/jpeg', 'image/webp'];
+  const max = { USER_AVATAR: 5, LABEL_LOGO: 1, RELEASE_COVER: 5, TRACK_AUDIO: 500, TAKEDOWN_DOCUMENT: 10, OTHER: 5 }[binding.category] * 1024 ** 2;
+  const types = binding.category === 'TRACK_AUDIO' ? ['audio/wav', 'audio/x-wav', 'audio/flac', 'audio/aiff', 'audio/x-aiff', 'audio/mpeg']
+    : binding.category === 'TAKEDOWN_DOCUMENT' ? ['application/pdf', 'image/png', 'image/jpeg', 'image/webp']
+    : ['image/png', 'image/jpeg', 'image/webp'];
   if (!file.size || file.size > max || !types.includes(file.type)) throw new Error('Jenis atau ukuran file tidak didukung');
   // ponytail: Web Crypto hashes whole file in memory, capped at 500 MiB; use worker streaming hash if larger files are required.
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()));

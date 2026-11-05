@@ -1,4 +1,5 @@
-import { usesBackendReleases } from '@/services/releases';
+import { usesBackendDomain } from '@/api/routing';
+import { BackendTakedownDetail } from '@/components/takedowns/BackendTakedownDetail';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -122,6 +123,6 @@ function LegacyTakedownDetail() {
 }
 
 export default function TakedownDetail() {
-  if (usesBackendReleases()) return <main role="alert" className="p-6">Takedown menunggu migrasi domain Takedown.</main>;
+  if (usesBackendDomain('takedowns')) return <BackendTakedownDetail />;
   return <LegacyTakedownDetail />;
 }

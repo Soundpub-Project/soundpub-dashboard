@@ -12,7 +12,7 @@ const request = { id: '00000000-0000-4000-8000-000000000003', request_code: 'TD-
   declaration_checksum: 'a'.repeat(64), declaration_accepted_at: '2026-11-05T00:00:00.000000Z',
   reviewer_id: null, review_note: null, rejection_reason: null, submitted_at: '2026-11-05T00:00:00.000000Z', reviewed_at: null,
   sent_to_dsp_at: null, completed_at: null, status_before_cancel: null, version: 1, created_at: '2026-11-05T00:00:00.000000Z',
-  updated_at: '2026-11-05T00:00:00.000000Z', items: [], targets: [], history: [] };
+  updated_at: '2026-11-05T00:00:00.000000Z', items: [], targets: [], history: [], documents: [] };
 
 function dependencies(): ApiDependencies {
   return {
