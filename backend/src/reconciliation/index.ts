@@ -23,6 +23,18 @@ const checks: Check[] = [
       OR (NOT EXISTS(SELECT 1 FROM soundpub.royalty_import_corrections c WHERE c.batch_id=b.id)
         AND NOT soundpub.royalty_reconciliation_intact(b.id))
     ORDER BY b.id LIMIT $1` },
+  { code: 'COPYRIGHT_ROYALTY_BATCH_INTEGRITY', sql: `SELECT 'COPYRIGHT_ROYALTY_BATCH_INTEGRITY' AS code,
+    'copyright_royalty' AS resource_type,b.id::text AS resource_id,
+    jsonb_build_object('corrected',EXISTS(SELECT 1 FROM soundpub.copyright_royalty_corrections c WHERE c.batch_id=b.id),
+      'matched',EXISTS(SELECT 1 FROM soundpub.copyright_royalty_reconciliations r WHERE r.batch_id=b.id AND r.result='MATCHED')) AS detail
+    FROM soundpub.copyright_royalty_batches b
+    WHERE (EXISTS(SELECT 1 FROM soundpub.copyright_royalty_corrections c WHERE c.batch_id=b.id)
+        AND NOT soundpub.copyright_royalty_correction_intact(b.id))
+      OR (NOT EXISTS(SELECT 1 FROM soundpub.copyright_royalty_corrections c WHERE c.batch_id=b.id)
+        AND (NOT EXISTS(SELECT 1 FROM soundpub.copyright_royalty_reconciliations r
+          WHERE r.batch_id=b.id AND r.result='MATCHED')
+          OR NOT soundpub.copyright_royalty_reconciliation_intact(b.id)))
+    ORDER BY b.id LIMIT $1` },
   { code: 'FINANCE_EVIDENCE', sql: `SELECT 'FINANCE_EVIDENCE' AS code,'finance_event' AS resource_type,e.id::text AS resource_id,
     jsonb_build_object('kind',e.kind,'ownerId',e.owner_id) AS detail
     FROM soundpub.finance_events e LEFT JOIN soundpub.finance_audit a ON a.event_id=e.id
@@ -105,8 +117,12 @@ const checks: Check[] = [
   { code: 'ORPHAN_LEDGER_EVENT', sql: `SELECT 'ORPHAN_LEDGER_EVENT' AS code,'finance_event' AS resource_type,e.id::text AS resource_id,
     jsonb_build_object('kind',e.kind,'businessReference',e.business_reference) AS detail
     FROM soundpub.finance_events e WHERE
-      (e.kind IN ('ROYALTY_EARNING','ROYALTY_ADJUSTMENT') AND (e.business_reference !~ '^royalty:[0-9a-f-]{36}$'
-        OR NOT EXISTS(SELECT 1 FROM soundpub.royalty_import_batches b WHERE 'royalty:'||b.id::text=e.business_reference)))
+      (e.kind IN ('ROYALTY_EARNING','ROYALTY_ADJUSTMENT') AND
+        NOT ((e.business_reference ~ '^royalty:[0-9a-f-]{36}$'
+          AND EXISTS(SELECT 1 FROM soundpub.royalty_import_batches b WHERE 'royalty:'||b.id::text=e.business_reference))
+        OR (e.business_reference ~ '^copyright-royalty:[0-9a-f-]{36}$'
+          AND EXISTS(SELECT 1 FROM soundpub.copyright_royalty_batches b
+            WHERE 'copyright-royalty:'||b.id::text=e.business_reference))))
       OR (e.kind IN ('PAYOUT_RESERVATION','PAYOUT_RELEASE','PAYOUT_SETTLEMENT') AND
         NOT EXISTS(SELECT 1 FROM soundpub.payout_requests p WHERE p.id::text=e.business_reference))
       OR (e.kind IN ('PAYMENT_CHARGE','PAYMENT_REFUND') AND
@@ -163,6 +179,7 @@ async function collect(db: PoolClient, issueLimit: number) {
 async function counts(db: PoolClient) {
   const row = (await db.query<Record<string, string>>(`SELECT
     (SELECT count(*) FROM soundpub.royalty_import_batches)::text AS royalty_batches,
+    (SELECT count(*) FROM soundpub.copyright_royalty_batches)::text AS copyright_royalty_batches,
     (SELECT count(*) FROM soundpub.finance_events)::text AS finance_events,
     (SELECT count(*) FROM soundpub.payout_requests)::text AS payouts,
     (SELECT count(*) FROM soundpub.payment_invoices)::text AS payment_invoices,

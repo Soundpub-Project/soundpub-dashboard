@@ -43,7 +43,9 @@ test('composer royalty preview permits DB-resolved admin roles and has no write 
       assert.deepEqual(response.json(), { ...statement, rows: [{ ...statement.rows[0], beneficiary_id: null,
         canonical_name: null, mapping_id: null, status: 'UNMATCHED' }], total_amount: '10.50',
         checksum: response.json().checksum, status: 'UNRECONCILED',
-        posting_allowed: false, blockers: ['COMPOSER_IDENTITY_MAPPING_REQUIRED', 'WORK_ALLOCATION_CONTRACT_REQUIRED'] });
+        policy_code: 'LEGACY_AGGREGATE_100_PERCENT_TO_RESOLVED_BENEFICIARY_V1',
+        policy_checksum: response.json().policy_checksum,
+        posting_allowed: false, blockers: ['COMPOSER_IDENTITY_MAPPING_REQUIRED'] });
     }
     assert.equal('royalties' in deps, false);
     assert.equal('payments' in deps, false);
@@ -76,13 +78,13 @@ test('composer royalty preview OpenAPI exactly documents request and response', 
     assert.equal(request.properties.rows.items.additionalProperties, false);
     const response = operation.responses['200'].content['application/json'].schema;
     assert.deepEqual(response.required, ['source', 'source_batch', 'period', 'currency', 'rows', 'total_amount',
-      'checksum', 'status', 'posting_allowed', 'blockers']);
+      'checksum', 'status', 'policy_code', 'policy_checksum', 'posting_allowed', 'blockers']);
     assert.equal(response.additionalProperties, false);
     assert.deepEqual(response.properties.status.enum, ['UNRECONCILED']);
-    assert.deepEqual(response.properties.posting_allowed.enum, [false]);
+    assert.equal(response.properties.posting_allowed.type, 'boolean');
     assert.deepEqual(response.properties.blockers.items.enum,
-      ['COMPOSER_IDENTITY_MAPPING_REQUIRED', 'WORK_ALLOCATION_CONTRACT_REQUIRED']);
-    assert.deepEqual([response.properties.blockers.minItems, response.properties.blockers.maxItems], [1, 2]);
+      ['COMPOSER_IDENTITY_MAPPING_REQUIRED']);
+    assert.equal(response.properties.blockers.maxItems, 1);
     const paths = (await app.inject('/openapi.json')).json().paths;
     assert.equal(paths['/api/v1/admin/copyright/beneficiary-mappings'].post.operationId, 'createCopyrightBeneficiaryMapping');
     assert.equal(paths['/api/v1/admin/copyright/beneficiary-mappings'].get.operationId, 'listCopyrightBeneficiaryMappings');

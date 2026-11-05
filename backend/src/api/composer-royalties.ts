@@ -3,7 +3,11 @@ import { z } from 'zod';
 import type { Principal } from '../auth/index.js';
 import type { ComposerRoyaltiesService } from '../composer-royalties/index.js';
 import { beneficiaryMapping, beneficiaryMappingCreate, beneficiaryMappingList, beneficiaryMappingQuery,
-  beneficiaryMappingRevoke, composerStatement, composerStatementPreview } from '../composer-royalties/contracts.js';
+  beneficiaryMappingRevoke, composerStatement, composerStatementPreview, copyrightRoyaltyBatch,
+  copyrightRoyaltyCorrection, copyrightRoyaltyCorrectionCreate, copyrightRoyaltyEntry,
+  copyrightRoyaltyImportCreate, copyrightRoyaltyImportDetail, copyrightRoyaltyImportList,
+  copyrightRoyaltyListQuery, copyrightRoyaltyPostingResult, copyrightRoyaltyReconciliation,
+  copyrightRoyaltyReconciliationCreate } from '../composer-royalties/contracts.js';
 
 export function registerComposerRoyaltiesRoutes(app: FastifyInstance, service: ComposerRoyaltiesService,
   authenticate: (request: FastifyRequest) => Promise<Principal>, paths: Record<string, Record<string, unknown>>,
@@ -11,6 +15,18 @@ export function registerComposerRoyaltiesRoutes(app: FastifyInstance, service: C
   const definitions = [
     { method: 'POST' as const, url: '/api/v1/copyright/royalties/preview', operationId: 'previewComposerRoyalties',
       body: composerStatement, response: composerStatementPreview },
+    { method: 'POST' as const, url: '/api/v1/admin/copyright/royalties/imports', operationId: 'importCopyrightRoyalties',
+      body: copyrightRoyaltyImportCreate, response: copyrightRoyaltyPostingResult },
+    { method: 'GET' as const, url: '/api/v1/admin/copyright/royalties/imports', operationId: 'listCopyrightRoyaltyImports',
+      query: copyrightRoyaltyListQuery, response: copyrightRoyaltyImportList },
+    { method: 'GET' as const, url: '/api/v1/admin/copyright/royalties/imports/:id', operationId: 'getCopyrightRoyaltyImport',
+      params: z.strictObject({ id: z.uuid() }), response: copyrightRoyaltyImportDetail },
+    { method: 'GET' as const, url: '/api/v1/copyright/royalties', operationId: 'listCopyrightRoyalties',
+      query: copyrightRoyaltyListQuery, response: z.strictObject({ items: z.array(copyrightRoyaltyEntry), next_offset: z.number().int().nullable() }) },
+    { method: 'POST' as const, url: '/api/v1/admin/copyright/royalties/imports/:id/corrections', operationId: 'correctCopyrightRoyaltyImport',
+      params: z.strictObject({ id: z.uuid() }), body: copyrightRoyaltyCorrectionCreate, response: copyrightRoyaltyCorrection },
+    { method: 'POST' as const, url: '/api/v1/admin/copyright/royalties/imports/:id/reconciliation', operationId: 'reconcileCopyrightRoyaltyImport',
+      params: z.strictObject({ id: z.uuid() }), body: copyrightRoyaltyReconciliationCreate, response: copyrightRoyaltyReconciliation },
     { method: 'POST' as const, url: '/api/v1/admin/copyright/beneficiary-mappings', operationId: 'createCopyrightBeneficiaryMapping',
       body: beneficiaryMappingCreate, response: beneficiaryMapping },
     { method: 'GET' as const, url: '/api/v1/admin/copyright/beneficiary-mappings', operationId: 'listCopyrightBeneficiaryMappings',
@@ -39,6 +55,12 @@ export function registerComposerRoyaltiesRoutes(app: FastifyInstance, service: C
       handler: async request => {
         const actor = await authenticate(request);
         if (def.operationId === 'previewComposerRoyalties') return service.preview(actor, request.body);
+        if (def.operationId === 'importCopyrightRoyalties') return service.postImport(actor, request.body, request.id);
+        if (def.operationId === 'listCopyrightRoyaltyImports') return service.listImports(actor, request.query);
+        if (def.operationId === 'getCopyrightRoyaltyImport') return service.getImport(actor, (request.params as { id: string }).id);
+        if (def.operationId === 'listCopyrightRoyalties') return service.listRoyalties(actor, request.query);
+        if (def.operationId === 'correctCopyrightRoyaltyImport') return service.correct(actor, (request.params as { id: string }).id, request.body, request.id);
+        if (def.operationId === 'reconcileCopyrightRoyaltyImport') return service.reconcile(actor, (request.params as { id: string }).id, request.body, request.id);
         if (def.operationId === 'createCopyrightBeneficiaryMapping') return service.createMapping(actor, request.body);
         if (def.operationId === 'listCopyrightBeneficiaryMappings') return service.listMappings(actor, request.query);
         return service.revokeMapping(actor, (request.params as { id: string }).id, request.body);

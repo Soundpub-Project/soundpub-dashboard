@@ -30,12 +30,23 @@ export function createBalanceService(pool: Pool) {
           WHERE p.id=$1 OR (p.parent_label_id=$1 AND EXISTS (SELECT 1 FROM soundpub.artists a
             WHERE a.artist_user_id=p.id AND a.label_id=$1 AND a.verified_at IS NOT NULL)) ORDER BY p.id`, [requested])).rows.map(row => row.id) : [requested];
         const accountIds = [...new Set(ids)];
-        const reconciliationRequired = custom ? !(await customReadiness(db, requested)).reconciled : Boolean((await db.query(`SELECT 1 FROM soundpub.royalty_import_allocations allocation
+        const reconciliationRequired = custom ? !(await customReadiness(db, requested)).reconciled : Boolean((await db.query(`SELECT 1 FROM (
+          SELECT batch.id FROM soundpub.royalty_import_allocations allocation
           JOIN soundpub.royalty_import_entries entry ON entry.id=allocation.entry_id
           JOIN soundpub.royalty_import_batches batch ON batch.id=entry.batch_id
           LEFT JOIN soundpub.royalty_import_corrections correction ON correction.batch_id=batch.id
           WHERE allocation.owner_id=ANY($1::uuid[]) AND correction.id IS NULL
-            AND NOT soundpub.royalty_reconciliation_intact(batch.id) LIMIT 1`, [accountIds])).rowCount);
+            AND NOT soundpub.royalty_reconciliation_intact(batch.id)
+          UNION ALL
+          SELECT batch.id FROM soundpub.copyright_royalty_entries entry
+          JOIN soundpub.copyright_royalty_batches batch ON batch.id=entry.batch_id
+          LEFT JOIN soundpub.copyright_royalty_corrections correction ON correction.batch_id=batch.id
+          WHERE entry.beneficiary_id=ANY($1::uuid[]) AND (
+            (correction.id IS NULL AND (NOT EXISTS(SELECT 1 FROM soundpub.copyright_royalty_reconciliations reconciliation
+              WHERE reconciliation.batch_id=batch.id AND reconciliation.result='MATCHED')
+              OR NOT soundpub.copyright_royalty_reconciliation_intact(batch.id)))
+            OR (correction.id IS NOT NULL AND NOT soundpub.copyright_royalty_correction_intact(batch.id)))
+        ) unreconciled LIMIT 1`, [accountIds])).rowCount);
         const total = empty();
         for (const id of accountIds) {
           const balance = await getBalance(db, id);

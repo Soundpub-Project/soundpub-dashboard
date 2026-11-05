@@ -35,9 +35,11 @@ test('DB-resolved preview snapshots mapping, blockers and deterministic checksum
   const second = await service.preview(actor, structuredClone(statement)) as any;
   assert.deepEqual(first, second);
   assert.deepEqual(first.rows[0], { ...row, beneficiary_id: owner, canonical_name: 'Canonical Composer', mapping_id: mapping, status: 'MATCHED' });
-  assert.deepEqual(first.blockers, ['WORK_ALLOCATION_CONTRACT_REQUIRED']);
+  assert.deepEqual(first.blockers, []);
+  assert.equal(first.posting_allowed, true);
+  assert.equal(first.policy_code, 'LEGACY_AGGREGATE_100_PERCENT_TO_RESOLVED_BENEFICIARY_V1');
+  assert.match(first.policy_checksum, /^[a-f0-9]{64}$/);
   assert.match(first.checksum, /^[a-f0-9]{64}$/);
-  assert.equal(first.posting_allowed, false);
   assert.deepEqual(database.writes, []);
 });
 
@@ -45,7 +47,7 @@ test('unmatched preview remains quarantined and stale DB authority fails closed'
   const database = pool();
   const service = createComposerRoyaltiesService(database.value);
   const result = await service.preview(actor, statement) as any;
-  assert.deepEqual(result.blockers, ['COMPOSER_IDENTITY_MAPPING_REQUIRED', 'WORK_ALLOCATION_CONTRACT_REQUIRED']);
+  assert.deepEqual(result.blockers, ['COMPOSER_IDENTITY_MAPPING_REQUIRED']);
   const stale = pool();
   const original = stale.value.connect.bind(stale.value);
   stale.value.connect = async () => { const client = await original(); const query = client.query.bind(client);

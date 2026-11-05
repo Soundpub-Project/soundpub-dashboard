@@ -11,14 +11,29 @@ export async function reconciliationSnapshot(db: PoolClient, owner: string) {
     LEFT JOIN soundpub.royalty_import_reconciliations r ON r.batch_id=e.batch_id AND r.result='MATCHED'
       AND soundpub.royalty_reconciliation_intact(e.batch_id)
     WHERE a.owner_id=$1 GROUP BY e.batch_id
+  ), copyright_batches AS (
+    SELECT e.batch_id,(sum(e.amount)*100)::bigint AS amount,
+      (SELECT max(c.id::text) FROM soundpub.copyright_royalty_corrections c WHERE c.batch_id=e.batch_id) AS correction,
+      EXISTS(SELECT 1 FROM soundpub.copyright_royalty_reconciliations r
+        WHERE r.batch_id=e.batch_id AND r.result='MATCHED')
+        AND soundpub.copyright_royalty_reconciliation_intact(e.batch_id) AS reconciled,
+      soundpub.copyright_royalty_correction_intact(e.batch_id) AS correction_intact
+    FROM soundpub.copyright_royalty_entries e
+    WHERE e.beneficiary_id=$1 GROUP BY e.batch_id
   ), expected AS (
     SELECT 'ROYALTY_EARNING' AS kind,'royalty:'||batch_id::text AS reference,amount FROM batches WHERE amount<>0
     UNION ALL SELECT 'ROYALTY_ADJUSTMENT','royalty:'||batch_id::text,-amount FROM batches WHERE correction IS NOT NULL AND amount<>0
+    UNION ALL SELECT 'ROYALTY_EARNING','copyright-royalty:'||batch_id::text,amount FROM copyright_batches
+      WHERE (reconciled OR (correction IS NOT NULL AND correction_intact)) AND amount<>0
+    UNION ALL SELECT 'ROYALTY_ADJUSTMENT','copyright-royalty:'||batch_id::text,-amount FROM copyright_batches
+      WHERE correction IS NOT NULL AND correction_intact AND amount<>0
   ), actual AS (
     SELECT * FROM soundpub.finance_events WHERE owner_id=$1 AND currency='IDR'
       AND kind IN ('ROYALTY_EARNING','ROYALTY_ADJUSTMENT','MANUAL_ADJUSTMENT')
   ) SELECT jsonb_build_object(
     'batches',COALESCE((SELECT jsonb_agg(jsonb_build_array(batch_id,amount::text,correction,reconciliation) ORDER BY batch_id) FROM batches),'[]'::jsonb),
+    'copyrightBatches',COALESCE((SELECT jsonb_agg(jsonb_build_array(batch_id,amount::text,correction,reconciled,correction_intact)
+      ORDER BY batch_id) FROM copyright_batches),'[]'::jsonb),
     'events',COALESCE((SELECT jsonb_agg(id ORDER BY id) FROM actual),'[]'::jsonb)
   ) AS snapshot,
   NOT EXISTS(SELECT kind,reference,amount FROM expected EXCEPT SELECT kind,business_reference,amount_minor FROM actual)
@@ -29,7 +44,9 @@ export async function reconciliationSnapshot(db: PoolClient, owner: string) {
     (a.event_id IS NULL OR o.id IS NULL OR a.old_state IS DISTINCT FROM e.old_state OR a.new_state IS DISTINCT FROM e.new_state
      OR o.topic IS DISTINCT FROM 'finance.event' OR o.payload IS DISTINCT FROM jsonb_build_object('eventId',e.id)
      OR o.idempotency_key IS DISTINCT FROM 'finance:'||e.id::text))
-  AND NOT EXISTS(SELECT 1 FROM batches WHERE correction IS NULL AND reconciliation IS NULL) AS intact`, [owner])).rows[0];
+  AND NOT EXISTS(SELECT 1 FROM batches WHERE correction IS NULL AND reconciliation IS NULL)
+  AND NOT EXISTS(SELECT 1 FROM copyright_batches WHERE
+    (correction IS NULL AND NOT reconciled) OR (correction IS NOT NULL AND NOT correction_intact)) AS intact`, [owner])).rows[0];
   return { snapshot: row?.snapshot, intact: row?.intact === true };
 }
 export async function currentDestination(db: PoolClient, owner: string) {
