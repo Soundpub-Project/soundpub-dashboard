@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
 import { authApi } from '@/api/auth'
@@ -72,7 +72,7 @@ export default function ResetPassword() {
     } catch (err) {
       if (err instanceof z.ZodError) {
         const fieldErrors: Record<string, string> = {}
-        err.errors.forEach((error) => {
+        err.issues.forEach((error) => {
           if (error.path[0]) {
             fieldErrors[error.path[0] as string] = error.message
           }

@@ -97,7 +97,7 @@ export default function Auth() {
     } catch (error) {
       if (error instanceof z.ZodError) {
         const fieldErrors: Record<string, string> = {};
-        error.errors.forEach((err) => {
+        error.issues.forEach((err) => {
           if (err.path[0]) {
             fieldErrors[err.path[0] as string] = err.message;
           }
@@ -137,7 +137,7 @@ export default function Auth() {
     } catch (error) {
       if (error instanceof z.ZodError) {
         const fieldErrors: Record<string, string> = {};
-        error.errors.forEach((err) => {
+        error.issues.forEach((err) => {
           if (err.path[0]) {
             fieldErrors[err.path[0] as string] = err.message;
           }
@@ -186,10 +186,10 @@ export default function Auth() {
       });
 
       if (error) throw error;
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Gagal Login dengan Google',
-        description: error.message,
+        description: error instanceof Error ? error.message : 'Gagal terhubung ke Google.',
         variant: 'destructive',
       });
     } finally {

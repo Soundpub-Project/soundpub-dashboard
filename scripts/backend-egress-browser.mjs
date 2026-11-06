@@ -93,6 +93,22 @@ try {
     await delay(300);
   }
   assert.deepEqual(exceptions, [], `Browser runtime exceptions after login options: ${exceptions.join('; ')}`);
+  const validation = await command('Runtime.evaluate', {
+    expression: `(() => {
+      const submit = document.querySelector('#login-password')?.closest('form')?.querySelector('button[type="submit"]');
+      if (!submit) return false;
+      submit.click();
+      return true;
+    })()`,
+    returnByValue: true,
+  });
+  assert.equal(validation.result.result.value, true, 'Login submit button missing');
+  await delay(300);
+  const message = await command('Runtime.evaluate', {
+    expression: `document.body.textContent.includes('Email tidak valid')`, returnByValue: true,
+  });
+  assert.equal(message.result.result.value, true, 'Zod validation message not displayed');
+  assert.deepEqual(exceptions, [], `Browser runtime exceptions after validation: ${exceptions.join('; ')}`);
   assert.ok(requests.some(url => url.includes('/api/v1/auth/session')),
     `Backend session request missing. Requests: ${requests.length}. Exceptions: ${exceptions.join('; ')}. Paths: ${requests.slice(-12).map(url => { try { return new URL(url).pathname; } catch { return url; } }).join(', ')}`);
   const forbidden = requests.filter(url => /supabase\.invalid|sso\.invalid|\/rest\/v1|\/auth\/v1|\/functions\/v1/.test(url));

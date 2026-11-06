@@ -10,6 +10,8 @@ const compose = fs.readFileSync('backend/docker-compose.yml', 'utf8');
 const authProvider = fs.readFileSync('src/hooks/useAuth.tsx', 'utf8');
 const ssoProvider = fs.readFileSync('src/context/SsoAuthContext.tsx', 'utf8');
 const authPage = fs.readFileSync('src/pages/Auth.tsx', 'utf8');
+const forgotPage = fs.readFileSync('src/pages/ForgotPassword.tsx', 'utf8');
+const resetPage = fs.readFileSync('src/pages/ResetPassword.tsx', 'utf8');
 
 for (const operation of [
   'requestEmailVerification', 'confirmEmailVerification', 'requestPasswordRecovery', 'resetRecoveredPassword',
@@ -25,4 +27,8 @@ assert.match(ssoProvider, /const run = async \(\) => \{\s*if \(usesBackendDomain
 assert.match(ssoProvider, /Login partner SSO belum tersedia di backend dev/);
 assert.match(authPage, /handleGoogleSignIn = async \(\) => \{\s*if \(usesBackendDomain\('auth'\)\)/);
 assert.match(authPage, /Login Google belum tersedia/);
+for (const page of [authPage, forgotPage, resetPage]) {
+  assert.doesNotMatch(page, /\b(?:err|error)\.errors\b/);
+  assert.match(page, /\b(?:err|error)\.issues\b/);
+}
 console.log('local auth lifecycle frontend contract passed');
