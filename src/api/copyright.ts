@@ -76,6 +76,19 @@ export const copyrightApi = {
     apiRequest<CopyrightRoyaltyImportDetail>(`/api/v1/admin/copyright/royalties/imports/${encodeURIComponent(id)}`, { signal }),
   listRoyalties: (limit = 50, offset = 0, signal?: AbortSignal) =>
     apiRequest<Page<CopyrightRoyaltyEntry>>(`/api/v1/copyright/royalties${pageQuery(limit, offset)}`, { signal }),
+  async listAllRoyalties(signal?: AbortSignal) {
+    const items: CopyrightRoyaltyEntry[] = [];
+    let offset = 0;
+    do {
+      const page = await apiRequest<Page<CopyrightRoyaltyEntry>>(
+        `/api/v1/copyright/royalties${pageQuery(100, offset)}`, { signal },
+      );
+      items.push(...page.items);
+      if (page.next_offset === null) return { items, next_offset: null };
+      offset = page.next_offset;
+    } while (items.length <= 100_000);
+    throw new Error('Royalty result exceeds dashboard limit');
+  },
   correctImport: (id: string, reason: string) =>
     apiRequest<CopyrightRoyaltyCorrection>(`/api/v1/admin/copyright/royalties/imports/${encodeURIComponent(id)}/corrections`, {
       method: 'POST', body: { reason }, timeoutMs: 120000,
