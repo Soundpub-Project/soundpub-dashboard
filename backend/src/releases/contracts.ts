@@ -20,6 +20,24 @@ export const releasePatch = z.strictObject({
   status: releaseStatus.optional(), rejection_reason: text(2000),
   archived_at: z.iso.datetime().nullable().optional(),
 }).refine(value => Object.keys(value).some(key => key !== 'version'));
+const normalizedIsrc = z.string().trim().transform(value => value.replaceAll('-', '').toUpperCase())
+  .pipe(z.string().regex(/^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$/));
+export const releaseActivation = z.strictObject({
+  version: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER - 1),
+  upc: z.string().trim().regex(/^\d{8,14}$/),
+  tracks: z.array(z.strictObject({
+    id: z.uuid(), version: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER - 1), isrc: normalizedIsrc,
+  })).min(1).max(500),
+}).superRefine((value, context) => {
+  const ids = new Set<string>();
+  const isrcs = new Set<string>();
+  for (const [index, track] of value.tracks.entries()) {
+    if (ids.has(track.id)) context.addIssue({ code: 'custom', path: ['tracks', index, 'id'], message: 'Duplicate track' });
+    if (isrcs.has(track.isrc)) context.addIssue({ code: 'custom', path: ['tracks', index, 'isrc'], message: 'Duplicate ISRC' });
+    ids.add(track.id);
+    isrcs.add(track.isrc);
+  }
+});
 export const releaseListQuery = z.strictObject({
   limit: z.string().regex(/^(?:[1-9]|[1-9][0-9]|100)$/).optional(),
   cursor: z.string().min(1).max(300).optional(),
@@ -35,5 +53,6 @@ export const releaseDto = z.strictObject({
 export type ReleaseStatus = z.infer<typeof releaseStatus>;
 export type ReleaseCreate = z.infer<typeof releaseCreate>;
 export type ReleasePatch = z.infer<typeof releasePatch>;
+export type ReleaseActivation = z.infer<typeof releaseActivation>;
 export type ReleaseListQuery = z.infer<typeof releaseListQuery>;
 export type ReleaseDto = z.infer<typeof releaseDto>;

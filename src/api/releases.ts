@@ -11,6 +11,7 @@ export type ReleaseMetadata = { title: string; artist_name: string; release_type
 export type ReleaseArtistIdentity = { artist_id: string; artist_user_id?: never } | { artist_user_id: string; artist_id?: never };
 export type AggregateTrack = { id?: string; version?: number; title: string; artist_name: string; lyrics?: string | null };
 export type AggregateResult = { release: BackendRelease; tracks: import('./tracks').BackendTrack[] };
+export type ReleaseActivation = { version: number; upc: string; tracks: { id: string; version: number; isrc: string }[] };
 export interface SubmissionReadiness {
   release_id: string; version: number; ready: boolean;
   blockers: { code: string; owner: 'PHASE3C' | 'PHASE3D_STORAGE' | 'PHASE3E_PAYMENT' | 'LATER_PROVIDER' }[];
@@ -22,6 +23,7 @@ export const releasesApi = {
   readiness: (id: string) => apiRequest<SubmissionReadiness>(`/api/v1/releases/${encodeURIComponent(id)}/submission-readiness`),
   submit: (id: string, body: { version: number }) => apiRequest<BackendRelease>(`/api/v1/releases/${encodeURIComponent(id)}/submit`, { method: 'POST', body }),
   update: (id: string, body: Partial<ReleaseMetadata> & { version: number; status?: string; rejection_reason?: string; archived_at?: string | null }) => apiRequest<BackendRelease>(`/api/v1/releases/${encodeURIComponent(id)}`, { method: 'PATCH', body }),
+  activate: (id: string, body: ReleaseActivation) => apiRequest<BackendRelease>(`/api/v1/admin/releases/${encodeURIComponent(id)}/activate`, { method: 'POST', body }),
   list: (cursor?: string) => apiRequest<CursorPage<BackendRelease>>(`/api/v1/releases?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`),
   detail: (id: string) => apiRequest<BackendRelease>(`/api/v1/releases/${encodeURIComponent(id)}`),
 };

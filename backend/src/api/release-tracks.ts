@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { ApiDependencies, Principal } from './types.js';
-import { releaseCreate, releasePatch, releaseListQuery, releaseDto } from '../releases/contracts.js';
+import { releaseActivation, releaseCreate, releasePatch, releaseListQuery, releaseDto } from '../releases/contracts.js';
 import { trackCreate, trackPatch, trackDelete, trackReorder, trackDto } from '../tracks/contracts.js';
 import { aggregateCreate, aggregatePatch, aggregateDto } from '../releases/aggregate-contracts.js';
 
@@ -53,6 +53,8 @@ export function registerReleaseTrackRoutes(app: FastifyInstance, deps: ApiDepend
     route('GET', '/api/v1/releases/:id', 'getRelease', releaseDto, (actor, request) => releases.get(actor, id(request)));
     route('PATCH', '/api/v1/releases/:id', 'updateRelease', releaseDto,
       (actor, request) => releases.update(actor, id(request), request.body as z.infer<typeof releasePatch>, request.id), releasePatch);
+    route('POST', '/api/v1/admin/releases/:id/activate', 'activateRelease', releaseDto,
+      (actor, request) => releases.activate(actor, id(request), request.body as z.infer<typeof releaseActivation>, request.id), releaseActivation);
     route('DELETE', '/api/v1/releases/:id', 'deleteRelease', z.strictObject({ status: z.literal('deleted') }),
       (actor, request) => releases.delete(actor, id(request), request.id));
   }

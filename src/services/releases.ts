@@ -2,7 +2,7 @@ import { releasesApi, type BackendRelease, type CursorPage } from '@/api/release
 import { usesBackendDomain } from '@/api/routing';
 
 export const usesBackendReleases = () => usesBackendDomain('releases');
-export const releaseWorkflowUnavailable = 'Mode backend: metadata release dan track tersedia. Upload media, pembayaran, aktivasi, refund, penghapusan dan bulk action belum tersedia.';
+export const releaseWorkflowUnavailable = 'Mode backend: pembayaran dari daftar, refund, penghapusan permanen, dan bulk action belum tersedia.';
 
 export async function collectReleasePages<T>(load: (cursor?: string) => Promise<CursorPage<T>>): Promise<T[]> {
   if (!usesBackendReleases()) throw new Error('Backend releases mode required');

@@ -7,7 +7,7 @@ import { canManageArtist } from '../artists/index.js';
 import { artistsRepository } from '../artists/repository.js';
 import { usersRepository } from '../users/repository.js';
 import { withTransaction } from '../db/pool.js';
-import { releaseCreate, releasePatch, releaseListQuery,
+import { releaseActivation, releaseCreate, releasePatch, releaseListQuery,
   type ReleaseCreate, type ReleasePatch, type ReleaseListQuery, type ReleaseStatus } from './contracts.js';
 import { catalogIdentity, customAuthority } from './ownership.js';
 import { releasesRepository } from './repository.js';
@@ -253,6 +253,42 @@ export function createReleasesService(pool: Pool) {
         await repo.audit(current.id, id, requestId, 'release.updated', {
           previousStatus: release.status, status: next, previousVersion: release.version,
           fields: Object.keys(patch).filter(key => key !== 'version'),
+        });
+        return (await repo.find(id))!;
+      });
+    },
+    async activate(actor: Principal, releaseId: string, input: unknown, requestId: string) {
+      requireActor(actor);
+      const id = parse(z.uuid(), releaseId);
+      const value = parse(releaseActivation, input);
+      return withTransaction(pool, async db => {
+        const { current, repo, release } = await resource(db, actor, id, true);
+        if (!allows(current, 'admin')) throw new ApiError(403, 'FORBIDDEN');
+        if (release.version !== value.version || release.status !== 'processing' || release.archived_at) {
+          throw new ApiError(409, 'CONFLICT');
+        }
+        const tracks = await tracksRepository(db).list(id);
+        if (tracks.length !== value.tracks.length) throw new ApiError(409, 'CONFLICT');
+        const requested = new Map(value.tracks.map(track => [track.id, track]));
+        await db.query("SELECT pg_advisory_xact_lock(hashtextextended('release-identifiers',53))");
+        if ((await db.query('SELECT 1 FROM soundpub.releases WHERE upc=$1 AND id<>$2', [value.upc,id])).rowCount) {
+          throw new ApiError(409, 'IDENTIFIER_CONFLICT');
+        }
+        const isrcs = value.tracks.map(track => track.isrc);
+        if ((await db.query(`SELECT 1 FROM soundpub.tracks WHERE isrc=ANY($1::text[]) AND release_id<>$2 LIMIT 1`,
+          [isrcs,id])).rowCount) throw new ApiError(409, 'IDENTIFIER_CONFLICT');
+        for (const track of tracks) {
+          const next = requested.get(track.id);
+          if (!next || next.version !== track.version) throw new ApiError(409, 'CONFLICT');
+          const changed = await db.query(`UPDATE soundpub.tracks SET isrc=$3
+            WHERE id=$1 AND release_id=$2 AND version=$4 RETURNING id`, [track.id, id, next.isrc, next.version]);
+          if (changed.rowCount !== 1) throw new ApiError(409, 'CONFLICT');
+        }
+        if (!await repo.update(id, { version:value.version, upc:value.upc, status:'active', rejection_reason:null })) {
+          throw new ApiError(409, 'CONFLICT');
+        }
+        await repo.audit(current.id, id, requestId, 'release.activated', {
+          previousStatus: release.status, status: 'active', previousVersion: release.version, trackCount: tracks.length,
         });
         return (await repo.find(id))!;
       });

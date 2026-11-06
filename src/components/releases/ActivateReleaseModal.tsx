@@ -1,4 +1,6 @@
-import { usesBackendReleases, releaseWorkflowUnavailable } from '@/services/releases';
+import { usesBackendReleases } from '@/services/releases';
+import { releasesApi } from '@/api/releases';
+import { tracksApi, type BackendTrack } from '@/api/tracks';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -29,8 +31,43 @@ interface ActivateReleaseModalProps {
     id: string;
     title: string;
     upc: string | null;
+    version?: number;
   } | null;
   onSuccess: () => void;
+}
+
+function BackendActivateReleaseModal({ open, onOpenChange, release, onSuccess }: ActivateReleaseModalProps) {
+  const [loading,setLoading] = useState(false);
+  const [fetching,setFetching] = useState(false);
+  const [version,setVersion] = useState(0);
+  const [upc,setUpc] = useState('');
+  const [tracks,setTracks] = useState<BackendTrack[]>([]);
+  const [isrcs,setIsrcs] = useState<Record<string,string>>({});
+  useEffect(() => {
+    if (!open || !release) return;
+    let active=true; setFetching(true);
+    Promise.all([releasesApi.detail(release.id),tracksApi.list(release.id)]).then(([row,page])=>{
+      if(!active)return; setVersion(row.version); setUpc(row.upc??''); setTracks(page.items);
+      setIsrcs(Object.fromEntries(page.items.map(track=>[track.id,track.isrc??''])));
+    }).catch(()=>toast.error('Data aktivasi release tidak dapat dimuat.')).finally(()=>{if(active)setFetching(false);});
+    return()=>{active=false;};
+  },[open,release]);
+  const close=()=>{if(!loading)onOpenChange(false);};
+  const activate=async()=>{
+    if(!release)return;
+    const normalizedUpc=upc.trim();
+    if(!/^\d{8,14}$/.test(normalizedUpc))return toast.error('UPC harus 8-14 digit.');
+    const payload=tracks.map(track=>({id:track.id,version:track.version,isrc:(isrcs[track.id]??'').replaceAll('-','').trim().toUpperCase()}));
+    if(!payload.length||payload.some(track=>! /^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$/.test(track.isrc)))return toast.error('Semua track wajib memiliki ISRC valid.');
+    setLoading(true);
+    try{await releasesApi.activate(release.id,{version,upc:normalizedUpc,tracks:payload});toast.success('Release berhasil diaktifkan');onSuccess();onOpenChange(false);}
+    catch(error){toast.error(error instanceof Error?error.message:'Gagal mengaktifkan release');}
+    finally{setLoading(false);}
+  };
+  return <Dialog open={open} onOpenChange={close}><DialogContent className="max-h-[85vh] max-w-xl overflow-y-auto"><DialogHeader><DialogTitle>Aktifkan Release</DialogTitle><DialogDescription>UPC dan seluruh ISRC disimpan atomik sebelum status menjadi active.</DialogDescription></DialogHeader>
+    {fetching?<div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin"/></div>:<div className="space-y-4 py-2"><div className="space-y-2"><Label htmlFor="backend-upc">UPC</Label><Input id="backend-upc" value={upc} onChange={event=>setUpc(event.target.value.replace(/\D/g,''))} maxLength={14}/></div>
+      {tracks.map(track=><div className="space-y-2 rounded-lg border p-3" key={track.id}><Label htmlFor={`isrc-${track.id}`}>{track.title}</Label><Input id={`isrc-${track.id}`} value={isrcs[track.id]??''} onChange={event=>setIsrcs(current=>({...current,[track.id]:event.target.value.toUpperCase()}))} maxLength={15}/></div>)}</div>}
+    <DialogFooter><Button variant="outline" onClick={close} disabled={loading}>Batal</Button><Button onClick={()=>void activate()} disabled={loading||fetching||!tracks.length}>{loading&&<Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Aktifkan Release</Button></DialogFooter></DialogContent></Dialog>;
 }
 
 function LegacyActivateReleaseModal({
@@ -129,9 +166,9 @@ function LegacyActivateReleaseModal({
       onSuccess();
       onOpenChange(false);
       resetForm();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error activating release:', error);
-      toast.error(error.message || 'Gagal mengaktifkan release');
+      toast.error(error instanceof Error ? error.message : 'Gagal mengaktifkan release');
     } finally {
       setLoading(false);
     }
@@ -274,6 +311,6 @@ function LegacyActivateReleaseModal({
 }
 
 export function ActivateReleaseModal(props: Parameters<typeof LegacyActivateReleaseModal>[0]) {
-  if (usesBackendReleases()) return props.open ? <p role="alert">{releaseWorkflowUnavailable}</p> : null;
+  if (usesBackendReleases()) return <BackendActivateReleaseModal {...props} />;
   return <LegacyActivateReleaseModal {...props} />;
 }

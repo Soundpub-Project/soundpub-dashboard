@@ -58,6 +58,7 @@ test('Phase 3C HTTP routes use restricted disposable PostgreSQL and reject forge
     assert.equal((await database.owner.query('SELECT count(*)::int AS n FROM soundpub.audit_logs WHERE resource_type IN ($1,$2)', ['release', 'track'])).rows[0].n, 4);
     const paths = (await app.inject('/openapi.json')).json().paths;
     assert.ok(paths['/api/v1/releases/{id}'].patch);
+    assert.ok(paths['/api/v1/admin/releases/{id}/activate'].post);
     assert.ok(paths['/api/v1/releases/{id}/tracks/reorder'].post);
   } finally { await app.close(); await database.close(); }
 });

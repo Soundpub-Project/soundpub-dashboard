@@ -235,13 +235,11 @@ export default function Releases() {
   };
 
   const handleOpenActivateDialog = (release: Release) => {
-    if (usesBackendReleases()) { toast.error(releaseWorkflowUnavailable); return; }
     setSelectedRelease(release);
     setActivateDialogOpen(true);
   };
 
   const handleOpenRejectDialog = (release: Release) => {
-    if (usesBackendReleases()) { toast.error(releaseWorkflowUnavailable); return; }
     setSelectedRelease(release);
     setRejectDialogOpen(true);
   };

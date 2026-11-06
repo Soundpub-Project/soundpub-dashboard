@@ -1,4 +1,5 @@
-import { usesBackendReleases, releaseWorkflowUnavailable } from '@/services/releases';
+import { usesBackendReleases } from '@/services/releases';
+import { releasesApi } from '@/api/releases';
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -21,8 +22,18 @@ interface RejectReleaseModalProps {
   release: {
     id: string;
     title: string;
+    version?: number;
   } | null;
   onSuccess: () => void;
+}
+
+function BackendRejectReleaseModal({ open,onOpenChange,release,onSuccess }: RejectReleaseModalProps) {
+  const [loading,setLoading]=useState(false); const [reason,setReason]=useState('');
+  const close=()=>{if(!loading){setReason('');onOpenChange(false);}};
+  const reject=async()=>{if(!release)return;const note=reason.trim();if(!note)return toast.error('Alasan penolakan wajib diisi');setLoading(true);
+    try{const current=await releasesApi.detail(release.id);await releasesApi.update(release.id,{version:current.version,status:'rejected',rejection_reason:note});toast.success('Release berhasil ditolak');onSuccess();setReason('');onOpenChange(false);}
+    catch(error){toast.error(error instanceof Error?error.message:'Gagal menolak release');}finally{setLoading(false);}};
+  return <Dialog open={open} onOpenChange={close}><DialogContent className="max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><XCircle className="h-5 w-5 text-destructive"/>Tolak Release</DialogTitle><DialogDescription>Alasan tersimpan sebagai bukti review dan ditampilkan kepada pemilik release.</DialogDescription></DialogHeader><div className="space-y-2 py-4"><Label htmlFor="backend-reject-reason">Alasan penolakan</Label><Textarea id="backend-reject-reason" value={reason} onChange={event=>setReason(event.target.value)} disabled={loading} maxLength={2000} rows={5}/></div><DialogFooter><Button variant="outline" onClick={close} disabled={loading}>Batal</Button><Button variant="destructive" onClick={()=>void reject()} disabled={loading}>{loading&&<Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Tolak Release</Button></DialogFooter></DialogContent></Dialog>;
 }
 
 function LegacyRejectReleaseModal({
@@ -61,9 +72,9 @@ function LegacyRejectReleaseModal({
       onSuccess();
       onOpenChange(false);
       resetForm();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error rejecting release:', error);
-      toast.error(error.message || 'Gagal menolak release');
+      toast.error(error instanceof Error ? error.message : 'Gagal menolak release');
     } finally {
       setLoading(false);
     }
@@ -142,6 +153,6 @@ function LegacyRejectReleaseModal({
 }
 
 export function RejectReleaseModal(props: Parameters<typeof LegacyRejectReleaseModal>[0]) {
-  if (usesBackendReleases()) return props.open ? <p role="alert">{releaseWorkflowUnavailable}</p> : null;
+  if (usesBackendReleases()) return <BackendRejectReleaseModal {...props} />;
   return <LegacyRejectReleaseModal {...props} />;
 }
