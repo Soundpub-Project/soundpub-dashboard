@@ -635,6 +635,6 @@ Backend parity selesai hanya jika:
 
 ## 28. Frontend backend-auth egress checkpoint
 
-- Browser dev `/auth` pada `127.0.0.1:8281` setelah rebuild hanya Compose service `frontend` (`dashboard-sounpub-dev`): 282 requests, form login render, nol runtime exception, nol Supabase/SSO egress. `npm run test:egress` memakai Chrome headless tanpa kredensial; tes ini belum mencakup sesi login, tombol SSO, atau dashboard role.
+- Browser dev `/auth` pada `127.0.0.1:8281` setelah rebuild hanya Compose service `frontend` (`dashboard-sounpub-dev`): 282 requests, form login render, nol runtime exception, nol Supabase/SSO egress. `npm run test:egress` memakai Chrome headless tanpa kredensial; tes ini mengeklik tombol Google dan partner SSO dalam mode backend tanpa egress; belum mencakup sesi login bercredential atau dashboard role.
 - Backend-auth session restore tidak lagi memakai fallback Supabase pada kegagalan backend; frontend tidak melakukan silent SSO check. Tombol partner SSO dan Google saat backend auth aktif memberi pesan belum tersedia, tidak membuat login Supabase. Legacy mode di luar backend-auth tetap terpisah.
 - Frontend contracts, `npx tsc --noEmit`, dan `npm run build` lulus. Build memberi peringatan chunk besar; image frontend Docker `dashboard-sounpub-dev` selesai dibangun. Partner Keycloak frontend cutover, browser role-matrix, dan provider nyata masih gap; tidak ada perubahan production.
