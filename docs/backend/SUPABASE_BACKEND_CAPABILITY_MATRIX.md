@@ -157,6 +157,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Outbox topic coverage | direct function side effects | explicit producer/consumer topic registry with startup assertion | Dev worker registered | VERIFIED | Add provider-specific delivery handlers as each provider becomes real |
 | Production identity provider | Supabase Auth/SSO | local session remains primary; production OIDC/JWKS bearer adapter available for partner identity | Deployment config belum diaktifkan | IMPLEMENTED | Bind verified external identity and run realm E2E |
 | Local auth delivery | Supabase Auth email | digest-only token, encrypted outbox, post-delivery redaction and replay-safe effect | Verification and recovery backend-mode | IMPLEMENTED | Shared limiter, key rotation, real provider delivery evidence |
+| Shared rate limits | function/API process limits | PostgreSQL atomic one-minute windows keyed by route and SHA-256 of client address; expired window cleanup | All backend routes in dev | VERIFIED | Trusted-proxy policy and multi-node load test before public deployment |
 
 ## Verification evidence
 
@@ -180,6 +181,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 - 2026-11-06: Payment owner migration `0057` stores immutable payer/financial/artist/policy snapshots. Read-only dev preflight found 0 invoice and 0 blocked; populated synthetic upgrade proves canonical backfill, unresolved release rejection, and charge/refund ledger owner mismatch rollback. Label Custom PIC owns managed release payment, cross-unit denied, callback and reconciliation reject owner drift. Frontend backend invoice cutover and payment contract tests pass; real provider deferred.
 - 2026-11-06: Copyright royalty dashboard summary uses one beneficiary-scoped aggregate endpoint instead of full-history pagination. PostgreSQL and HTTP tests cover scope, exact minor-unit totals and OpenAPI; frontend contract and build pass. Auth worker PostgreSQL test covers encrypted token retry, redaction after success, and duplicate delivery prevention. Email provider remains mock.
 - 2026-11-06: Final isolated Docker-enabled backend suite after payment ownership, auth delivery evidence, and copyright summary: 395 tests, 389 pass, 0 fail, 6 skipped. Frontend contracts, TypeScript, production build, backend build, isolation scan, and Compose config pass.
+- 2026-11-06: Shared PostgreSQL rate limiter replaces process-local counters. Two independent instances atomically share auth request budget; expired windows reset and clean up; raw IP is never stored as key. Backend Docker-enabled suite: 398 tests, 392 pass, 0 fail, 6 skipped. Frontend contracts, TypeScript, build, backend build, isolation scan, and Compose config pass.
 
 ## Remaining blockers
 

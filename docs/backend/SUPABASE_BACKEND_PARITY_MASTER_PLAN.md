@@ -593,7 +593,7 @@ Backend parity selesai hanya jika:
 - Copyright Dashboard backend memuat registration, contract capability, seluruh halaman royalty, dan bereaksi terhadap pergantian identity. Legacy Supabase dashboard dipisahkan menjadi lazy chunk dan tidak dimuat pada backend branch.
 - Migration `0055` dan `0056` hanya diterapkan pada project Docker `dashboard-sounpub-dev`. API `3300`, frontend `8281`, PostgreSQL `55433`, object storage `9100`, backend, frontend, dan worker sehat. Production port `8181` tidak disentuh.
 - Full Docker suite setelah checkpoint: 385 tests, 379 pass, 0 fail, 6 skipped. Frontend contracts, TypeScript, build, backend typecheck, security isolation, dan Docker config lulus.
-- Remaining P2: shared/distributed auth rate limiter, auth delivery key-ring rotation, runtime frontend egress test, dan browser role E2E. Copyright dashboard server-side summary sekarang tersedia.
+- Remaining P2: auth delivery key-ring rotation, runtime frontend egress test, dan browser role E2E. Copyright dashboard server-side summary dan PostgreSQL shared auth rate limiter sekarang tersedia.
 
 ## 23. Payment ownership checkpoint
 
@@ -618,3 +618,10 @@ Backend parity selesai hanya jika:
 - Scope dan verified role mengikuti list royalti copyright; tidak menerima owner override dari query string. Authz, HTTP/OpenAPI, fixture PostgreSQL termasuk corrected history, dan frontend contract diverifikasi.
 - Dashboard backend meminta satu summary server dan tetap memisahkan legacy Supabase module menjadi lazy chunk; runtime browser egress dan role-matrix E2E masih belum dibuktikan.
 - Final Docker-enabled backend suite checkpoint: 395 tests, 389 pass, 0 fail, 6 skipped. Enam skip adalah suites yang memiliki gate lingkungan/rehearsal terpisah, bukan failure tersembunyi.
+
+## 26. Shared rate limiter checkpoint
+
+- Migration `0058` menyimpan counter window satu menit di PostgreSQL dev, keyed SHA-256 dari route dan alamat klien, tanpa menyimpan IP mentah. Semua instance backend memakai atomic UPSERT, dan window kedaluwarsa dibersihkan berkala.
+- Auth login, verification, dan recovery tetap memiliki batas 10 request per route per address per menit; webhooks, admin, storage, dan API lain mempertahankan policy sebelumnya. Kegagalan database fail closed, bukan mengizinkan bypass.
+- Test dua instance paralel membuktikan hanya 10 dari 12 request auth diterima, isolation lintas route/address, reset window, cleanup, dan database unavailable. Docker-enabled suite: 398 tests, 392 pass, 0 fail, 6 skipped.
+- Sebelum exposure publik, definisikan trusted-proxy chain; `request.ip` sekarang memakai peer address default Fastify sehingga header `X-Forwarded-For` tidak dipercaya otomatis.
