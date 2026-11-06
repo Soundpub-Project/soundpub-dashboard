@@ -1,6 +1,6 @@
 # Supabase to Backend Capability Matrix
 
-Snapshot: 2026-11-05. Baseline commit: `f58cd80`.
+Snapshot: 2026-11-06. Baseline commit: `0c8a9a1`.
 
 Dokumen ini adalah evidence tracker Phase 0. Status berubah hanya setelah source, contract, dan test evidence tersedia.
 
@@ -18,8 +18,8 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Delete user | `delete-user` | safe lifecycle/archive/delete | Backend adapter tersedia | IMPLEMENTED | Dependency conflict compatibility |
 | Change own password | `change-own-password` | local auth password endpoint | Backend adapter tersedia | IMPLEMENTED | Session revocation evidence |
 | Admin reset password | `update-user-password`, `set-artist-password` | privileged password endpoint | Backend adapter tersedia | IMPLEMENTED | Target-role matrix test |
-| Email verification | verification Edge Functions | local verification workflow | Belum parity penuh | PARTIAL | Delivery, expiry, replay, rate-limit tests |
-| Password recovery | reset Edge Functions | local recovery workflow | Belum parity penuh | PARTIAL | Digest token dan atomic consumption evidence |
+| Email verification | verification Edge Functions | purpose-bound 24-hour digest token, AES-GCM delivery envelope, one-time consumption, audit/outbox | Frontend cutover belum selesai | IMPLEMENTED | Shared rate limiter, key rotation, browser E2E |
+| Password recovery | reset Edge Functions | purpose-bound 1-hour digest token, encrypted delivery, atomic password update, all-session revocation | Frontend cutover belum selesai | IMPLEMENTED | Shared rate limiter, key rotation, browser E2E |
 | Impersonation | `start-user-impersonation` | local privileged session | Belum dipastikan frontend | PARTIAL | Origin, expiry, audit, exit workflow |
 
 ## Tenant, label, dan artist
@@ -43,7 +43,9 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Release CRUD | `soundpub.releases` policies/triggers | releases module | Backend adapter tersedia | IMPLEMENTED | Field/default/state parity matrix |
 | Track CRUD | `soundpub.tracks` policies/triggers | tracks module | Backend adapter tersedia | IMPLEMENTED | ISRC uniqueness and archive parity |
 | Release aggregate write | frontend multi-table writes | aggregate backend endpoint | Backend adapter tersedia | IMPLEMENTED | Transaction/failure compatibility |
-| Submission readiness | release validation/functions | submissions module | Backend adapter tersedia | IMPLEMENTED | Production rule comparison |
+| Submission readiness | release validation/functions | canonical artist readiness supports login artist and Label Custom managed artist with current unit authority | Backend adapter tersedia | VERIFIED | Production rule comparison and payment-owner contract |
+| Admin activation | direct release/track updates | atomic processing-to-active transition with exact track set, optimistic versions, normalized unique UPC/ISRC, audit | Backend modal cut over | VERIFIED | Browser reviewer E2E and production identifier fixtures |
+| Admin rejection | direct status/reason update | protected optimistic release update with mandatory rejection evidence | Backend modal cut over | IMPLEMENTED | Dedicated reviewer endpoint if policy diverges |
 | Submission provider | external/manual workflow | provider adapter | Mock/dev implementation | PARTIAL | Provider contract and failure lifecycle |
 | Artwork upload | Supabase Storage | media upload intent | Backend adapter tersedia | IMPLEMENTED | MIME/checksum/replacement parity |
 | Master audio upload | Supabase Storage | private media capability | Backend adapter tersedia | IMPLEMENTED | Full browser and cleanup tests |
@@ -64,6 +66,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Registration payment | `create-copyright-invoice` | owner-only idempotent invoice, server-derived amount/currency, raw-body HMAC callback, replay evidence | Owner dapat membuat invoice dan melihat status | PARTIAL | Replace dev mock with production payment provider and settlement reconciliation |
 | Admin review | direct status updates | payment-gated reviewer state machine, optimistic version, notes, composer code | Backend admin list/detail/review cut over | VERIFIED | Browser reviewer E2E |
 | Contract lifecycle | browser PDF service and storage writes | private generated/stamped/signed artifacts, advisory-locked number, strict transitions, audit/outbox | Backend admin contract workflow cut over | VERIFIED | Production template/stamping provider integration |
+| Owner dashboard | Supabase registration, contract storage, composer royalty queries | backend current-registration, private capability download, paged royalty history, identity-safe reload | Backend route lazy-splits legacy Supabase module | IMPLEMENTED | Add server aggregate summary endpoint and runtime egress test |
 
 ## Royalty upload dan ingestion
 

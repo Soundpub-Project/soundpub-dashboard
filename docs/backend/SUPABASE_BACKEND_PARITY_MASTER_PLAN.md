@@ -582,3 +582,15 @@ Backend parity selesai hanya jika:
 - Nomor kontrak memakai advisory lock bulanan. Generated, stamped, dan signed memakai private media artifact terverifikasi; activation menambahkan role copyright secara idempotent.
 - Frontend backend-mode memiliki onboarding, draft, private upload, submit, invoice request, status, admin list/detail, review, artifact download/upload, dan contract lifecycle tanpa Supabase/PDF service fallback.
 - Migration `0052`-`0054` hanya diterapkan pada `dashboard-sounpub-dev`. Full Docker suite: 379 tests, 373 pass, 0 fail, 6 skipped. Production payment dan stamping provider tetap deferred.
+
+## 22. Release review, Label Custom submission, auth lifecycle, dan copyright dashboard checkpoint
+
+- Admin release activation memakai satu transaksi untuk mengunci release, memverifikasi status `processing`, optimistic release/track version, exact complete track set, UPC/ISRC normalization, domain-wide uniqueness, track updates, release activation, dan audit evidence.
+- Backend activation dan rejection modal tidak lagi bergantung pada Supabase. Rejection menyimpan alasan wajib; activation mengirim UPC dan seluruh ISRC melalui endpoint admin khusus.
+- Label Custom PIC dapat mengirim release milik managed artist tanpa akun login. Canonical artist, current custom unit authority, PIC status, dan cross-unit denial divalidasi ulang di transaksi; ordinary artist-login behavior tidak berubah.
+- Email verification dan password recovery memakai token digest-only pada tabel auth, TTL purpose-bound, one-time row lock, atomic audit/outbox, password reset yang mencabut seluruh session, serta response request generik.
+- Token delivery tidak disimpan plaintext pada outbox. AES-256-GCM envelope dibuka hanya oleh worker, lalu ciphertext, IV, dan tag dihapus dalam transaksi delivery sukses. `AUTH_DELIVERY_SECRET` diwajibkan pada konfigurasi dev.
+- Copyright Dashboard backend memuat registration, contract capability, seluruh halaman royalty, dan bereaksi terhadap pergantian identity. Legacy Supabase dashboard dipisahkan menjadi lazy chunk dan tidak dimuat pada backend branch.
+- Migration `0055` dan `0056` hanya diterapkan pada project Docker `dashboard-sounpub-dev`. API `3300`, frontend `8281`, PostgreSQL `55433`, object storage `9100`, backend, frontend, dan worker sehat. Production port `8181` tidak disentuh.
+- Full Docker suite setelah checkpoint: 385 tests, 379 pass, 0 fail, 6 skipped. Frontend contracts, TypeScript, build, backend typecheck, security isolation, dan Docker config lulus.
+- Remaining P2: shared/distributed auth rate limiter, auth delivery key-ring rotation, runtime frontend egress test, dan server-side copyright royalty summary untuk menghindari full-history pagination pada dashboard besar.
