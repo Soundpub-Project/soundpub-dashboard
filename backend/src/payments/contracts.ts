@@ -30,6 +30,8 @@ export function nextPaymentStatus(current: PaymentStatus, incoming: PaymentStatu
 export interface Invoice {
  id: string; business_type: 'release'; business_id: string; provider: 'mock'; provider_invoice_id: string;
  amount_minor: string; currency: 'IDR'; precision: 2; status: PaymentStatus; idempotency_key: string;
+ payer_owner_id: string; financial_owner_id: string; artist_id: string;
+ ownership_policy: 'LOGIN_ACCOUNT' | 'LABEL_CUSTOM_PIC';
  reconciliation_required: boolean; created_at: Date; updated_at: Date;
 }
 export interface ProviderInvoice { provider_invoice_id: string; amount_minor: string; currency: 'IDR'; status: PaymentStatus }

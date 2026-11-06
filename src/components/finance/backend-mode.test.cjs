@@ -127,7 +127,15 @@ const dependencies = name => {
   assert.equal(calls.at(-1)[1].idempotencyKey, 'retry-key');
   await api.paymentsApi.create('release');
   assert.equal(calls.at(-1)[1].body.idempotency_key, 'release-invoice:release');
-  assert(!read('src/components/finance/BackendPaymentStatus.tsx').includes("params.get('status')"));
+  const paymentStatus = read('src/components/finance/BackendPaymentStatus.tsx');
+  assert(!paymentStatus.includes("params.get('status')"));
+  assert.match(paymentStatus, /LABEL_CUSTOM_PIC/);
+  const releasesPage = read('src/pages/Releases.tsx');
+  assert.match(releasesPage, /usesBackendReleases\(\)[\s\S]*paymentsApi\.create\(release\.id\)/);
+  const backendPaymentStart = releasesPage.indexOf('if (usesBackendReleases())', releasesPage.indexOf('handleContinuePayment'));
+  const legacyPaymentStart = releasesPage.indexOf('createXenditInvoice', backendPaymentStart);
+  const backendPaymentReturn = releasesPage.indexOf('return;', backendPaymentStart);
+  assert.ok(backendPaymentStart < backendPaymentReturn && backendPaymentReturn < legacyPaymentStart);
   const clientSource = read('src/api/client.ts').replace(/import\.meta\.env\.VITE_SOUNDPUB_API_URL/g, "'https://api.soundpub.test'");
   const clientOutput = ts.transpileModule(clientSource, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const client = {};

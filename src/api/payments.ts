@@ -3,6 +3,8 @@ import { apiRequest } from './client';
 export interface BackendInvoice {
   id: string; business_type: 'release'; business_id: string; provider: 'mock';
   amount_minor: string; currency: 'IDR'; precision: 2; status: 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
+  payer_owner_id: string; financial_owner_id: string; artist_id: string;
+  ownership_policy: 'LOGIN_ACCOUNT' | 'LABEL_CUSTOM_PIC';
   reconciliation_required: boolean; created_at: string; updated_at: string;
 }
 export interface PaymentStatusResult {

@@ -1,5 +1,6 @@
 import { useMediaUrl } from '@/hooks/useMediaUrl';
 import { releasesApi } from '@/api/releases';
+import { paymentsApi } from '@/api/payments';
 import { usesBackendReleases, releaseWorkflowUnavailable, listBackendReleases, archiveBackendRelease } from '@/services/releases';
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -326,7 +327,15 @@ export default function Releases() {
   };
 
   const handleContinuePayment = async (release: Release) => {
-    if (usesBackendReleases()) { toast.error(releaseWorkflowUnavailable); return; }
+    if (usesBackendReleases()) {
+      try {
+        await paymentsApi.create(release.id);
+        navigate(`/dashboard/invoices?release_id=${encodeURIComponent(release.id)}`);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Gagal membuat invoice backend');
+      }
+      return;
+    }
     try {
       const invoiceData = await createXenditInvoice(release.id);
       toast.success('Mengarahkan ke halaman pembayaran...');

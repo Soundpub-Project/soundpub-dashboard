@@ -91,7 +91,7 @@ export function BackendReleaseForm({ releaseId }: { releaseId?: string }) {
   if (!usesBackendReleases()) return null;
   return <div className="space-y-6">
     <h1 className="text-2xl font-bold">{releaseId ? 'Edit Release' : 'Tambah Release'} — Metadata</h1>
-    <p role="status">Simpan release dan tracks sebelum mengupload media. Submission memerlukan seluruh syarat terpenuhi; pembayaran dan aktivasi belum tersedia.</p>
+    <p role="status">Simpan release dan tracks sebelum mengupload media. Pembayaran diverifikasi backend sebelum release dapat diajukan.</p>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     {release?.archived_at && <p role="status">Release diarsipkan. Metadata dan tracks hanya dapat dilihat.</p>}
     {releaseId && <Button disabled={busy} onClick={() => void run(load)}>Muat ulang</Button>}
@@ -121,6 +121,8 @@ export function BackendReleaseForm({ releaseId }: { releaseId?: string }) {
     {release && <section aria-label="Kesiapan pengajuan"><h2 className="text-xl font-semibold">Kesiapan pengajuan</h2>
       <p>{readiness?.ready ? 'Siap diajukan' : 'Belum siap diajukan'}</p>
       <ul>{readiness?.blockers.map(blocker => <li key={blocker.code}>{blocker.code} ({blocker.owner})</li>)}</ul>
+      {['draft', 'rejected'].includes(release.status) && <Button variant="outline" disabled={busy || dirty}
+        onClick={() => navigate(`/dashboard/invoices?release_id=${encodeURIComponent(release.id)}`)}>Kelola pembayaran</Button>}
       {['draft', 'rejected'].includes(release.status) && <Button disabled={busy || dirty || Boolean(release?.archived_at) || !readiness?.ready} onClick={() => void run(async () => {
         const row = await releasesApi.submit(release.id, { version: release.version });
         setRelease(row); setReadiness(await releasesApi.readiness(row.id)); setMessage('Release diajukan.');
