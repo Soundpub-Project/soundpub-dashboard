@@ -1,13 +1,28 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
-import { encryptDeliveryToken } from '../src/local-auth/delivery-crypto.js';
+import { decryptDeliveryToken, encryptDeliveryToken } from '../src/local-auth/delivery-crypto.js';
 import { createAuthDeliveryHandler } from '../src/local-auth/delivery-handler.js';
 import { createMockProvider, type ProviderRequest } from '../src/integrations/index.js';
 import { pollOutbox } from '../src/worker/index.js';
 import { concurrencyPostgres, dockerTestsEnabled } from './support/concurrency-postgres.js';
 
 const integration = dockerTestsEnabled ? test : test.skip;
+test('auth delivery key ring decrypts active and previous envelopes, rejects unknown IDs and preserves legacy compatibility', () => {
+  const active = 'synthetic-active-delivery-secret-32-chars';
+  const previous = 'synthetic-previous-delivery-secret-32-chars';
+  const ring = { active, previous };
+  assert.equal(decryptDeliveryToken(encryptDeliveryToken('active-token', active, 'active'), ring), 'active-token');
+  assert.equal(decryptDeliveryToken(encryptDeliveryToken('previous-token', previous, 'previous'), ring), 'previous-token');
+  assert.equal(decryptDeliveryToken(encryptDeliveryToken('legacy-token', previous), previous), 'legacy-token');
+  const oldEnvelope = encryptDeliveryToken('pending-token', previous);
+  delete oldEnvelope.token_key_id;
+  assert.equal(decryptDeliveryToken(oldEnvelope, { active, legacy: previous }), 'pending-token');
+  assert.throws(() => decryptDeliveryToken(encryptDeliveryToken('unknown-token', previous, 'unknown'), ring),
+    /Unknown auth delivery key ID/);
+  assert.throws(() => encryptDeliveryToken('bad', active, '../bad'), /Invalid auth delivery key ID/);
+});
+
 integration('auth delivery retries retain encrypted token; success atomically redacts envelope and prevents replay', async () => {
   const database = await concurrencyPostgres();
   const secret = 'synthetic-worker-delivery-secret-32-chars';

@@ -34,7 +34,7 @@ function principal(row: SessionRow): Principal {
   return { id: row.user_id, status: row.status, roles: row.roles };
 }
 
-export function createLocalAuthService(pool: Pool, options: { deliverySecret: string }) {
+export function createLocalAuthService(pool: Pool, options: { deliverySecret: string; deliveryKeyId?: string }) {
   async function requestToken(input: unknown, requestId: string, purpose: 'email_verification' | 'password_reset') {
     const startedAt = performance.now();
     const parsed = lifecycleRequestInput.safeParse(input);
@@ -60,12 +60,12 @@ export function createLocalAuthService(pool: Pool, options: { deliverySecret: st
       await db.query(`INSERT INTO soundpub.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,metadata)
         VALUES(NULL,$1,'auth_one_time_token',$2,$3,jsonb_build_object('purpose',$4::text,'expires_at',$5::timestamptz,'target_user_id',$6::uuid))`,
       [action, inserted.rows[0]!.id, requestId, purpose, expiresAt, row.user_id]);
-      const encrypted = encryptDeliveryToken(token, options.deliverySecret);
+      const encrypted = encryptDeliveryToken(token, options.deliverySecret, options.deliveryKeyId);
       await db.query(`INSERT INTO soundpub.outbox_events(topic,payload,idempotency_key)
         VALUES($1,jsonb_build_object('userId',$2::uuid,'email',$3::text,'token_ciphertext',$4::text,
-          'token_iv',$5::text,'token_tag',$6::text,'expiresAt',$7::timestamptz),$8)`,
+          'token_iv',$5::text,'token_tag',$6::text,'expiresAt',$7::timestamptz,'token_key_id',$8::text),$9)`,
       [topic, row.user_id, row.email, encrypted.token_ciphertext, encrypted.token_iv, encrypted.token_tag,
-        expiresAt, `auth-token:${inserted.rows[0]!.id}`]);
+        expiresAt, encrypted.token_key_id, `auth-token:${inserted.rows[0]!.id}`]);
     }); } finally {
       const remaining = 75 - (performance.now() - startedAt);
       if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));

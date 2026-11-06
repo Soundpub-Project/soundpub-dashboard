@@ -50,6 +50,16 @@ const schema = z.object({
   OBJECT_STORAGE_BUCKET: z.string().min(3).default("soundpub-development"),
   WEBHOOK_MOCK_SECRET: z.string().min(16),
   AUTH_DELIVERY_SECRET: z.string().min(32),
+  AUTH_DELIVERY_KEY_ID: z.string().regex(/^[A-Za-z0-9_-]{1,32}$/).default('legacy'),
+  AUTH_DELIVERY_PREVIOUS_KEYS_JSON: z.string().default('{}').transform((raw, context) => {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      const keys = z.record(z.string().regex(/^[A-Za-z0-9_-]{1,32}$/), z.string().min(32)).safeParse(parsed);
+      if (keys.success) return keys.data;
+    } catch {}
+    context.addIssue({ code: 'custom', message: 'Must be a JSON object of key IDs and secrets' });
+    return z.NEVER;
+  }),
   WORKER_POLL_MS: z.coerce.number().int().min(50).max(60000).default(1000),
   WORKER_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(10),
   FINANCE_RECONCILIATION_INTERVAL_MS: z.coerce.number().int().min(10_000).max(86_400_000).default(300_000),
@@ -84,6 +94,10 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
   if (!parsed.success) {
     const details = parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ");
     throw new Error(`Invalid backend configuration: ${details}`);
+  }
+
+  if (Object.hasOwn(parsed.data.AUTH_DELIVERY_PREVIOUS_KEYS_JSON, parsed.data.AUTH_DELIVERY_KEY_ID)) {
+    throw new Error('Active auth delivery key ID conflicts with a previous key ID');
   }
 
   return parsed.data;

@@ -48,7 +48,8 @@ const releaseMigration = await pool.query(`SELECT to_regclass('soundpub.releases
 if (Object.values(releaseMigration.rows[0] ?? {}).some(value => !value)) throw new Error('Phase 3E database migration required before API boot');
 const repositories = createRepositories(pool);
 const users = createUsersService(pool);
-const localAuth = createLocalAuthService(pool, { deliverySecret: config.AUTH_DELIVERY_SECRET });
+const localAuth = createLocalAuthService(pool, { deliverySecret: config.AUTH_DELIVERY_SECRET,
+  deliveryKeyId: config.AUTH_DELIVERY_KEY_ID });
 const artists = createArtistsService(pool);
 const labels = createLabelsService(pool);
 const labelCustom = createLabelCustomService(pool);

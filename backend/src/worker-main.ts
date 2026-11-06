@@ -30,10 +30,12 @@ const royaltyImportStore = await createRoyaltyImportObjectStore(pool, {
 const royaltyJobs = createRoyaltyImportJobProcessor(pool, royaltyImportStore);
 const royaltyCleanup = createRoyaltyImportCleanupProcessor(pool, royaltyImportStore);
 const providers = createMockProviders();
+const authDeliveryKeys = { ...config.AUTH_DELIVERY_PREVIOUS_KEYS_JSON,
+  [config.AUTH_DELIVERY_KEY_ID]: config.AUTH_DELIVERY_SECRET };
 const handlers: Record<string, OutboxHandler> = {
   'notification.requested': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-notification', payload: event.payload }); },
-  'auth.email_verification.requested': createAuthDeliveryHandler(providers.email, config.AUTH_DELIVERY_SECRET, 'send-email-verification'),
-  'auth.password_reset.requested': createAuthDeliveryHandler(providers.email, config.AUTH_DELIVERY_SECRET, 'send-password-reset'),
+  'auth.email_verification.requested': createAuthDeliveryHandler(providers.email, authDeliveryKeys, 'send-email-verification'),
+  'auth.password_reset.requested': createAuthDeliveryHandler(providers.email, authDeliveryKeys, 'send-password-reset'),
   'auth.email_verified': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-email-verified-notice', payload: event.payload }); },
   'auth.password_reset.completed': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-password-reset-notice', payload: event.payload }); },
   'audit.notification': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-audit-notification', payload: event.payload }); },

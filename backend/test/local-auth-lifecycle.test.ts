@@ -60,7 +60,7 @@ integration('verification and recovery are purpose-bound, one-time, atomic and r
     await owner.query(`INSERT INTO soundpub.local_auth_credentials(user_id,login_email,password_hash) VALUES($1,$2,$3)`,
       [userId,email,await hashPassword(oldPassword)]);
     const deliverySecret = 'synthetic-auth-delivery-secret-32-chars';
-    const service = createLocalAuthService(runtime, { deliverySecret });
+    const service = createLocalAuthService(runtime, { deliverySecret, deliveryKeyId: 'active-2026' });
     const app = buildApp({ localAuth: service, auth: { authenticate: async () => null },
       readiness: { check: async () => true }, rateLimiter: { consume: async () => ({ allowed: true }) },
       admin: { suspendUser: async () => {} }, webhooks: { receive: async () => false } });
@@ -74,7 +74,8 @@ integration('verification and recovery are purpose-bound, one-time, atomic and r
     const resetPayload = (await owner.query(`SELECT payload FROM soundpub.outbox_events
       WHERE topic='auth.password_reset.requested' ORDER BY created_at DESC LIMIT 1`)).rows[0].payload;
     assert.equal(resetPayload.token, undefined);
-    const resetToken = decryptDeliveryToken(resetPayload, deliverySecret);
+    assert.equal(resetPayload.token_key_id, 'active-2026');
+    const resetToken = decryptDeliveryToken(resetPayload, { 'active-2026': deliverySecret });
     assert.equal((await app.inject({ method:'POST', url:'/api/v1/auth/email-verification/confirm',
       payload:{ token:resetToken } })).statusCode, 400);
 
@@ -94,7 +95,8 @@ integration('verification and recovery are purpose-bound, one-time, atomic and r
     const verifyPayload = (await owner.query(`SELECT payload FROM soundpub.outbox_events
       WHERE topic='auth.email_verification.requested' ORDER BY created_at DESC LIMIT 1`)).rows[0].payload;
     assert.equal(verifyPayload.token, undefined);
-    const verifyToken = decryptDeliveryToken(verifyPayload, deliverySecret);
+    assert.equal(verifyPayload.token_key_id, 'active-2026');
+    const verifyToken = decryptDeliveryToken(verifyPayload, { 'active-2026': deliverySecret });
     assert.equal((await app.inject({ method:'POST', url:'/api/v1/auth/email-verification/confirm',
       payload:{ token:verifyToken } })).statusCode, 200);
     assert.equal((await owner.query('SELECT email_verified_at IS NOT NULL verified FROM soundpub.backend_users WHERE id=$1',[userId])).rows[0].verified,true);

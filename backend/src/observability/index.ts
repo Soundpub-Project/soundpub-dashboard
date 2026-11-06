@@ -8,7 +8,8 @@ const redactionPaths = [
   'authorization', 'cookie', 'headers', 'accessToken', 'refreshToken', 'access_token', 'refresh_token',
   'token', 'password', 'secret', 'clientSecret', 'client_secret', 'accessKeyId', 'secretAccessKey',
   'DATABASE_URL', 'RECONCILIATION_DATABASE_URL', 'AUDIT_DATABASE_URL', 'POSTGRES_PASSWORD', 'AUDIT_DATABASE_PASSWORD', 'OBJECT_STORAGE_ACCESS_KEY', 'OBJECT_STORAGE_SECRET_KEY',
-  'WEBHOOK_MOCK_SECRET', 'AUTH_DELIVERY_SECRET', 'DEV_AUTH_TOKENS_JSON', 'SPOTIFY_CLIENT_SECRET', 'SUPABASE_SERVICE_ROLE_KEY',
+  'WEBHOOK_MOCK_SECRET', 'AUTH_DELIVERY_SECRET', 'AUTH_DELIVERY_PREVIOUS_KEYS_JSON', 'DEV_AUTH_TOKENS_JSON',
+  'SPOTIFY_CLIENT_SECRET', 'SUPABASE_SERVICE_ROLE_KEY',
   'body', 'payload', 'url', 'signedUrl', 'signed_url', 'connectionString', 'err', 'error',
   'config', 'credentials', 'req.headers', 'req.body', 'req.rawBody', 'req.url', 'res.headers', 'res.body',
 ];

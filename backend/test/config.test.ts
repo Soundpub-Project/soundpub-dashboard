@@ -27,6 +27,8 @@ test('typed config accepts isolated development/test and applies safe defaults',
     assert.equal(config.FINANCE_RECONCILIATION_INTERVAL_MS, 300000);
     assert.equal(config.FINANCE_RECONCILIATION_ISSUE_LIMIT, 500);
     assert.equal(config.FINANCE_RECONCILIATION_TIMEOUT_MS, 5000);
+    assert.equal(config.AUTH_DELIVERY_KEY_ID, 'legacy');
+    assert.deepEqual(config.AUTH_DELIVERY_PREVIOUS_KEYS_JSON, {});
   }
   for (const OBJECT_STORAGE_PUBLIC_ENDPOINT of ['http://127.0.0.1:9100', 'http://localhost:19000', 'http://[::1]:9100']) {
     assert.doesNotThrow(() => loadConfig({ ...valid, OBJECT_STORAGE_PUBLIC_ENDPOINT }));
@@ -78,6 +80,8 @@ test('invalid config fails without disclosing synthetic credentials', () => {
     { FINANCE_RECONCILIATION_INTERVAL_MS: '9999' }, { FINANCE_RECONCILIATION_ISSUE_LIMIT: '0' },
     { FINANCE_RECONCILIATION_TIMEOUT_MS: '999' },
     { OBJECT_STORAGE_SECRET_KEY: '' }, { OBJECT_STORAGE_USE_SSL: 'yes' },
+    { AUTH_DELIVERY_KEY_ID: '../bad' }, { AUTH_DELIVERY_PREVIOUS_KEYS_JSON: '[]' },
+    { AUTH_DELIVERY_PREVIOUS_KEYS_JSON: '{"old":"short"}' },
     { DEV_AUTH_TOKENS_JSON: 'not-json' }, { DEV_AUTH_TOKENS_JSON: '[]' },
     { DEV_AUTH_TOKENS_JSON: '{"short":{"issuer":"local","subject":"one"}}' },
     { DEV_AUTH_TOKENS_JSON: '{"synthetic-token":{"issuer":"","subject":"one"}}' },
@@ -90,5 +94,9 @@ test('invalid config fails without disclosing synthetic credentials', () => {
     });
   }
   assert.doesNotThrow(() => loadConfig({ ...valid, DEV_AUTH_TOKENS_JSON: '{"synthetic-token":{"issuer":"local","subject":"one"}}' }));
+  assert.doesNotThrow(() => loadConfig({ ...valid, AUTH_DELIVERY_KEY_ID: 'v2',
+    AUTH_DELIVERY_PREVIOUS_KEYS_JSON: '{"v1":"synthetic-previous-delivery-secret-32-chars"}' }));
+  assert.throws(() => loadConfig({ ...valid, AUTH_DELIVERY_KEY_ID: 'v1',
+    AUTH_DELIVERY_PREVIOUS_KEYS_JSON: '{"v1":"synthetic-previous-delivery-secret-32-chars"}' }), /conflicts/);
   assert.throws(() => loadConfig({}));
 });
