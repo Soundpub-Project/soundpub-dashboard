@@ -79,6 +79,20 @@ try {
   const rendered = JSON.parse(dom.result.result.value);
   assert.equal(rendered.email, true, `Login email input missing. Title: ${rendered.title}`);
   assert.equal(rendered.password, true, `Login password input missing. Title: ${rendered.title}`);
+  for (const label of ['Login dengan Google', 'Login dengan SSO (Label)']) {
+    const click = await command('Runtime.evaluate', {
+      expression: `(() => {
+        const button = [...document.querySelectorAll('button')].find(item => item.textContent?.trim() === ${JSON.stringify(label)});
+        if (!button) return false;
+        button.click();
+        return true;
+      })()`,
+      returnByValue: true,
+    });
+    assert.equal(click.result.result.value, true, `Button missing: ${label}`);
+    await delay(300);
+  }
+  assert.deepEqual(exceptions, [], `Browser runtime exceptions after login options: ${exceptions.join('; ')}`);
   assert.ok(requests.some(url => url.includes('/api/v1/auth/session')),
     `Backend session request missing. Requests: ${requests.length}. Exceptions: ${exceptions.join('; ')}. Paths: ${requests.slice(-12).map(url => { try { return new URL(url).pathname; } catch { return url; } }).join(', ')}`);
   const forbidden = requests.filter(url => /supabase\.invalid|sso\.invalid|\/rest\/v1|\/auth\/v1|\/functions\/v1/.test(url));
