@@ -593,7 +593,7 @@ Backend parity selesai hanya jika:
 - Copyright Dashboard backend memuat registration, contract capability, seluruh halaman royalty, dan bereaksi terhadap pergantian identity. Legacy Supabase dashboard dipisahkan menjadi lazy chunk dan tidak dimuat pada backend branch.
 - Migration `0055` dan `0056` hanya diterapkan pada project Docker `dashboard-sounpub-dev`. API `3300`, frontend `8281`, PostgreSQL `55433`, object storage `9100`, backend, frontend, dan worker sehat. Production port `8181` tidak disentuh.
 - Full Docker suite setelah checkpoint: 385 tests, 379 pass, 0 fail, 6 skipped. Frontend contracts, TypeScript, build, backend typecheck, security isolation, dan Docker config lulus.
-- Remaining P2: auth delivery key-ring rotation, runtime frontend egress test, dan browser role E2E. Copyright dashboard server-side summary dan PostgreSQL shared auth rate limiter sekarang tersedia.
+- Remaining P2: runtime frontend egress test, browser role E2E, dan real email/provider integration. Copyright dashboard server-side summary, PostgreSQL shared limiter, dan auth delivery key-ring sudah tersedia.
 
 ## 23. Payment ownership checkpoint
 
@@ -625,3 +625,10 @@ Backend parity selesai hanya jika:
 - Auth login, verification, dan recovery tetap memiliki batas 10 request per route per address per menit; webhooks, admin, storage, dan API lain mempertahankan policy sebelumnya. Kegagalan database fail closed, bukan mengizinkan bypass.
 - Test dua instance paralel membuktikan hanya 10 dari 12 request auth diterima, isolation lintas route/address, reset window, cleanup, dan database unavailable. Docker-enabled suite: 398 tests, 392 pass, 0 fail, 6 skipped.
 - Sebelum exposure publik, definisikan trusted-proxy chain; `request.ip` sekarang memakai peer address default Fastify sehingga header `X-Forwarded-For` tidak dipercaya otomatis.
+
+## 27. Auth delivery key-ring checkpoint
+
+- Envelope baru memuat `token_key_id`; worker memakai hanya secret dengan ID yang tepat. Envelope lama tanpa ID memakai key `legacy`, tanpa brute-force semua key. Handler menghapus ciphertext, IV, tag, dan key ID setelah delivery sukses.
+- `AUTH_DELIVERY_SECRET` tetap active secret. `AUTH_DELIVERY_KEY_ID` opsional, default `legacy`; `AUTH_DELIVERY_PREVIOUS_KEYS_JSON` opsional untuk secret lama yang masih diperlukan oleh pending outbox, tidak pernah di-commit atau dicetak.
+- Untuk rotasi kelak: simpan active secret lama sebagai key `legacy` (atau ID active sebelumnya) di previous keys, set active key ID baru dan secret baru secara serentak pada backend+worker, deploy project dev terisolasi, verifikasi pending outbox terkirim; hapus previous key hanya setelah seluruh pending/dead-letter terkait diputuskan secara eksplisit. Jangan mengubah file backup atau production.
+- Config menolak key ID invalid dan collision active/previous. Unit serta PostgreSQL lifecycle tests memverifikasi kompatibilitas envelope lama/baru. Full Docker-enabled suite: 399 tests, 393 pass, 0 fail, 6 skipped. Dev tidak merotasi secret aktual.
