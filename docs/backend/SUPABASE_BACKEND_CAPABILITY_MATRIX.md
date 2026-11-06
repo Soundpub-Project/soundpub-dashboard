@@ -11,7 +11,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Capability | Supabase reference | Backend target/current | Frontend state | Status | Next evidence/work |
 | --- | --- | --- | --- | --- | --- |
 | Login utama | Supabase Auth session | local auth tersedia; generic bearer provider production belum tersedia | Backend auth aktif pada dev; browser `/auth` terbukti tanpa Supabase egress | PARTIAL | Login bercredential + role-matrix browser dan production local-session verification |
-| Partner SSO | `sso-login` | Keycloak-compatible OIDC/JWKS bearer adapter validates RS256, issuer, audience, expiry, nbf, and key rotation | Backend-mode partner login sengaja diblokir; frontend Keycloak cutover belum ada | PARTIAL | Implement backend OIDC login flow lalu verify realm/client dan browser E2E |
+| Partner SSO | `sso-login` | OIDC/JWKS bearer adapter validates RS256, issuer, audience, expiry, nbf, rotation; optional `OIDC_CLIENT_ID` checks azp and client roles | Backend-mode partner login sengaja diblokir; frontend Keycloak cutover belum ada | PARTIAL | Implement backend OIDC login flow lalu verify realm/client dan browser E2E |
 | Create user | `create-user` | `/api/v1/admin/users` | Backend adapter tersedia | IMPLEMENTED | Role matrix compatibility |
 | Update role | `update-user-role` | admin user role endpoint | Backend adapter tersedia | IMPLEMENTED | Superadmin hierarchy regression |
 | Update status | `update-user-status` | admin user status endpoint | Backend adapter tersedia | IMPLEMENTED | Suspension/session invalidation parity |
