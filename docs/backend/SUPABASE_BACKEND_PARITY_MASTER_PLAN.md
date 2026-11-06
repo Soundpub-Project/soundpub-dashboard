@@ -632,3 +632,9 @@ Backend parity selesai hanya jika:
 - `AUTH_DELIVERY_SECRET` tetap active secret. `AUTH_DELIVERY_KEY_ID` opsional, default `legacy`; `AUTH_DELIVERY_PREVIOUS_KEYS_JSON` opsional untuk secret lama yang masih diperlukan oleh pending outbox, tidak pernah di-commit atau dicetak.
 - Untuk rotasi kelak: simpan active secret lama sebagai key `legacy` (atau ID active sebelumnya) di previous keys, set active key ID baru dan secret baru secara serentak pada backend+worker, deploy project dev terisolasi, verifikasi pending outbox terkirim; hapus previous key hanya setelah seluruh pending/dead-letter terkait diputuskan secara eksplisit. Jangan mengubah file backup atau production.
 - Config menolak key ID invalid dan collision active/previous. Unit serta PostgreSQL lifecycle tests memverifikasi kompatibilitas envelope lama/baru. Full Docker-enabled suite: 399 tests, 393 pass, 0 fail, 6 skipped. Dev tidak merotasi secret aktual.
+
+## 28. Frontend backend-auth egress checkpoint
+
+- Browser dev `/auth` pada `127.0.0.1:8281` setelah rebuild hanya Compose service `frontend` (`dashboard-sounpub-dev`): 282 requests, form login render, nol runtime exception, nol Supabase/SSO egress. `npm run test:egress` memakai Chrome headless tanpa kredensial; tes ini belum mencakup sesi login, tombol SSO, atau dashboard role.
+- Backend-auth session restore tidak lagi memakai fallback Supabase pada kegagalan backend; frontend tidak melakukan silent SSO check. Tombol partner SSO dan Google saat backend auth aktif memberi pesan belum tersedia, tidak membuat login Supabase. Legacy mode di luar backend-auth tetap terpisah.
+- Frontend contracts, `npx tsc --noEmit`, dan `npm run build` lulus. Build memberi peringatan chunk besar; image frontend Docker `dashboard-sounpub-dev` selesai dibangun. Partner Keycloak frontend cutover, browser role-matrix, dan provider nyata masih gap; tidak ada perubahan production.

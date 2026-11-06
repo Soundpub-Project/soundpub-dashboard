@@ -10,16 +10,16 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 
 | Capability | Supabase reference | Backend target/current | Frontend state | Status | Next evidence/work |
 | --- | --- | --- | --- | --- | --- |
-| Login utama | Supabase Auth session | local auth tersedia; generic bearer provider production belum tersedia | Backend auth aktif pada dev | PARTIAL | Production local-session verification dan lifecycle gate |
-| Partner SSO | `sso-login` | Keycloak-compatible OIDC/JWKS bearer adapter validates RS256, issuer, audience, expiry, nbf, and key rotation | Frontend partner login cutover belum penuh | IMPLEMENTED | Configure real realm/client and verify browser E2E |
+| Login utama | Supabase Auth session | local auth tersedia; generic bearer provider production belum tersedia | Backend auth aktif pada dev; browser `/auth` terbukti tanpa Supabase egress | PARTIAL | Login bercredential + role-matrix browser dan production local-session verification |
+| Partner SSO | `sso-login` | Keycloak-compatible OIDC/JWKS bearer adapter validates RS256, issuer, audience, expiry, nbf, and key rotation | Backend-mode partner login sengaja diblokir; frontend Keycloak cutover belum ada | PARTIAL | Implement backend OIDC login flow lalu verify realm/client dan browser E2E |
 | Create user | `create-user` | `/api/v1/admin/users` | Backend adapter tersedia | IMPLEMENTED | Role matrix compatibility |
 | Update role | `update-user-role` | admin user role endpoint | Backend adapter tersedia | IMPLEMENTED | Superadmin hierarchy regression |
 | Update status | `update-user-status` | admin user status endpoint | Backend adapter tersedia | IMPLEMENTED | Suspension/session invalidation parity |
 | Delete user | `delete-user` | safe lifecycle/archive/delete | Backend adapter tersedia | IMPLEMENTED | Dependency conflict compatibility |
 | Change own password | `change-own-password` | local auth password endpoint | Backend adapter tersedia | IMPLEMENTED | Session revocation evidence |
 | Admin reset password | `update-user-password`, `set-artist-password` | privileged password endpoint | Backend adapter tersedia | IMPLEMENTED | Target-role matrix test |
-| Email verification | verification Edge Functions | purpose-bound 24-hour digest token, AES-GCM delivery envelope, one-time consumption, audit/outbox | Frontend cutover belum selesai | IMPLEMENTED | Shared rate limiter, key rotation, browser E2E |
-| Password recovery | reset Edge Functions | purpose-bound 1-hour digest token, encrypted delivery, atomic password update, all-session revocation | Frontend cutover belum selesai | IMPLEMENTED | Shared rate limiter, key rotation, browser E2E |
+| Email verification | verification Edge Functions | purpose-bound 24-hour digest token, AES-GCM delivery envelope, one-time consumption, audit/outbox | Backend-mode frontend cutover; `/auth` browser egress lulus | IMPLEMENTED | Browser verification/recovery dengan akun sintetis dan email provider |
+| Password recovery | reset Edge Functions | purpose-bound 1-hour digest token, encrypted delivery, atomic password update, all-session revocation | Backend-mode frontend cutover; `/auth` browser egress lulus | IMPLEMENTED | Browser verification/recovery dengan akun sintetis dan email provider |
 | Impersonation | `start-user-impersonation` | local privileged session | Belum dipastikan frontend | PARTIAL | Origin, expiry, audit, exit workflow |
 
 ## Tenant, label, dan artist
