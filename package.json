@@ -8,6 +8,7 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "test:contracts": "node src/lib/file-checksum.test.cjs && node src/components/finance/backend-mode.test.cjs && node src/api/copyright-registrations.contract.test.cjs && node src/api/copyright-summary.contract.test.cjs && node src/api/releases.contract.test.cjs && node src/api/auth-lifecycle.contract.test.cjs",
+    "test:egress": "node scripts/backend-egress-browser.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

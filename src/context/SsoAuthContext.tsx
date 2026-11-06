@@ -17,6 +17,7 @@ import {
   wasSsoActive,
 } from '@/lib/keycloak';
 import { clearSessionLimit, isSessionExpired } from '@/lib/sessionLimit';
+import { usesBackendDomain } from '@/api/routing';
 
 interface SsoAuthContextType {
   ssoLoading: boolean;
@@ -94,6 +95,7 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     const run = async () => {
+      if (usesBackendDomain('auth')) return;
       if (isSessionExpired()) {
         setSsoLoading(false);
         setSsoChecking(false);
@@ -234,6 +236,10 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
   }, [exchangeToken, navigate, location.pathname]);
 
   const triggerSsoLogin = useCallback(async () => {
+    if (usesBackendDomain('auth')) {
+      setSsoError('Login partner SSO belum tersedia di backend dev. Gunakan login akun lokal.');
+      return;
+    }
     clearSessionLimit();
     setSsoLoading(true);
     setSsoError(null);
@@ -249,7 +255,7 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const triggerSsoLogout = useCallback(async () => {
-    await supabase.auth.signOut();
+    if (!usesBackendDomain('auth')) await supabase.auth.signOut();
     // Bersihkan semua cache data dari React Query sebelum mengalihkan user
     queryClient.clear();
     clearSsoActive();

@@ -9,8 +9,10 @@ import { setApiCsrfToken, setApiTokenProvider } from '@/api/client';
 import { SoundpubApiError } from '@/api/client';
 import { authApi, type AuthSessionResponse } from '@/api/auth';
 import { usersApi } from '@/api/users';
+import { usesBackendDomain } from '@/api/routing';
 
-setApiTokenProvider(async () => (await supabase.auth.getSession()).data.session?.access_token ?? null);
+setApiTokenProvider(usesBackendDomain('auth') ? async () => null :
+  async () => (await supabase.auth.getSession()).data.session?.access_token ?? null);
 
 export type { AppRole } from '@/services/users';
 
@@ -137,6 +139,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    if (usesBackendDomain('auth')) {
+      void authApi.session().then(applyLocalSession).catch(error => {
+        restoringSession.current = false;
+        if (!(error instanceof SoundpubApiError) || (error.status !== 401 && error.status !== 503)) {
+          console.error('Error restoring local session:', error);
+        }
+        setLoading(false);
+      });
+      return () => { clearSessionExpiryTimer(); restoringSession.current = false; };
+    }
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, nextSession) => {
         if (restoringSession.current || localAuth.current) return;
@@ -168,7 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       expiringSession.current = true;
       markSessionExpired();
       if (localAuth.current) await authApi.logout().catch(() => undefined);
-      else await supabase.auth.signOut();
+      else if (!usesBackendDomain('auth')) await supabase.auth.signOut();
       localAuth.current = false;
       clearAuthState();
       toast.error('Sesi berakhir setelah 6 jam. Silakan login kembali.');
@@ -228,7 +240,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (request !== profileRequest.current || activeProfileUser.current !== userId) return;
       if (error instanceof SoundpubApiError && (error.status === 401 || error.status === 403)) {
         if (localAuth.current) await authApi.logout().catch(() => undefined);
-        else await supabase.auth.signOut();
+        else if (!usesBackendDomain('auth')) await supabase.auth.signOut();
         localAuth.current = false;
         clearAuthState();
         toast.error(error.status === 401
@@ -247,7 +259,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = async (email: string, password: string) => {
     clearSessionLimit();
     try {
-      await supabase.auth.signOut();
+      if (!usesBackendDomain('auth')) await supabase.auth.signOut();
       applyLocalSession(await authApi.login(email, password));
       return { error: null };
     } catch (error) {
@@ -264,9 +276,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     activeProfileUser.current = null;
     profileRequest.current += 1;
     if (localAuth.current) await authApi.logout();
-    else await supabase.auth.signOut();
+    else if (!usesBackendDomain('auth')) await supabase.auth.signOut();
     localAuth.current = false;
-    setApiTokenProvider(async () => (await supabase.auth.getSession()).data.session?.access_token ?? null);
+    setApiTokenProvider(usesBackendDomain('auth') ? async () => null :
+      async () => (await supabase.auth.getSession()).data.session?.access_token ?? null);
     setApiCsrfToken(null);
     // Bersihkan semua cache data dari React Query agar tidak bocor ke user lain saat berganti akun
     queryClient.clear();

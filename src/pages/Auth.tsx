@@ -16,6 +16,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AuthEnvironmentNotice } from '@/components/auth/AuthEnvironmentNotice';
+import { usesBackendDomain } from '@/api/routing';
 
 const loginSchema = z.object({
   email: z.string().email('Email tidak valid'),
@@ -167,6 +168,14 @@ export default function Auth() {
   };
 
   const handleGoogleSignIn = async () => {
+    if (usesBackendDomain('auth')) {
+      toast({
+        title: 'Login Google belum tersedia',
+        description: 'Gunakan login akun lokal. Integrasi Google akan diaktifkan melalui backend mandiri.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setGoogleLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithOAuth({
