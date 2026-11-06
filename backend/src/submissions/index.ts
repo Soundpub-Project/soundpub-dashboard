@@ -7,6 +7,7 @@ import { artistsRepository } from '../artists/repository.js';
 import { usersRepository } from '../users/repository.js';
 import { releasesRepository } from '../releases/repository.js';
 import type { ReleaseDto } from '../releases/contracts.js';
+import { catalogIdentity, customAuthority } from '../releases/ownership.js';
 import { tracksRepository } from '../tracks/repository.js';
 import type { TrackDto } from '../tracks/contracts.js';
 import { withTransaction } from '../db/pool.js';
@@ -19,6 +20,7 @@ export interface SubmissionContext {
   db: PoolClient;
   release: Readonly<ReleaseDto>;
   tracks: readonly Readonly<TrackDto>[];
+  ownershipValid?: boolean;
 }
 export interface SubmissionDependencies {
   media?: { check(context: SubmissionContext): Promise<{ cover: boolean; audio: boolean }> };
@@ -43,7 +45,7 @@ export async function evaluateSubmission(context: SubmissionContext, dependencie
   if (release.archived_at || !['draft', 'rejected'].includes(release.status)) block('RELEASE_STATE_INVALID');
   if (!release.title.trim() || !release.artist_name.trim() || !release.release_type ||
     !release.genre?.trim() || !release.release_date) block('RELEASE_METADATA_REQUIRED');
-  if (!release.artist_user_id) block('OWNERSHIP_REQUIRED');
+  if (!release.artist_user_id && context.ownershipValid !== true) block('OWNERSHIP_REQUIRED');
   if (!tracks.length) block('TRACKS_REQUIRED');
   if (tracks.some((track, index) => !track.title.trim() || !track.artist_name.trim() ||
     track.release_id !== release.id || track.position !== index + 1)) block('TRACK_METADATA_REQUIRED');
@@ -72,6 +74,19 @@ export function createSubmissionService(pool: Pool, dependencies: SubmissionDepe
     const repo = releasesRepository(db);
     const initial = await repo.find(id);
     if (!initial) throw new ApiError(404, 'NOT_FOUND');
+    if (initial.artist_id) {
+      const canonical = await catalogIdentity(db, initial.artist_id, initial.artist_user_id);
+      if (canonical.management_mode === 'LABEL_CUSTOM_MANAGED') {
+        const { current } = await customAuthority(db, actor, canonical, true);
+        const release = await repo.find(id, true);
+        if (!release || release.artist_id !== initial.artist_id || release.artist_user_id !== null) {
+          throw new ApiError(409, 'CONFLICT');
+        }
+        const tracks = await tracksRepository(db).list(id);
+        const readiness = await evaluateSubmission({ db, release, tracks, ownershipValid: true }, dependencies);
+        return { repo, release, readiness, current };
+      }
+    }
     const users = usersRepository(db);
     const principals = await users.lock([actor.id, ...(initial.artist_user_id ? [initial.artist_user_id] : [])], true);
     const current = principals.get(actor.id);
@@ -88,7 +103,7 @@ export function createSubmissionService(pool: Pool, dependencies: SubmissionDepe
     const release = await repo.find(id, true);
     if (!release || release.artist_user_id !== initial.artist_user_id) throw new ApiError(409, 'CONFLICT');
     const tracks = await tracksRepository(db).list(id);
-    const readiness = await evaluateSubmission({ db, release, tracks }, dependencies);
+    const readiness = await evaluateSubmission({ db, release, tracks, ownershipValid }, dependencies);
     if (!ownershipValid && !readiness.blockers.some(blocker => blocker.code === 'OWNERSHIP_REQUIRED')) {
       readiness.blockers.push({ code: 'OWNERSHIP_REQUIRED', owner: 'PHASE3C' });
       readiness.ready = false;
