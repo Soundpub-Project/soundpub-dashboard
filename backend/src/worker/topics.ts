@@ -2,6 +2,10 @@ import type { OutboxHandler } from './index.js';
 
 export const OUTBOX_TOPICS = [
   'notification.requested',
+  'auth.email_verification.requested',
+  'auth.password_reset.requested',
+  'auth.email_verified',
+  'auth.password_reset.completed',
   'audit.notification',
   'webhook.received',
   'finance.event',

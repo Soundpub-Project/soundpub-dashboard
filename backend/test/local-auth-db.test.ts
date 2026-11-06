@@ -45,7 +45,7 @@ test('local auth persists lockout and protects cookie sessions with CSRF', { ski
     }
     await owner.query("INSERT INTO soundpub.user_roles(user_id,role,verified_at) VALUES ($1,'admin',now())", [activeId]);
 
-    const localAuth = createLocalAuthService(runtime);
+    const localAuth = createLocalAuthService(runtime, { deliverySecret: 'synthetic-auth-delivery-secret-32-chars' });
     await assert.rejects(localAuth.login({ email: 'lock@example.test', password: 'wrong-password-value' }, 'direct-probe'),
       (error: unknown) => (error as { code?: string }).code === 'UNAUTHORIZED');
     await owner.query('UPDATE soundpub.local_auth_credentials SET failed_attempts=0,locked_until=NULL WHERE user_id=$1', [lockedId]);

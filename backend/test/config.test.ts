@@ -11,6 +11,7 @@ const valid = {
   OBJECT_STORAGE_ACCESS_KEY: 'synthetic-access',
   OBJECT_STORAGE_SECRET_KEY: 'synthetic-storage-secret',
   WEBHOOK_MOCK_SECRET: 'synthetic-webhook-secret',
+  AUTH_DELIVERY_SECRET: 'synthetic-auth-delivery-secret-32-chars',
 };
 
 test('typed config accepts isolated development/test and applies safe defaults', () => {

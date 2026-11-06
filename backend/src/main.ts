@@ -47,7 +47,7 @@ const releaseMigration = await pool.query(`SELECT to_regclass('soundpub.releases
 if (Object.values(releaseMigration.rows[0] ?? {}).some(value => !value)) throw new Error('Phase 3E database migration required before API boot');
 const repositories = createRepositories(pool);
 const users = createUsersService(pool);
-const localAuth = createLocalAuthService(pool);
+const localAuth = createLocalAuthService(pool, { deliverySecret: config.AUTH_DELIVERY_SECRET });
 const artists = createArtistsService(pool);
 const labels = createLabelsService(pool);
 const labelCustom = createLabelCustomService(pool);
@@ -95,7 +95,8 @@ const app = buildApp({
   readiness: { async check() { await pool.query('SELECT 1'); return (await mediaStore.isReady()) && (await royaltyImportStore.isReady()); } },
   rateLimiter: {
     async consume({ key, route }) {
-      const limit = route === '/api/v1/auth/login' ? 10 : route.includes('/webhooks/') ? 120 : route.includes('/admin/') ? 30 :
+      const limit = route === '/api/v1/auth/login' || route.includes('/api/v1/auth/email-verification/') ||
+        route.includes('/api/v1/auth/password-recovery/') ? 10 : route.includes('/webhooks/') ? 120 : route.includes('/admin/') ? 30 :
         route === '/api/v1/me' ? 60 : route.includes('/storage/') || route.includes('/actions/') ? 120 : 300;
       const now = Date.now();
       if (windows.size >= 5_000) {

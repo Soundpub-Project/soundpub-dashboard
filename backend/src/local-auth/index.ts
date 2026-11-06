@@ -4,6 +4,8 @@ import { ApiError, type Principal } from '../api/types.js';
 import { createOpaqueToken, digestOpaqueToken, hashPassword, verifyPassword } from '../auth/local-crypto.js';
 import type { Role } from '../auth/index.js';
 import { withTransaction } from '../db/pool.js';
+import { lifecycleRequestInput, lifecycleTokenInput, passwordRecoveryResetInput } from './contracts.js';
+import { encryptDeliveryToken } from './delivery-crypto.js';
 
 const loginInput = z.strictObject({ email: z.email().max(320).transform(value => value.trim().toLowerCase()),
   password: z.string().min(1).max(1024) });
@@ -32,7 +34,85 @@ function principal(row: SessionRow): Principal {
   return { id: row.user_id, status: row.status, roles: row.roles };
 }
 
-export function createLocalAuthService(pool: Pool) {
+export function createLocalAuthService(pool: Pool, options: { deliverySecret: string }) {
+  async function requestToken(input: unknown, requestId: string, purpose: 'email_verification' | 'password_reset') {
+    const startedAt = performance.now();
+    const parsed = lifecycleRequestInput.safeParse(input);
+    if (!parsed.success) throw new ApiError(400, 'BAD_REQUEST');
+    const token = createOpaqueToken();
+    try { await withTransaction(pool, async db => {
+      const found = await db.query<{ user_id: string; email: string; email_verified_at: Date | null; status: Principal['status'] }>(
+        `SELECT c.user_id,c.login_email AS email,u.email_verified_at,u.status
+         FROM soundpub.local_auth_credentials c JOIN soundpub.backend_users u ON u.id=c.user_id
+         WHERE c.login_email=$1 FOR UPDATE OF c,u`, [parsed.data.email]);
+      const row = found.rows[0];
+      const eligible = row && row.status === 'active' && (purpose === 'password_reset' || !row.email_verified_at);
+      if (!eligible) return;
+      await db.query(`UPDATE soundpub.auth_one_time_tokens SET consumed_at=now(),consumed_request_id=$3
+        WHERE user_id=$1 AND purpose=$2 AND consumed_at IS NULL`, [row.user_id, purpose, requestId]);
+      const inserted = await db.query<{ id: string; expires_at: Date }>(`INSERT INTO soundpub.auth_one_time_tokens
+        (user_id,purpose,token_sha256,expires_at,request_id)
+        VALUES($1::uuid,$2::text,$3::bytea,now()+CASE WHEN $2::text='email_verification' THEN interval '24 hours' ELSE interval '1 hour' END,$4::text)
+        RETURNING id,expires_at`, [row.user_id, purpose, digestOpaqueToken(token), requestId]);
+      const expiresAt = inserted.rows[0]!.expires_at;
+      const action = purpose === 'email_verification' ? 'auth.email_verification_requested' : 'auth.password_reset_requested';
+      const topic = purpose === 'email_verification' ? 'auth.email_verification.requested' : 'auth.password_reset.requested';
+      await db.query(`INSERT INTO soundpub.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,metadata)
+        VALUES(NULL,$1,'auth_one_time_token',$2,$3,jsonb_build_object('purpose',$4::text,'expires_at',$5::timestamptz,'target_user_id',$6::uuid))`,
+      [action, inserted.rows[0]!.id, requestId, purpose, expiresAt, row.user_id]);
+      const encrypted = encryptDeliveryToken(token, options.deliverySecret);
+      await db.query(`INSERT INTO soundpub.outbox_events(topic,payload,idempotency_key)
+        VALUES($1,jsonb_build_object('userId',$2::uuid,'email',$3::text,'token_ciphertext',$4::text,
+          'token_iv',$5::text,'token_tag',$6::text,'expiresAt',$7::timestamptz),$8)`,
+      [topic, row.user_id, row.email, encrypted.token_ciphertext, encrypted.token_iv, encrypted.token_tag,
+        expiresAt, `auth-token:${inserted.rows[0]!.id}`]);
+    }); } finally {
+      const remaining = 75 - (performance.now() - startedAt);
+      if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
+    }
+  }
+
+  async function consumeToken(input: unknown, requestId: string, purpose: 'email_verification' | 'password_reset') {
+    const parsed = (purpose === 'password_reset' ? passwordRecoveryResetInput : lifecycleTokenInput).safeParse(input);
+    if (!parsed.success) throw new ApiError(400, 'BAD_REQUEST');
+    let digest: Buffer;
+    try { digest = digestOpaqueToken(parsed.data.token); } catch { throw new ApiError(400, 'BAD_REQUEST'); }
+    const consumed = await withTransaction(pool, async db => {
+      const found = await db.query<{ id: string; user_id: string; status: Principal['status'] }>(
+        `SELECT t.id,t.user_id,u.status FROM soundpub.auth_one_time_tokens t
+         JOIN soundpub.backend_users u ON u.id=t.user_id
+         WHERE t.token_sha256=$1 AND t.purpose=$2 AND t.consumed_at IS NULL AND t.expires_at>now()
+         FOR UPDATE OF t,u`, [digest, purpose]);
+      const tokenRow = found.rows[0];
+      if (!tokenRow || tokenRow.status !== 'active') return false;
+      const newHash = purpose === 'password_reset'
+        ? await hashPassword((parsed.data as z.infer<typeof passwordRecoveryResetInput>).newPassword) : null;
+      await db.query(`UPDATE soundpub.auth_one_time_tokens SET consumed_at=now(),consumed_request_id=$2
+        WHERE id=$1`, [tokenRow.id, requestId]);
+      if (purpose === 'email_verification') {
+        await db.query(`UPDATE soundpub.backend_users SET email_verified_at=COALESCE(email_verified_at,now()),updated_at=now()
+          WHERE id=$1`, [tokenRow.user_id]);
+      } else {
+        await db.query(`UPDATE soundpub.local_auth_credentials SET password_hash=$2,password_changed_at=now(),
+          failed_attempts=0,locked_until=NULL,requires_password_reset=false,updated_at=now() WHERE user_id=$1`,
+        [tokenRow.user_id, newHash]);
+        await db.query('UPDATE soundpub.auth_sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL', [tokenRow.user_id]);
+        await db.query(`UPDATE soundpub.auth_one_time_tokens SET consumed_at=now(),consumed_request_id=$2
+          WHERE user_id=$1 AND consumed_at IS NULL`, [tokenRow.user_id, requestId]);
+      }
+      const action = purpose === 'email_verification' ? 'auth.email_verified' : 'auth.password_reset_completed';
+      const topic = purpose === 'email_verification' ? 'auth.email_verified' : 'auth.password_reset.completed';
+      await db.query(`INSERT INTO soundpub.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,metadata)
+        VALUES($1,$2,'local_auth_credential',$1::uuid::text,$3,jsonb_build_object('token_id',$4::uuid))`,
+      [tokenRow.user_id, action, requestId, tokenRow.id]);
+      await db.query(`INSERT INTO soundpub.outbox_events(topic,payload,idempotency_key)
+        VALUES($1,jsonb_build_object('userId',$2::uuid),$3)`,
+      [topic, tokenRow.user_id, `auth-consumed:${tokenRow.id}`]);
+      return true;
+    });
+    if (!consumed) throw new ApiError(400, 'BAD_REQUEST');
+  }
+
   async function session(token: string, write = false): Promise<SessionRow | null> {
     let digest: Buffer;
     try { digest = digestOpaqueToken(token); } catch { return null; }
@@ -47,6 +127,10 @@ export function createLocalAuthService(pool: Pool) {
     return row;
   }
   return {
+    requestEmailVerification: (input: unknown, requestId: string) => requestToken(input, requestId, 'email_verification'),
+    confirmEmailVerification: (input: unknown, requestId: string) => consumeToken(input, requestId, 'email_verification'),
+    requestPasswordRecovery: (input: unknown, requestId: string) => requestToken(input, requestId, 'password_reset'),
+    resetRecoveredPassword: (input: unknown, requestId: string) => consumeToken(input, requestId, 'password_reset'),
     async login(input: unknown, requestId: string) {
       const value = parseLogin(input);
       const result = await withTransaction(pool, async db => {

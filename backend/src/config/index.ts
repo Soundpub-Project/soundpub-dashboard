@@ -49,6 +49,7 @@ const schema = z.object({
   OBJECT_STORAGE_SECRET_KEY: z.string().min(12),
   OBJECT_STORAGE_BUCKET: z.string().min(3).default("soundpub-development"),
   WEBHOOK_MOCK_SECRET: z.string().min(16),
+  AUTH_DELIVERY_SECRET: z.string().min(32),
   WORKER_POLL_MS: z.coerce.number().int().min(50).max(60000).default(1000),
   WORKER_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(10),
   FINANCE_RECONCILIATION_INTERVAL_MS: z.coerce.number().int().min(10_000).max(86_400_000).default(300_000),

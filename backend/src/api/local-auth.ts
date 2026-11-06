@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { LocalAuthService } from '../local-auth/index.js';
 import { ApiError } from './types.js';
+import { acceptedResponseSchema, okResponseSchema } from '../local-auth/contracts.js';
 
 const cookieName = 'soundpub_session';
 const sessionCookie = (token: string, maxAge: number) => `${cookieName}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}`;
@@ -43,11 +44,39 @@ export function registerLocalAuthRoutes(app: FastifyInstance, service: LocalAuth
     reply.header('set-cookie', sessionCookie('', 0));
     return { status: 'ok' };
   });
-  for (const [path, method, operationId, response] of [
+  const requestBody = { type: 'object', required: ['email'], additionalProperties: false,
+    properties: { email: { type: 'string', format: 'email', maxLength: 320 } } } as const;
+  const tokenBody = { type: 'object', required: ['token'], additionalProperties: false,
+    properties: { token: { type: 'string', pattern: '^[A-Za-z0-9_-]{43}$' } } } as const;
+  app.post('/api/v1/auth/email-verification/request', { schema: { body: requestBody } }, async (request, reply) => {
+    await service.requestEmailVerification(request.body, request.id);
+    reply.code(202);
+    return { status: 'accepted' };
+  });
+  app.post('/api/v1/auth/email-verification/confirm', { schema: { body: tokenBody } }, async request => {
+    await service.confirmEmailVerification(request.body, request.id);
+    return { status: 'ok' };
+  });
+  app.post('/api/v1/auth/password-recovery/request', { schema: { body: requestBody } }, async (request, reply) => {
+    await service.requestPasswordRecovery(request.body, request.id);
+    reply.code(202);
+    return { status: 'accepted' };
+  });
+  app.post('/api/v1/auth/password-recovery/reset', { schema: { body: { ...tokenBody, required: ['token','newPassword'],
+    properties: { ...tokenBody.properties, newPassword: { type: 'string', minLength: 12, maxLength: 1024 } } } } }, async request => {
+    await service.resetRecoveredPassword(request.body, request.id);
+    return { status: 'ok' };
+  });
+  for (const [path, method, operationId, response, successStatus = 200] of [
     ['/api/v1/auth/login','post','login',authResponse], ['/api/v1/auth/session','get','getSession',authResponse],
-    ['/api/v1/auth/logout','post','logout',{ type: 'object', required: ['status'], properties: { status: { type: 'string' } } }],
-    ['/api/v1/auth/password','post','changePassword',{ type: 'object', required: ['status'], properties: { status: { type: 'string' } } }],
-  ] as const) paths[path] = { [method]: { operationId, security: [], responses: Object.fromEntries([200,400,401,403,409,429,500].map(status => [status, {
-    description: status === 200 ? 'Success' : 'Error', content: { 'application/json': { schema: status === 200 ? response : errorSchema } },
+    ['/api/v1/auth/logout','post','logout',okResponseSchema],
+    ['/api/v1/auth/password','post','changePassword',okResponseSchema],
+    ['/api/v1/auth/email-verification/request','post','requestEmailVerification',acceptedResponseSchema,202],
+    ['/api/v1/auth/email-verification/confirm','post','confirmEmailVerification',okResponseSchema],
+    ['/api/v1/auth/password-recovery/request','post','requestPasswordRecovery',acceptedResponseSchema,202],
+    ['/api/v1/auth/password-recovery/reset','post','resetRecoveredPassword',okResponseSchema],
+  ] as const) paths[path] = { [method]: { operationId, security: [], responses: Object.fromEntries(
+    [...new Set([successStatus,400,401,403,409,429,500])].map(status => [status, {
+    description: status === successStatus ? 'Success' : 'Error', content: { 'application/json': { schema: status === successStatus ? response : errorSchema } },
   }])) } };
 }
