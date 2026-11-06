@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, Download, FileText, Music, TrendingUp, Wallet } from 'lucide-react';
-import { copyrightApi, type CopyrightRoyaltyEntry } from '@/api/copyright';
+import { copyrightApi, type CopyrightRoyaltySummary } from '@/api/copyright';
 import { copyrightRegistrationsApi, type CopyrightRegistration } from '@/api/copyright-registrations';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -17,11 +16,16 @@ const date = (value?: string | null) => value ? new Date(value).toLocaleDateStri
   day: 'numeric', month: 'long', year: 'numeric',
 }) : '-';
 
+// Preserve whole-rupiah display rounding without converting money to floating point.
+export const formatRoyaltyMinor = (value: string) => new Intl.NumberFormat('id-ID', {
+  style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0,
+}).format((BigInt(value) + 50n) / 100n);
+
 export function BackendCopyrightDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [registration, setRegistration] = useState<CopyrightRegistration | null>(null);
-  const [royalties, setRoyalties] = useState<CopyrightRoyaltyEntry[]>([]);
+  const [summary, setSummary] = useState<CopyrightRoyaltySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [registrationError, setRegistrationError] = useState('');
   const [financeError, setFinanceError] = useState('');
@@ -30,14 +34,14 @@ export function BackendCopyrightDashboard() {
   const load = useCallback(async (signal?: AbortSignal) => {
     const sequence = ++loadSequence.current;
     setLoading(true); setRegistrationError(''); setFinanceError('');
-    setRegistration(null); setRoyalties([]);
+    setRegistration(null); setSummary(null);
     const [registrationResult, royaltyResult] = await Promise.allSettled([
-      copyrightRegistrationsApi.current(signal), copyrightApi.listAllRoyalties(signal),
+      copyrightRegistrationsApi.current(signal), copyrightApi.summary(signal),
     ]);
     if (signal?.aborted || sequence !== loadSequence.current) return;
     if (registrationResult.status === 'fulfilled') setRegistration(registrationResult.value);
     else setRegistrationError('Status pendaftaran belum dapat dimuat dari backend.');
-    if (royaltyResult.status === 'fulfilled') setRoyalties(royaltyResult.value.items);
+    if (royaltyResult.status === 'fulfilled') setSummary(royaltyResult.value);
     else setFinanceError('Data royalti backend belum tersedia untuk akun ini.');
     setLoading(false);
   }, [user?.id]);
@@ -48,8 +52,7 @@ export function BackendCopyrightDashboard() {
     return () => controller.abort();
   }, [load]);
 
-  const totalRoyalty = useMemo(() => royalties.reduce((total, item) => total + Number(item.amount), 0), [royalties]);
-  const latestRoyalty = royalties[0];
+  const latestRoyalty = summary?.latest;
   const openContract = async () => {
     const reference = registration?.contract?.download_reference;
     if (!reference) return;
@@ -75,8 +78,8 @@ export function BackendCopyrightDashboard() {
     </header>
     {registrationError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Data pendaftaran tidak tersedia</AlertTitle><AlertDescription>{registrationError} <Button variant="link" className="h-auto p-0" onClick={() => void load()}>Coba lagi</Button></AlertDescription></Alert>}
     <section className="grid gap-4 md:grid-cols-3">
-      <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm">Total Royalti</CardTitle><Wallet className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><p className="text-2xl font-bold">{financeError ? '—' : formatCurrency(totalRoyalty)}</p><p className="text-xs text-muted-foreground">{financeError || `${royalties.length} earning backend`}</p></CardContent></Card>
-      <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm">Royalti Terbaru</CardTitle><TrendingUp className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><p className="text-2xl font-bold">{latestRoyalty ? formatCurrency(Number(latestRoyalty.amount)) : '—'}</p><p className="text-xs text-muted-foreground">{financeError || (latestRoyalty ? `Periode ${latestRoyalty.period}` : 'Belum ada data')}</p></CardContent></Card>
+      <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm">Total Royalti</CardTitle><Wallet className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><p className="text-2xl font-bold">{financeError || !summary ? '—' : formatRoyaltyMinor(summary.total_minor)}</p><p className="text-xs text-muted-foreground">{financeError || `${summary?.entry_count ?? '0'} earning backend`}</p></CardContent></Card>
+      <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm">Royalti Terbaru</CardTitle><TrendingUp className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><p className="text-2xl font-bold">{latestRoyalty ? formatRoyaltyMinor(latestRoyalty.amount_minor) : '—'}</p><p className="text-xs text-muted-foreground">{financeError || (latestRoyalty ? `Periode ${latestRoyalty.period}` : 'Belum ada data')}</p></CardContent></Card>
       <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm">Karya Terdaftar</CardTitle><Music className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><p className="text-2xl font-bold">{registration?.works.length ?? 0}</p><p className="text-xs text-muted-foreground">{registration ? registration.status : 'Belum mendaftar'}</p></CardContent></Card>
     </section>
     {registration ? <>

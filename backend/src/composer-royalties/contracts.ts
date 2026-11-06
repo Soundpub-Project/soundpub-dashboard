@@ -39,6 +39,15 @@ export const composerStatementPreview = z.strictObject({
 });
 
 export const copyrightRoyaltyImportCreate = z.strictObject({ expected_checksum: checksum, statement: composerStatement });
+const unsignedInteger = z.string().regex(/^(0|[1-9]\d*)$/);
+export const copyrightRoyaltySummaryQuery = z.strictObject({});
+export const copyrightRoyaltySummary = z.strictObject({
+  currency: z.literal('IDR'), semantics: z.literal('GROSS_ENTRIES'),
+  total_minor: unsignedInteger, entry_count: unsignedInteger,
+  periods: z.array(z.strictObject({ period: month, total_minor: unsignedInteger, entry_count: unsignedInteger })),
+  latest: z.strictObject({ period: month, amount_minor: unsignedInteger }).nullable(),
+});
+export type CopyrightRoyaltySummary = z.infer<typeof copyrightRoyaltySummary>;
 export const copyrightRoyaltyListQuery = z.strictObject({
   limit: z.string().regex(/^(?:[1-9]|[1-9]\d|100)$/).optional(),
   offset: z.string().regex(/^(?:0|[1-9]\d*)$/).optional(),

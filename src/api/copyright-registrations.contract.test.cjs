@@ -37,7 +37,8 @@ assert.match(dashboardPage, /usesBackendDomain\('copyright-registration'\)[\s\S]
 assert.match(dashboard, /copyrightRegistrationsApi\.current/);
 assert.match(dashboard, /copyrightRegistrationsApi\.downloadEvidence/);
 assert.doesNotMatch(dashboard, /supabase|\.from\(|createSignedUrl/);
-assert.match(dashboard, /copyrightApi\.listAllRoyalties/);
+assert.match(dashboard, /copyrightApi\.summary\(signal\)/);
+assert.doesNotMatch(dashboard, /listAllRoyalties|listRoyalties|\.reduce\(/);
 assert.doesNotMatch(dashboardPage, /supabase|LegacyCopyrightDashboard\.tsx/);
 assert.match(dashboardPage, /lazy\(\(\) => import\('@\/components\/copyright\/LegacyCopyrightDashboard'\)\)/);
 assert.match(legacyDashboard, /supabase/);

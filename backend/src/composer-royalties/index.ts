@@ -10,7 +10,8 @@ import { postEvent } from '../finance/index.js';
 import { decimal, minor } from '../royalties/contracts.js';
 import { beneficiaryMappingCreate, beneficiaryMappingQuery, beneficiaryMappingRevoke, COPYRIGHT_ROYALTY_POLICY_CODE,
   copyrightRoyaltyCorrectionCreate, copyrightRoyaltyImportCreate, copyrightRoyaltyListQuery,
-  copyrightRoyaltyReconciliationCreate, parseComposerStatement } from './contracts.js';
+  copyrightRoyaltyReconciliationCreate, copyrightRoyaltySummary, copyrightRoyaltySummaryQuery,
+  type CopyrightRoyaltySummary, parseComposerStatement } from './contracts.js';
 
 const allows = createAuthorizer();
 const policyChecksum = createHash('sha256').update(JSON.stringify({
@@ -30,6 +31,7 @@ export interface ComposerRoyaltiesService {
   listImports(actor: Principal, input: unknown): Promise<unknown>;
   getImport(actor: Principal, id: string): Promise<unknown>;
   listRoyalties(actor: Principal, input: unknown): Promise<unknown>;
+  summary(actor: Principal, input: unknown): Promise<CopyrightRoyaltySummary>;
   correct(actor: Principal, id: string, input: unknown, requestId?: string): Promise<unknown>;
   reconcile(actor: Principal, id: string, input: unknown, requestId?: string): Promise<unknown>;
   createMapping(actor: Principal, input: unknown): Promise<unknown>;
@@ -165,6 +167,28 @@ export function createComposerRoyaltiesService(pool: Pool): ComposerRoyaltiesSer
           WHERE ($1::uuid IS NULL OR e.beneficiary_id=$1) ORDER BY e.created_at DESC,e.id DESC LIMIT $2 OFFSET $3`,
         [admin ? null : current.id, limit + 1, offset])).rows;
         return { items: rows.slice(0, limit), next_offset: rows.length > limit ? offset + limit : null };
+      });
+    },
+    async summary(actor, input) {
+      parse(copyrightRoyaltySummaryQuery, input);
+      return authorized(actor, 'authenticated', async (db, current) => {
+        const admin = allows(current, 'admin');
+        if (!admin && !current.roles.includes('copyright')) throw new ApiError(403, 'FORBIDDEN');
+        // Same historical entries as listRoyalties, not reconciled spendable balance.
+        const row = (await db.query(`WITH scoped AS (
+          SELECT e.id,e.created_at,b.period,e.amount FROM soundpub.copyright_royalty_entries e
+          JOIN soundpub.copyright_royalty_batches b ON b.id=e.batch_id
+          WHERE ($1::uuid IS NULL OR e.beneficiary_id=$1)
+        ), periods AS (
+          SELECT period,(sum(amount)*100)::numeric(100,0)::text AS total_minor,count(*)::text AS entry_count
+          FROM scoped GROUP BY period
+        ) SELECT 'IDR' AS currency,'GROSS_ENTRIES' AS semantics,
+          (COALESCE(sum(amount),0)*100)::numeric(100,0)::text AS total_minor,count(*)::text AS entry_count,
+          COALESCE((SELECT jsonb_agg(to_jsonb(periods) ORDER BY period DESC) FROM periods),'[]'::jsonb) AS periods,
+          (SELECT jsonb_build_object('period',period,'amount_minor',(amount*100)::numeric(100,0)::text)
+            FROM scoped ORDER BY created_at DESC,id DESC LIMIT 1) AS latest
+          FROM scoped`, [admin ? null : current.id])).rows[0];
+        return copyrightRoyaltySummary.parse(row);
       });
     },
     async correct(actor, id, input, requestId = 'copyright-royalty-correction') {

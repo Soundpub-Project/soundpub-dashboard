@@ -7,12 +7,14 @@ import { beneficiaryMapping, beneficiaryMappingCreate, beneficiaryMappingList, b
   copyrightRoyaltyCorrection, copyrightRoyaltyCorrectionCreate, copyrightRoyaltyEntry,
   copyrightRoyaltyImportCreate, copyrightRoyaltyImportDetail, copyrightRoyaltyImportList,
   copyrightRoyaltyListQuery, copyrightRoyaltyPostingResult, copyrightRoyaltyReconciliation,
-  copyrightRoyaltyReconciliationCreate } from '../composer-royalties/contracts.js';
+  copyrightRoyaltyReconciliationCreate, copyrightRoyaltySummary, copyrightRoyaltySummaryQuery } from '../composer-royalties/contracts.js';
 
 export function registerComposerRoyaltiesRoutes(app: FastifyInstance, service: ComposerRoyaltiesService,
   authenticate: (request: FastifyRequest) => Promise<Principal>, paths: Record<string, Record<string, unknown>>,
   errorSchema: object) {
   const definitions = [
+    { method: 'GET' as const, url: '/api/v1/copyright/royalties/summary', operationId: 'copyrightRoyaltySummary',
+      query: copyrightRoyaltySummaryQuery, response: copyrightRoyaltySummary },
     { method: 'POST' as const, url: '/api/v1/copyright/royalties/preview', operationId: 'previewComposerRoyalties',
       body: composerStatement, response: composerStatementPreview },
     { method: 'POST' as const, url: '/api/v1/admin/copyright/royalties/imports', operationId: 'importCopyrightRoyalties',
@@ -54,6 +56,7 @@ export function registerComposerRoyaltiesRoutes(app: FastifyInstance, service: C
         response: Object.fromEntries(Object.entries(responses).map(([status, value]) => [status, value.content['application/json'].schema])) },
       handler: async request => {
         const actor = await authenticate(request);
+        if (def.operationId === 'copyrightRoyaltySummary') return service.summary(actor, request.query);
         if (def.operationId === 'previewComposerRoyalties') return service.preview(actor, request.body);
         if (def.operationId === 'importCopyrightRoyalties') return service.postImport(actor, request.body, request.id);
         if (def.operationId === 'listCopyrightRoyaltyImports') return service.listImports(actor, request.query);

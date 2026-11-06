@@ -59,9 +59,15 @@ export interface CopyrightBeneficiaryMappingCreate {
 }
 
 interface Page<T> { items: T[]; next_offset: number | null }
+export interface CopyrightRoyaltySummary {
+  currency: 'IDR'; semantics: 'GROSS_ENTRIES'; total_minor: string; entry_count: string;
+  periods: { period: string; total_minor: string; entry_count: string }[];
+  latest: { period: string; amount_minor: string } | null;
+}
 const pageQuery = (limit = 50, offset = 0) => `?limit=${limit}&offset=${offset}`;
 
 export const copyrightApi = {
+  summary: (signal?: AbortSignal) => apiRequest<CopyrightRoyaltySummary>('/api/v1/copyright/royalties/summary', { signal }),
   previewRoyalties: (body: CopyrightRoyaltyPreviewRequest, signal?: AbortSignal) =>
     apiRequest<CopyrightRoyaltyPreview>('/api/v1/copyright/royalties/preview', {
       method: 'POST', body, signal, timeoutMs: 120000,
