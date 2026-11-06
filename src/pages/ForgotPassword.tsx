@@ -1,6 +1,8 @@
 ﻿import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
+import { authApi } from '@/api/auth'
+import { usesBackendDomain } from '@/api/routing'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -35,12 +37,12 @@ export default function ForgotPassword() {
     setIsLoading(true)
 
     try {
-      const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      })
-
-      if (recoveryError) {
-        throw recoveryError
+      if (usesBackendDomain('auth')) await authApi.requestPasswordRecovery(email)
+      else {
+        const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/reset-password`,
+        })
+        if (recoveryError) throw recoveryError
       }
 
       setIsSuccess(true)
@@ -49,11 +51,11 @@ export default function ForgotPassword() {
         description: 'Silakan cek inbox Anda untuk link reset password'
       })
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error:', err)
       toast({
         title: 'Gagal Mengirim Email',
-        description: err.message || 'Terjadi kesalahan. Silakan coba lagi.',
+        description: err instanceof Error ? err.message : 'Terjadi kesalahan. Silakan coba lagi.',
         variant: 'destructive'
       })
     } finally {
@@ -88,7 +90,7 @@ export default function ForgotPassword() {
             </div>
 
             <div className="text-sm text-muted-foreground text-center space-y-1">
-              <p>Link berlaku selama <strong>24 jam</strong></p>
+              <p>Link berlaku selama <strong>{usesBackendDomain('auth') ? '1 jam' : '24 jam'}</strong></p>
               <p>Tidak menerima email? Cek folder spam Anda</p>
             </div>
 

@@ -1,6 +1,8 @@
 ﻿import { useState, useEffect } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
+import { authApi } from '@/api/auth'
+import { usesBackendDomain } from '@/api/routing'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,7 +12,7 @@ import { Loader2, Eye, EyeOff, CheckCircle2, AlertCircle, Lock } from 'lucide-re
 import { z } from 'zod'
 
 const passwordSchema = z.object({
-  password: z.string().min(6, 'Password minimal 6 karakter'),
+  password: z.string().min(12, 'Password minimal 12 karakter'),
   confirmPassword: z.string()
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'Password tidak sama',
@@ -19,6 +21,7 @@ const passwordSchema = z.object({
 
 export default function ResetPassword() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { toast } = useToast()
   
   const [password, setPassword] = useState('')
@@ -34,6 +37,11 @@ export default function ResetPassword() {
 
   useEffect(() => {
     const verifyRecoverySession = async () => {
+      if (usesBackendDomain('auth')) {
+        setIsValidToken(/^[A-Za-z0-9_-]{43}$/.test(searchParams.get('token') ?? ''))
+        setIsVerifying(false)
+        return
+      }
       const { data: { session }, error } = await supabase.auth.getSession()
 
       if (error || !session) {
@@ -52,7 +60,7 @@ export default function ResetPassword() {
     }
 
     verifyRecoverySession()
-  }, [toast])
+  }, [searchParams, toast])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -77,13 +85,13 @@ export default function ResetPassword() {
     setIsLoading(true)
 
     try {
-      const { error } = await supabase.auth.updateUser({ password })
-
-      if (error) {
-        throw error
+      if (usesBackendDomain('auth')) {
+        await authApi.resetRecoveredPassword(searchParams.get('token') ?? '', password)
+      } else {
+        const { error } = await supabase.auth.updateUser({ password })
+        if (error) throw error
+        await supabase.auth.signOut()
       }
-
-      await supabase.auth.signOut()
 
       setIsSuccess(true)
       toast({
@@ -95,11 +103,11 @@ export default function ResetPassword() {
         navigate('/auth')
       }, 3000)
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Reset password error:', err)
       toast({
         title: 'Gagal Reset Password',
-        description: err.message || 'Terjadi kesalahan. Silakan coba lagi.',
+        description: err instanceof Error ? err.message : 'Terjadi kesalahan. Silakan coba lagi.',
         variant: 'destructive'
       })
     } finally {
@@ -218,7 +226,7 @@ export default function ResetPassword() {
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="Minimal 6 karakter"
+                  placeholder="Minimal 12 karakter"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className={`pr-10 ${errors.password ? 'border-destructive' : ''}`}

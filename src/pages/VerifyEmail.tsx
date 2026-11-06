@@ -1,6 +1,8 @@
 ﻿import { useState, useEffect } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
+import { authApi } from '@/api/auth'
+import { usesBackendDomain } from '@/api/routing'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useToast } from '@/hooks/use-toast'
@@ -8,6 +10,7 @@ import { Loader2, CheckCircle2, AlertCircle, Mail } from 'lucide-react'
 
 export default function VerifyEmail() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { toast } = useToast()
   
   const [isVerifying, setIsVerifying] = useState(true)
@@ -16,6 +19,17 @@ export default function VerifyEmail() {
 
   useEffect(() => {
     const verifyEmail = async () => {
+      if (usesBackendDomain('auth')) {
+        try {
+          await authApi.confirmEmailVerification(searchParams.get('token') ?? '')
+          setIsSuccess(true)
+          toast({ title: 'Email Terverifikasi!', description: 'Akun Anda telah aktif' })
+          setTimeout(() => navigate('/auth'), 3000)
+        } catch {
+          setErrorMessage('Link verifikasi tidak valid atau sudah kadaluarsa')
+        } finally { setIsVerifying(false) }
+        return
+      }
       const { data: { user }, error } = await supabase.auth.getUser()
 
       if (error || !user?.email_confirmed_at) {
@@ -39,7 +53,7 @@ export default function VerifyEmail() {
     }
 
     verifyEmail()
-  }, [navigate, toast])
+  }, [navigate, searchParams, toast])
 
   // Verifying state
   if (isVerifying) {
@@ -95,8 +109,8 @@ export default function VerifyEmail() {
               className="w-full" 
               asChild
             >
-              <Link to="/dashboard">
-                Lanjut ke Dashboard
+              <Link to={usesBackendDomain('auth') ? '/auth' : '/dashboard'}>
+                {usesBackendDomain('auth') ? 'Kembali ke Login' : 'Lanjut ke Dashboard'}
               </Link>
             </Button>
           </CardContent>
@@ -125,7 +139,7 @@ export default function VerifyEmail() {
             <p className="text-sm font-medium">Kemungkinan penyebab:</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
               <li>Link sudah pernah digunakan</li>
-              <li>Link sudah kadaluarsa (lebih dari 7 hari)</li>
+              <li>Link sudah kadaluarsa ({usesBackendDomain('auth') ? 'lebih dari 24 jam' : 'lebih dari 7 hari'})</li>
               <li>Link tidak lengkap atau rusak</li>
             </ul>
           </div>

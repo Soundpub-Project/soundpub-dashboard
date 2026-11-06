@@ -1,14 +1,16 @@
-﻿import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/integrations/supabase/client'
+import { authApi } from '@/api/auth'
+import { usesBackendDomain } from '@/api/routing'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useToast } from '@/hooks/use-toast'
 import { Loader2, Mail, CheckCircle2, AlertCircle } from 'lucide-react'
 
 export default function VerifyEmailRequired() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const navigate = useNavigate()
   const { toast } = useToast()
   
@@ -17,17 +19,12 @@ export default function VerifyEmailRequired() {
   const [canResend, setCanResend] = useState(true)
   const [countdown, setCountdown] = useState(0)
 
-  // If user is not logged in, redirect to auth
-  if (!user) {
-    navigate('/auth')
-    return null
-  }
+  useEffect(() => {
+    if (!user) navigate('/auth', { replace: true })
+    else if (usesBackendDomain('auth') ? profile?.email_verified : user.email_confirmed_at) navigate('/dashboard', { replace: true })
+  }, [navigate, profile?.email_verified, user])
 
-  // If email is already verified, redirect to dashboard
-  if (user.email_confirmed_at) {
-    navigate('/dashboard')
-    return null
-  }
+  if (!user || (usesBackendDomain('auth') ? profile?.email_verified : user.email_confirmed_at)) return null
 
   const handleResendEmail = async () => {
     if (!canResend) {
@@ -42,20 +39,15 @@ export default function VerifyEmailRequired() {
     setIsResending(true)
 
     try {
-      if (!user.email) {
-        throw new Error('Email akun tidak tersedia')
-      }
-
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: user.email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/verify-email`,
-        },
-      })
-
-      if (error) {
-        throw error
+      const email = usesBackendDomain('auth') ? profile?.email : user.email
+      if (!email) throw new Error('Email akun tidak tersedia')
+      if (usesBackendDomain('auth')) await authApi.requestEmailVerification(email)
+      else {
+        const { error } = await supabase.auth.resend({
+          type: 'signup', email,
+          options: { emailRedirectTo: `${window.location.origin}/verify-email` },
+        })
+        if (error) throw error
       }
 
       setIsSent(true)
@@ -78,11 +70,11 @@ export default function VerifyEmailRequired() {
         })
       }, 1000)
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Resend email error:', err)
       toast({
         title: 'Gagal Mengirim Email',
-        description: err.message || 'Terjadi kesalahan. Silakan coba lagi.',
+        description: err instanceof Error ? err.message : 'Terjadi kesalahan. Silakan coba lagi.',
         variant: 'destructive'
       })
     } finally {
@@ -117,7 +109,7 @@ export default function VerifyEmailRequired() {
               <>
                 Silakan verifikasi email Anda untuk melanjutkan
                 <br />
-                <span className="font-medium text-foreground">{user?.email}</span>
+                <span className="font-medium text-foreground">{usesBackendDomain('auth') ? profile?.email : user?.email}</span>
               </>
             )}
           </CardDescription>
@@ -179,7 +171,7 @@ export default function VerifyEmailRequired() {
 
           <div className="text-center space-y-2">
             <p className="text-xs text-muted-foreground">
-              Link verifikasi berlaku selama <strong>7 hari</strong>
+              Link verifikasi berlaku selama <strong>{usesBackendDomain('auth') ? '24 jam' : '7 hari'}</strong>
             </p>
             <p className="text-xs text-muted-foreground">
               Email salah?{' '}

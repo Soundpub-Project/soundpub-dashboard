@@ -15,4 +15,16 @@ export const authApi = {
   changePassword: (currentPassword: string, newPassword: string) => apiRequest<{ status: string }>('/api/v1/auth/password', {
     method: 'POST', body: { currentPassword, newPassword },
   }),
+  requestEmailVerification: (email: string) => apiRequest<{ status: 'accepted' }>('/api/v1/auth/email-verification/request', {
+    method: 'POST', body: { email }, authenticated: false,
+  }),
+  confirmEmailVerification: (token: string) => apiRequest<{ status: 'ok' }>('/api/v1/auth/email-verification/confirm', {
+    method: 'POST', body: { token }, authenticated: false,
+  }),
+  requestPasswordRecovery: (email: string) => apiRequest<{ status: 'accepted' }>('/api/v1/auth/password-recovery/request', {
+    method: 'POST', body: { email }, authenticated: false,
+  }),
+  resetRecoveredPassword: (token: string, newPassword: string) => apiRequest<{ status: 'ok' }>('/api/v1/auth/password-recovery/reset', {
+    method: 'POST', body: { token, newPassword }, authenticated: false,
+  }),
 };
