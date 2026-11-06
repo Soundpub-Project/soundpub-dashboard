@@ -66,7 +66,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Registration payment | `create-copyright-invoice` | owner-only idempotent invoice, server-derived amount/currency, raw-body HMAC callback, replay evidence | Owner dapat membuat invoice dan melihat status | PARTIAL | Replace dev mock with production payment provider and settlement reconciliation |
 | Admin review | direct status updates | payment-gated reviewer state machine, optimistic version, notes, composer code | Backend admin list/detail/review cut over | VERIFIED | Browser reviewer E2E |
 | Contract lifecycle | browser PDF service and storage writes | private generated/stamped/signed artifacts, advisory-locked number, strict transitions, audit/outbox | Backend admin contract workflow cut over | VERIFIED | Production template/stamping provider integration |
-| Owner dashboard | Supabase registration, contract storage, composer royalty queries | backend current-registration, private capability download, paged royalty history, identity-safe reload | Backend route lazy-splits legacy Supabase module | IMPLEMENTED | Add server aggregate summary endpoint and runtime egress test |
+| Owner dashboard | Supabase registration, contract storage, composer royalty queries | backend current-registration, private capability download, scoped server royalty summary, identity-safe reload | Backend route lazy-splits legacy Supabase module | IMPLEMENTED | Runtime egress test and browser role E2E |
 
 ## Royalty upload dan ingestion
 
@@ -139,7 +139,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Label Custom payout | N/A legacy | PIC-only wallet | Backend UI/API | VERIFIED | Maintain no artist recipient |
 | Admin review | status update workflow | payout transitions | Backend API | IMPLEMENTED | UI and audit evidence |
 | Settlement/failure | provider/manual workflow | state machine | Backend API | IMPLEMENTED | Callback/provider adapter |
-| Xendit invoice | create invoice functions | payments module | Mock/dev path | PARTIAL | Sandbox provider and idempotency |
+| Xendit invoice | create invoice functions | backend invoice snapshots canonical artist or Label Custom PIC as payer and financial owner; immutable DB guard and independent reconciliation | Backend-mode invoice path, provider still mock/dev | PARTIAL | Sandbox provider, legacy invoice preflight, provider callback E2E |
 | Xendit webhook | Edge Function | dedicated webhook route | Backend implementation | PARTIAL | Signature/raw-body/provider contract |
 | Copyright invoice | Edge Function | payment adapter | Not fully mapped | PARTIAL | Consumer and domain ownership |
 
@@ -156,6 +156,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Observability | container/function logs | structured logs/metrics | Dev only | PARTIAL | Import/payout SLO and alert design |
 | Outbox topic coverage | direct function side effects | explicit producer/consumer topic registry with startup assertion | Dev worker registered | VERIFIED | Add provider-specific delivery handlers as each provider becomes real |
 | Production identity provider | Supabase Auth/SSO | local session remains primary; production OIDC/JWKS bearer adapter available for partner identity | Deployment config belum diaktifkan | IMPLEMENTED | Bind verified external identity and run realm E2E |
+| Local auth delivery | Supabase Auth email | digest-only token, encrypted outbox, post-delivery redaction and replay-safe effect | Verification and recovery backend-mode | IMPLEMENTED | Shared limiter, key rotation, real provider delivery evidence |
 
 ## Verification evidence
 
@@ -176,6 +177,9 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 - 2026-11-05: Versioned copyright beneficiary mappings are append-only, period-scoped, case-insensitive, overlap-guarded, revocable, and restricted to active copyright users. Preview resolves and snapshots mapping IDs/owners while remaining write-free; posting requires every row to resolve.
 - 2026-11-05: Copyright royalty posting now preserves production's aggregate final-amount semantics: each composer row posts 100% to its period-resolved copyright beneficiary. Source/period replay is idempotent, changed payload conflicts, finance events are exact minor units, correction is full-batch append-only reversal, and independent reconciliation binds snapshot, audit, and outbox evidence. Frontend backend-mode supports posting, history/detail, mapping administration, own-role royalty history, correction, and reconciliation without Supabase fallback. Full Docker suite produced 346 tests, 340 pass, 0 fail, 6 skipped.
 - 2026-11-05: Copyright registration is backend-owned in dev. Draft, private evidence, submit/payment gate, admin review, contract artifacts, contract numbering, lifecycle, audit, and outbox are transactional. Frontend owner/admin flows no longer call Supabase in backend mode. Full Docker suite produced 379 tests, 373 pass, 0 fail, 6 skipped. Migration `0052`-`0054` is applied only to `dashboard-sounpub-dev`; production provider remains intentionally deferred.
+- 2026-11-06: Payment owner migration `0057` stores immutable payer/financial/artist/policy snapshots. Read-only dev preflight found 0 invoice and 0 blocked; populated synthetic upgrade proves canonical backfill, unresolved release rejection, and charge/refund ledger owner mismatch rollback. Label Custom PIC owns managed release payment, cross-unit denied, callback and reconciliation reject owner drift. Frontend backend invoice cutover and payment contract tests pass; real provider deferred.
+- 2026-11-06: Copyright royalty dashboard summary uses one beneficiary-scoped aggregate endpoint instead of full-history pagination. PostgreSQL and HTTP tests cover scope, exact minor-unit totals and OpenAPI; frontend contract and build pass. Auth worker PostgreSQL test covers encrypted token retry, redaction after success, and duplicate delivery prevention. Email provider remains mock.
+- 2026-11-06: Final isolated Docker-enabled backend suite after payment ownership, auth delivery evidence, and copyright summary: 395 tests, 389 pass, 0 fail, 6 skipped. Frontend contracts, TypeScript, production build, backend build, isolation scan, and Compose config pass.
 
 ## Remaining blockers
 

@@ -593,4 +593,28 @@ Backend parity selesai hanya jika:
 - Copyright Dashboard backend memuat registration, contract capability, seluruh halaman royalty, dan bereaksi terhadap pergantian identity. Legacy Supabase dashboard dipisahkan menjadi lazy chunk dan tidak dimuat pada backend branch.
 - Migration `0055` dan `0056` hanya diterapkan pada project Docker `dashboard-sounpub-dev`. API `3300`, frontend `8281`, PostgreSQL `55433`, object storage `9100`, backend, frontend, dan worker sehat. Production port `8181` tidak disentuh.
 - Full Docker suite setelah checkpoint: 385 tests, 379 pass, 0 fail, 6 skipped. Frontend contracts, TypeScript, build, backend typecheck, security isolation, dan Docker config lulus.
-- Remaining P2: shared/distributed auth rate limiter, auth delivery key-ring rotation, runtime frontend egress test, dan server-side copyright royalty summary untuk menghindari full-history pagination pada dashboard besar.
+- Remaining P2: shared/distributed auth rate limiter, auth delivery key-ring rotation, runtime frontend egress test, dan browser role E2E. Copyright dashboard server-side summary sekarang tersedia.
+
+## 23. Payment ownership checkpoint
+
+- Invoice release menyimpan `payer_owner_id`, `financial_owner_id`, `artist_id`, dan `ownership_policy` dari canonical identity server. Artist login memakai pemilik akun artist; managed artist Label Custom memakai PIC unit, tanpa membuat akun login artist.
+- Snapshot ownership tidak dapat diubah setelah insert, termasuk melalui owner SQL biasa. Constraint menyamakan payer dan financial owner untuk kedua policy yang didukung. Browser tidak dapat mengirim owner, amount, currency, atau status.
+- Creation, status, callback, dan refund menggunakan urutan lock owner/authority, release, lalu invoice. Callback membandingkan empat field snapshot dan mencatat mismatch untuk manual reconciliation tanpa memindahkan charge.
+- Exact invoice replay memvalidasi snapshot; callback/refund ledger selalu memakai financial owner snapshot. Cross-unit access ditolak server, bukan hanya disembunyikan UI.
+- Frontend backend-mode membuka invoice backend melalui `Kelola pembayaran`; tidak memanggil Xendit/Supabase legacy pada jalur tersebut. Provider tetap mock dan belum siap pembayaran uang nyata.
+- Migration `0057` hanya membackfill invoice login artist dengan canonical owner yang sama dengan legacy release owner dan seluruh historical payment ledger evidence. Data ambigu menghentikan seluruh migration transaction; tidak ada inferensi owner atau penghapusan invoice.
+- Sebelum upgrade, jalankan read-only `backend/scripts/payment-owner-preflight.sql` dengan `psql -X -v ON_ERROR_STOP=1` pada database dev terisolasi. `blocked_count` harus nol. Jika tidak, hentikan deployment dan susun pemetaan berbukti; jangan bypass guard atau drop invoice.
+- Preflight dev pada 2026-11-06: 0 invoice, 0 blocked. Populated upgrade test sintetis membuktikan canonical backfill dan rollback untuk unresolved release serta charge/refund historical owner mismatch; hasil database kosong sendiri tidak membuktikan populated upgrade.
+
+## 24. Auth delivery evidence checkpoint
+
+- Worker memakai handler auth yang dapat diuji langsung; perilaku delivery tetap sama. Hanya adapter email menerima plaintext token; ciphertext, IV, dan tag tidak diteruskan ke adapter.
+- PostgreSQL test membuktikan provider failure mempertahankan envelope terenkripsi dan me-rollback effect guard; error tersimpan tetap generik. Delivery sukses menghapus envelope dalam transaksi status processed. Replay event tidak mengirim email ulang atau membuka token yang telah dihapus.
+- Email provider masih mock. Keberhasilan test ini bukan bukti email telah terkirim ke inbox nyata.
+
+## 25. Copyright dashboard summary checkpoint
+
+- `GET /api/v1/copyright/royalties/summary` menghitung total dan count per beneficiary serta period di PostgreSQL memakai minor-unit exact, tanpa menarik seluruh halaman history ke browser.
+- Scope dan verified role mengikuti list royalti copyright; tidak menerima owner override dari query string. Authz, HTTP/OpenAPI, fixture PostgreSQL termasuk corrected history, dan frontend contract diverifikasi.
+- Dashboard backend meminta satu summary server dan tetap memisahkan legacy Supabase module menjadi lazy chunk; runtime browser egress dan role-matrix E2E masih belum dibuktikan.
+- Final Docker-enabled backend suite checkpoint: 395 tests, 389 pass, 0 fail, 6 skipped. Enam skip adalah suites yang memiliki gate lingkungan/rehearsal terpisah, bukan failure tersembunyi.
