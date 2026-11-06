@@ -8,7 +8,7 @@ import { createLogger, Metrics, poolMetrics, sampleQueue } from './observability
 import { createRoyaltyImportObjectStore } from './royalties/store.js';
 import { createRoyaltyImportCleanupProcessor, createRoyaltyImportJobProcessor } from './royalties/jobs.js';
 import { runFinanceReconciliation } from './reconciliation/index.js';
-import { decryptDeliveryToken } from './local-auth/delivery-crypto.js';
+import { createAuthDeliveryHandler } from './local-auth/delivery-handler.js';
 
 const config = loadConfig();
 const logger = createLogger(config.LOG_LEVEL);
@@ -30,20 +30,10 @@ const royaltyImportStore = await createRoyaltyImportObjectStore(pool, {
 const royaltyJobs = createRoyaltyImportJobProcessor(pool, royaltyImportStore);
 const royaltyCleanup = createRoyaltyImportCleanupProcessor(pool, royaltyImportStore);
 const providers = createMockProviders();
-const authDelivery = (payload: unknown) => {
-  const { token_ciphertext: _ciphertext, token_iv: _iv, token_tag: _tag, ...delivery } = payload as Record<string, unknown>;
-  return { ...delivery, token: decryptDeliveryToken(payload, config.AUTH_DELIVERY_SECRET) };
-};
 const handlers: Record<string, OutboxHandler> = {
   'notification.requested': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-notification', payload: event.payload }); },
-  'auth.email_verification.requested': async (event, db) => {
-    await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-email-verification', payload: authDelivery(event.payload) });
-    await db.query("UPDATE soundpub.outbox_events SET payload=payload-'token_ciphertext'-'token_iv'-'token_tag' WHERE id=$1", [event.id]);
-  },
-  'auth.password_reset.requested': async (event, db) => {
-    await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-password-reset', payload: authDelivery(event.payload) });
-    await db.query("UPDATE soundpub.outbox_events SET payload=payload-'token_ciphertext'-'token_iv'-'token_tag' WHERE id=$1", [event.id]);
-  },
+  'auth.email_verification.requested': createAuthDeliveryHandler(providers.email, config.AUTH_DELIVERY_SECRET, 'send-email-verification'),
+  'auth.password_reset.requested': createAuthDeliveryHandler(providers.email, config.AUTH_DELIVERY_SECRET, 'send-password-reset'),
   'auth.email_verified': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-email-verified-notice', payload: event.payload }); },
   'auth.password_reset.completed': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-password-reset-notice', payload: event.payload }); },
   'audit.notification': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-audit-notification', payload: event.payload }); },
