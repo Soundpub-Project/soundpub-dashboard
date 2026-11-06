@@ -67,7 +67,7 @@ export class SupabaseLegacyIdentityProvider implements IdentityProvider {
 }
 
 type JwtHeader = { alg?: unknown; kid?: unknown; typ?: unknown };
-type JwtClaims = { iss?: unknown; sub?: unknown; aud?: unknown; exp?: unknown; nbf?: unknown };
+type JwtClaims = { iss?: unknown; sub?: unknown; aud?: unknown; exp?: unknown; nbf?: unknown; azp?: unknown; resource_access?: unknown };
 type Jwks = { keys?: unknown };
 type RsaJwk = CryptoJsonWebKey & { kid: string; kty: 'RSA'; use?: string; alg?: string };
 
@@ -82,10 +82,11 @@ export class OidcIdentityProvider implements IdentityProvider {
   private readonly issuer: string;
   private readonly audience: string;
   private readonly jwksUrl: string;
+  private readonly clientId: string | undefined;
   private keys = new Map<string, RsaJwk>();
   private keysExpireAt = 0;
 
-  constructor(config: { environment: string; issuer: string; audience: string; jwksUrl: string },
+  constructor(config: { environment: string; issuer: string; audience: string; jwksUrl: string; clientId?: string },
     private readonly transport: typeof fetch = fetch, private readonly now: () => number = Date.now) {
     const issuer = new URL(config.issuer);
     const jwks = new URL(config.jwksUrl);
@@ -100,7 +101,10 @@ export class OidcIdentityProvider implements IdentityProvider {
       throw new Error('Invalid OIDC audience');
     this.issuer = issuer.href.replace(/\/$/, '');
     this.audience = config.audience;
+    if (config.clientId !== undefined && (!config.clientId.trim() || config.clientId.length > 200 || /\s/.test(config.clientId)))
+      throw new Error('Invalid OIDC client ID');
     this.jwksUrl = jwks.href;
+    this.clientId = config.clientId;
   }
 
   private async refreshKeys(): Promise<boolean> {
@@ -138,6 +142,16 @@ export class OidcIdentityProvider implements IdentityProvider {
         typeof claims.exp !== 'number' || !Number.isSafeInteger(claims.exp)) return null;
     const audience = typeof claims.aud === 'string' ? [claims.aud] : Array.isArray(claims.aud) ? claims.aud : [];
     if (!audience.includes(this.audience)) return null;
+    if (this.clientId) {
+      const resourceAccess = claims.resource_access;
+      if (claims.azp !== this.clientId || !resourceAccess || typeof resourceAccess !== 'object' ||
+          Array.isArray(resourceAccess)) return null;
+      const client = (resourceAccess as Record<string, unknown>)[this.clientId];
+      const clientRoles = client && typeof client === 'object' && !Array.isArray(client)
+        ? (client as Record<string, unknown>).roles : null;
+      if (!Array.isArray(clientRoles) || !clientRoles.length ||
+          clientRoles.some(role => typeof role !== 'string' || !role.trim())) return null;
+    }
     const nowSeconds = Math.floor(this.now() / 1000);
     if (claims.exp <= nowSeconds - 30 || (claims.nbf !== undefined &&
         (typeof claims.nbf !== 'number' || !Number.isSafeInteger(claims.nbf) || claims.nbf > nowSeconds + 30))) return null;
@@ -172,6 +186,8 @@ export function createConfiguredIdentityProvider(environment: NodeJS.ProcessEnv)
   });
   if (mode === 'oidc') return new OidcIdentityProvider({ environment: nodeEnvironment,
     issuer: environment.OIDC_ISSUER ?? '', audience: environment.OIDC_AUDIENCE ?? '',
-    jwksUrl: environment.OIDC_JWKS_URL ?? '' });
+    jwksUrl: environment.OIDC_JWKS_URL ?? '',
+    ...(environment.OIDC_CLIENT_ID !== undefined ? { clientId: environment.OIDC_CLIENT_ID } : {}),
+  });
   throw new Error('Unknown identity provider');
 }

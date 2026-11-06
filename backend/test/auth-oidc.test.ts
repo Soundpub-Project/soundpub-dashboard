@@ -43,6 +43,25 @@ test('OIDC provider verifies RS256 issuer, audience, expiry and caches JWKS', as
   assert.equal(await provider.verifyAccessToken('not.a.jwt'), null);
 });
 
+test('Keycloak partner tokens require authorized client and nonempty client roles', async () => {
+  const clientId = 'Soundpub';
+  const provider = new OidcIdentityProvider({ environment: 'production', issuer, audience, jwksUrl, clientId },
+    async () => Response.json({ keys: [first.jwk] }), () => now);
+  const valid = { azp: clientId, resource_access: { [clientId]: { roles: ['artist'] } } };
+  assert.deepEqual(await provider.verifyAccessToken(token(first, valid)), { issuer, subject: 'partner-user-123' });
+  for (const invalid of [
+    { ...valid, azp: 'another-client' },
+    { ...valid, resource_access: { [clientId]: { roles: [] } } },
+    { ...valid, resource_access: { 'another-client': { roles: ['artist'] } } },
+    { ...valid, resource_access: { [clientId]: { roles: [42] } } },
+    { azp: clientId },
+  ]) assert.equal(await provider.verifyAccessToken(token(first, invalid)), null);
+  assert.throws(() => new OidcIdentityProvider({ environment: 'production', issuer, audience, jwksUrl, clientId: 'bad id' }));
+  assert.ok(createConfiguredIdentityProvider({ NODE_ENV: 'production', IDENTITY_PROVIDER: 'oidc',
+    OIDC_ISSUER: issuer, OIDC_AUDIENCE: audience, OIDC_JWKS_URL: jwksUrl, OIDC_CLIENT_ID: clientId }) instanceof OidcIdentityProvider);
+  assert.throws(() => createConfiguredIdentityProvider({ NODE_ENV: 'production', IDENTITY_PROVIDER: 'oidc',
+    OIDC_ISSUER: issuer, OIDC_AUDIENCE: audience, OIDC_JWKS_URL: jwksUrl, OIDC_CLIENT_ID: '' }));
+});
 test('OIDC provider refreshes JWKS once for unknown rotated kid', async () => {
   let requests = 0;
   const provider = new OidcIdentityProvider({ environment: 'production', issuer, audience, jwksUrl }, async () => {
