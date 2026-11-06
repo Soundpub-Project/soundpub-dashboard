@@ -27,6 +27,7 @@ import { createLocalAuthService } from './local-auth/index.js';
 import { createFinanceReconciliationService } from './reconciliation/index.js';
 import { createComposerRoyaltiesService } from './composer-royalties/index.js';
 import { createCopyrightRegistrationsService } from './copyright-registrations/index.js';
+import { createSharedRateLimiter } from './api/rate-limiter.js';
 
 const config = loadConfig();
 const identityProvider = createConfiguredIdentityProvider(process.env);
@@ -74,7 +75,6 @@ const royaltyImportStore = await createRoyaltyImportObjectStore(pool, {
   bucket: config.OBJECT_STORAGE_BUCKET,
 });
 pool.on('error', () => { console.error(JSON.stringify({ level: 'error', message: 'database idle connection failed' })); });
-const windows = new Map<string, { count: number; resetAt: number }>();
 
 const app = buildApp({
   publicCatalog: createPublicCatalogService(pool),
@@ -93,23 +93,7 @@ const app = buildApp({
   maintenance: { isEnabled: () => auditSettings.isMaintenanceEnabled() },
   auth: createIdentityAuthenticator(identityProvider, repositories.principals),
   readiness: { async check() { await pool.query('SELECT 1'); return (await mediaStore.isReady()) && (await royaltyImportStore.isReady()); } },
-  rateLimiter: {
-    async consume({ key, route }) {
-      const limit = route === '/api/v1/auth/login' || route.includes('/api/v1/auth/email-verification/') ||
-        route.includes('/api/v1/auth/password-recovery/') ? 10 : route.includes('/webhooks/') ? 120 : route.includes('/admin/') ? 30 :
-        route === '/api/v1/me' ? 60 : route.includes('/storage/') || route.includes('/actions/') ? 120 : 300;
-      const now = Date.now();
-      if (windows.size >= 5_000) {
-        for (const [windowKey, value] of windows) if (value.resetAt <= now) windows.delete(windowKey);
-        if (windows.size >= 5_000) windows.delete(windows.keys().next().value!);
-      }
-      const id = `${route}:${key}`;
-      const state = windows.get(id);
-      if (!state || state.resetAt <= now) { windows.set(id, { count: 1, resetAt: now + 60_000 }); return { allowed: true }; }
-      state.count += 1;
-      return state.count <= limit ? { allowed: true } : { allowed: false, retryAfterSeconds: Math.ceil((state.resetAt - now) / 1000) };
-    },
-  },
+  rateLimiter: createSharedRateLimiter(pool),
   admin: {
     async suspendUser({ userId, reason, actor, requestId }) {
       await users.setStatus(actor, userId, { status: 'suspended' }, requestId, reason);
