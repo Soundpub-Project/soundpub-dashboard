@@ -23,6 +23,15 @@ export const whitelabelDashboardDto = z.strictObject({
   artists_without_access: z.number().int().nonnegative(),
 });
 export const composerCodePut = z.strictObject({ composerCode: z.string().trim().toUpperCase().regex(/^[A-Z0-9_-]+$/).max(100).nullable() });
+export const partnerIdentityPut = z.strictObject({
+  subject: z.string().trim().min(1).max(255).refine(value => !/[\u0000-\u001f\u007f]/.test(value)),
+});
+const partnerBindingDto = z.strictObject({
+  provider: z.literal('iccn'), issuer: z.string(), subject: z.string(), verifiedAt: z.string().nullable(),
+});
+export const partnerIdentityDto = z.strictObject({
+  eligible: z.boolean(), issuer: z.string().nullable(), binding: partnerBindingDto.nullable(),
+});
 export const userCreate = z.strictObject({
   email: z.string().trim().toLowerCase().email().max(320),
   password: z.string().min(12).max(1024),
@@ -58,6 +67,7 @@ export type ProfilePatch = z.infer<typeof profilePatch>;
 export type RolesPut = z.infer<typeof rolesPut>;
 export type ListQuery = z.infer<typeof listQuery>;
 export type ComposerCodePut = z.infer<typeof composerCodePut>;
+export type PartnerIdentityPut = z.infer<typeof partnerIdentityPut>;
 export type PasswordReset = z.infer<typeof passwordReset>;
 export type UserCreate = z.infer<typeof userCreate>;
 export type WhitelabelArtistCreate = z.infer<typeof whitelabelArtistCreate>;

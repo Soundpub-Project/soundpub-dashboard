@@ -46,6 +46,7 @@ import {
   Hash,
   UserX,
   UsersRound,
+  Link2,
 } from "lucide-react";
 import { ChangeRoleDialog } from "@/components/users/ChangeRoleDialog";
 import { AddUserDialog } from "@/components/users/AddUserDialog";
@@ -53,6 +54,7 @@ import { ChangePasswordDialog } from "@/components/users/ChangePasswordDialog";
 import { ChangeStatusDialog } from "@/components/users/ChangeStatusDialog";
 import { DeleteUserDialog } from "@/components/users/DeleteUserDialog";
 import { EditComposerCodeDialog } from "@/components/users/EditComposerCodeDialog";
+import { IccnIdentityDialog } from "@/components/users/IccnIdentityDialog";
 import {
   LabelCustomArtistsAdminDialog,
   type LabelCustomAdminOwner,
@@ -149,6 +151,7 @@ export default function Users() {
   const [composerCodeDialogOpen, setComposerCodeDialogOpen] = useState(false);
   const [labelCustomOwner, setLabelCustomOwner] = useState<UserProfile | null>(null);
   const [labelCustomArtistsOpen, setLabelCustomArtistsOpen] = useState(false);
+  const [iccnIdentityOpen, setIccnIdentityOpen] = useState(false);
 
   useEffect(() => {
     // Only fetch users if user is logged in AND is admin
@@ -265,6 +268,11 @@ export default function Users() {
   const handleManageLabelCustomArtists = (target: UserProfile) => {
     setLabelCustomOwner(target);
     setLabelCustomArtistsOpen(true);
+  };
+
+  const handleManageIccnIdentity = (target: UserProfile) => {
+    setSelectedUser(target);
+    setIccnIdentityOpen(true);
   };
 
   const canMutateLabelCustomOwner = (target: UserProfile | null) => {
@@ -637,16 +645,24 @@ export default function Users() {
                                       </DropdownMenuItem>
                                     )}
                                   {user.role === "artist" && (
-                                    <DropdownMenuItem
-                                      onClick={() =>
-                                        navigate(
-                                          `/dashboard/artist-profile/${user.id}`,
-                                        )
-                                      }
-                                    >
-                                      <Music className="mr-2 h-4 w-4" />
-                                      Lihat Profil Artis
-                                    </DropdownMenuItem>
+                                    <>
+                                      <DropdownMenuItem
+                                        onClick={() =>
+                                          navigate(
+                                            `/dashboard/artist-profile/${user.id}`,
+                                          )
+                                        }
+                                      >
+                                        <Music className="mr-2 h-4 w-4" />
+                                        Lihat Profil Artis
+                                      </DropdownMenuItem>
+                                      {backendUsers && isSuperadmin && (
+                                        <DropdownMenuItem onClick={() => handleManageIccnIdentity(user)}>
+                                          <Link2 className="mr-2 h-4 w-4" />
+                                          Kelola ICCN
+                                        </DropdownMenuItem>
+                                      )}
+                                    </>
                                   )}
                                   {(user.role === "label_custom" || user.roles?.includes("label_custom")) && backendUsers && (
                                     <DropdownMenuItem onClick={() => handleManageLabelCustomArtists(user)}>
@@ -705,6 +721,12 @@ export default function Users() {
           status: labelCustomOwner.status,
         } satisfies LabelCustomAdminOwner : null}
         canMutate={canMutateLabelCustomOwner(labelCustomOwner)}
+      />
+      <IccnIdentityDialog
+        open={iccnIdentityOpen}
+        onOpenChange={setIccnIdentityOpen}
+        user={selectedUser}
+        onSuccess={fetchUsers}
       />
       <ChangeRoleDialog
         open={dialogOpen}

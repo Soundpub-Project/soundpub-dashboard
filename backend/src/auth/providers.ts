@@ -143,6 +143,8 @@ export class OidcIdentityProvider implements IdentityProvider {
     this.tokenUrl = `${this.issuer}/protocol/openid-connect/token`;
   }
 
+  configuredIssuer() { return this.issuer; }
+
   private async refreshKeys(): Promise<boolean> {
     try {
       const response = await this.transport(this.jwksUrl, { redirect: 'error', signal: AbortSignal.timeout(5000),

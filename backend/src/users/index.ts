@@ -1,12 +1,12 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { ApiError } from '../api/types.js';
 import { createAuthorizer, type Principal, type Role } from '../auth/index.js';
 import { withTransaction } from '../db/pool.js';
 import { hashPassword } from '../auth/local-crypto.js';
-import { composerCodePut, listQuery, passwordReset, profilePatch, rolesPut, statusPatch, userCreate,
-  whitelabelArtistCreate, type ComposerCodePut, type ListQuery, type PasswordReset, type ProfilePatch,
+import { composerCodePut, listQuery, partnerIdentityPut, passwordReset, profilePatch, rolesPut, statusPatch, userCreate,
+  whitelabelArtistCreate, type ComposerCodePut, type ListQuery, type PartnerIdentityPut, type PasswordReset, type ProfilePatch,
   type RolesPut, type UserCreate, type WhitelabelArtistCreate } from './contracts.js';
 import { usersRepository } from './repository.js';
 
@@ -35,7 +35,36 @@ export function canCreateUser(actor: Principal, input: Pick<UserCreate, 'role' |
     && input.role === 'artist' && input.parentLabelId === actor.id;
 }
 
-export function createUsersService(pool: Pool) {
+export function createUsersService(pool: Pool, options: { partnerIdentity?: { labelId: string; issuer: string } } = {}) {
+  async function partnerContext(db: PoolClient, actor: Principal, id: string) {
+    const ids = [actor.id, id, ...(options.partnerIdentity ? [options.partnerIdentity.labelId] : [])];
+    const repo = usersRepository(db);
+    const principals = await repo.lock(ids, true);
+    const current = principals.get(actor.id);
+    requirePolicy(current, 'admin');
+    const target = principals.get(id);
+    if (!target) throw new ApiError(404, 'NOT_FOUND');
+    const targetRoles = await repo.allRoles(id);
+    if (!canManageUser(current!, id, targetRoles)) throw new ApiError(403, 'FORBIDDEN');
+    if (!options.partnerIdentity) return { repo, current: current!, configured: false as const, eligible: false };
+    const verifiedRoles = (await db.query<{ role: Role }>(`SELECT role FROM soundpub.user_roles
+      WHERE user_id=$1 AND tenant_id IS NULL AND verified_at IS NOT NULL ORDER BY role`, [id])).rows.map(row => row.role);
+    const eligible = target.status === 'active' && targetRoles.length === 1 && verifiedRoles.length === 1 &&
+      verifiedRoles[0] === 'artist' &&
+      Boolean((await db.query<{ eligible: boolean }>(`SELECT EXISTS (
+        SELECT 1 FROM soundpub.profiles profile
+        JOIN soundpub.artists roster ON roster.artist_user_id=profile.id AND roster.label_id=$2
+          AND roster.verified_at IS NOT NULL
+        JOIN soundpub.backend_users label_user ON label_user.id=$2 AND label_user.status='active'
+        WHERE profile.id=$1 AND profile.parent_label_id=$2
+          AND NOT EXISTS (SELECT 1 FROM soundpub.local_auth_credentials credential WHERE credential.user_id=$1)
+          AND EXISTS (SELECT 1 FROM soundpub.user_roles label_role WHERE label_role.user_id=$2
+            AND label_role.tenant_id IS NULL AND label_role.verified_at IS NOT NULL
+            AND label_role.role IN ('label','whitelabel'))
+      ) AS eligible`, [id, options.partnerIdentity.labelId])).rows[0]?.eligible);
+    return { repo, current: current!, configured: true as const, eligible,
+      issuer: options.partnerIdentity.issuer, labelId: options.partnerIdentity.labelId };
+  }
   return {
     async profile(actor: Principal) {
       return withTransaction(pool, async db => {
@@ -305,6 +334,86 @@ export function createUsersService(pool: Pool) {
         if ((error as { code?: string }).code === '23505') throw new ApiError(409, 'CONFLICT');
         throw error;
       }
+    },
+    async partnerIdentity(actor: Principal, id: string) {
+      requirePolicy(actor, 'admin');
+      parse(z.uuid(), id);
+      return withTransaction(pool, async db => {
+        const context = await partnerContext(db, actor, id);
+        if (!context.configured) return { eligible: false, issuer: null, binding: null };
+        const row = (await db.query<{ provider: 'iccn'; issuer: string; subject: string; verified_at: Date | null }>(
+          `SELECT provider,issuer,subject,verified_at FROM soundpub.external_identities
+           WHERE application_user_id=$1 AND provider='iccn' ORDER BY created_at LIMIT 1`, [id])).rows[0];
+        return { eligible: context.eligible, issuer: context.issuer, binding: row ? {
+          provider: row.provider, issuer: row.issuer, subject: row.subject,
+          verifiedAt: row.verified_at?.toISOString() ?? null,
+        } : null };
+      });
+    },
+    async bindPartnerIdentity(actor: Principal, id: string, input: PartnerIdentityPut, requestId: string) {
+      requirePolicy(actor, 'admin');
+      parse(z.uuid(), id);
+      const value = parse(partnerIdentityPut, input);
+      try {
+        return await withTransaction(pool, async db => {
+          const context = await partnerContext(db, actor, id);
+          if (!context.current.roles.includes('superadmin')) throw new ApiError(403, 'FORBIDDEN');
+          if (!context.configured || !context.eligible) throw new ApiError(409, 'CONFLICT');
+          const existing = (await db.query<{ issuer: string; subject: string; verified_at: Date | null }>(
+            `SELECT issuer,subject,verified_at FROM soundpub.external_identities
+             WHERE application_user_id=$1 AND provider='iccn'`, [id])).rows[0];
+          if (existing && (existing.issuer !== context.issuer || existing.subject !== value.subject)) {
+            throw new ApiError(409, 'CONFLICT');
+          }
+          let verifiedAt = existing?.verified_at;
+          if (!existing) verifiedAt = (await db.query<{ verified_at: Date }>(`INSERT INTO soundpub.external_identities
+            (application_user_id,provider,issuer,subject,verified_at,binding_provenance)
+            VALUES ($1,'iccn',$2,$3,now(),jsonb_build_object('method','admin_explicit','actorUserId',$4::uuid,
+              'requestId',$5::text,'partnerLabelId',$6::uuid)) RETURNING verified_at`,
+          [id, context.issuer, value.subject, context.current.id, requestId, context.labelId])).rows[0]!.verified_at;
+          else verifiedAt = (await db.query<{ verified_at: Date }>(`UPDATE soundpub.external_identities
+            SET verified_at=now(),binding_provenance=jsonb_build_object('method','admin_explicit_reverify',
+              'actorUserId',$3::uuid,'requestId',$4::text,'partnerLabelId',$5::uuid)
+            WHERE application_user_id=$1 AND provider='iccn' AND issuer=$2 RETURNING verified_at`,
+          [id, context.issuer, context.current.id, requestId, context.labelId])).rows[0]!.verified_at;
+          await db.query("UPDATE soundpub.profiles SET sso_provider='iccn',updated_at=now() WHERE id=$1", [id]);
+          await context.repo.audit(context.current.id, id, requestId,
+            existing ? 'auth.iccn_identity_binding_confirmed' : 'auth.iccn_identity_bound', {
+              provider: 'iccn', issuer: context.issuer, partnerLabelId: context.labelId,
+              subjectSha256: createHash('sha256').update(value.subject).digest('hex'),
+            });
+          return { eligible: true, issuer: context.issuer, binding: { provider: 'iccn' as const,
+            issuer: context.issuer, subject: value.subject, verifiedAt: verifiedAt!.toISOString() } };
+        });
+      } catch (error) {
+        if ((error as { code?: string }).code === '23505') throw new ApiError(409, 'CONFLICT');
+        throw error;
+      }
+    },
+    async unbindPartnerIdentity(actor: Principal, id: string, input: PartnerIdentityPut, requestId: string) {
+      requirePolicy(actor, 'admin');
+      parse(z.uuid(), id);
+      const value = parse(partnerIdentityPut, input);
+      return withTransaction(pool, async db => {
+        const context = await partnerContext(db, actor, id);
+        if (!context.current.roles.includes('superadmin')) throw new ApiError(403, 'FORBIDDEN');
+        if (!context.configured) throw new ApiError(409, 'CONFLICT');
+        const removed = await db.query<{ issuer: string; subject: string }>(`DELETE FROM soundpub.external_identities
+          WHERE application_user_id=$1 AND provider='iccn' AND subject=$2 RETURNING issuer,subject`,
+        [id, value.subject]);
+        if (!removed.rowCount) {
+          const exists = await db.query(`SELECT 1 FROM soundpub.external_identities
+            WHERE application_user_id=$1 AND provider='iccn'`, [id]);
+          throw new ApiError(exists.rowCount ? 409 : 404, exists.rowCount ? 'CONFLICT' : 'NOT_FOUND');
+        }
+        await db.query('UPDATE soundpub.auth_sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL', [id]);
+        await db.query("UPDATE soundpub.profiles SET sso_provider=NULL,updated_at=now() WHERE id=$1 AND sso_provider='iccn'", [id]);
+        await context.repo.audit(context.current.id, id, requestId, 'auth.iccn_identity_unbound', {
+          provider: 'iccn', issuer: removed.rows[0]!.issuer, partnerLabelId: context.labelId,
+          subjectSha256: createHash('sha256').update(value.subject).digest('hex'),
+        });
+        return { deleted: true as const };
+      });
     },
     async setRoles(actor: Principal, id: string, input: RolesPut, requestId: string) {
       requirePolicy(actor, 'admin');

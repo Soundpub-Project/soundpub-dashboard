@@ -22,6 +22,7 @@ export function projectSettings<T extends z.ZodRawShape>(schema: z.ZodObject<T>,
   })) as z.infer<z.ZodObject<T>>;
 }
 const actions = new Set(['profile.updated', 'user.suspended', 'user.status_changed', 'user.roles_changed',
+  'auth.iccn_identity_bound', 'auth.iccn_identity_binding_confirmed', 'auth.iccn_identity_unbound',
   'artist.created', 'artist.updated', 'artist.removed_from_label', 'artist.deletion_requested', 'artist.deletion_reviewed',
   'label.updated', 'release.created', 'release.updated', 'release.aggregate.created', 'release.aggregate.updated',
   'release.submitted', 'track.created', 'track.updated', 'track.deleted', 'notification.created', 'notification.updated',

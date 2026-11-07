@@ -22,7 +22,7 @@ import { createNotificationsService } from './notifications/index.js';
 import { createMediaObjectStore, createMediaReadinessAdapter, createMediaService } from './media/index.js';
 import { createAuditSettingsService } from './audit-settings/index.js';
 import { createPublicCatalogService } from './public-catalog/index.js';
-import { createConfiguredIdentityProvider, createIdentityAuthenticator } from './auth/providers.js';
+import { createConfiguredIdentityProvider, createIdentityAuthenticator, OidcIdentityProvider } from './auth/providers.js';
 import { createPartnerOAuthService } from './auth/partner-oauth.js';
 import { createLocalAuthService } from './local-auth/index.js';
 import { createFinanceReconciliationService } from './reconciliation/index.js';
@@ -55,7 +55,8 @@ const releaseMigration = await pool.query(`SELECT to_regclass('soundpub.releases
   to_regclass('soundpub.copyright_registrations') AS copyright_registrations`);
 if (Object.values(releaseMigration.rows[0] ?? {}).some(value => !value)) throw new Error('Phase 3E database migration required before API boot');
 const repositories = createRepositories(pool);
-const users = createUsersService(pool);
+const users = createUsersService(pool, config.PARTNER_LABEL_ID && identityProvider instanceof OidcIdentityProvider
+  ? { partnerIdentity: { labelId: config.PARTNER_LABEL_ID, issuer: identityProvider.configuredIssuer() } } : {});
 const localAuth = createLocalAuthService(pool, { deliverySecret: config.AUTH_DELIVERY_SECRET,
   deliveryKeyId: config.AUTH_DELIVERY_KEY_ID });
 const artists = createArtistsService(pool);

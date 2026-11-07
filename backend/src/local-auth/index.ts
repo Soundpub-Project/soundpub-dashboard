@@ -181,6 +181,7 @@ export function createLocalAuthService(pool: Pool, options: { deliverySecret: st
           JOIN soundpub.artists a ON a.artist_user_id=u.id AND a.label_id=p.parent_label_id
           JOIN soundpub.backend_users label ON label.id=p.parent_label_id AND label.status='active'
           WHERE i.provider='iccn' AND i.issuer=$1 AND i.subject=$2 AND i.verified_at IS NOT NULL
+            AND p.sso_provider='iccn'
             AND EXISTS (SELECT 1 FROM soundpub.user_roles label_role WHERE label_role.user_id=label.id
               AND label_role.role IN ('label','whitelabel') AND label_role.verified_at IS NOT NULL)
           FOR UPDATE OF u`, [identity.issuer, identity.subject]);

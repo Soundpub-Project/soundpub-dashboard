@@ -28,6 +28,19 @@ export interface BackendUser {
   roles: AppRole[];
 }
 
+export interface IccnIdentityBinding {
+  provider: 'iccn';
+  issuer: string;
+  subject: string;
+  verifiedAt: string | null;
+}
+
+export interface IccnIdentity {
+  eligible: boolean;
+  issuer: string | null;
+  binding: IccnIdentityBinding | null;
+}
+
 export const usersApi = {
   create: (body: { email: string; password: string; fullName: string; phone?: string | null; role: AppRole; parentLabelId?: string | null }) =>
     apiRequest<BackendUser>('/api/v1/admin/users', { method: 'POST', body }),
@@ -47,6 +60,15 @@ export const usersApi = {
   ),
   composerCode: (id: string, composerCode: string | null) => apiRequest<{ composerCode: string | null }>(
     `/api/v1/admin/users/${encodeURIComponent(id)}/composer-code`, { method: 'PUT', body: { composerCode } },
+  ),
+  iccnIdentity: (id: string, signal?: AbortSignal) => apiRequest<IccnIdentity>(
+    `/api/v1/admin/users/${encodeURIComponent(id)}/iccn-identity`, { signal },
+  ),
+  bindIccnIdentity: (id: string, subject: string) => apiRequest<IccnIdentity>(
+    `/api/v1/admin/users/${encodeURIComponent(id)}/iccn-identity`, { method: 'PUT', body: { subject } },
+  ),
+  unbindIccnIdentity: (id: string, subject: string) => apiRequest<{ deleted: true }>(
+    `/api/v1/admin/users/${encodeURIComponent(id)}/iccn-identity`, { method: 'DELETE', body: { subject } },
   ),
   delete: (id: string) => apiRequest<{ deleted: true }>(
     `/api/v1/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE' },

@@ -107,6 +107,10 @@ test('OIDC authorization code exchange binds PKCE, redirect and verified access 
   assert.throws(() => new OidcIdentityProvider({ environment: 'production', issuer, audience, jwksUrl,
     clientSecret: 'secret-without-client' }));
 });
+test('OIDC provider exposes canonical issuer without trailing slash', () => {
+  const provider = new OidcIdentityProvider({ environment: 'production', issuer: `${issuer}/`, audience, jwksUrl });
+  assert.equal(provider.configuredIssuer(), issuer);
+});
 test('OIDC provider refreshes JWKS once for unknown rotated kid', async () => {
   let requests = 0;
   const provider = new OidcIdentityProvider({ environment: 'production', issuer, audience, jwksUrl }, async () => {

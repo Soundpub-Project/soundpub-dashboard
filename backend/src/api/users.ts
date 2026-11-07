@@ -2,8 +2,8 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Principal } from './types.js';
 import { ROLES } from '../auth/index.js';
-import { composerCodePut, listQuery, passwordReset, profileDto, profilePatch, rolesPut, statusPatch, userCreate,
-  whitelabelArtistCreate, whitelabelDashboardDto, type ComposerCodePut, type ListQuery, type PasswordReset,
+import { composerCodePut, listQuery, partnerIdentityDto, partnerIdentityPut, passwordReset, profileDto, profilePatch, rolesPut, statusPatch, userCreate,
+  whitelabelArtistCreate, whitelabelDashboardDto, type ComposerCodePut, type ListQuery, type PartnerIdentityPut, type PasswordReset,
   type ProfilePatch, type RolesPut, type UserCreate, type WhitelabelArtistCreate } from '../users/contracts.js';
 import type { UsersService } from '../users/index.js';
 
@@ -30,6 +30,11 @@ export function registerUsersRoutes(app: FastifyInstance, users: UsersService,
       response: z.strictObject({ status: z.literal('ok') }) },
     { method: 'PUT', url: '/api/v1/admin/users/:id/composer-code', operationId: 'updateComposerCode', body: composerCodePut,
       response: z.strictObject({ composerCode: z.string().nullable() }) },
+    { method: 'GET', url: '/api/v1/admin/users/:id/iccn-identity', operationId: 'getIccnIdentity', response: partnerIdentityDto },
+    { method: 'PUT', url: '/api/v1/admin/users/:id/iccn-identity', operationId: 'bindIccnIdentity', body: partnerIdentityPut,
+      response: partnerIdentityDto },
+    { method: 'DELETE', url: '/api/v1/admin/users/:id/iccn-identity', operationId: 'unbindIccnIdentity', body: partnerIdentityPut,
+      response: z.strictObject({ deleted: z.literal(true) }) },
     { method: 'DELETE', url: '/api/v1/admin/users/:id', operationId: 'deleteUser', response: z.strictObject({ deleted: z.literal(true) }) },
   ] as const;
   for (const def of definitions) {
@@ -55,6 +60,11 @@ export function registerUsersRoutes(app: FastifyInstance, users: UsersService,
         const id = (request.params as { id: string }).id;
         if (def.url === '/api/v1/whitelabel/artists/:id/password') return users.setWhitelabelArtistPassword(actor, id,
           request.body as PasswordReset, request.id);
+        if (def.url.endsWith('/iccn-identity')) {
+          if (def.method === 'GET') return users.partnerIdentity(actor, id);
+          if (def.method === 'PUT') return users.bindPartnerIdentity(actor, id, request.body as PartnerIdentityPut, request.id);
+          return users.unbindPartnerIdentity(actor, id, request.body as PartnerIdentityPut, request.id);
+        }
         if (def.method === 'DELETE') return users.deleteUser(actor, id, request.id);
         if (def.url.endsWith('/password')) return users.resetPassword(actor, id, request.body as PasswordReset, request.id);
         if (def.url.endsWith('/composer-code')) return users.setComposerCode(actor, id, request.body as ComposerCodePut, request.id);
