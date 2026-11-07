@@ -80,6 +80,9 @@ pool.on('error', () => { console.error(JSON.stringify({ level: 'error', message:
 const app = buildApp({
   publicCatalog: createPublicCatalogService(pool),
   localAuth,
+  ...(config.PARTNER_LABEL_ID ? { partnerAuth: {
+    verify: (token: string) => identityProvider.verifyAccessToken(token), labelId: config.PARTNER_LABEL_ID,
+  } } : {}),
   users, artists, labels, labelCustom, releases, tracks, takedowns,
   balance: createBalanceService(pool), royalties: createRoyaltiesService(pool, royaltyImportStore, reconciliationPool), payouts, payments,
   financeReconciliation: createFinanceReconciliationService(pool),

@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { LocalAuthService } from '../local-auth/index.js';
+import type { Identity } from '../auth/index.js';
 import { ApiError } from './types.js';
 import { acceptedResponseSchema, okResponseSchema } from '../local-auth/contracts.js';
 
@@ -10,7 +11,8 @@ export function sessionToken(request: FastifyRequest) {
   return raw ? raw.slice(cookieName.length + 1) : null;
 }
 export function registerLocalAuthRoutes(app: FastifyInstance, service: LocalAuthService,
-  paths: Record<string, Record<string, unknown>>, errorSchema: object) {
+  paths: Record<string, Record<string, unknown>>, errorSchema: object,
+  partner?: { verify(token: string): Promise<Identity | null>; labelId: string }) {
   const authResponse = { type: 'object', required: ['user','csrfToken','expiresAt'], additionalProperties: false, properties: {
     user: { type: 'object', required: ['id','roles'], additionalProperties: false, properties: {
       id: { type: 'string', format: 'uuid' }, roles: { type: 'array', items: { type: 'string' } },
@@ -19,6 +21,16 @@ export function registerLocalAuthRoutes(app: FastifyInstance, service: LocalAuth
   app.post('/api/v1/auth/login', { schema: { body: { type: 'object', required: ['email','password'], additionalProperties: false,
     properties: { email: { type: 'string', format: 'email', maxLength: 320 }, password: { type: 'string', minLength: 1, maxLength: 1024 } } } } }, async (request, reply) => {
     const result = await service.login(request.body, request.id);
+    reply.header('set-cookie', sessionCookie(result.token, 6 * 60 * 60));
+    return { user: { id: result.principal.id, roles: result.principal.roles }, csrfToken: result.csrfToken, expiresAt: result.expiresAt };
+  });
+  const partnerBody = { type: 'object', required: ['accessToken'], additionalProperties: false,
+    properties: { accessToken: { type: 'string', minLength: 100, maxLength: 16384,
+      pattern: '^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$' } } } as const;
+  if (partner) app.post('/api/v1/auth/partner', { schema: { body: partnerBody } }, async (request, reply) => {
+    const identity = await partner.verify((request.body as { accessToken: string }).accessToken);
+    if (!identity) throw new ApiError(401, 'UNAUTHORIZED');
+    const result = await service.loginPartner(identity, partner.labelId, request.id);
     reply.header('set-cookie', sessionCookie(result.token, 6 * 60 * 60));
     return { user: { id: result.principal.id, roles: result.principal.roles }, csrfToken: result.csrfToken, expiresAt: result.expiresAt };
   });
@@ -68,14 +80,18 @@ export function registerLocalAuthRoutes(app: FastifyInstance, service: LocalAuth
     return { status: 'ok' };
   });
   for (const [path, method, operationId, response, successStatus = 200] of [
-    ['/api/v1/auth/login','post','login',authResponse], ['/api/v1/auth/session','get','getSession',authResponse],
+    ['/api/v1/auth/login','post','login',authResponse], ...(partner ? [['/api/v1/auth/partner','post','partnerLogin',authResponse] as const] : []),
+    ['/api/v1/auth/session','get','getSession',authResponse],
     ['/api/v1/auth/logout','post','logout',okResponseSchema],
     ['/api/v1/auth/password','post','changePassword',okResponseSchema],
     ['/api/v1/auth/email-verification/request','post','requestEmailVerification',acceptedResponseSchema,202],
     ['/api/v1/auth/email-verification/confirm','post','confirmEmailVerification',okResponseSchema],
     ['/api/v1/auth/password-recovery/request','post','requestPasswordRecovery',acceptedResponseSchema,202],
     ['/api/v1/auth/password-recovery/reset','post','resetRecoveredPassword',okResponseSchema],
-  ] as const) paths[path] = { [method]: { operationId, security: [], responses: Object.fromEntries(
+  ] as const) paths[path] = { [method]: { operationId, security: [],
+    ...(path === '/api/v1/auth/partner' ? { requestBody: { required: true,
+      content: { 'application/json': { schema: partnerBody } } } } : {}),
+    responses: Object.fromEntries(
     [...new Set([successStatus,400,401,403,409,429,500])].map(status => [status, {
     description: status === successStatus ? 'Success' : 'Error', content: { 'application/json': { schema: status === successStatus ? response : errorSchema } },
   }])) } };

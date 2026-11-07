@@ -32,6 +32,7 @@ const schema = z.object({
   RECONCILIATION_DATABASE_URL: z.string().url(),
   AUDIT_DATABASE_URL: z.string().url(),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
+  PARTNER_LABEL_ID: z.preprocess(value => value === '' ? undefined : value, z.uuid().optional()),
   DEV_AUTH_TOKENS_JSON: z.string().refine((raw) => {
     try {
       const value: unknown = JSON.parse(raw);
@@ -96,6 +97,9 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     throw new Error(`Invalid backend configuration: ${details}`);
   }
 
+  if (parsed.data.PARTNER_LABEL_ID && (environment.IDENTITY_PROVIDER !== 'oidc' || !environment.OIDC_CLIENT_ID)) {
+    throw new Error('Partner SSO requires OIDC identity provider and client ID');
+  }
   if (Object.hasOwn(parsed.data.AUTH_DELIVERY_PREVIOUS_KEYS_JSON, parsed.data.AUTH_DELIVERY_KEY_ID)) {
     throw new Error('Active auth delivery key ID conflicts with a previous key ID');
   }

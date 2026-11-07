@@ -2,7 +2,7 @@ import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { ApiError, type Principal } from '../api/types.js';
 import { createOpaqueToken, digestOpaqueToken, hashPassword, verifyPassword } from '../auth/local-crypto.js';
-import type { Role } from '../auth/index.js';
+import type { Identity, Role } from '../auth/index.js';
 import { withTransaction } from '../db/pool.js';
 import { lifecycleRequestInput, lifecycleTokenInput, passwordRecoveryResetInput } from './contracts.js';
 import { encryptDeliveryToken } from './delivery-crypto.js';
@@ -166,6 +166,37 @@ export function createLocalAuthService(pool: Pool, options: { deliverySecret: st
           VALUES ($1::uuid,'auth.login_succeeded','auth_session',$1::uuid::text,$2,'{}')`, [credential.user_id, requestId]);
         return { token, csrfToken, expiresAt: expiresAt.toISOString(), principal: {
           id: credential.user_id, status: credential.status, roles: await roles(db, credential.user_id),
+        } satisfies Principal };
+      });
+      if (!result) throw new ApiError(401, 'UNAUTHORIZED');
+      return result;
+    },
+    async loginPartner(identity: Identity, labelId: string, requestId: string) {
+      const result = await withTransaction(pool, async db => {
+        const bound = await db.query<{ id: string; status: Principal['status']; parent_label_id: string | null }>(`
+          SELECT u.id,u.status,p.parent_label_id FROM soundpub.external_identities i
+          JOIN soundpub.backend_users u ON u.id=i.application_user_id
+          JOIN soundpub.profiles p ON p.id=u.id
+          JOIN soundpub.artist_profiles ap ON ap.user_id=u.id
+          JOIN soundpub.artists a ON a.artist_user_id=u.id AND a.label_id=p.parent_label_id
+          JOIN soundpub.backend_users label ON label.id=p.parent_label_id AND label.status='active'
+          WHERE i.provider='iccn' AND i.issuer=$1 AND i.subject=$2 AND i.verified_at IS NOT NULL
+            AND EXISTS (SELECT 1 FROM soundpub.user_roles label_role WHERE label_role.user_id=label.id
+              AND label_role.role IN ('label','whitelabel') AND label_role.verified_at IS NOT NULL)
+          FOR UPDATE OF u`, [identity.issuer, identity.subject]);
+        const user = bound.rows[0];
+        if (!user || user.status !== 'active' || user.parent_label_id !== labelId) return null;
+        const assignedRoles = await roles(db, user.id);
+        if (!assignedRoles.includes('artist') || assignedRoles.some(role => role !== 'artist')) return null;
+        const token = createOpaqueToken();
+        const csrfToken = createOpaqueToken();
+        const expiresAt = new Date(Date.now() + absoluteSessionMs);
+        await db.query(`INSERT INTO soundpub.auth_sessions(user_id,token_sha256,csrf_sha256,idle_expires_at,expires_at)
+          VALUES ($1,$2,$3,$4,$4)`, [user.id, digestOpaqueToken(token), digestOpaqueToken(csrfToken), expiresAt]);
+        await db.query(`INSERT INTO soundpub.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,metadata)
+          VALUES ($1,'auth.partner_login','auth_session',$1::uuid::text,$2,'{}')`, [user.id, requestId]);
+        return { token, csrfToken, expiresAt: expiresAt.toISOString(), principal: {
+          id: user.id, status: user.status, roles: assignedRoles,
         } satisfies Principal };
       });
       if (!result) throw new ApiError(401, 'UNAUTHORIZED');

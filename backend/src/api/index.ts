@@ -111,7 +111,7 @@ export function buildApp(deps: ApiDependencies) {
     if (request.method === 'OPTIONS') return true;
     return new Set([
       '/health', '/ready', '/openapi.json',
-      '/api/v1/auth/login', '/api/v1/auth/session', '/api/v1/auth/logout',
+      '/api/v1/auth/login', '/api/v1/auth/partner', '/api/v1/auth/session', '/api/v1/auth/logout',
       '/api/v1/settings/public', '/api/v1/settings/public-media/:key',
       '/api/v1/public/releases', '/api/v1/public/releases/:id',
       '/api/v1/webhooks/events',
@@ -134,7 +134,7 @@ export function buildApp(deps: ApiDependencies) {
     if (!authorize(principal, 'authenticated')) throw new ApiError(403, 'FORBIDDEN');
     return principal;
   }
-  if (deps.localAuth) registerLocalAuthRoutes(app, deps.localAuth, paths, errorSchema);
+  if (deps.localAuth) registerLocalAuthRoutes(app, deps.localAuth, paths, errorSchema, deps.partnerAuth);
   const statusSchema = { type: 'object', required: ['status'], properties: { status: { type: 'string' } }, additionalProperties: false };
   const definitions = [
     { method: 'GET', url: '/health', operationId: 'health', response: statusSchema },

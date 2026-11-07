@@ -1,4 +1,4 @@
-import type { Role } from '../auth/index.js';
+import type { Identity, Role } from '../auth/index.js';
 import type { UsersService } from '../users/index.js';
 import type { ArtistsService } from '../artists/index.js';
 import type { LabelsService } from '../labels/index.js';
@@ -31,6 +31,7 @@ export interface RateLimiter {
 
 export interface ApiDependencies {
   localAuth?: import('../local-auth/index.js').LocalAuthService;
+  partnerAuth?: { verify(token: string): Promise<Identity | null>; labelId: string };
   publicCatalog?: import('../public-catalog/index.js').PublicCatalogService;
   users?: UsersService;
   artists?: ArtistsService;

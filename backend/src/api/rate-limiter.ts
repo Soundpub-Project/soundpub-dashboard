@@ -3,7 +3,7 @@ import type { Pool } from 'pg';
 import type { RateLimiter } from './types.js';
 
 export function rateLimitForRoute(route: string) {
-  return route === '/api/v1/auth/login' || route.includes('/api/v1/auth/email-verification/') ||
+  return route === '/api/v1/auth/login' || route === '/api/v1/auth/partner' || route.includes('/api/v1/auth/email-verification/') ||
     route.includes('/api/v1/auth/password-recovery/') ? 10 : route.includes('/webhooks/') ? 120 :
     route.includes('/admin/') ? 30 : route === '/api/v1/me' ? 60 :
     route.includes('/storage/') || route.includes('/actions/') ? 120 : 300;
