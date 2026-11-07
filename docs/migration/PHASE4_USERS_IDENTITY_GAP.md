@@ -1,8 +1,8 @@
 # Phase 4 Users and Identity Gap
 
-Status: PARTIAL - standalone local auth verified in isolated development; recovery and Keycloak exchange remain
+Status: PARTIAL - standalone local auth and backend Keycloak PKCE exchange verified in isolated development; provider activation remains
 
-Evidence date: 2026-11-03 Asia/Bangkok
+Evidence date: 2026-11-07 Asia/Bangkok
 
 ## Verified in isolated development
 
@@ -13,16 +13,16 @@ Evidence date: 2026-11-03 Asia/Bangkok
 - Existing backend APIs cover current profile read/update, bounded admin user listing, status changes, and role replacement.
 - Label-managed artist creation already has a backend path that creates a business artist without inventing a login account.
 - Standalone email/password login, cookie session restore, logout, lockout, CSRF, password change, CLI provisioning, and administrator password reset pass database-backed tests.
-- Browser auth uses the backend HttpOnly cookie as the primary session and retains Supabase session handling only as the temporary partner-SSO fallback.
+- Browser backend-mode auth uses only backend HttpOnly sessions. Partner SSO code exchange also creates a backend-local session and has no Supabase fallback.
 - Password changes and administrator resets revoke all target sessions. Smoke credentials and sessions are deleted after every isolated HTTP test.
 
 ## Remaining legacy responsibilities
 
 - Public self-registration remains unavailable; the login page directs users to an administrator.
-- General account creation still invokes `create-user` or `create-whitelabel-artist` Edge Functions.
-- Email verification, forgotten-password recovery, and one-time-token delivery are not implemented.
-- Keycloak partner login still exchanges through the Supabase `sso-login` Edge Function and creates a Supabase session.
-- User deletion and impersonation still use Supabase functions and legacy lifecycle rules.
+- Backend-mode account creation uses `/api/v1/admin/users`; legacy non-backend builds still retain Edge Function paths pending final frontend inventory removal.
+- Email verification and forgotten-password recovery are backend-owned; real email provider delivery remains deferred.
+- Keycloak partner login uses backend-issued state/PKCE transactions and verified pre-bound ICCN identities. Dev activation remains disabled pending realm/client evidence.
+- User deletion has a backend lifecycle path; impersonation remains partial and legacy-dependent.
 - Some user screens still read deletion requests, composer fields, avatars, and artist synchronization directly from Supabase.
 
 ## Architecture decision
@@ -37,14 +37,13 @@ Supabase Auth is allowed only as an isolated temporary migration bridge while st
 
 ## Safe next implementation
 
-1. Add email verification and password-reset delivery through the existing notification/provider boundary.
-2. Migrate eligible users into local credential enrollment without copying Supabase password hashes or sessions.
-3. Add the separate Keycloak partner exchange adapter with exact issuer, audience, redirect URI, and JWKS validation.
-4. Remove the Supabase session exchange from `SsoAuthContext` after the backend Keycloak adapter passes negative tests.
-6. Replace remaining user Edge Functions and direct Supabase calls.
-7. Enable remaining `users` operations only after recovery and Keycloak negative tests pass.
+1. Add explicit admin workflow to bind a verified ICCN `(issuer, subject)` to an eligible existing artist under configured partner label.
+2. Add shared one-time OAuth transaction storage before multi-instance/public activation.
+3. Validate configured realm/client, callback and logout against a non-production Keycloak environment.
+4. Migrate eligible users into local credential enrollment without copying Supabase password hashes or sessions.
+5. Replace remaining user Edge Functions and direct Supabase calls.
 
-Until then, keep browser `VITE_SOUNDPUB_BACKEND_DOMAINS` without `users`. API development and tests may continue with synthetic tokens inside `dashboard-sounpub-dev`.
+Until then, keep `VITE_PARTNER_SSO_ENABLED=false` and `PARTNER_LABEL_ID` unset in `dashboard-sounpub-dev`. Do not add real realm credentials until onboarding, shared replay storage, and sandbox browser evidence exist.
 
 ## Implemented foundation
 

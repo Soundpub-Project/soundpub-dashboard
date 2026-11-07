@@ -1,6 +1,6 @@
 # Supabase to Independent Backend Parity Master Plan
 
-Snapshot: 2026-11-04, Asia/Bangkok.
+Snapshot: 2026-11-07, Asia/Bangkok.
 
 ## 1. Tujuan
 
@@ -657,3 +657,11 @@ Backend parity selesai hanya jika:
 - Login hanya berhasil untuk external identity `provider=iccn` yang sudah verified, user aktif dengan tepat role `artist`, artist profile+roster konsisten, parent label cocok `PARTNER_LABEL_ID`, serta label/whitelabel owner aktif dan verified. Unknown subject, unverified binding, wrong label, missing roster, suspended label/user, role escalation, wrong client, dan bad signature fail closed. Endpoint tidak otomatis mengikat email atau membuat akun.
 - Disposable PostgreSQL+RS256 E2E dan full Docker suite lulus: 401 tests, 395 pass, 0 fail, 6 skipped. Backend typecheck/build dan isolated Compose config lulus. Dev Compose tetap tidak mengaktifkan partner endpoint karena `PARTNER_LABEL_ID` kosong; tidak ada request ke realm atau server production.
 - Sisa parity: admin onboarding/binding ICCN yang eksplisit, frontend PKCE handoff ke endpoint ini, refresh/logout semantics dengan realm nyata, browser E2E, dan keputusan aman untuk legacy auto-provisioning dari email.
+
+## 32. Partner SSO backend PKCE checkpoint
+
+- `POST /api/v1/auth/partner/start` membuat state dan PKCE verifier di backend, memvalidasi redirect `/auth` terhadap exact origin allowlist, lalu menyimpan transaksi AES-256-GCM dalam cookie HttpOnly `SameSite=Lax` selama maksimum 10 menit. Browser hanya menerima authorization URL; verifier tidak berada di JavaScript atau session storage backend-mode.
+- Callback `POST /api/v1/auth/partner` menerima hanya code dan state. Backend membuka transaksi cookie, membandingkan state constant-time, menolak expiry/tamper/replay, menukar code pada token endpoint dengan redirect+verifier terikat, membatasi body JSON OIDC 64 KiB, memverifikasi JWT, lalu membuat sesi lokal untuk binding ICCN yang sudah ada. Cookie transaksi selalu dihapus; respons auth memakai `no-store`.
+- React StrictMode tidak lagi mengonsumsi verifier dua kali. Callback URL dibersihkan sebelum exchange; disabled feature flag membersihkan callback tanpa realm egress. Logout backend gagal secara fail-closed dan tidak menghapus state UI atau mengalihkan ke Keycloak jika cookie lokal belum berhasil dicabut.
+- Evidence: backend focused tests 9/9; disposable partner PostgreSQL 1/1; full Docker suite 403 tests, 397 pass, 0 fail, 6 skipped; frontend contracts, TypeScript dan production build lulus; dev Compose backend/frontend sehat pada `3300`/`8281`; browser `/auth` 283 requests, zero forbidden Supabase/SSO egress. Production Docker/port `8181` tidak disentuh.
+- Gap: onboarding/binding ICCN admin belum tersedia, konfigurasi realm/client nyata belum diuji, replay cache masih per-process sehingga perlu penyimpanan shared sebelum multi-instance/public activation, dan auto-provision email legacy tetap ditolak sampai kebijakan takeover-safe disetujui.
