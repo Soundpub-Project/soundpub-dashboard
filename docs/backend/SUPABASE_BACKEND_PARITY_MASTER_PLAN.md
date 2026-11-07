@@ -424,7 +424,8 @@ Gate: source total, accepted/rejected total, ledger posting, dan wallet balance 
 ### Phase 7 - Reporting dan permission parity
 
 - Summary, period, release, track, dan artist breakdown.
-- Role-scoped export.
+- Role-scoped royalty export.
+- Superadmin allowlisted dataset export with secret redaction, formula neutralization, direct-export caps, and immutable audit evidence. (Implemented in dev.)
 - Label Custom mendapat internal artist report dan PIC wallet.
 - Admin mendapat global view.
 - Frontend menangani loading, empty, forbidden, archived, dan retry states.
