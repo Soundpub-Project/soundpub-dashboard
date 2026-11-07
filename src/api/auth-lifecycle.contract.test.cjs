@@ -23,8 +23,17 @@ assert.match(required, /usesBackendDomain\('auth'\)[\s\S]*authApi\.requestEmailV
 assert.match(compose, /VITE_SOUNDPUB_BACKEND_DOMAINS: auth,/);
 assert.match(authProvider, /if \(usesBackendDomain\('auth'\)\) \{[\s\S]*authApi\.session\(\)[\s\S]*return \(\) =>/);
 assert.match(authProvider, /if \(!usesBackendDomain\('auth'\)\) await supabase\.auth\.signOut\(\)/);
-assert.match(ssoProvider, /const run = async \(\) => \{\s*if \(usesBackendDomain\('auth'\)\) return;/);
-assert.match(ssoProvider, /Login partner SSO belum tersedia di backend dev/);
+assert.match(ssoProvider, /if \(usesBackendDomain\('auth'\)\) \{[\s\S]*backendPartnerSsoEnabled[\s\S]*authApi\.partnerLogin/);
+assert.match(ssoProvider, /Login partner SSO belum dikonfigurasi di environment ini/);
+assert.match(ssoProvider, /if \(exchangedRef\.current\) return;\s*exchangedRef\.current = true;/);
+assert.match(ssoProvider, /window\.history\.replaceState\(\{\}, '', window\.location\.pathname\);\s*const ok = await exchangeToken\(\{ code: callback\.code, state: callback\.state \}\)/);
+assert.match(ssoProvider, /await authApi\.logout\(\);[\s\S]*if \(shouldLogoutRealm\) keycloakLogout\(\);[\s\S]*else navigate\('\/auth'/);
+assert.match(ssoProvider, /if \(!backendPartnerSsoEnabled\) \{[\s\S]*window\.history\.replaceState/);
+assert.match(api, /partnerStart: \(redirectUri: string\)/);
+assert.match(api, /partnerLogin: \(code: string, state: string\)/);
+assert.match(ssoProvider, /authApi\.partnerStart\(`\$\{window\.location\.origin\}\/auth`\)/);
+assert.match(compose, /VITE_PARTNER_SSO_ENABLED: 'false'/);
+assert.match(fs.readFileSync('Dockerfile', 'utf8'), /ARG VITE_PARTNER_SSO_ENABLED=false[\s\S]*ENV VITE_PARTNER_SSO_ENABLED=/);
 assert.match(authPage, /handleGoogleSignIn = async \(\) => \{\s*if \(usesBackendDomain\('auth'\)\)/);
 assert.match(authPage, /Login Google belum tersedia/);
 for (const page of [authPage, forgotPage, resetPage]) {

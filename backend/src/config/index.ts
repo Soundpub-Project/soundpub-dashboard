@@ -44,6 +44,7 @@ const schema = z.object({
   OBJECT_STORAGE_ENDPOINT: z.enum(['object-storage', 'localhost', '127.0.0.1']),
   OBJECT_STORAGE_PUBLIC_ENDPOINT: z.string().url().default('http://127.0.0.1:9100'),
   OBJECT_STORAGE_BROWSER_ORIGINS: localBrowserOrigins,
+  PARTNER_REDIRECT_ORIGINS: localBrowserOrigins,
   OBJECT_STORAGE_PORT: z.coerce.number().int().min(1).max(65535).default(9000),
   OBJECT_STORAGE_USE_SSL: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   OBJECT_STORAGE_ACCESS_KEY: z.string().min(8),

@@ -10,6 +10,7 @@ services:
         - VITE_SSO_BASE_URL=${VITE_SSO_BASE_URL}
         - VITE_SSO_REALM=${VITE_SSO_REALM}
         - VITE_SSO_CLIENT_ID=${VITE_SSO_CLIENT_ID}
+        - VITE_PARTNER_SSO_ENABLED=${VITE_PARTNER_SSO_ENABLED:-false}
         - VITE_PDF_SERVICE_URL=${VITE_PDF_SERVICE_URL:-}
         - VITE_CONTRACT_BUCKET=${VITE_CONTRACT_BUCKET:-}
     container_name: soundpub-dashboard

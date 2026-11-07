@@ -4,6 +4,10 @@ import type { Identity, PrincipalRepository } from './index.js';
 
 export interface IdentityProvider {
   verifyAccessToken(token: string): Promise<Identity | null>;
+  createAuthorizationUrl?(input: { redirectUri: string; state: string; codeChallenge: string },
+    allowedRedirectOrigins: readonly string[]): string | null;
+  exchangeAuthorizationCode?(input: { code: string; redirectUri: string; codeVerifier: string },
+    allowedRedirectOrigins: readonly string[]): Promise<Identity | null>;
 }
 
 export class MockIdentityProvider implements IdentityProvider {
@@ -78,15 +82,42 @@ function decodeJson<T>(value: string): T | null {
   } catch { return null; }
 }
 
+async function readBoundedJson(response: Response, maxBytes = 64 * 1024): Promise<unknown | null> {
+  const declared = response.headers.get('content-length');
+  if (declared !== null) {
+    const length = Number(declared);
+    if (!Number.isSafeInteger(length) || length < 0 || length > maxBytes) return null;
+  }
+  if (!response.body) return null;
+  const reader = response.body.getReader();
+  const chunks: Buffer[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const next = await reader.read();
+      if (next.done) break;
+      total += next.value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(Buffer.from(next.value));
+    }
+    return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
+  } catch { return null; }
+}
+
 export class OidcIdentityProvider implements IdentityProvider {
   private readonly issuer: string;
   private readonly audience: string;
   private readonly jwksUrl: string;
   private readonly clientId: string | undefined;
+  private readonly clientSecret: string | undefined;
+  private readonly tokenUrl: string;
   private keys = new Map<string, RsaJwk>();
   private keysExpireAt = 0;
 
-  constructor(config: { environment: string; issuer: string; audience: string; jwksUrl: string; clientId?: string },
+  constructor(config: { environment: string; issuer: string; audience: string; jwksUrl: string; clientId?: string; clientSecret?: string },
     private readonly transport: typeof fetch = fetch, private readonly now: () => number = Date.now) {
     const issuer = new URL(config.issuer);
     const jwks = new URL(config.jwksUrl);
@@ -103,8 +134,13 @@ export class OidcIdentityProvider implements IdentityProvider {
     this.audience = config.audience;
     if (config.clientId !== undefined && (!config.clientId.trim() || config.clientId.length > 200 || /\s/.test(config.clientId)))
       throw new Error('Invalid OIDC client ID');
+    if (config.clientSecret !== undefined && (config.clientSecret.length < 8 || config.clientSecret.length > 512 || /[\r\n]/.test(config.clientSecret)))
+      throw new Error('Invalid OIDC client secret');
+    if (config.clientSecret && !config.clientId) throw new Error('OIDC client ID required for secret');
     this.jwksUrl = jwks.href;
     this.clientId = config.clientId;
+    this.clientSecret = config.clientSecret;
+    this.tokenUrl = `${this.issuer}/protocol/openid-connect/token`;
   }
 
   private async refreshKeys(): Promise<boolean> {
@@ -112,7 +148,8 @@ export class OidcIdentityProvider implements IdentityProvider {
       const response = await this.transport(this.jwksUrl, { redirect: 'error', signal: AbortSignal.timeout(5000),
         headers: { accept: 'application/json' } });
       if (response.status !== 200) return false;
-      const body = await response.json() as Jwks;
+      const body = await readBoundedJson(response) as Jwks | null;
+      if (!body) return false;
       if (!Array.isArray(body.keys) || body.keys.length > 20) return false;
       const keys = new Map<string, RsaJwk>();
       for (const candidate of body.keys) {
@@ -130,6 +167,45 @@ export class OidcIdentityProvider implements IdentityProvider {
     } catch { return false; }
   }
 
+  createAuthorizationUrl(input: { redirectUri: string; state: string; codeChallenge: string },
+    allowedRedirectOrigins: readonly string[]): string | null {
+    if (!this.clientId || !/^[A-Za-z0-9_-]{43}$/.test(input.state) || !/^[A-Za-z0-9_-]{43}$/.test(input.codeChallenge)) return null;
+    let redirect: URL;
+    try { redirect = new URL(input.redirectUri); } catch { return null; }
+    if (!allowedRedirectOrigins.includes(redirect.origin) || redirect.username || redirect.password ||
+        redirect.search || redirect.hash || redirect.pathname !== '/auth') return null;
+    const url = new URL(this.issuer + '/protocol/openid-connect/auth');
+    url.searchParams.set('client_id', this.clientId);
+    url.searchParams.set('redirect_uri', redirect.href);
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('scope', 'openid profile email');
+    url.searchParams.set('state', input.state);
+    url.searchParams.set('code_challenge', input.codeChallenge);
+    url.searchParams.set('code_challenge_method', 'S256');
+    return url.href;
+  }
+
+  async exchangeAuthorizationCode(input: { code: string; redirectUri: string; codeVerifier: string },
+    allowedRedirectOrigins: readonly string[]): Promise<Identity | null> {
+    if (!this.clientId || !/^[A-Za-z0-9._~-]{8,2048}$/.test(input.code) ||
+        !/^[A-Za-z0-9._~-]{43,128}$/.test(input.codeVerifier)) return null;
+    let redirect: URL;
+    try { redirect = new URL(input.redirectUri); } catch { return null; }
+    if (!allowedRedirectOrigins.includes(redirect.origin) || redirect.username || redirect.password ||
+        redirect.search || redirect.hash || redirect.pathname !== '/auth') return null;
+    const body = new URLSearchParams({ grant_type: 'authorization_code', client_id: this.clientId,
+      redirect_uri: redirect.href, code: input.code, code_verifier: input.codeVerifier });
+    if (this.clientSecret) body.set('client_secret', this.clientSecret);
+    try {
+      const response = await this.transport(this.tokenUrl, { method: 'POST', redirect: 'error',
+        signal: AbortSignal.timeout(5000), headers: { 'content-type': 'application/x-www-form-urlencoded',
+          accept: 'application/json' }, body });
+      if (response.status !== 200) return null;
+      const payload = await readBoundedJson(response) as { access_token?: unknown } | null;
+      if (!payload) return null;
+      return typeof payload.access_token === 'string' ? this.verifyAccessToken(payload.access_token) : null;
+    } catch { return null; }
+  }
   async verifyAccessToken(token: string): Promise<Identity | null> {
     if (!token || token.length > 16384 || /\s/.test(token)) return null;
     const parts = token.split('.');
@@ -188,6 +264,7 @@ export function createConfiguredIdentityProvider(environment: NodeJS.ProcessEnv)
     issuer: environment.OIDC_ISSUER ?? '', audience: environment.OIDC_AUDIENCE ?? '',
     jwksUrl: environment.OIDC_JWKS_URL ?? '',
     ...(environment.OIDC_CLIENT_ID !== undefined ? { clientId: environment.OIDC_CLIENT_ID } : {}),
+    ...(environment.OIDC_CLIENT_SECRET ? { clientSecret: environment.OIDC_CLIENT_SECRET } : {}),
   });
   throw new Error('Unknown identity provider');
 }

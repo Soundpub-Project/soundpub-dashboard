@@ -23,6 +23,7 @@ test('typed config accepts isolated development/test and applies safe defaults',
     assert.equal(config.OBJECT_STORAGE_USE_SSL, false);
     assert.equal(config.OBJECT_STORAGE_PUBLIC_ENDPOINT, 'http://127.0.0.1:9100');
     assert.deepEqual(config.OBJECT_STORAGE_BROWSER_ORIGINS, ['http://localhost:8281', 'http://127.0.0.1:8281']);
+    assert.deepEqual(config.PARTNER_REDIRECT_ORIGINS, ['http://localhost:8281', 'http://127.0.0.1:8281']);
     assert.equal(config.WORKER_BATCH_SIZE, 10);
     assert.equal(config.FINANCE_RECONCILIATION_INTERVAL_MS, 300000);
     assert.equal(config.FINANCE_RECONCILIATION_ISSUE_LIMIT, 500);
@@ -35,6 +36,10 @@ test('typed config accepts isolated development/test and applies safe defaults',
   }
   assert.deepEqual(loadConfig({ ...valid, OBJECT_STORAGE_BROWSER_ORIGINS: 'http://127.0.0.1:8281' }).OBJECT_STORAGE_BROWSER_ORIGINS,
     ['http://127.0.0.1:8281']);
+  assert.deepEqual(loadConfig({ ...valid, PARTNER_REDIRECT_ORIGINS: 'http://localhost:8381' }).PARTNER_REDIRECT_ORIGINS,
+    ['http://localhost:8381']);
+  assert.doesNotThrow(() => loadConfig({ ...valid,
+    PARTNER_LABEL_ID: '11111111-1111-4111-8111-111111111111', IDENTITY_PROVIDER: 'oidc', OIDC_CLIENT_ID: 'soundpub-partner' }));
   for (const host of ['localhost', '127.0.0.1', '[::1]', 'postgres', 'db']) {
     assert.doesNotThrow(() => loadConfig({ ...valid, DATABASE_URL: `postgresql://soundpub_app:synthetic-password@${host}/soundpub_dev_review` }));
   }
@@ -69,6 +74,15 @@ test('config rejects production, staging, remote dependencies and URL overrides 
     'http://127.0.0.1', 'http://127.0.0.1:8281/path']) {
     assert.throws(() => loadConfig({ ...valid, OBJECT_STORAGE_BROWSER_ORIGINS }));
   }
+  for (const PARTNER_REDIRECT_ORIGINS of ['', '*', 'http://example.invalid:8281', 'https://127.0.0.1:8281',
+    'http://127.0.0.1', 'http://127.0.0.1:8281/path']) {
+    assert.throws(() => loadConfig({ ...valid, PARTNER_REDIRECT_ORIGINS }));
+  }
+  for (const override of [
+    { PARTNER_LABEL_ID: '11111111-1111-4111-8111-111111111111' },
+    { PARTNER_LABEL_ID: '11111111-1111-4111-8111-111111111111', IDENTITY_PROVIDER: 'oidc' },
+    { PARTNER_LABEL_ID: '11111111-1111-4111-8111-111111111111', IDENTITY_PROVIDER: 'local', OIDC_CLIENT_ID: 'soundpub-partner' },
+  ]) assert.throws(() => loadConfig({ ...valid, ...override }), /Partner SSO/);
   assert.throws(() => loadConfig({ ...valid, UNUSED_PROVIDER_URL: 'https://SUPABASE.CARUBRA.SPACE' }), /isolation violation/);
 });
 

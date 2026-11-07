@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -124,12 +125,13 @@ try {
   socket.close();
 } finally {
   browser.kill();
+  if (browser.exitCode === null) await Promise.race([once(browser, 'exit'), delay(5_000)]);
   const safeRoot = resolve(tmpdir()) + '\\';
   if (!resolve(userDataDir).startsWith(safeRoot)) throw new Error('Unsafe browser temp path');
   for (let attempt = 0; attempt < 10; attempt++) {
     try { await rm(userDataDir, { recursive: true, force: true }); break; }
     catch (error) {
-      if (attempt === 9 || error.code !== 'EBUSY') throw error;
+      if (attempt === 9 || !['EBUSY', 'EPERM', 'ENOTEMPTY'].includes(error.code)) throw error;
       await delay(250);
     }
   }

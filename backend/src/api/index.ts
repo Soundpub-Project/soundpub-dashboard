@@ -111,7 +111,7 @@ export function buildApp(deps: ApiDependencies) {
     if (request.method === 'OPTIONS') return true;
     return new Set([
       '/health', '/ready', '/openapi.json',
-      '/api/v1/auth/login', '/api/v1/auth/partner', '/api/v1/auth/session', '/api/v1/auth/logout',
+      '/api/v1/auth/login', '/api/v1/auth/partner/start', '/api/v1/auth/partner', '/api/v1/auth/session', '/api/v1/auth/logout',
       '/api/v1/settings/public', '/api/v1/settings/public-media/:key',
       '/api/v1/public/releases', '/api/v1/public/releases/:id',
       '/api/v1/webhooks/events',

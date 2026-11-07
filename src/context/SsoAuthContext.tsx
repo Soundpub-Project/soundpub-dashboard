@@ -18,6 +18,7 @@ import {
 } from '@/lib/keycloak';
 import { clearSessionLimit, isSessionExpired } from '@/lib/sessionLimit';
 import { usesBackendDomain } from '@/api/routing';
+import { authApi } from '@/api/auth';
 
 interface SsoAuthContextType {
   ssoLoading: boolean;
@@ -31,6 +32,7 @@ interface SsoAuthContextType {
 const SsoAuthContext = createContext<SsoAuthContextType | undefined>(undefined);
 const SSO_PROMPT_NONE_TRIED_KEY = 'Soundpub_iccn_prompt_none_tried';
 const SSO_EXCHANGE_KEY = 'Soundpub_iccn_exchange_key';
+const backendPartnerSsoEnabled = import.meta.env.VITE_PARTNER_SSO_ENABLED === 'true';
 
 export function SsoAuthProvider({ children }: { children: ReactNode }) {
   const [ssoLoading, setSsoLoading] = useState(false);
@@ -42,8 +44,20 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
   const queryClient = useQueryClient();
 
-  const exchangeToken = useCallback(async (payload: { keycloakToken?: string; code?: string; redirectUri?: string; codeVerifier?: string | null }) => {
+  const exchangeToken = useCallback(async (payload: { keycloakToken?: string; code?: string; state?: string | null;
+    redirectUri?: string; codeVerifier?: string | null }) => {
     try {
+      if (usesBackendDomain('auth')) {
+        if (!backendPartnerSsoEnabled || !payload.code || !payload.state) {
+          throw new Error('Login partner SSO belum dikonfigurasi.');
+        }
+        await authApi.partnerLogin(payload.code, payload.state);
+        setSsoAuthenticated(true);
+        exchangedRef.current = true;
+        markSsoActive();
+        window.history.replaceState({}, '', window.location.pathname);
+        return true;
+      }
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const functionUrl = `${supabaseUrl}/functions/v1/sso-login`;
 
@@ -95,7 +109,32 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     const run = async () => {
-      if (usesBackendDomain('auth')) return;
+      if (usesBackendDomain('auth')) {
+        if (!isSsoCallback()) return;
+        if (!backendPartnerSsoEnabled) {
+          window.history.replaceState({}, '', window.location.pathname);
+          setSsoError('Login partner SSO belum dikonfigurasi di environment ini. Gunakan login akun lokal.');
+          return;
+        }
+        if (exchangedRef.current) return;
+        exchangedRef.current = true;
+        setSsoLoading(true);
+        setSsoError(null);
+        try {
+          const callback = getSsoCallbackParams();
+          if (callback.error) throw new Error(callback.errorDescription || callback.error);
+          if (!callback.code || !callback.state) throw new Error('SSO: Callback atau state tidak valid');
+          window.history.replaceState({}, '', window.location.pathname);
+          const ok = await exchangeToken({ code: callback.code, state: callback.state });
+          if (ok) window.location.replace('/dashboard');
+        } catch (error) {
+          if (!cancelled) setSsoError(error instanceof Error ? error.message : 'SSO login failed');
+          window.history.replaceState({}, '', window.location.pathname);
+        } finally {
+          if (!cancelled) setSsoLoading(false);
+        }
+        return;
+      }
       if (isSessionExpired()) {
         setSsoLoading(false);
         setSsoChecking(false);
@@ -236,14 +275,19 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
   }, [exchangeToken, navigate, location.pathname]);
 
   const triggerSsoLogin = useCallback(async () => {
-    if (usesBackendDomain('auth')) {
-      setSsoError('Login partner SSO belum tersedia di backend dev. Gunakan login akun lokal.');
+    if (usesBackendDomain('auth') && !backendPartnerSsoEnabled) {
+      setSsoError('Login partner SSO belum dikonfigurasi di environment ini. Gunakan login akun lokal.');
       return;
     }
     clearSessionLimit();
     setSsoLoading(true);
     setSsoError(null);
     try {
+      if (usesBackendDomain('auth')) {
+        const started = await authApi.partnerStart(`${window.location.origin}/auth`);
+        window.location.href = started.authorizationUrl;
+        return;
+      }
       console.log('SSO: User triggered SSO login...');
       await initKeycloakAndLogin();
       // If we get here without redirect, something went wrong
@@ -255,12 +299,27 @@ export function SsoAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const triggerSsoLogout = useCallback(async () => {
-    if (!usesBackendDomain('auth')) await supabase.auth.signOut();
+    if (usesBackendDomain('auth')) {
+      const shouldLogoutRealm = backendPartnerSsoEnabled && wasSsoActive();
+      try {
+        await authApi.logout();
+      } catch (error) {
+        setSsoError(error instanceof Error ? error.message : 'Logout gagal. Silakan coba lagi.');
+        return;
+      }
+      queryClient.clear();
+      clearSsoActive();
+      setSsoAuthenticated(false);
+      if (shouldLogoutRealm) keycloakLogout();
+      else navigate('/auth', { replace: true });
+      return;
+    }
+    await supabase.auth.signOut();
     // Bersihkan semua cache data dari React Query sebelum mengalihkan user
     queryClient.clear();
     clearSsoActive();
     keycloakLogout();
-  }, [queryClient]);
+  }, [navigate, queryClient]);
 
   return (
     <SsoAuthContext.Provider

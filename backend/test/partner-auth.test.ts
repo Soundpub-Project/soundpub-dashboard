@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { OidcIdentityProvider } from '../src/auth/providers.js';
+import { createPartnerOAuthService } from '../src/auth/partner-oauth.js';
 import test from 'node:test';
 import { buildApp } from '../src/api/index.js';
 import { createLocalAuthService } from '../src/local-auth/index.js';
@@ -46,32 +47,58 @@ integration('partner session requires verified ICCN binding, active artist and o
     const provider = new OidcIdentityProvider({ environment: 'test', issuer, audience: 'soundpub-dashboard',
       jwksUrl: `${issuer}/protocol/openid-connect/certs`, clientId },
     async () => Response.json({ keys: [publicKey] }));
-    const accessToken = signedAccessToken();
-    const app = buildApp({ localAuth, partnerAuth: { labelId,
-      verify: token => provider.verifyAccessToken(token) }, auth: { authenticate: async () => null },
+    const redirectUri = 'http://127.0.0.1:8281/auth';
+    const partnerAuth = createPartnerOAuthService({
+      createAuthorizationUrl(input, origins) {
+        if (!origins.includes(new URL(input.redirectUri).origin) || new URL(input.redirectUri).pathname !== '/auth') return null;
+        const url = new URL(`${issuer}/protocol/openid-connect/auth`);
+        url.searchParams.set('state', input.state);
+        url.searchParams.set('code_challenge', input.codeChallenge);
+        return url.href;
+      },
+      async exchangeAuthorizationCode(input) {
+        if (input.redirectUri !== redirectUri || input.codeVerifier.length !== 43) return null;
+        const claims = input.code === 'wrong-client-code' ? { azp: 'wrong-client' }
+          : input.code === 'unbound-subject-code' ? { sub: 'unbound-subject' } : {};
+        const accessToken = signedAccessToken(claims);
+        const candidate = input.code === 'tampered-signature-code'
+          ? `${accessToken.slice(0, accessToken.lastIndexOf('.') + 1)}A${accessToken.slice(accessToken.lastIndexOf('.') + 2)}`
+          : accessToken;
+        return provider.verifyAccessToken(candidate);
+      },
+    }, { secret: 'synthetic-partner-transaction-secret-32-chars', allowedRedirectOrigins: ['http://127.0.0.1:8281'] });
+    const app = buildApp({ localAuth, partnerAuth: { labelId, ...partnerAuth }, auth: { authenticate: async () => null },
       readiness: { check: async () => true }, rateLimiter: { consume: async () => ({ allowed: true }) },
       admin: { suspendUser: async () => {} }, webhooks: { receive: async () => false } });
-    const login = () => app.inject({ method: 'POST', url: '/api/v1/auth/partner', payload: { accessToken } });
+    const begin = () => app.inject({ method: 'POST', url: '/api/v1/auth/partner/start', payload: { redirectUri } });
+    const login = async (code = 'valid-authorization-code', stateOverride?: string) => {
+      const started = await begin();
+      assert.equal(started.statusCode, 200, started.body);
+      const transactionCookie = (started.headers['set-cookie'] as string).split(';')[0]!;
+      const state = new URL(started.json().authorizationUrl).searchParams.get('state')!;
+      return app.inject({ method: 'POST', url: '/api/v1/auth/partner', headers: { cookie: transactionCookie },
+        payload: { code, state: stateOverride ?? state } });
+    };
     try {
+      assert.equal((await app.inject({ method: 'POST', url: '/api/v1/auth/partner/start',
+        payload: { redirectUri: 'http://example.invalid/auth' } })).statusCode, 400);
       assert.equal((await app.inject({ method: 'POST', url: '/api/v1/auth/partner',
-        payload: { accessToken: 'bad.token.signature' } })).statusCode, 400);
+        payload: { code: 'short', state: 's'.repeat(43) } })).statusCode, 400);
       assert.equal((await app.inject({ method: 'POST', url: '/api/v1/auth/partner',
-        payload: { accessToken: 'x'.repeat(100) } })).statusCode, 400);
-      assert.equal((await app.inject({ method: 'POST', url: '/api/v1/auth/partner',
-        payload: { accessToken: signedAccessToken({ azp: 'wrong-client' }) } })).statusCode, 401);
-      assert.equal((await app.inject({ method: 'POST', url: '/api/v1/auth/partner',
-        payload: { accessToken: signedAccessToken({ sub: 'unbound-subject' }) } })).statusCode, 401);
-      const tokenParts = accessToken.split('.');
-      const signature = tokenParts[2]!;
-      const tamperedToken = `${tokenParts[0]}.${tokenParts[1]}.${signature[0] === 'A' ? 'B' : 'A'}${signature.slice(1)}`;
-      assert.equal((await app.inject({ method: 'POST', url: '/api/v1/auth/partner',
-        payload: { accessToken: tamperedToken } })).statusCode, 401);
+        payload: { code: 'valid-authorization-code', state: 'short' } })).statusCode, 400);
+      assert.equal((await login('valid-authorization-code', 'x'.repeat(43))).statusCode, 401);
+      assert.equal((await login('wrong-client-code')).statusCode, 401);
+      assert.equal((await login('unbound-subject-code')).statusCode, 401);
+      assert.equal((await login('tampered-signature-code')).statusCode, 401);
       const success = await login();
       assert.equal(success.statusCode, 200, success.body);
       assert.deepEqual(success.json().user, { id: artistId, roles: ['artist'] });
-      const cookie = success.headers['set-cookie'] as string;
+      const cookies = success.headers['set-cookie'] as string[];
+      const cookie = cookies.find(value => value.startsWith('soundpub_session='))!;
       assert.match(cookie, /^soundpub_session=[A-Za-z0-9_-]{43}; Path=\/; HttpOnly; SameSite=Strict; Max-Age=21600$/);
-      assert.equal((await app.inject({ method: 'GET', url: '/api/v1/auth/session', headers: { cookie } })).statusCode, 200);
+      assert.equal(success.headers['cache-control'], 'no-store');
+      assert.equal(success.headers.pragma, 'no-cache');
+      assert.equal((await app.inject({ method: 'GET', url: '/api/v1/auth/session', headers: { cookie: cookie.split(';')[0] } })).statusCode, 200);
       assert.equal((await owner.query('SELECT count(*)::int AS count FROM soundpub.local_auth_credentials WHERE user_id=$1',
         [artistId])).rows[0].count, 0);
       assert.equal((await owner.query("SELECT count(*)::int AS count FROM soundpub.audit_logs WHERE action='auth.partner_login' AND actor_user_id=$1",
@@ -98,7 +125,9 @@ integration('partner session requires verified ICCN binding, active artist and o
       const partnerOperation = (await app.inject({ method: 'GET', url: '/openapi.json' })).json()
         .paths['/api/v1/auth/partner'].post;
       assert.equal(partnerOperation.operationId, 'partnerLogin');
-      assert.deepEqual(partnerOperation.requestBody.content['application/json'].schema.required, ['accessToken']);
+      assert.deepEqual(partnerOperation.requestBody.content['application/json'].schema.required, ['code','state']);
+      assert.equal((await app.inject({ method: 'GET', url: '/openapi.json' })).json()
+        .paths['/api/v1/auth/partner/start'].post.operationId, 'startPartnerLogin');
     } finally { await app.close(); }
   } finally { await database.close(); }
 });

@@ -31,7 +31,8 @@ export interface RateLimiter {
 
 export interface ApiDependencies {
   localAuth?: import('../local-auth/index.js').LocalAuthService;
-  partnerAuth?: { verify(token: string): Promise<Identity | null>; labelId: string };
+  partnerAuth?: { start(redirectUri: string): { authorizationUrl: string; transaction: string } | null;
+    exchange(input: { code: string; state: string; transaction: string }): Promise<Identity | null>; labelId: string };
   publicCatalog?: import('../public-catalog/index.js').PublicCatalogService;
   users?: UsersService;
   artists?: ArtistsService;
