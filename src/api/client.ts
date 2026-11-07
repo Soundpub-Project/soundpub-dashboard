@@ -28,6 +28,10 @@ export function setApiTokenProvider(provider: () => Promise<string | null>) {
   tokenProvider = provider;
 }
 
+export function getApiAccessToken() {
+  return tokenProvider();
+}
+
 export function setApiCsrfToken(token: string | null) {
   csrfToken = token;
 }

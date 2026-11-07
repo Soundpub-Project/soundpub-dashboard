@@ -29,6 +29,7 @@ import { createFinanceReconciliationService } from './reconciliation/index.js';
 import { createComposerRoyaltiesService } from './composer-royalties/index.js';
 import { createCopyrightRegistrationsService } from './copyright-registrations/index.js';
 import { createSharedRateLimiter } from './api/rate-limiter.js';
+import { createExportsService } from './exports/index.js';
 
 const config = loadConfig();
 const identityProvider = createConfiguredIdentityProvider(process.env);
@@ -81,6 +82,7 @@ const mediaStore = await createMediaObjectStore(pool, {
 });
 const media = createMediaService(pool, mediaStore);
 const auditSettings = createAuditSettingsService(pool);
+const exports = createExportsService(pool);
 const royaltyImportStore = await createRoyaltyImportObjectStore(pool, {
   environment: config.NODE_ENV === 'test' ? 'test' : 'development',
   endpoint: `${config.OBJECT_STORAGE_USE_SSL ? 'https' : 'http'}://${config.OBJECT_STORAGE_ENDPOINT}:${config.OBJECT_STORAGE_PORT}`,
@@ -106,7 +108,7 @@ const app = buildApp({
     environment: config.NODE_ENV, callbackSecret: config.WEBHOOK_MOCK_SECRET,
   }),
   submissions: createSubmissionService(pool, { media: createMediaReadinessAdapter(), payment: paymentSubmissionDependency, provider: new MockSubmissionProvider() }),
-  notifications: createNotificationsService(pool),
+  notifications: createNotificationsService(pool), exports,
   media,
   auditSettings,
   maintenance: { isEnabled: () => auditSettings.isMaintenanceEnabled() },

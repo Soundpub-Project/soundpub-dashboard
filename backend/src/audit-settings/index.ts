@@ -28,8 +28,8 @@ const actions = new Set(['profile.updated', 'user.suspended', 'user.status_chang
   'release.submitted', 'track.created', 'track.updated', 'track.deleted', 'notification.created', 'notification.updated',
   'notification.deleted', 'announcement.created', 'settings.updated', 'user_settings.updated',
   'media.upload_requested', 'media.finalized', 'media.deleted',
-  'royalty.file_upload_requested', 'royalty.file_uploaded']);
-const resources = new Set(['backend_user', 'artist', 'label', 'release', 'track', 'notification', 'announcement', 'settings', 'user_settings', 'storage_asset', 'media', 'royalty_import_session']);
+  'royalty.file_upload_requested', 'royalty.file_uploaded', 'data.exported']);
+const resources = new Set(['backend_user', 'artist', 'label', 'release', 'track', 'notification', 'announcement', 'settings', 'user_settings', 'storage_asset', 'media', 'royalty_import_session', 'data_export']);
 export function safeAudit(row: Record<string, unknown>) {
   return { id: row.id as string, actor_user_id: row.actor_user_id as string | null,
     action: actions.has(String(row.action)) ? String(row.action) : 'other',

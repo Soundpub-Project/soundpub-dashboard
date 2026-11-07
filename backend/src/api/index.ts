@@ -16,6 +16,7 @@ import { registerLocalAuthRoutes, sessionToken } from './local-auth.js';
 import { registerComposerRoyaltiesRoutes } from './composer-royalties.js';
 import { registerTakedownRoutes } from './takedowns.js';
 import { registerCopyrightRegistrationRoutes } from './copyright-registrations.js';
+import { registerExportRoutes } from './exports.js';
 
 export { ApiError } from './types.js';
 export type { ApiDependencies, Principal, RateLimiter } from './types.js';
@@ -31,7 +32,7 @@ const messages: Record<string, string> = {
   BAD_REQUEST: 'Invalid request', UNAUTHORIZED: 'Authentication required', FORBIDDEN: 'Access denied',
   NOT_FOUND: 'Resource not found', CONFLICT: 'Conflict', RATE_LIMITED: 'Too many requests',
   NOT_READY: 'Service unavailable', MAINTENANCE_MODE: 'Service unavailable', INTERNAL_ERROR: 'Internal server error',
-  SUBMISSION_BLOCKED: 'Submission prerequisites are not satisfied',
+  SUBMISSION_BLOCKED: 'Submission prerequisites are not satisfied', EXPORT_TOO_LARGE: 'Export exceeds safe size limit',
 };
 const developmentOrigins = new Set([
   'http://localhost:8181',
@@ -180,6 +181,7 @@ export function buildApp(deps: ApiDependencies) {
   if (deps.notifications) registerNotificationsRoutes(app, deps.notifications, authenticate, paths, errorSchema);
   if (deps.media) registerMediaRoutes(app, deps.media, authenticate, paths, errorSchema);
   if (deps.auditSettings) registerAuditSettingsRoutes(app, deps.auditSettings, authenticate, paths, errorSchema);
+  if (deps.exports) registerExportRoutes(app, deps.exports, authenticate, paths, errorSchema);
   registerTakedownRoutes(app, deps, authenticate, paths, errorSchema);
   registerCopyrightRegistrationRoutes(app, deps, authenticate, paths, errorSchema);
   if (deps.composerRoyalties) registerComposerRoyaltiesRoutes(app, deps.composerRoyalties, authenticate, paths, errorSchema);
@@ -288,10 +290,3 @@ export function buildApp(deps: ApiDependencies) {
   }));
   return app;
 }
-
-
-
-
-
-
-

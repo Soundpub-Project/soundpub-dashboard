@@ -209,10 +209,9 @@ function moduleAt(file, dependencies, globals = {}) {
   }
   assert(read('src/pages/MediaLibrary.tsx').includes("usesBackendDomain('storage') || usesBackendReleases()"));
   assert(/if \(usesBackendDomain\('notifications'\)\) \{\s+await notificationsApi\.announce/.test(read('src/components/notifications/AnnouncementDialog.tsx')));
-  assert(read('src/hooks/useExportCsv.ts').includes("if (usesBackendDomain('audit')) throw"));
-  assert(read('src/hooks/useExportCsv.ts').includes("if (usesBackendDomain('settings')) throw"));
-  assert(read('src/hooks/useExportCsv.ts').includes("if (usesBackendDomain('users')) throw"));
-  assert(read('src/hooks/useExportCsv.ts').includes("if (usesBackendDomain('artists')) throw"));
+  assert(read('src/hooks/useExportCsv.ts').includes('downloadBackendExport(table.id)'));
+  assert(!read('src/api/exports.ts').includes('supabase'));
+  assert(!read('src/hooks/useExportCsv.ts').includes('supabase'));
   assert(read('src/components/layout/DashboardLayout.tsx').includes("if (usesBackendDomain('users')) return;"));
   assert(read('src/App.tsx').includes("getPublicSettingsRows(['favicon'])"));
   assert(read('src/api/audit.ts').includes('detail:'));

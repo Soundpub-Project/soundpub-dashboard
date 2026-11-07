@@ -16,6 +16,7 @@ import type { PaymentsService } from '../payments/index.js';
 import type { FinanceReconciliationService } from '../reconciliation/index.js';
 import type { ComposerRoyaltiesService } from '../composer-royalties/index.js';
 import type { TakedownsService } from '../takedowns/index.js';
+import type { ExportsService } from '../exports/index.js';
 export interface Principal {
   id: string;
   roles: readonly Role[];
@@ -52,6 +53,7 @@ export interface ApiDependencies {
   financeReconciliation?: FinanceReconciliationService;
   composerRoyalties?: ComposerRoyaltiesService;
   takedowns?: TakedownsService;
+  exports?: ExportsService;
   auth: { authenticate(token: string): Promise<Principal | null> };
   readiness: { check(): Promise<boolean> };
   admin: {
@@ -76,9 +78,3 @@ export class ApiError extends Error {
     super(code);
   }
 }
-
-
-
-
-
-

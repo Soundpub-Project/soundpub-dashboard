@@ -22,9 +22,9 @@ export default function Export() {
                 <Table className="h-5 w-5 text-primary" />
                 <CardTitle className="text-lg">Export Data ke CSV</CardTitle>
               </div>
-              <Button onClick={exportAllTables} disabled={exporting !== null} className="gap-2">
+              <Button onClick={exportAllTables} disabled={exporting !== null} className="min-h-11 gap-2" aria-busy={exporting === 'all'}>
                 {exporting === 'all' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                Export Semua Table
+                Export Semua Dataset
               </Button>
             </div>
             <CardDescription>Export data dari database ke format CSV untuk backup atau analisis</CardDescription>
@@ -46,7 +46,8 @@ export default function Export() {
                   </div>
                 </div>
                 <CardDescription>{table.description}</CardDescription>
-                <Button size="sm" onClick={() => exportTable(table.id)} disabled={exporting !== null} className="w-full gap-2">
+                <Button size="sm" onClick={() => exportTable(table.id)} disabled={exporting !== null}
+                  className="min-h-11 w-full gap-2" aria-busy={exporting === table.id}>
                   {exporting === table.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                   Export CSV
                 </Button>
