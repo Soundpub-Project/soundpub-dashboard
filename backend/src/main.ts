@@ -23,7 +23,7 @@ import { createMediaObjectStore, createMediaReadinessAdapter, createMediaService
 import { createAuditSettingsService } from './audit-settings/index.js';
 import { createPublicCatalogService } from './public-catalog/index.js';
 import { createConfiguredIdentityProvider, createIdentityAuthenticator, OidcIdentityProvider } from './auth/providers.js';
-import { createPartnerOAuthService } from './auth/partner-oauth.js';
+import { createPartnerOAuthService, createPgPartnerOAuthReplayStore } from './auth/partner-oauth.js';
 import { createLocalAuthService } from './local-auth/index.js';
 import { createFinanceReconciliationService } from './reconciliation/index.js';
 import { createComposerRoyaltiesService } from './composer-royalties/index.js';
@@ -32,17 +32,21 @@ import { createSharedRateLimiter } from './api/rate-limiter.js';
 
 const config = loadConfig();
 const identityProvider = createConfiguredIdentityProvider(process.env);
+const pool = createPool({ connectionString: config.DATABASE_URL });
 const partnerOAuth = config.PARTNER_LABEL_ID && identityProvider.createAuthorizationUrl && identityProvider.exchangeAuthorizationCode
   ? createPartnerOAuthService({
       createAuthorizationUrl: (input, origins) => identityProvider.createAuthorizationUrl!(input, origins),
       exchangeAuthorizationCode: (input, origins) => identityProvider.exchangeAuthorizationCode!(input, origins),
-    }, { secret: config.AUTH_DELIVERY_SECRET, allowedRedirectOrigins: config.PARTNER_REDIRECT_ORIGINS })
+    }, { secret: config.AUTH_DELIVERY_SECRET, allowedRedirectOrigins: config.PARTNER_REDIRECT_ORIGINS,
+      replayStore: createPgPartnerOAuthReplayStore(pool) })
   : null;
 if (config.PARTNER_LABEL_ID && !partnerOAuth) throw new Error('Partner SSO requires an authorization-code OIDC provider');
-const pool = createPool({ connectionString: config.DATABASE_URL });
 const reconciliationPool = createPool({ connectionString: config.RECONCILIATION_DATABASE_URL });
 const migrated = await pool.query("SELECT to_regclass('soundpub.schema_migrations') AS name");
 if (!migrated.rows[0]?.name) throw new Error('Database migration required before API boot');
+if (partnerOAuth && !(await pool.query("SELECT to_regclass('soundpub.partner_oauth_replays') AS name")).rows[0]?.name) {
+  throw new Error('Partner OAuth replay migration required before API boot');
+}
 const releaseMigration = await pool.query(`SELECT to_regclass('soundpub.releases') AS releases,
   to_regclass('soundpub.tracks') AS tracks, to_regclass('soundpub.media_objects') AS media,
   to_regclass('soundpub.notifications') AS notifications,

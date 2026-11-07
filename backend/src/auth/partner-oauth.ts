@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import type { Pool } from 'pg';
 import type { Identity } from './index.js';
 
 type Transaction = { state: string; codeVerifier: string; redirectUri: string; createdAt: number };
@@ -8,6 +9,25 @@ export interface PartnerAuthorizationProvider {
     allowedRedirectOrigins: readonly string[]): string | null;
   exchangeAuthorizationCode(input: { code: string; redirectUri: string; codeVerifier: string },
     allowedRedirectOrigins: readonly string[]): Promise<Identity | null>;
+}
+
+export interface PartnerOAuthReplayStore {
+  claim(state: string, expiresAt: Date): Promise<boolean>;
+}
+
+export function createPgPartnerOAuthReplayStore(pool: Pool): PartnerOAuthReplayStore {
+  let nextCleanupAt = 0;
+  return { async claim(state, expiresAt) {
+    const now = Date.now();
+    if (now >= nextCleanupAt) {
+      nextCleanupAt = now + 60_000;
+      await pool.query('SELECT soundpub.cleanup_partner_oauth_replays()').catch(() => undefined);
+    }
+    const stateSha256 = createHash('sha256').update(state, 'ascii').digest('hex');
+    const result = await pool.query<{ claimed: boolean }>(
+      'SELECT soundpub.claim_partner_oauth_state($1,$2::timestamptz) AS claimed', [stateSha256, expiresAt]);
+    return result.rows[0]?.claimed === true;
+  } };
 }
 
 function encryptionKey(secret: string) {
@@ -48,10 +68,9 @@ function equalState(left: string, right: string) {
 }
 
 export function createPartnerOAuthService(provider: PartnerAuthorizationProvider, options: {
-  secret: string; allowedRedirectOrigins: readonly string[]; now?: () => number;
+  secret: string; allowedRedirectOrigins: readonly string[]; replayStore: PartnerOAuthReplayStore; now?: () => number;
 }) {
   const now = options.now ?? Date.now;
-  const consumedStates = new Map<string, number>();
   encryptionKey(options.secret);
   return {
     start(redirectUri: string) {
@@ -66,9 +85,7 @@ export function createPartnerOAuthService(provider: PartnerAuthorizationProvider
       const transaction = decryptTransaction(input.transaction, options.secret);
       if (!transaction || now() - transaction.createdAt < 0 || now() - transaction.createdAt > 10 * 60 * 1000 ||
           !equalState(transaction.state, input.state)) return null;
-      for (const [state, expiresAt] of consumedStates) if (expiresAt <= now()) consumedStates.delete(state);
-      if (consumedStates.has(transaction.state)) return null;
-      consumedStates.set(transaction.state, transaction.createdAt + 10 * 60 * 1000);
+      if (!await options.replayStore.claim(transaction.state, new Date(transaction.createdAt + 10 * 60 * 1000))) return null;
       return provider.exchangeAuthorizationCode({ code: input.code, redirectUri: transaction.redirectUri,
         codeVerifier: transaction.codeVerifier }, options.allowedRedirectOrigins);
     },

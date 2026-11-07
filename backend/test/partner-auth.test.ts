@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { OidcIdentityProvider } from '../src/auth/providers.js';
-import { createPartnerOAuthService } from '../src/auth/partner-oauth.js';
+import { createPartnerOAuthService, createPgPartnerOAuthReplayStore } from '../src/auth/partner-oauth.js';
 import test from 'node:test';
 import { buildApp } from '../src/api/index.js';
 import { createLocalAuthService } from '../src/local-auth/index.js';
@@ -66,7 +66,8 @@ integration('partner session requires verified ICCN binding, active artist and o
           : accessToken;
         return provider.verifyAccessToken(candidate);
       },
-    }, { secret: 'synthetic-partner-transaction-secret-32-chars', allowedRedirectOrigins: ['http://127.0.0.1:8281'] });
+    }, { secret: 'synthetic-partner-transaction-secret-32-chars', allowedRedirectOrigins: ['http://127.0.0.1:8281'],
+      replayStore: createPgPartnerOAuthReplayStore(runtime) });
     const app = buildApp({ localAuth, partnerAuth: { labelId, ...partnerAuth }, auth: { authenticate: async () => null },
       readiness: { check: async () => true }, rateLimiter: { consume: async () => ({ allowed: true }) },
       admin: { suspendUser: async () => {} }, webhooks: { receive: async () => false } });

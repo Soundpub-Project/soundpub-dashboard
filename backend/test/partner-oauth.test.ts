@@ -5,6 +5,7 @@ import { createPartnerOAuthService } from '../src/auth/partner-oauth.js';
 test('partner OAuth transaction binds browser state, PKCE, redirect, expiry and replay', async () => {
   let now = 1_800_000_000_000;
   const exchanges: Array<{ code: string; redirectUri: string; codeVerifier: string }> = [];
+  const consumed = new Set<string>();
   const service = createPartnerOAuthService({
     createAuthorizationUrl(input, origins) {
       const redirect = new URL(input.redirectUri);
@@ -19,7 +20,8 @@ test('partner OAuth transaction binds browser state, PKCE, redirect, expiry and 
       return { issuer: 'https://sso.example.test/realms/partner', subject: 'partner-user' };
     },
   }, { secret: 'synthetic-partner-transaction-secret-32-chars',
-    allowedRedirectOrigins: ['http://127.0.0.1:8281'], now: () => now });
+    allowedRedirectOrigins: ['http://127.0.0.1:8281'], now: () => now,
+    replayStore: { async claim(state) { if (consumed.has(state)) return false; consumed.add(state); return true; } } });
 
   assert.equal(service.start('http://example.invalid/auth'), null);
   const started = service.start('http://127.0.0.1:8281/auth');
