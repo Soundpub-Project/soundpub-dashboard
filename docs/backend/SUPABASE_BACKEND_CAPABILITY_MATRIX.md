@@ -1,6 +1,6 @@
 # Supabase to Backend Capability Matrix
 
-Snapshot: 2026-11-07. Baseline commit: `eb028c4`.
+Snapshot: 2026-11-07. Baseline commit: `503bce2`.
 
 Dokumen ini adalah evidence tracker Phase 0. Status berubah hanya setelah source, contract, dan test evidence tersedia.
 
@@ -11,7 +11,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Capability | Supabase reference | Backend target/current | Frontend state | Status | Next evidence/work |
 | --- | --- | --- | --- | --- | --- |
 | Login utama | Supabase Auth session | local auth tersedia; generic bearer provider production belum tersedia | Backend auth aktif pada dev; browser `/auth` terbukti tanpa Supabase egress | PARTIAL | Login bercredential + role-matrix browser dan production local-session verification |
-| Partner SSO | `sso-login` | Backend-issued authorization transaction binds state, PKCE verifier, exact redirect, 10-minute expiry and one-time exchange; OIDC validates RS256, issuer, audience, expiry, nbf, azp/client roles and JWKS rotation | Backend-mode frontend uses `/partner/start` then exchanges code+state for local cookie; dev feature flag remains off and produces zero realm/Supabase egress | PARTIAL | Admin onboarding/binding, real realm/client browser E2E, multi-instance replay store and realm logout evidence |
+| Partner SSO | `sso-login` | Backend-issued authorization transaction binds state, PKCE verifier, exact redirect, 10-minute expiry and one-time exchange; OIDC validates RS256, issuer, audience, expiry, nbf, azp/client roles and JWKS rotation; superadmin explicitly manages verified ICCN subject bindings for eligible existing artists | Backend-mode frontend uses `/partner/start` then exchanges code+state for local cookie; superadmin ICCN manager handles bind, reverify and exact-subject unbind; dev feature flag remains off and produces zero realm/Supabase egress | PARTIAL | Real realm/client browser E2E, multi-instance replay store, realm logout evidence and production duplicate-binding preflight |
 | Create user | `create-user` | `/api/v1/admin/users` | Backend adapter tersedia | IMPLEMENTED | Role matrix compatibility |
 | Update role | `update-user-role` | admin user role endpoint | Backend adapter tersedia | IMPLEMENTED | Superadmin hierarchy regression |
 | Update status | `update-user-status` | admin user status endpoint | Backend adapter tersedia | IMPLEMENTED | Suspension/session invalidation parity |
@@ -184,6 +184,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 - 2026-11-06: Shared PostgreSQL rate limiter replaces process-local counters. Two independent instances atomically share auth request budget; expired windows reset and clean up; raw IP is never stored as key. Backend Docker-enabled suite: 398 tests, 392 pass, 0 fail, 6 skipped. Frontend contracts, TypeScript, build, backend build, isolation scan, and Compose config pass.
 - 2026-11-06: Auth delivery envelope carries key ID; worker selects active/previous key only by exact ID, and legacy no-ID envelope uses `legacy` key. Verified lifecycle tokens and worker redaction remain compatible. Docker-enabled backend suite: 399 tests, 393 pass, 0 fail, 6 skipped. No secret rotation was performed on dev deployment; email provider remains mock.
 - 2026-11-07: Partner SSO browser contract moved to backend-issued authorization-code+PKCE transactions. State, verifier, redirect and timestamp are AES-GCM protected in an HttpOnly transaction cookie; callback consumes code+state once, clears callback URL/cookie, verifies Keycloak access token, then creates only a local session for an existing verified ICCN binding. OIDC JSON responses are capped at 64 KiB. Full Docker suite: 403 tests, 397 pass, 0 fail, 6 skipped. Frontend contracts, TypeScript, production build, isolated dev rebuild and browser egress pass; `PARTNER_LABEL_ID` and feature flag remain disabled in dev.
+- 2026-11-07: Superadmin ICCN onboarding now binds only an exact configured issuer+subject to an active, verified, credential-free artist in the configured partner roster. It never auto-binds email or creates users. Legacy nullable bindings can be explicitly reverified; old-issuer bindings remain visible and can be removed; unbind revokes target sessions and clears `sso_provider`. Subject conflicts, stale confirmation, unverified roles, foreign roster, ordinary admin mutation and concurrent duplicate binds fail closed. Full Docker suite: 405 tests, 399 pass, 0 fail, 6 skipped. Dev migration `0059` applied only to `dashboard-sounpub-dev`; health, build and `/auth` egress (284 requests, zero forbidden egress) pass.
 
 ## Remaining blockers
 
@@ -192,5 +193,5 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 3. Dedicated aggregate track endpoint remains optional; generic scoped report already supports `track_id`.
 5. Payment provider, payout settlement provider, submission provider, and notification delivery remain partial or mock-oriented.
 6. Royalty upload is cut over when backend royalty/release domains are enabled, but frontend inventory still contains about 368 Supabase call chains in other domains; root production build does not enable backend domains.
-7. Keycloak authorization-code+PKCE adapter and frontend handoff are implemented but disabled by default; explicit ICCN onboarding/binding, production realm/client configuration, multi-instance replay storage and real browser E2E remain.
+7. Keycloak authorization-code+PKCE adapter, frontend handoff and explicit superadmin ICCN binding are implemented but disabled by default; production realm/client configuration, duplicate-binding preflight, multi-instance replay storage and real browser E2E remain.
 8. Copyright royalty, takedown, and copyright registration are backend-owned in dev. Production payment/stamping providers and several release actions remain partial or unavailable.

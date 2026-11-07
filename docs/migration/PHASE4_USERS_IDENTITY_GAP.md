@@ -22,6 +22,7 @@ Evidence date: 2026-11-07 Asia/Bangkok
 - Backend-mode account creation uses `/api/v1/admin/users`; legacy non-backend builds still retain Edge Function paths pending final frontend inventory removal.
 - Email verification and forgotten-password recovery are backend-owned; real email provider delivery remains deferred.
 - Keycloak partner login uses backend-issued state/PKCE transactions and verified pre-bound ICCN identities. Dev activation remains disabled pending realm/client evidence.
+- Superadmin can explicitly inspect, bind, reverify, and unbind ICCN identities for eligible existing artists. Ordinary admin can inspect eligibility but cannot assign login identity.
 - User deletion has a backend lifecycle path; impersonation remains partial and legacy-dependent.
 - Some user screens still read deletion requests, composer fields, avatars, and artist synchronization directly from Supabase.
 
@@ -37,13 +38,13 @@ Supabase Auth is allowed only as an isolated temporary migration bridge while st
 
 ## Safe next implementation
 
-1. Add explicit admin workflow to bind a verified ICCN `(issuer, subject)` to an eligible existing artist under configured partner label.
+1. Run read-only production preflight for duplicate ICCN bindings before migration `0059`; do not deduplicate automatically.
 2. Add shared one-time OAuth transaction storage before multi-instance/public activation.
 3. Validate configured realm/client, callback and logout against a non-production Keycloak environment.
 4. Migrate eligible users into local credential enrollment without copying Supabase password hashes or sessions.
 5. Replace remaining user Edge Functions and direct Supabase calls.
 
-Until then, keep `VITE_PARTNER_SSO_ENABLED=false` and `PARTNER_LABEL_ID` unset in `dashboard-sounpub-dev`. Do not add real realm credentials until onboarding, shared replay storage, and sandbox browser evidence exist.
+Until then, keep `VITE_PARTNER_SSO_ENABLED=false` and `PARTNER_LABEL_ID` unset in `dashboard-sounpub-dev`. Do not add real realm credentials until shared replay storage and sandbox browser evidence exist.
 
 ## Implemented foundation
 
@@ -53,4 +54,7 @@ Until then, keep `VITE_PARTNER_SSO_ENABLED=false` and `PARTNER_LABEL_ID` unset i
 - Frontend API requests include credentials and in-memory CSRF tokens; Vite development proxy targets the isolated backend on port `3300`.
 - Database-backed auth tests cover generic login failure, five-attempt lockout, cookie attributes, CSRF rotation, protected mutation denial, password change, logout, revocation, and inactive/suspended denial.
 - Administrator password reset reuses current user hierarchy checks, revokes target sessions, and writes an audit event.
+- Migration `0059_iccn_identity_bindings.sql` enforces one ICCN binding per user, grants only required identity/profile columns, and aborts with an explicit diagnostic when legacy duplicates exist.
+- ICCN mutation is superadmin-only and rechecks current database roles inside the transaction. Eligibility requires active user, exactly one verified `artist` role, verified partner roster, active verified label/whitelabel owner, matching parent label, and no local credential.
+- Binding stores audit provenance and only a SHA-256 subject digest in audit metadata. Unbind requires exact subject confirmation and revokes all target sessions.
 - Migration is applied only to `dashboard-sounpub-dev`; no production database or Docker resource was contacted.
