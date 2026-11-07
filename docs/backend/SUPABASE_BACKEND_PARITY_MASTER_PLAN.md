@@ -673,4 +673,12 @@ Backend parity selesai hanya jika:
 - Binding lama dengan `verified_at=NULL` tampil sebagai belum verified dan dapat direverify secara eksplisit. Binding issuer lama tetap terlihat dan dapat dilepas tanpa silent issuer rewrite. Unbind mencabut seluruh sesi target, membersihkan `profiles.sso_provider`, dan audit hanya menyimpan SHA-256 subject.
 - Migration `0059_iccn_identity_bindings.sql` memberi partial unique one-ICCN-binding-per-user dan column-level runtime grants. Migration fail-fast dengan diagnostic jika data legacy memiliki multiple ICCN binding per user; production wajib read-only preflight sebelum deploy.
 - Test mencakup subject uniqueness, idempotent bind, concurrent duplicate bind, legacy nullable reverify, old-issuer removal, verified-role requirement, foreign roster, ordinary-admin denial, login activation, session revocation, OpenAPI dan malformed input. Full Docker suite: 405 tests, 399 pass, 0 fail, 6 skipped. Frontend contracts, TypeScript, production build, dev migration, health dan browser `/auth` egress lulus.
-- Dev tetap `VITE_PARTNER_SSO_ENABLED=false` dan `PARTNER_LABEL_ID` kosong. Gap tersisa: realm/client sandbox nyata, shared replay storage multi-instance, realm logout semantics, production duplicate preflight, dan controlled activation plan.
+- Dev tetap `VITE_PARTNER_SSO_ENABLED=false` dan `PARTNER_LABEL_ID` kosong. Gap tersisa: realm/client sandbox nyata, realm logout semantics, production duplicate preflight, dan controlled activation plan.
+
+## 34. Shared partner OAuth replay checkpoint
+
+- Migration `0060_partner_oauth_replays.sql` mengganti replay map per-process dengan claim PostgreSQL. Tabel hanya menyimpan SHA-256 state, expiry, dan timestamp; raw state, code, verifier, token, issuer, subject dan redirect tidak disimpan.
+- Claim dijalankan melalui `SECURITY DEFINER` function dengan search path tetap. Runtime hanya mendapat `EXECUTE`, tanpa `SELECT/INSERT/UPDATE/DELETE` langsung. Cleanup expiry memakai function terpisah dan best-effort sehingga kegagalan cleanup tidak melewati atau memblokir claim utama.
+- Dua service instance yang menerima callback sama secara concurrent menghasilkan tepat satu claim dan satu provider exchange. Startup menolak aktivasi partner SSO jika migration replay belum tersedia.
+- Full Docker suite: 406 tests, 400 pass, 0 fail, 6 skipped. Migration `0060` diterapkan hanya ke `dashboard-sounpub-dev`; backend/frontend/worker/PostgreSQL/storage sehat pada port dev dan browser `/auth` tetap 284 requests dengan zero forbidden egress.
+- Sisa aktivasi partner: realm/client sandbox nyata, callback+logout browser E2E, production ICCN duplicate preflight, secret/config rollout, dan rollback/stop conditions. Production Docker/port `8181` belum disentuh.

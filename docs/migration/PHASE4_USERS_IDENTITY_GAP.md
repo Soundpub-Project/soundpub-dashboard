@@ -39,12 +39,11 @@ Supabase Auth is allowed only as an isolated temporary migration bridge while st
 ## Safe next implementation
 
 1. Run read-only production preflight for duplicate ICCN bindings before migration `0059`; do not deduplicate automatically.
-2. Add shared one-time OAuth transaction storage before multi-instance/public activation.
-3. Validate configured realm/client, callback and logout against a non-production Keycloak environment.
-4. Migrate eligible users into local credential enrollment without copying Supabase password hashes or sessions.
-5. Replace remaining user Edge Functions and direct Supabase calls.
+2. Validate configured realm/client, callback and logout against a non-production Keycloak environment.
+3. Migrate eligible users into local credential enrollment without copying Supabase password hashes or sessions.
+4. Replace remaining user Edge Functions and direct Supabase calls.
 
-Until then, keep `VITE_PARTNER_SSO_ENABLED=false` and `PARTNER_LABEL_ID` unset in `dashboard-sounpub-dev`. Do not add real realm credentials until shared replay storage and sandbox browser evidence exist.
+Until then, keep `VITE_PARTNER_SSO_ENABLED=false` and `PARTNER_LABEL_ID` unset in `dashboard-sounpub-dev`. Do not add real realm credentials until sandbox browser evidence exists.
 
 ## Implemented foundation
 
@@ -57,4 +56,5 @@ Until then, keep `VITE_PARTNER_SSO_ENABLED=false` and `PARTNER_LABEL_ID` unset i
 - Migration `0059_iccn_identity_bindings.sql` enforces one ICCN binding per user, grants only required identity/profile columns, and aborts with an explicit diagnostic when legacy duplicates exist.
 - ICCN mutation is superadmin-only and rechecks current database roles inside the transaction. Eligibility requires active user, exactly one verified `artist` role, verified partner roster, active verified label/whitelabel owner, matching parent label, and no local credential.
 - Binding stores audit provenance and only a SHA-256 subject digest in audit metadata. Unbind requires exact subject confirmation and revokes all target sessions.
+- Migration `0060_partner_oauth_replays.sql` stores only state SHA-256+expiry and exposes narrow claim/cleanup functions. Concurrent callbacks across instances have one atomic winner; runtime cannot read or mutate replay rows directly.
 - Migration is applied only to `dashboard-sounpub-dev`; no production database or Docker resource was contacted.
