@@ -93,7 +93,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 
 | Capability | Supabase reference | Backend target/current | Frontend state | Status | Next evidence/work |
 | --- | --- | --- | --- | --- | --- |
-| Net revenue source | CSV `net_revenue` | gross/deduction/net invariant | Kontrak berbeda | PARTIAL | Map source amount semantics |
+| Net revenue source | CSV `net_revenue` | `net_revenue` adalah basis bruto alokasi; SoundPub 9% dan artist 70% dibulatkan per baris, label menerima sisa; backend menyimpan gross=net, deduction=0, net=net_revenue pada adapter legacy | Backend preview menampilkan split server | VERIFIED | Revalidasi jika format provider baru menambah gross/deduction tersendiri |
 | SoundPub share | 9% dari `net_revenue`, dibulatkan per row ke 2 desimal | immutable SOUNDPUB allocation, excluded from user wallet | Backend preview displays server total | VERIFIED | Add accounting destination/reporting for retained share |
 | Label share | Sisa row setelah SoundPub 9% dan artist 70%; efektif sekitar 21% | immutable LABEL allocation; ordinary label and Label Custom PIC verified | Backend preview displays server total | VERIFIED | Add contract-specific policy variants later |
 | Artist share | 70% dari `net_revenue`, dibulatkan per row ke 2 desimal | immutable ARTIST allocation; managed artist aggregates to PIC | Backend preview displays server total | VERIFIED | Add contract-specific policy variants later |
