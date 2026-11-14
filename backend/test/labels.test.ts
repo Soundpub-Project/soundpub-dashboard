@@ -82,6 +82,7 @@ function setup() {
           return [{ membershipId: row.id, artistId: user.id, labelId: row.label_id, name: row.name, fullName: profile.full_name, status: user.status }];
         }).sort((a, b) => a.membershipId.localeCompare(b.membershipId)).slice(0, Number(values[4])));
       }
+      if (sql.includes('FROM soundpub.releases WHERE artist_user_id')) return result([{ releases: 0, tracks: 0, royalties: 0 }]);
       if (sql.startsWith('UPDATE soundpub.profiles SET parent_label_id')) {
         assert.match(sql, /parent_label_id IS NOT DISTINCT FROM \$3::uuid AND parent_label_reference_id IS NULL/);
         const profile = state.profiles.find(row => row.id === values[0] && row.parent_label_id === values[2] && row.parent_label_reference_id === null);
@@ -230,7 +231,7 @@ test('assign creates UUID membership and parent atomically; same-name legacy row
 test('transfer preserves stable membership ID, moves operational visibility, checks expected parent and audits together', async () => {
   const f = setup();
   const result = await f.service.transfer(f.principal(admin), artist, transfer, 'transfer');
-  assert.deepEqual(result, { artistId: artist, parentLabelId: otherLabel, membershipId, changed: true });
+  assert.deepEqual(result, { artistId: artist, parentLabelId: otherLabel, membershipId, changed: true, affected: { releases: 0, tracks: 0, royalties: 0 } });
   assert.equal(f.profile(artist).parent_label_id, otherLabel);
   assert.equal(f.state.memberships[0]?.label_id, otherLabel);
   assert.equal((await f.service.roster(f.principal(label), label)).items.length, 0);
@@ -242,7 +243,8 @@ test('transfer preserves stable membership ID, moves operational visibility, che
   const unchanged = await f.service.transfer(f.principal(admin), artist, { ...transfer, expectedParentLabelId: otherLabel }, 'no-op');
   assert.equal(unchanged.changed, false);
   assert.equal(f.state.audits.length, 1);
-  assert.ok(f.queries.every(sql => !/soundpub\.(?:releases|tracks|royalties)/.test(sql)));
+  assert.equal(f.queries.filter(sql => sql.includes('FROM soundpub.releases WHERE artist_user_id')).length, 1);
+  assert.ok(f.queries.every(sql => !/^(?:UPDATE|DELETE) soundpub\.(?:releases|tracks|royalty_import_entries)/.test(sql)));
 });
 
 test('transfer rejects default-only or historical parents, invalid destinations and protected targets', async () => {

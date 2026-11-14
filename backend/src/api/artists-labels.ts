@@ -15,7 +15,7 @@ const rosterItem = z.strictObject({ membershipId: z.uuid(), artistId: z.uuid(), 
   email: z.string().nullable(), phone: z.string().nullable(), address: z.string().nullable(),
   passwordSet: z.boolean(), createdAt: z.string() });
 const parent = z.strictObject({ artistId: z.uuid(), parentLabelId: z.uuid().nullable(), membershipId: z.uuid().nullable() });
-const change = parent.extend({ changed: z.boolean() });
+const change = parent.extend({ changed: z.boolean(), affected: z.strictObject({ releases: z.number().int().nonnegative(), tracks: z.number().int().nonnegative(), royalties: z.number().int().nonnegative() }).optional() });
 const labelDto = z.strictObject({ id: z.uuid(), ownerId: z.uuid(), full_name: z.string(),
   logo_url: z.string().nullable(), logo_url_light: z.string().nullable(), logo_url_dark: z.string().nullable(),
   status: z.enum(['active', 'inactive', 'suspended']), roles: z.array(z.enum(['label', 'whitelabel'])) });

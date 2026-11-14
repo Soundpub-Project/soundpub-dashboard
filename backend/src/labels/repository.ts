@@ -48,6 +48,15 @@ export function labelsRepository(db: PoolClient) {
             AND r.role = 'artist' AND r.tenant_id IS NULL AND r.verified_at IS NOT NULL)
         ORDER BY a.id LIMIT $5`, [labelId, after, query.status ?? null, query.search ?? null, limit + 1])).rows;
     },
+    async transferImpact(artistId: string) {
+      const result = await db.query<{ releases: number; tracks: number; royalties: number }>(`SELECT
+        (SELECT count(*)::integer FROM soundpub.releases WHERE artist_user_id=$1) AS releases,
+        (SELECT count(*)::integer FROM soundpub.tracks WHERE artist_user_id=$1) AS tracks,
+        (SELECT count(*)::integer FROM soundpub.royalty_import_entries entry
+          JOIN soundpub.releases release ON release.id=entry.release_id
+          WHERE release.artist_user_id=$1) AS royalties`, [artistId]);
+      return result.rows[0] ?? { releases: 0, tracks: 0, royalties: 0 };
+    },
     async setParent(artistId: string, labelId: string | null, expected: string | null) {
       const result = await db.query(`UPDATE soundpub.profiles SET parent_label_id = $2, updated_at = now()
         WHERE id = $1 AND parent_label_id IS NOT DISTINCT FROM $3::uuid AND parent_label_reference_id IS NULL`,

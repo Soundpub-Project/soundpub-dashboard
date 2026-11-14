@@ -32,7 +32,7 @@ Status: `UNMAPPED`, `MAPPED`, `PARTIAL`, `IMPLEMENTED`, `VERIFIED`, `DEFERRED`, 
 | Managed artist | legacy managed artist conventions | label-custom unit artist | Backend UI tersedia | VERIFIED | Pertahankan no-login invariant |
 | Label Custom PIC | Tidak ada role canonical lama | label-custom module | Backend UI tersedia | VERIFIED | Compatibility hanya untuk shared resource behavior |
 | Parent assignment | `create-user`, whitelabel function | server-derived parent scope | Backend guard tersedia | IMPLEMENTED | Cross-tenant negative matrix |
-| Transfer artist | `transfer-artist-label` | ownership workflow | Belum dinyatakan parity | PARTIAL | Historical ownership contract dan tests |
+| Transfer artist | `transfer-artist-label` | ownership workflow dengan affected counts (release/track/royalty), immutable financial ownership, dan audit metadata | Backend mengembalikan affected counts dan audit | VERIFIED | Browser role confirmation dan production status/count comparison |
 | Remove artist | `remove-artist-from-label` | Shared transaction guard blocks submitted/active release states (including legacy name-only rows); historical royalty/release ownership remains immutable | Both backend detach routes use same guard | IMPLEMENTED | Browser role confirmation and production status mapping |
 | Orphan audit/repair | orphan RPCs | orphan repair service/CLI | Backend page tersedia | IMPLEMENTED | Read-only plan and apply authorization evidence |
 

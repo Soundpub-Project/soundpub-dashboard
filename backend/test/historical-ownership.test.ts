@@ -11,10 +11,36 @@ test('Phase 3B populated historical ownership on owned disposable PostgreSQL', {
     await suite.test('transfer preserves every completed release and royalty field and changes current authority', async () => {
       const fixture = await historicalFixture(owner, runtime);
       const before = await fixture.current();
-      await labels.transfer(fixture.admin, fixture.artist.id, {
+      const catalogArtistId = (await owner.query('SELECT id FROM soundpub.artists WHERE artist_user_id=$1', [fixture.artist.id])).rows[0].id as string;
+      const releaseId = (await owner.query(`INSERT INTO soundpub.releases(label_id,artist_id,artist_user_id,created_by,title,artist_name)
+        VALUES($1,$2,$3,$4,'Synthetic transfer release','Same synthetic display name') RETURNING id`,
+      [fixture.labelA, catalogArtistId, fixture.artist.id, fixture.admin.id])).rows[0].id as string;
+      const trackId = (await owner.query(`INSERT INTO soundpub.tracks(release_id,title,artist_name,position)
+        VALUES($1,'Synthetic transfer track','Same synthetic display name',1) RETURNING id`, [releaseId])).rows[0].id as string;
+      const batchId = randomUUID();
+      const transaction = await owner.connect();
+      try {
+        await transaction.query('BEGIN');
+        await transaction.query(`INSERT INTO soundpub.royalty_import_batches
+          (id,source,period,currency,checksum,filename,uploader_id,row_count,total_amount,validation_result)
+          VALUES($1,'synthetic-transfer','2024-02','IDR',$2,'synthetic-transfer.csv',$3,1,100.00,'{}')`,
+        [batchId, randomUUID().replaceAll('-', '').padEnd(64, '0'), fixture.admin.id]);
+        const entryId = (await transaction.query(`INSERT INTO soundpub.royalty_import_entries
+          (batch_id,source,period,source_row_id,beneficiary_id,release_id,track_id,gross_amount,deduction_amount,net_amount,artist_id,financial_owner_user_id,label_owner_user_id,calculation_policy_code)
+          VALUES($1,'synthetic-transfer','2024-02','transfer-row-1',$2,$3,$4,100.00,0.00,100.00,$5,$2,$6,'SYNTHETIC_TRANSFER_V1') RETURNING id`,
+        [batchId, fixture.artist.id, releaseId, trackId, catalogArtistId, fixture.labelA])).rows[0].id as string;
+        await transaction.query(`INSERT INTO soundpub.royalty_import_allocations(entry_id,component,owner_id,amount,policy_code)
+          VALUES($1,'LEGACY_OWNER',$2,100.00,'SYNTHETIC_TRANSFER_V1')`, [entryId, fixture.artist.id]);
+        await transaction.query('COMMIT');
+      } catch (error) {
+        await transaction.query('ROLLBACK');
+        throw error;
+      } finally { transaction.release(); }
+      const result = await labels.transfer(fixture.admin, fixture.artist.id, {
         labelId: fixture.labelB, expectedParentLabelId: fixture.labelA,
         confirmationPhrase: 'PINDAH LABEL', royaltyTransferMode: 'keep_old_label',
       }, randomUUID());
+      assert.deepEqual(result.affected, { releases: 1, tracks: 1, royalties: 1 });
       assert.deepEqual(await fixture.current(), {
         parent_label_id: fixture.labelB, label_id: fixture.labelB, membership_id: before.membership_id,
       });
@@ -27,6 +53,9 @@ test('Phase 3B populated historical ownership on owned disposable PostgreSQL', {
       assert.equal(audit[0].metadata.previousParentLabelId, fixture.labelA);
       assert.equal(audit[0].metadata.parentLabelId, fixture.labelB);
       assert.equal(audit[0].metadata.royaltyTransferMode, 'keep_old_label');
+      assert.deepEqual(audit[0].metadata.affected, { releases: 1, tracks: 1, royalties: 1 });
+      assert.equal(audit[0].metadata.historicalOwnership, 'kept');
+      assert.equal((await owner.query('SELECT label_id,artist_user_id FROM soundpub.releases WHERE id=$1', [releaseId])).rows[0].label_id, fixture.labelA);
     });
 
     for (const path of ['labels.remove', 'artists.removeFromLabel'] as const) {

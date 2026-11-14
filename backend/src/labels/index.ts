@@ -81,6 +81,7 @@ export function labelsInTransaction(db: PoolClient, options: LabelsOptions = {})
     if (operation === 'remove') {
       if (options.assertCanRemove) await options.assertCanRemove(db, artistId);
     }
+    const affected = operation === 'transfer' ? await repo.transferImpact(artistId) : null;
     if (!await repo.setParent(artistId, labelId, expected)) throw new ApiError(409, 'CONFLICT');
     let membershipId = membership?.id ?? null;
     if (labelId === null) {
@@ -90,8 +91,9 @@ export function labelsInTransaction(db: PoolClient, options: LabelsOptions = {})
     else membershipId = await repo.assign(artistId, labelId, artist.artist_name);
     await users.audit(current.id, artistId, requestId, `label.artist_${operation === 'assign' ? 'assigned' : operation === 'transfer' ? 'transferred' : 'removed'}`, {
       previousParentLabelId: expected, parentLabelId: labelId, membershipId, royaltyTransferMode: 'keep_old_label',
+      ...(affected ? { affected, historicalOwnership: 'kept', note: 'Historical release/track/royalty ownership was kept unchanged.' } : {}),
     });
-    return { artistId, parentLabelId: labelId, membershipId, changed: true };
+    return { artistId, parentLabelId: labelId, membershipId, changed: true, ...(affected ? { affected } : {}) };
   }
 
   return {

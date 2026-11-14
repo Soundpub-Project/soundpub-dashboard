@@ -4,7 +4,7 @@ export interface RosterItem {
   status: 'active' | 'inactive' | 'suspended';
   email: string | null; phone: string | null; address: string | null; passwordSet: boolean; createdAt: string;
 }
-export interface ArtistParent { artistId: string; parentLabelId: string | null; membershipId: string | null }
+export interface ArtistParent { artistId: string; parentLabelId: string | null; membershipId: string | null; affected?: { releases: number; tracks: number; royalties: number } }
 export interface BackendLabel {
   id: string; ownerId: string; full_name: string; status: 'active' | 'inactive' | 'suspended';
   logo_url: string | null; logo_url_light: string | null; logo_url_dark: string | null;
