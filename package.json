@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
-    "test:contracts": "node src/lib/file-checksum.test.cjs && node src/components/finance/backend-mode.test.cjs && node src/api/copyright-registrations.contract.test.cjs && node src/api/copyright-summary.contract.test.cjs && node src/api/releases.contract.test.cjs && node src/api/auth-lifecycle.contract.test.cjs && node src/components/users/iccn-identity.contract.test.cjs && node src/api/zod-v4.contract.test.mjs && node src/api/exports.contract.test.cjs",
+    "test:contracts": "node src/lib/file-checksum.test.cjs && node src/components/finance/backend-mode.test.cjs && node src/api/copyright-registrations.contract.test.cjs && node src/api/copyright-summary.contract.test.cjs && node src/api/releases.contract.test.cjs && node src/api/auth-lifecycle.contract.test.cjs && node src/components/users/iccn-identity.contract.test.cjs && node src/api/zod-v4.contract.test.mjs && node src/api/exports.contract.test.cjs && node src/api/impersonation.contract.test.cjs",
     "test:egress": "node scripts/backend-egress-browser.mjs",
     "lint": "eslint .",
     "preview": "vite preview"

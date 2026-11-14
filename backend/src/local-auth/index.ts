@@ -11,15 +11,21 @@ const loginInput = z.strictObject({ email: z.email().max(320).transform(value =>
   password: z.string().min(1).max(1024) });
 const passwordInput = z.strictObject({ currentPassword: z.string().min(1).max(1024),
   newPassword: z.string().min(12).max(1024) });
+const impersonationInput = z.strictObject({ targetUserId: z.uuid(), reason: z.string().trim().min(10).max(500),
+  currentPassword: z.string().min(1).max(1024) });
 const dummyHash = 'scrypt$v=1$ln=17,r=8,p=1$BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc$wWuwD_X40CaPDItW91LQOEHdyVpjIQ_MT0Rm6y-KTMFAq4x8JFWt_M4peXBvUkvjd-ibidcfSA3liG3Ky0sb7Q';
 const absoluteSessionMs = 6 * 60 * 60 * 1000;
+const impersonationSessionMs = 15 * 60 * 1000;
 const maxFailures = 5;
 const lockMs = 15 * 60 * 1000;
 
 type CredentialRow = { user_id: string; password_hash: string; failed_attempts: number; locked_until: Date | null;
   status: Principal['status'] };
 type SessionRow = { id: string; user_id: string; status: Principal['status']; roles: Role[]; csrf_sha256: Buffer;
-  expires_at: Date };
+  expires_at: Date; impersonation_id: string | null; actor_user_id: string | null; target_user_id: string | null;
+  impersonation_reason: string | null; impersonation_expires_at: Date | null };
+export type ImpersonationMetadata = { active: true; actorUserId: string; targetUserId: string; reason: string;
+  expiresAt: string };
 
 function parseLogin(input: unknown) {
   const result = loginInput.safeParse(input);
@@ -32,6 +38,12 @@ async function roles(db: PoolClient, userId: string) {
 }
 function principal(row: SessionRow): Principal {
   return { id: row.user_id, status: row.status, roles: row.roles };
+}
+function impersonation(row: SessionRow): ImpersonationMetadata | null {
+  return row.impersonation_id && row.actor_user_id && row.target_user_id && row.impersonation_reason
+    && row.impersonation_expires_at ? { active: true, actorUserId: row.actor_user_id,
+      targetUserId: row.target_user_id, reason: row.impersonation_reason,
+      expiresAt: row.impersonation_expires_at.toISOString() } : null;
 }
 
 export function createLocalAuthService(pool: Pool, options: { deliverySecret: string; deliveryKeyId?: string }) {
@@ -117,11 +129,25 @@ export function createLocalAuthService(pool: Pool, options: { deliverySecret: st
     let digest: Buffer;
     try { digest = digestOpaqueToken(token); } catch { return null; }
     const result = await pool.query<SessionRow>(`SELECT s.id,s.user_id,u.status,s.csrf_sha256,s.expires_at,
+      i.id AS impersonation_id,i.actor_user_id,i.target_user_id,i.reason AS impersonation_reason,
+      i.expires_at AS impersonation_expires_at,
       COALESCE(array_agg(r.role ORDER BY r.role) FILTER (WHERE r.role IS NOT NULL),'{}') AS roles
       FROM soundpub.auth_sessions s JOIN soundpub.backend_users u ON u.id=s.user_id
+      LEFT JOIN soundpub.auth_impersonations i ON i.impersonated_session_id=s.id AND i.ended_at IS NULL
+        AND i.expires_at>now()
+      LEFT JOIN soundpub.backend_users actor ON actor.id=i.actor_user_id
+      LEFT JOIN soundpub.local_auth_credentials actor_credential ON actor_credential.user_id=i.actor_user_id
       LEFT JOIN soundpub.user_roles r ON r.user_id=u.id AND r.tenant_id IS NULL AND r.verified_at IS NOT NULL
       WHERE s.token_sha256=$1 AND s.revoked_at IS NULL AND s.expires_at>now() AND s.idle_expires_at>now()
-      GROUP BY s.id,u.id`, [digest]);
+        AND (i.id IS NULL OR (actor.status='active' AND actor_credential.password_changed_at<=i.created_at
+          AND EXISTS (SELECT 1 FROM soundpub.user_roles ar WHERE ar.user_id=actor.id AND ar.tenant_id IS NULL
+            AND ar.role='superadmin' AND ar.verified_at IS NOT NULL)
+          AND EXISTS (SELECT 1 FROM soundpub.user_roles target_role WHERE target_role.user_id=u.id
+            AND target_role.tenant_id IS NULL AND target_role.verified_at IS NOT NULL)
+          AND NOT EXISTS (SELECT 1 FROM soundpub.user_roles target_role WHERE target_role.user_id=u.id
+            AND target_role.tenant_id IS NULL AND target_role.verified_at IS NOT NULL
+            AND target_role.role IN ('admin','superadmin'))))
+      GROUP BY s.id,u.id,i.id`, [digest]);
     const row = result.rows[0] ?? null;
     if (row && write) await pool.query('UPDATE soundpub.auth_sessions SET last_seen_at=now() WHERE id=$1', [row.id]);
     return row;
@@ -213,13 +239,144 @@ export function createLocalAuthService(pool: Pool, options: { deliverySecret: st
       }
       return principal(row);
     },
+    async impersonation(token: string) {
+      const row = await session(token);
+      return row ? impersonation(row) : null;
+    },
+    async auditImpersonatedRead(token: string, route: string, requestId: string) {
+      const row = await session(token);
+      if (!row?.impersonation_id || !row.actor_user_id || !row.target_user_id) return;
+      await pool.query(`INSERT INTO soundpub.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,metadata)
+        VALUES($1,'auth.impersonation_read','auth_impersonation',$2,$3,
+          jsonb_build_object('target_user_id',$4::uuid,'route',$5::text))`,
+      [row.actor_user_id, row.impersonation_id, requestId, row.target_user_id, route.slice(0, 500)]);
+    },
     async rotateCsrf(token: string) {
       const row = await session(token);
       if (!row || row.status !== 'active') throw new ApiError(401, 'UNAUTHORIZED');
       const csrfToken = createOpaqueToken();
       await pool.query('UPDATE soundpub.auth_sessions SET csrf_sha256=$2,last_seen_at=now() WHERE id=$1',
         [row.id, digestOpaqueToken(csrfToken)]);
-      return { csrfToken, expiresAt: row.expires_at.toISOString(), principal: principal(row) };
+      return { csrfToken, expiresAt: row.expires_at.toISOString(), principal: principal(row), impersonation: impersonation(row) };
+    },
+    async startImpersonation(token: string, csrfToken: string, input: unknown, requestId: string) {
+      const value = impersonationInput.safeParse(input);
+      if (!value.success) throw new ApiError(400, 'BAD_REQUEST');
+      let tokenDigest: Buffer;
+      let csrfDigest: Buffer;
+      try { tokenDigest = digestOpaqueToken(token); csrfDigest = digestOpaqueToken(csrfToken); }
+      catch { throw new ApiError(401, 'UNAUTHORIZED'); }
+      const result = await withTransaction(pool, async db => {
+        const actorResult = await db.query<{ session_id: string; user_id: string; status: Principal['status'];
+          csrf_sha256: Buffer; password_hash: string }>(`SELECT s.id AS session_id,s.user_id,u.status,s.csrf_sha256,c.password_hash
+          FROM soundpub.auth_sessions s JOIN soundpub.backend_users u ON u.id=s.user_id
+          JOIN soundpub.local_auth_credentials c ON c.user_id=s.user_id
+          WHERE s.token_sha256=$1 AND s.revoked_at IS NULL AND s.expires_at>now() AND s.idle_expires_at>now()
+          FOR UPDATE OF s,u,c`, [tokenDigest]);
+        const actor = actorResult.rows[0];
+        if (!actor || actor.status !== 'active' || !actor.csrf_sha256.equals(csrfDigest)) return null;
+        const actorRoles = await roles(db, actor.user_id);
+        if (!actorRoles.includes('superadmin')) throw new ApiError(403, 'FORBIDDEN');
+        if (!await verifyPassword(value.data.currentPassword, actor.password_hash)) return null;
+        if (actor.user_id === value.data.targetUserId) throw new ApiError(409, 'CONFLICT');
+        const targetResult = await db.query<{ id: string; status: Principal['status'] }>(
+          'SELECT id,status FROM soundpub.backend_users WHERE id=$1 FOR UPDATE', [value.data.targetUserId]);
+        const target = targetResult.rows[0];
+        if (!target) throw new ApiError(404, 'NOT_FOUND');
+        if (target.status !== 'active') throw new ApiError(403, 'FORBIDDEN');
+        const targetRoles = await roles(db, target.id);
+        if (targetRoles.length === 0 || targetRoles.some(role => role === 'admin' || role === 'superadmin')) {
+          throw new ApiError(403, 'FORBIDDEN');
+        }
+        await db.query(`UPDATE soundpub.auth_impersonations i SET ended_at=now(),ended_reason='invalidated'
+          FROM soundpub.auth_sessions child, soundpub.backend_users existing_actor, soundpub.backend_users existing_target,
+            soundpub.local_auth_credentials existing_credential
+          WHERE i.ended_at IS NULL AND child.id=i.impersonated_session_id AND existing_actor.id=i.actor_user_id
+            AND existing_target.id=i.target_user_id AND existing_credential.user_id=i.actor_user_id
+            AND (i.actor_user_id=$1 OR i.target_user_id=$2)
+            AND (i.expires_at<=now() OR child.revoked_at IS NOT NULL OR child.expires_at<=now()
+              OR existing_actor.status<>'active' OR existing_target.status<>'active'
+              OR existing_credential.password_changed_at>i.created_at
+              OR NOT EXISTS (SELECT 1 FROM soundpub.user_roles existing_role WHERE existing_role.user_id=i.actor_user_id
+                AND existing_role.tenant_id IS NULL AND existing_role.role='superadmin' AND existing_role.verified_at IS NOT NULL))`,
+        [actor.user_id, target.id]);
+        const active = await db.query(`SELECT 1 FROM soundpub.auth_impersonations
+          WHERE ended_at IS NULL AND (actor_user_id=$1 OR target_user_id=$2) LIMIT 1`, [actor.user_id, target.id]);
+        if (active.rowCount) throw new ApiError(409, 'CONFLICT');
+        const expiresAt = new Date(Date.now() + impersonationSessionMs);
+        const created = await db.query<{ id: string }>(`INSERT INTO soundpub.auth_impersonations
+          (actor_user_id,target_user_id,actor_user_id_snapshot,target_user_id_snapshot,initiating_session_id,reason,expires_at)
+          VALUES($1,$2,$1,$2,$3,$4,$5) RETURNING id`,
+        [actor.user_id, target.id, actor.session_id, value.data.reason, expiresAt]);
+        const childToken = createOpaqueToken();
+        const childCsrf = createOpaqueToken();
+        const child = await db.query<{ id: string }>(`INSERT INTO soundpub.auth_sessions
+          (user_id,token_sha256,csrf_sha256,idle_expires_at,expires_at) VALUES($1,$2,$3,$4,$4) RETURNING id`,
+        [target.id, digestOpaqueToken(childToken), digestOpaqueToken(childCsrf), expiresAt]);
+        await db.query('UPDATE soundpub.auth_impersonations SET impersonated_session_id=$2 WHERE id=$1',
+          [created.rows[0]!.id, child.rows[0]!.id]);
+        await db.query('UPDATE soundpub.auth_sessions SET revoked_at=now() WHERE id=$1', [actor.session_id]);
+        await db.query(`INSERT INTO soundpub.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,metadata)
+          VALUES($1,'auth.impersonation_started','auth_impersonation',$2,$3,
+            jsonb_build_object('target_user_id',$4::uuid,'reason',$5::text,'expires_at',$6::timestamptz))`,
+        [actor.user_id, created.rows[0]!.id, requestId, target.id, value.data.reason, expiresAt]);
+        return { token: childToken, csrfToken: childCsrf, expiresAt: expiresAt.toISOString(),
+          principal: { id: target.id, status: target.status, roles: targetRoles } satisfies Principal,
+          impersonation: { active: true, actorUserId: actor.user_id, targetUserId: target.id,
+            reason: value.data.reason, expiresAt: expiresAt.toISOString() } satisfies ImpersonationMetadata };
+      });
+      if (!result) throw new ApiError(401, 'UNAUTHORIZED');
+      return result;
+    },
+    async stopImpersonation(token: string, csrfToken: string, requestId: string) {
+      let tokenDigest: Buffer;
+      let csrfDigest: Buffer;
+      try { tokenDigest = digestOpaqueToken(token); csrfDigest = digestOpaqueToken(csrfToken); }
+      catch { throw new ApiError(401, 'UNAUTHORIZED'); }
+      const result = await withTransaction(pool, async db => {
+        const found = await db.query<{ session_id: string; csrf_sha256: Buffer; impersonation_id: string;
+          actor_user_id: string; actor_status: Principal['status']; actor_password_valid: boolean;
+          target_user_id: string; reason: string }>(`
+          SELECT s.id AS session_id,s.csrf_sha256,i.id AS impersonation_id,i.actor_user_id,
+            actor.status AS actor_status,c.password_changed_at<=i.created_at AS actor_password_valid,i.target_user_id,i.reason
+          FROM soundpub.auth_sessions s JOIN soundpub.auth_impersonations i ON i.impersonated_session_id=s.id
+          JOIN soundpub.backend_users actor ON actor.id=i.actor_user_id
+          JOIN soundpub.local_auth_credentials c ON c.user_id=actor.id
+          WHERE s.token_sha256=$1 AND s.revoked_at IS NULL AND s.expires_at>now() AND s.idle_expires_at>now()
+            AND i.ended_at IS NULL AND i.expires_at>now()
+          FOR UPDATE OF s,i,actor,c`, [tokenDigest]);
+        const row = found.rows[0];
+        if (!row || !row.csrf_sha256.equals(csrfDigest)) return null;
+        const actorRoles = await roles(db, row.actor_user_id);
+        if (row.actor_status !== 'active' || !row.actor_password_valid || !actorRoles.includes('superadmin')) {
+          await db.query('UPDATE soundpub.auth_sessions SET revoked_at=now() WHERE id=$1', [row.session_id]);
+          await db.query(`UPDATE soundpub.auth_impersonations SET ended_at=now(),ended_reason='invalidated'
+            WHERE id=$1 AND ended_at IS NULL`, [row.impersonation_id]);
+          await db.query(`INSERT INTO soundpub.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,metadata)
+            VALUES($1,'auth.impersonation_invalidated','auth_impersonation',$2,$3,
+              jsonb_build_object('target_user_id',$4::uuid,'reason',$5::text))`,
+          [row.actor_user_id, row.impersonation_id, requestId, row.target_user_id, row.reason]);
+          return { invalidated: true } as const;
+        }
+        const nextToken = createOpaqueToken();
+        const nextCsrf = createOpaqueToken();
+        const expiresAt = new Date(Date.now() + absoluteSessionMs);
+        await db.query('UPDATE soundpub.auth_sessions SET revoked_at=now() WHERE id=$1', [row.session_id]);
+        await db.query(`UPDATE soundpub.auth_impersonations SET ended_at=now(),ended_reason='stopped'
+          WHERE id=$1`, [row.impersonation_id]);
+        await db.query(`INSERT INTO soundpub.auth_sessions(user_id,token_sha256,csrf_sha256,idle_expires_at,expires_at)
+          VALUES($1,$2,$3,$4,$4)`, [row.actor_user_id, digestOpaqueToken(nextToken), digestOpaqueToken(nextCsrf), expiresAt]);
+        await db.query(`INSERT INTO soundpub.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,metadata)
+          VALUES($1,'auth.impersonation_stopped','auth_impersonation',$2,$3,
+            jsonb_build_object('target_user_id',$4::uuid,'reason',$5::text))`,
+        [row.actor_user_id, row.impersonation_id, requestId, row.target_user_id, row.reason]);
+        return { token: nextToken, csrfToken: nextCsrf, expiresAt: expiresAt.toISOString(),
+          principal: { id: row.actor_user_id, status: row.actor_status, roles: actorRoles } satisfies Principal,
+          impersonation: null };
+      });
+      if (!result) throw new ApiError(403, 'FORBIDDEN');
+      if ('invalidated' in result) throw new ApiError(403, 'IMPERSONATION_INVALIDATED');
+      return result;
     },
     async logout(token: string, csrfToken: string, requestId: string) {
       const row = await session(token);
@@ -229,8 +386,12 @@ export function createLocalAuthService(pool: Pool, options: { deliverySecret: st
       if (!row.csrf_sha256.equals(digest)) throw new ApiError(403, 'FORBIDDEN');
       await withTransaction(pool, async db => {
         await db.query('UPDATE soundpub.auth_sessions SET revoked_at=now() WHERE id=$1 AND revoked_at IS NULL', [row.id]);
+        if (row.impersonation_id) await db.query(`UPDATE soundpub.auth_impersonations
+          SET ended_at=now(),ended_reason='logout' WHERE id=$1 AND ended_at IS NULL`, [row.impersonation_id]);
         await db.query(`INSERT INTO soundpub.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,metadata)
-          VALUES ($1,'auth.logout','auth_session',$2,$3,'{}')`, [row.user_id, row.id, requestId]);
+          VALUES ($1,'auth.logout','auth_session',$2,$3,$4)`,
+        [row.actor_user_id ?? row.user_id, row.id, requestId,
+          row.impersonation_id ? { impersonated_user_id: row.user_id } : {}]);
       });
     },
     async changePassword(token: string, csrfToken: string, input: unknown, requestId: string) {

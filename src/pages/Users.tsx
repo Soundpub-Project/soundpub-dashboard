@@ -19,6 +19,9 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -130,7 +133,7 @@ const ALL_STATUSES: UserStatus[] = ["active", "inactive", "suspended"];
 
 export default function Users() {
   const backendUsers = usesBackendDomain('users');
-  const { isAdmin, isSuperadmin, loading: authLoading, user } = useAuth();
+  const { isAdmin, isSuperadmin, loading: authLoading, user, startImpersonation } = useAuth();
   const navigate = useNavigate();
   const currentUserId = user?.id ?? null;
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -152,6 +155,10 @@ export default function Users() {
   const [labelCustomOwner, setLabelCustomOwner] = useState<UserProfile | null>(null);
   const [labelCustomArtistsOpen, setLabelCustomArtistsOpen] = useState(false);
   const [iccnIdentityOpen, setIccnIdentityOpen] = useState(false);
+  const [impersonationTarget, setImpersonationTarget] = useState<UserProfile | null>(null);
+  const [impersonationReason, setImpersonationReason] = useState("");
+  const [impersonationPassword, setImpersonationPassword] = useState("");
+  const [impersonating, setImpersonating] = useState(false);
 
   useEffect(() => {
     // Only fetch users if user is logged in AND is admin
@@ -193,7 +200,10 @@ export default function Users() {
   };
 
   const handleImpersonate = async (target: UserProfile) => {
-    if (backendUsers) return;
+    if (backendUsers) {
+      setImpersonationTarget(target);
+      return;
+    }
     if (!isSuperadmin || !user) return;
     if (
       !window.confirm(
@@ -237,6 +247,34 @@ export default function Users() {
       toast.error(
         error instanceof Error ? error.message : "Gagal masuk sebagai user",
       );
+    }
+  };
+
+  const closeBackendImpersonation = (open: boolean) => {
+    if (open || impersonating) return;
+    setImpersonationTarget(null);
+    setImpersonationReason("");
+    setImpersonationPassword("");
+  };
+
+  const confirmBackendImpersonation = async () => {
+    if (!impersonationTarget || impersonationReason.trim().length < 10 || !impersonationPassword) return;
+    setImpersonating(true);
+    try {
+      await startImpersonation(impersonationTarget.id, impersonationReason.trim(), impersonationPassword);
+      setImpersonationPassword("");
+      setImpersonationReason("");
+      setImpersonationTarget(null);
+      window.location.assign('/dashboard');
+    } catch (error) {
+      toast.error(error instanceof SoundpubApiError && error.status === 401
+        ? 'Password saat ini salah atau sesi tidak valid.'
+        : error instanceof SoundpubApiError && error.status === 403
+          ? 'Impersonasi hanya tersedia untuk superadmin.'
+          : 'Gagal memulai impersonasi. Silakan coba lagi.');
+    } finally {
+      setImpersonationPassword("");
+      setImpersonating(false);
     }
   };
 
@@ -376,7 +414,7 @@ export default function Users() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Users</h1>
           <p className="text-muted-foreground">Kelola pengguna platform</p>
-          {backendUsers && <p className="text-sm text-muted-foreground">Backend mandiri aktif. Pembuatan akun, reset password, status, role, composer code, dan penghapusan user kosong sudah tersedia. Impersonasi dan audit orphan tetap dinonaktifkan.</p>}
+          {backendUsers && <p className="text-sm text-muted-foreground">Backend mandiri aktif. Pengelolaan akun dan impersonasi superadmin menggunakan sesi backend.</p>}
           {loadError && <div role="alert"><p>{loadError}</p><Button onClick={fetchUsers}>Coba lagi</Button></div>}
         </div>
 
@@ -633,8 +671,9 @@ export default function Users() {
                                     <UserCog className="mr-2 h-4 w-4" />
                                     Ubah Status
                                   </DropdownMenuItem>
-                                  {!backendUsers && isSuperadmin &&
-                                    user.role !== "superadmin" && (
+                                  {isSuperadmin &&
+                                    !user.roles?.some(role => role === "admin" || role === "superadmin") &&
+                                    user.role !== "admin" && user.role !== "superadmin" && (
                                       <DropdownMenuItem
                                         onClick={() =>
                                           void handleImpersonate(user)
@@ -769,6 +808,39 @@ export default function Users() {
         user={selectedUser}
         onSuccess={fetchUsers}
       />
+      <Dialog open={Boolean(impersonationTarget)} onOpenChange={closeBackendImpersonation}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Masuk sebagai user</DialogTitle>
+            <DialogDescription>
+              Akses sebagai {impersonationTarget?.full_name || impersonationTarget?.email}. Aktivitas tetap tercatat sebagai impersonasi superadmin.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="impersonation-reason">Alasan</Label>
+              <Textarea id="impersonation-reason" value={impersonationReason} disabled={impersonating}
+                maxLength={500} autoFocus placeholder="Jelaskan kebutuhan akses ini"
+                onChange={event => setImpersonationReason(event.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="impersonation-password">Password saat ini</Label>
+              <Input id="impersonation-password" type="password" autoComplete="current-password"
+                value={impersonationPassword} disabled={impersonating}
+                onChange={event => setImpersonationPassword(event.target.value)} />
+              <p className="text-xs text-muted-foreground">Password dipakai sekali untuk verifikasi dan tidak disimpan di browser.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" disabled={impersonating} onClick={() => closeBackendImpersonation(false)}>Batal</Button>
+            <Button disabled={impersonating || impersonationReason.trim().length < 10 || !impersonationPassword}
+              onClick={() => void confirmBackendImpersonation()}>
+              {impersonating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Mulai impersonasi
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

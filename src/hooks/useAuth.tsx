@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { getCurrentProfile, primaryRole, type AppRole } from '@/services/users';
 import { setApiCsrfToken, setApiTokenProvider } from '@/api/client';
 import { SoundpubApiError } from '@/api/client';
-import { authApi, type AuthSessionResponse } from '@/api/auth';
+import { authApi, type AuthSessionResponse, type ImpersonationSession } from '@/api/auth';
 import { usersApi } from '@/api/users';
 import { usesBackendDomain } from '@/api/routing';
 
@@ -50,6 +50,9 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   refreshProfile: () => Promise<void>;
+  impersonation: ImpersonationSession | null;
+  startImpersonation: (targetUserId: string, reason: string, currentPassword: string) => Promise<void>;
+  stopImpersonation: () => Promise<void>;
   isSuperadmin: boolean;
   isAdmin: boolean;
   isLabel: boolean;
@@ -79,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
+  const [impersonation, setImpersonation] = useState<ImpersonationSession | null>(null);
   const [loading, setLoading] = useState(true);
   const queryClient = useQueryClient();
   const sessionExpiryTimer = useRef<number | null>(null);
@@ -103,6 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setProfile(null);
     setRole(null);
+    setImpersonation(null);
     setApiCsrfToken(null);
   };
 
@@ -115,6 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setApiCsrfToken(result.csrfToken);
     setUser(nextUser);
     setSession(localSession(result, nextUser));
+    setImpersonation(result.impersonation ?? null);
     void fetchProfileAndRole(nextUser.id, true);
   };
 
@@ -125,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     activeProfileUser.current = nextSession?.user.id ?? null;
     setSession(nextSession);
     setUser(nextSession?.user ?? null);
+    setImpersonation(null);
     if (nextSession?.user) {
       void fetchProfileAndRole(nextSession.user.id);
     } else {
@@ -302,6 +309,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const startImpersonation = async (targetUserId: string, reason: string, currentPassword: string) => {
+    if (!localAuth.current || !usesBackendDomain('users')) throw new Error('Impersonasi backend tidak tersedia.');
+    applyLocalSession(await authApi.startImpersonation(targetUserId, reason, currentPassword));
+    queryClient.clear();
+  };
+
+  const stopImpersonation = async () => {
+    if (!localAuth.current || !impersonation) return;
+    applyLocalSession(await authApi.stopImpersonation());
+    queryClient.clear();
+  };
+
   const isSuperadmin = role === 'superadmin';
   const isAdmin = role === 'superadmin' || role === 'admin';
   const isLabel = role === 'label';
@@ -325,6 +344,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signOut,
         changePassword,
         refreshProfile,
+        impersonation,
+        startImpersonation,
+        stopImpersonation,
         isSuperadmin,
         isAdmin,
         isLabel,

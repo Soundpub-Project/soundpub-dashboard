@@ -206,6 +206,8 @@ test('Users migrations, runtime repositories, services, local API contracts and 
       assert.equal(created.statusCode, 200, created.body);
       const targetId = created.json().id;
       const path = `admin/users/${targetId}`;
+      await pool.query(`INSERT INTO soundpub.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,metadata)
+        VALUES($1,'synthetic.target.action','backend_user',$2,'synthetic-delete-audit','{}'::jsonb)`, [targetId, targetId]);
       assert.equal((await request('superadmin', 'DELETE', path)).statusCode, 409);
       assert.equal((await request('superadmin', 'PATCH', `${path}/status`, { status: 'inactive' })).statusCode, 200);
       assert.equal((await request('admin', 'DELETE', path)).statusCode, 403);

@@ -4,6 +4,15 @@ export interface AuthSessionResponse {
   user: { id: string; roles: string[] };
   csrfToken: string;
   expiresAt: string;
+  impersonation?: ImpersonationSession | null;
+}
+
+export interface ImpersonationSession {
+  active: true;
+  actorUserId: string;
+  targetUserId: string;
+  reason: string;
+  expiresAt: string;
 }
 
 export const authApi = {
@@ -17,6 +26,11 @@ export const authApi = {
     method: 'POST', body: { code, state }, authenticated: false,
   }),
   session: () => apiRequest<AuthSessionResponse>('/api/v1/auth/session', { authenticated: false }),
+  startImpersonation: (targetUserId: string, reason: string, currentPassword: string) =>
+    apiRequest<AuthSessionResponse>('/api/v1/admin/impersonations', {
+      method: 'POST', body: { targetUserId, reason, currentPassword },
+    }),
+  stopImpersonation: () => apiRequest<AuthSessionResponse>('/api/v1/admin/impersonations/stop', { method: 'POST' }),
   logout: () => apiRequest<{ status: string }>('/api/v1/auth/logout', { method: 'POST' }),
   changePassword: (currentPassword: string, newPassword: string) => apiRequest<{ status: string }>('/api/v1/auth/password', {
     method: 'POST', body: { currentPassword, newPassword },

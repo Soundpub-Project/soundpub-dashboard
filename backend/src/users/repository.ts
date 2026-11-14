@@ -122,6 +122,10 @@ export function usersRepository(db: PoolClient) {
       return true;
     },
     async deleteAccount(id: string) {
+      await db.query(`UPDATE soundpub.auth_sessions SET revoked_at=now()
+        WHERE user_id=$1 AND revoked_at IS NULL`, [id]);
+      await db.query(`UPDATE soundpub.auth_impersonations SET ended_at=now(),ended_reason='invalidated'
+        WHERE ended_at IS NULL AND (actor_user_id=$1 OR target_user_id=$1)`, [id]);
       await db.query('DELETE FROM soundpub.external_identities WHERE application_user_id=$1', [id]);
       await db.query('DELETE FROM soundpub.user_roles WHERE user_id=$1', [id]);
       await db.query('DELETE FROM soundpub.profiles WHERE id=$1', [id]);

@@ -23,6 +23,8 @@ test('maintenance mode enforces protected APIs and preserves explicit exceptions
     localAuth: {
       login: async () => ({ token: 'session-token', csrfToken: 'csrf', expiresAt: new Date().toISOString(), principal: principals.user! }),
       authenticate: async () => principals.user,
+      impersonation: async () => null,
+      auditImpersonatedRead: async () => undefined,
       rotateCsrf: async () => ({ csrfToken: 'csrf-2', expiresAt: new Date().toISOString(), principal: principals.user! }),
       logout: async () => undefined,
       changePassword: async () => undefined,
@@ -71,5 +73,30 @@ test('maintenance mode enforces protected APIs and preserves explicit exceptions
     enabled = false;
     assert.equal((await app.inject('/api/v1/me')).statusCode, 401);
     assert.equal((await app.inject({ url: '/api/v1/me', headers: { authorization: 'Bearer user' } })).statusCode, 200);
+  } finally { await app.close(); }
+});
+
+test('rate limiting runs before impersonated read audit', async () => {
+  let auditCalls = 0;
+  const principal: Principal = { id: '00000000-0000-4000-8000-000000000901', status: 'active', roles: ['artist'] };
+  const deps: ApiDependencies = {
+    auth: { authenticate: async () => null },
+    readiness: { check: async () => true },
+    admin: { suspendUser: async () => undefined },
+    webhooks: { receive: async () => false },
+    rateLimiter: { consume: async () => ({ allowed: false, retryAfterSeconds: 5 }) },
+    localAuth: {
+      authenticate: async () => principal,
+      impersonation: async () => ({ active: true as const,
+        actorUserId: '00000000-0000-4000-8000-000000000902', targetUserId: principal.id,
+        reason: 'Synthetic support investigation', expiresAt: new Date(Date.now() + 60_000).toISOString() }),
+      auditImpersonatedRead: async () => { auditCalls += 1; },
+    } as ApiDependencies['localAuth'],
+  };
+  const app = buildApp(deps);
+  try {
+    const response = await app.inject({ url: '/api/v1/me', headers: { cookie: 'soundpub_session=synthetic' } });
+    assert.equal(response.statusCode, 429, response.body);
+    assert.equal(auditCalls, 0);
   } finally { await app.close(); }
 });

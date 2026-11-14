@@ -33,6 +33,8 @@ const messages: Record<string, string> = {
   NOT_FOUND: 'Resource not found', CONFLICT: 'Conflict', RATE_LIMITED: 'Too many requests',
   NOT_READY: 'Service unavailable', MAINTENANCE_MODE: 'Service unavailable', INTERNAL_ERROR: 'Internal server error',
   SUBMISSION_BLOCKED: 'Submission prerequisites are not satisfied', EXPORT_TOO_LARGE: 'Export exceeds safe size limit',
+  IMPERSONATION_READ_ONLY: 'Impersonation sessions are read-only',
+  IMPERSONATION_INVALIDATED: 'Impersonation session is no longer authorized',
 };
 const developmentOrigins = new Set([
   'http://localhost:8181',
@@ -79,11 +81,24 @@ export function buildApp(deps: ApiDependencies) {
         return fail(reply, 503, 'MAINTENANCE_MODE', request.id);
       }
     }
+    if (deps.localAuth && !['GET','HEAD','OPTIONS'].includes(request.method)
+      && !new Set(['/api/v1/admin/impersonations/stop','/api/v1/auth/logout']).has(request.routeOptions.url ?? '')) {
+      const token = sessionToken(request);
+      if (token && await deps.localAuth.impersonation(token)) {
+        return fail(reply, 403, 'IMPERSONATION_READ_ONLY', request.id);
+      }
+    }
     if (request.routeOptions.url === '/health' || request.routeOptions.url === '/ready' || request.routeOptions.url === '/openapi.json') return;
     const denied = await limited(request);
     if (denied) {
       reply.header('retry-after', Math.max(1, Math.ceil(denied.retryAfterSeconds ?? 1)));
       return fail(reply, 429, 'RATE_LIMITED', request.id);
+    }
+    if (deps.localAuth && request.method === 'GET') {
+      const token = sessionToken(request);
+      if (token && await deps.localAuth.impersonation(token)) {
+        await deps.localAuth.auditImpersonatedRead(token, request.routeOptions.url ?? request.url, request.id);
+      }
     }
   });
   app.addHook('onResponse', async (request, reply) => {
@@ -123,9 +138,16 @@ export function buildApp(deps: ApiDependencies) {
     if (existing) return existing;
     const match = /^Bearer ([^\s]+)$/i.exec(request.headers.authorization ?? '');
     const cookieToken = deps.localAuth ? sessionToken(request) : null;
-    const resolved = match ? deps.auth.authenticate(match[1]!) : cookieToken ? deps.localAuth!.authenticate(
-      cookieToken, String(request.headers['x-csrf-token'] ?? ''), !['GET','HEAD','OPTIONS'].includes(request.method),
-    ) : Promise.resolve(null);
+    const resolved = (async () => {
+      if (cookieToken && await deps.localAuth?.impersonation(cookieToken)) {
+        return deps.localAuth!.authenticate(cookieToken, String(request.headers['x-csrf-token'] ?? ''),
+          !['GET','HEAD','OPTIONS'].includes(request.method));
+      }
+      if (match) return deps.auth.authenticate(match[1]!);
+      if (cookieToken) return deps.localAuth!.authenticate(cookieToken,
+        String(request.headers['x-csrf-token'] ?? ''), !['GET','HEAD','OPTIONS'].includes(request.method));
+      return null;
+    })();
     principals.set(request, resolved);
     return resolved;
   }

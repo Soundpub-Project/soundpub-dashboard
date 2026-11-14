@@ -20,7 +20,8 @@ interface DashboardLayoutProps {
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { user, loading, profile, isAdmin, isLabel, isWhitelabel, role } =
+  const { user, loading, profile, isAdmin, isLabel, isWhitelabel, role,
+    impersonation: backendImpersonation, stopImpersonation } =
     useAuth();
   const avatarUrl = useMediaUrl(profile?.avatar_url);
   const navigate = useNavigate();
@@ -30,12 +31,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     targetId: string;
     targetName: string;
   } | null>(() => {
+    if (usesBackendDomain('users')) return null;
     const stored = sessionStorage.getItem("soundpub_impersonation_active");
     return stored ? JSON.parse(stored) : null;
   });
   const [currentBalance, setCurrentBalance] = useState<string>(
     usesBackendFinance() ? '—' : Number(profile?.balance || 0).toLocaleString('id-ID'),
   );
+  const [stoppingImpersonation, setStoppingImpersonation] = useState(false);
 
   const refreshCurrentBalance = async () => {
     if (!profile?.id) return;
@@ -105,6 +108,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [profile?.id, profile?.balance, isLabel, isWhitelabel]);
 
   useEffect(() => {
+    if (usesBackendDomain('users')) {
+      setImpersonation(null);
+      return;
+    }
     const stored = sessionStorage.getItem("soundpub_impersonation_active");
     if (!stored) {
       setImpersonation(null);
@@ -128,6 +135,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [user?.id]);
 
   const endImpersonation = async () => {
+    if (backendImpersonation) {
+      setStoppingImpersonation(true);
+      try {
+        await stopImpersonation();
+        window.location.assign('/dashboard/users');
+      } finally { setStoppingImpersonation(false); }
+      return;
+    }
     const stored = sessionStorage.getItem("soundpub_impersonation_origin");
     if (!stored) return;
     const origin = JSON.parse(stored) as {
@@ -266,18 +281,21 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
           </header>
 
-          {impersonation && (
+          {(backendImpersonation || impersonation) && (
             <div className="flex items-center justify-between gap-3 border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm">
               <span>
                 Mode akses superadmin:{" "}
-                <strong>{impersonation.targetName}</strong>
+                <strong>{backendImpersonation ? profile?.full_name || backendImpersonation.targetUserId : impersonation?.targetName}</strong>
+                {backendImpersonation?.reason ? <span className="ml-2 text-muted-foreground">({backendImpersonation.reason})</span> : null}
               </span>
               <Button
                 size="sm"
                 variant="outline"
+                disabled={stoppingImpersonation}
                 onClick={() => void endImpersonation()}
               >
-                Kembali ke {impersonation.actorName}
+                {stoppingImpersonation && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {backendImpersonation ? 'Kembali ke akun superadmin' : `Kembali ke ${impersonation?.actorName}`}
               </Button>
             </div>
           )}
