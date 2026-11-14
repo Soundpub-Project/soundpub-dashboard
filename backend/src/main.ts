@@ -12,6 +12,7 @@ import { createRoyaltyImportObjectStore } from './royalties/store.js';
 import { createPaymentsService, paymentSubmissionDependency } from './payments/index.js';
 import { createUsersService } from './users/index.js';
 import { createArtistsService } from './artists/index.js';
+import { assertArtistCanDetachFromLabel } from './artists/detachment.js';
 import { createLabelsService } from './labels/index.js';
 import { createLabelCustomService } from './label-custom/index.js';
 import { createReleasesService } from './releases/index.js';
@@ -64,8 +65,8 @@ const users = createUsersService(pool, config.PARTNER_LABEL_ID && identityProvid
   ? { partnerIdentity: { labelId: config.PARTNER_LABEL_ID, issuer: identityProvider.configuredIssuer() } } : {});
 const localAuth = createLocalAuthService(pool, { deliverySecret: config.AUTH_DELIVERY_SECRET,
   deliveryKeyId: config.AUTH_DELIVERY_KEY_ID });
-const artists = createArtistsService(pool);
-const labels = createLabelsService(pool);
+const artists = createArtistsService(pool, { assertCanDetach: assertArtistCanDetachFromLabel });
+const labels = createLabelsService(pool, { assertCanRemove: assertArtistCanDetachFromLabel });
 const labelCustom = createLabelCustomService(pool);
 const releases = createReleasesService(pool);
 const takedowns = createTakedownsService(pool);
