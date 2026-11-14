@@ -9,6 +9,7 @@ import { createRoyaltyImportObjectStore } from './royalties/store.js';
 import { createRoyaltyImportCleanupProcessor, createRoyaltyImportJobProcessor } from './royalties/jobs.js';
 import { runFinanceReconciliation } from './reconciliation/index.js';
 import { createAuthDeliveryHandler } from './local-auth/delivery-handler.js';
+import { MockSubmissionProvider, createSubmissionDeliveryHandler } from './submissions/index.js';
 
 const config = loadConfig();
 const logger = createLogger(config.LOG_LEVEL);
@@ -30,6 +31,7 @@ const royaltyImportStore = await createRoyaltyImportObjectStore(pool, {
 const royaltyJobs = createRoyaltyImportJobProcessor(pool, royaltyImportStore);
 const royaltyCleanup = createRoyaltyImportCleanupProcessor(pool, royaltyImportStore);
 const providers = createMockProviders();
+const submissionProvider = new MockSubmissionProvider();
 const authDeliveryKeys = { ...config.AUTH_DELIVERY_PREVIOUS_KEYS_JSON,
   [config.AUTH_DELIVERY_KEY_ID]: config.AUTH_DELIVERY_SECRET };
 const handlers: Record<string, OutboxHandler> = {
@@ -41,6 +43,7 @@ const handlers: Record<string, OutboxHandler> = {
   'audit.notification': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-audit-notification', payload: event.payload }); },
   'webhook.received': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-webhook', payload: event.payload }); },
   'finance.event': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-finance-event', payload: event.payload }); },
+  'release.submission.requested': createSubmissionDeliveryHandler(submissionProvider),
   'royalty.changed': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-royalty-change', payload: event.payload }); },
   'payout.changed': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-payout-change', payload: event.payload }); },
   'payout.readiness': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-payout-readiness', payload: event.payload }); },

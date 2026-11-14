@@ -74,7 +74,8 @@ test('scheduled finance reconciliation records deterministic read-only evidence'
     assert.equal((await owner.query('SELECT count(*) FROM soundpub.finance_reconciliation_runs')).rows[0].count, '4');
     const alerts = await owner.query(`SELECT payload FROM soundpub.outbox_events WHERE topic='finance.reconciliation' ORDER BY created_at,id`);
     assert.equal(alerts.rowCount, 3);
-    assert.deepEqual(alerts.rows.map(row => row.payload.status), ['PASS','FAIL','FAIL']);
+    // created_at can tie across fast transactions; UUID is not a business ordering signal.
+    assert.deepEqual(alerts.rows.map(row => row.payload.status).sort(), ['FAIL','FAIL','PASS']);
 
     const admin: Principal = { id: '00000000-0000-4000-8000-000000000001', roles: ['superadmin'], status: 'active' };
     const ordinary: Principal = { id: '00000000-0000-4000-8000-000000000002', roles: ['user'], status: 'active' };

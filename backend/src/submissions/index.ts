@@ -13,6 +13,7 @@ import type { TrackDto } from '../tracks/contracts.js';
 import { withTransaction } from '../db/pool.js';
 import { blockerOwners, submissionInput, type BlockerCode, type SubmissionBlocker } from './contracts.js';
 import type { ProviderSubmission } from './provider.js';
+import type { OutboxEvent, SqlClient } from '../worker/index.js';
 
 export * from './contracts.js';
 export { MockSubmissionProvider, type SubmissionProvider, type ProviderSubmission } from './provider.js';
@@ -27,6 +28,24 @@ export interface SubmissionDependencies {
   payment?: { isReleasePaymentSatisfied(context: SubmissionContext): Promise<boolean> };
   provider?: { providerReady(context: SubmissionContext): Promise<boolean>;
     createSubmission?(context: SubmissionContext): Promise<ProviderSubmission> };
+}
+const deliveryPayload = z.strictObject({ release_id: z.uuid(), version: z.number().int().min(1).max(2147483646), requested_by: z.uuid() });
+export function createSubmissionDeliveryHandler(provider: NonNullable<SubmissionDependencies['provider']>) {
+  return async (event: OutboxEvent, client: SqlClient) => {
+    if (!provider.createSubmission) throw new Error('Submission provider unavailable');
+    const parsed = deliveryPayload.safeParse(event.payload);
+    if (!parsed.success) throw new Error('Invalid release submission delivery payload');
+    const db = client as unknown as PoolClient;
+    const repo = releasesRepository(db);
+    const release = await repo.find(parsed.data.release_id, true);
+    if (!release || !['pending_paid', 'revision_submitted'].includes(release.status)) throw new Error('Release submission is no longer deliverable');
+    const tracks = await tracksRepository(db).list(release.id);
+    const providerSubmission = await provider.createSubmission({ db, release: { ...release, version: parsed.data.version }, tracks });
+    if (providerSubmission.status !== 'ACCEPTED' || !providerSubmission.reference) throw new Error('Provider did not accept release submission');
+    await repo.audit(parsed.data.requested_by, release.id, event.idempotency_key, 'release.submission.dispatched', {
+      version: parsed.data.version, providerSubmission,
+    });
+  };
 }
 const allows = createAuthorizer();
 function parse<T>(schema: z.ZodType<T>, input: unknown): T {
@@ -125,11 +144,16 @@ export function createSubmissionService(pool: Pool, dependencies: SubmissionDepe
         if (release.version !== version) throw new ApiError(409, 'CONFLICT');
         if (!readiness.ready) throw new ApiError(409, 'SUBMISSION_BLOCKED');
         if (!dependencies.provider?.createSubmission) throw new ApiError(409, 'SUBMISSION_BLOCKED');
-        const providerSubmission = await dependencies.provider.createSubmission({ db, release, tracks: await tracksRepository(db).list(id) });
-        if (providerSubmission.status !== 'ACCEPTED' || !providerSubmission.reference) throw new ApiError(409, 'SUBMISSION_BLOCKED');
         const status = release.status === 'rejected' ? 'revision_submitted' : 'pending_paid';
+        const outboxKey = `release-submission:${id}:${version}`;
+        const outbox = await db.query<{ id: string }>(`INSERT INTO soundpub.outbox_events(topic,payload,idempotency_key)
+          VALUES('release.submission.requested',$1::jsonb,$2) RETURNING id`,
+        [JSON.stringify({ release_id: id, version, requested_by: current.id }), outboxKey]);
+        if (outbox.rowCount !== 1) throw new ApiError(409, 'CONFLICT');
         if (!await repo.update(id, { version, status, rejection_reason: null })) throw new ApiError(409, 'CONFLICT');
-        await repo.audit(current.id, id, requestId, 'release.submitted', { previousStatus: release.status, status, previousVersion: version, providerSubmission });
+        await repo.audit(current.id, id, requestId, 'release.submitted', {
+          previousStatus: release.status, status, previousVersion: version, submissionOutboxId: outbox.rows[0]!.id,
+        });
         return (await repo.find(id))!;
       });
     },

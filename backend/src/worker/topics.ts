@@ -9,6 +9,7 @@ export const OUTBOX_TOPICS = [
   'audit.notification',
   'webhook.received',
   'finance.event',
+  'release.submission.requested',
   'royalty.changed',
   'payout.changed',
   'payout.readiness',
