@@ -1,6 +1,7 @@
 import { usesBackendFinance, requireLegacyFinance } from '@/components/finance/mode';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { royaltiesApi } from '@/api/royalties';
 
 const STALE_TIME = 5 * 60 * 1000; // 5 minutes
 
@@ -8,6 +9,7 @@ export function useRoyaltyStats() {
   return useQuery({
     queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-stats'],
     queryFn: async () => {
+      if (usesBackendFinance()) { const s = await royaltiesApi.analytics<Record<string, unknown>>('stats'); return { totalRevenue: Number(s.total_revenue || 0), totalStreams: Number(s.total_streams || 0), uniqueArtists: Number(s.unique_artists || 0), uniqueLabels: Number(s.unique_labels || 0), uniquePlatforms: Number(s.unique_platforms || 0), uniqueTracks: Number(s.unique_tracks || 0) }; }
       requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_stats');
       if (error) throw error;
@@ -31,6 +33,7 @@ export function useRoyaltyMonthlySummary() {
   return useQuery({
     queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-monthly-summary'],
     queryFn: async () => {
+      if (usesBackendFinance()) return (await royaltiesApi.analytics<any[]>('monthly')).map(d => ({ month: d.period, period: d.period, revenue: Number(d.revenue), streams: Number(d.streams) }));
       requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_monthly_summary');
       if (error) throw error;
@@ -50,6 +53,7 @@ export function useRoyaltyPlatformSummary(limit: number = 10) {
   return useQuery({
     queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-platform-summary', limit],
     queryFn: async () => {
+      if (usesBackendFinance()) return (await royaltiesApi.analytics<any[]>('platform', { limit })).map((d, i) => ({ name: d.name, platform: d.name, revenue: Number(d.revenue), streams: Number(d.streams), fill: CHART_COLORS[i % CHART_COLORS.length] }));
       requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_platform_summary', { _limit: limit });
       if (error) throw error;
@@ -70,6 +74,7 @@ export function useRoyaltyCountrySummary(limit: number = 10) {
   return useQuery({
     queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-country-summary', limit],
     queryFn: async () => {
+      if (usesBackendFinance()) return (await royaltiesApi.analytics<any[]>('country', { limit })).map((d, i) => ({ name: d.name, revenue: Number(d.revenue), streams: Number(d.streams), fill: CHART_COLORS[i % CHART_COLORS.length] }));
       requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_country_summary', { _limit: limit });
       if (error) throw error;
@@ -89,6 +94,7 @@ export function useRoyaltyPeriods() {
   return useQuery({
     queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-periods'],
     queryFn: async () => {
+      if (usesBackendFinance()) return (await royaltiesApi.periods()).items;
       requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_periods');
       if (error) throw error;
@@ -105,6 +111,7 @@ export function useRoyaltyPeriodSummary() {
   return useQuery({
     queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-period-summary'],
     queryFn: async () => {
+      if (usesBackendFinance()) return (await royaltiesApi.analytics<any[]>('period')).map(d => ({ period: d.period, totalRevenue: Number(d.revenue || 0), totalStreams: Number(d.streams || 0), uniqueTracks: Number(d.unique_tracks || 0), uniqueArtists: Number(d.unique_artists || 0), uniqueLabels: Number(d.unique_labels || 0), topPlatform: d.top_platform || '-', topCountry: d.top_country || '-', growth: Number(d.growth || 0) }));
       requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_period_summary' as any);
       if (error) throw error;
@@ -129,6 +136,7 @@ export function useRoyaltyLabelBreakdown(period: string | null) {
   return useQuery({
     queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-label-breakdown', period],
     queryFn: async () => {
+      if (usesBackendFinance()) return (await royaltiesApi.analytics<any[]>('label', { period })).map(d => ({ label: d.label_name, revenue: Number(d.revenue || 0), streams: Number(d.streams || 0), artistRevenue: Number(d.artist_share || 0), labelRevenue: Number(d.label_share || 0), adminRevenue: Number(d.admin_share || 0) }));
       requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_label_breakdown' as any, {
         _period: period,
@@ -152,6 +160,7 @@ export function useRoyaltyArtistBreakdown(period: string | null, limit: number =
   return useQuery({
     queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-artist-breakdown', period, limit],
     queryFn: async () => {
+      if (usesBackendFinance()) return (await royaltiesApi.analytics<any[]>('artist', { period, limit })).map(d => ({ artist: d.artist_name, revenue: Number(d.revenue || 0), streams: Number(d.streams || 0), trackCount: Number(d.track_count || 0), isSoundpubOnly: Boolean(d.is_soundpub), artistRevenue: Number(d.artist_share || 0), labelRevenue: Number(d.label_share || 0), adminRevenue: Number(d.admin_share || 0) }));
       requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_artist_breakdown' as any, {
         _period: period,
@@ -163,7 +172,7 @@ export function useRoyaltyArtistBreakdown(period: string | null, limit: number =
         revenue: Number(d.revenue || 0),
         streams: Number(d.streams || 0),
         trackCount: Number(d.track_count || 0),
-        isSoundpubOnly: Boolean(d.is_Soundpub),
+        isSoundpubOnly: Boolean(d.is_soundpub),
         artistRevenue: Number(d.artist_share || 0),
         labelRevenue: Number(d.label_share || 0),
         adminRevenue: Number(d.admin_share || 0),
@@ -178,6 +187,7 @@ export function useRoyaltyTrackBreakdown(period: string | null) {
   return useQuery({
     queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-track-breakdown', period],
     queryFn: async () => {
+      if (usesBackendFinance()) return (await royaltiesApi.analytics<any[]>('track', { period })).map(d => ({ isrc: d.isrc, title: d.title || 'Unknown', artist: d.artist_name || 'Unknown', label: d.label || '', revenue: Number(d.revenue || 0), streams: Number(d.streams || 0), platformCount: Number(d.platform_count || 0), countryCount: Number(d.country_count || 0), isSoundpub: Boolean(d.is_soundpub), artistRevenue: Number(d.artist_share || 0), labelRevenue: Number(d.label_share || 0), adminRevenue: Number(d.admin_share || 0) }));
       requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_track_breakdown' as any, {
         _period: period,
@@ -192,7 +202,7 @@ export function useRoyaltyTrackBreakdown(period: string | null) {
         streams: Number(d.streams || 0),
         platformCount: Number(d.platform_count || 0),
         countryCount: Number(d.country_count || 0),
-        isSoundpub: Boolean(d.is_Soundpub),
+        isSoundpub: Boolean(d.is_soundpub),
         artistRevenue: Number(d.artist_share || 0),
         labelRevenue: Number(d.label_share || 0),
         adminRevenue: Number(d.admin_share || 0),
@@ -207,6 +217,7 @@ export function useRoyaltyComparison(currentPeriods: string[], previousPeriods: 
   return useQuery({
     queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-comparison', currentPeriods, previousPeriods],
     queryFn: async () => {
+      if (usesBackendFinance()) { const data = await royaltiesApi.analytics<any[]>('comparison', { current_period: currentPeriods, previous_period: previousPeriods }); const currentMap = new Map<string, { revenue: number; streams: number }>(); const previousMap = new Map<string, { revenue: number; streams: number }>(); data.forEach(d => (d.data_type === 'current' ? currentMap : previousMap).set(d.period, { revenue: Number(d.revenue || 0), streams: Number(d.streams || 0) })); return { currentMap, previousMap }; }
       requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_comparison' as any, {
         _current_periods: currentPeriods,
@@ -236,6 +247,7 @@ export function useRoyaltyTopPerformers(
   return useQuery({
     queryKey: [usesBackendFinance() ? 'backend-finance' : 'legacy-finance', 'royalty-top-performers', currentPeriods, previousPeriods, groupBy, limit],
     queryFn: async () => {
+      if (usesBackendFinance()) return (await royaltiesApi.analytics<any[]>('top', { current_period: currentPeriods, previous_period: previousPeriods, group_by: groupBy, limit })).map(d => ({ name: d.name, revenue: Number(d.revenue || 0), streams: Number(d.streams || 0), growth: Number(d.growth || 0) }));
       requireLegacyFinance();
       const { data, error } = await supabase.rpc('get_royalty_top_performers' as any, {
         _current_periods: currentPeriods,

@@ -7,7 +7,7 @@ const root = path.resolve(__dirname, '../../..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const evaluate = (file, require) => {
   const exports = {};
-  vm.runInNewContext(ts.transpileModule(read(file), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports, require });
+  vm.runInNewContext(ts.transpileModule(read(file), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports, require, URLSearchParams });
   return exports;
 };
 let domain = '';
@@ -18,6 +18,11 @@ let egress = 0;
 const forbidden = new Proxy({}, { get() { egress++; throw Error('Unexpected Supabase access'); } });
 const dependencies = name => {
   if (name === '@/components/finance/mode') return mode;
+  if (name === '@/api/royalties') return { royaltiesApi: {
+    analytics: async view => view === 'stats' ? { total_revenue: '70.00', total_streams: '10', unique_artists: '1', unique_labels: '1', unique_platforms: '1', unique_tracks: '1' }
+      : [{ period: '2026-01', name: 'Spotify', revenue: '70.00', streams: '10', label_name: 'Label', artist_name: 'Artist', isrc: 'FRX762598330', title: 'Track', label: 'Label', data_type: 'current' }],
+    periods: async () => ({ items: ['2026-01'] }),
+  } };
   if (name === '@/integrations/supabase/client') return { supabase: forbidden };
   if (name === '@tanstack/react-query') return { useQuery: options => options };
   throw Error(name);
@@ -31,12 +36,12 @@ const dependencies = name => {
     for (const [name, hook] of Object.entries(hooks)) {
       const query = name === 'useRoyaltyTopPerformers' ? hook(['2026-01'], [], 'title')
         : name === 'useRoyaltyComparison' ? hook(['2026-01'], []) : hook(null);
-      await assert.rejects(query.queryFn(), /backend/);
+      await query.queryFn();
       assert.equal(query.queryKey[0], 'backend-finance');
     }
-    await assert.rejects(records.fetchAllRoyalties(), /backend/);
-    await assert.rejects(invoices.createXenditInvoice('release'), /backend/);
-    await assert.rejects(invoices.createCopyrightInvoice('registration'), /backend/);
+    await assert.rejects(records.fetchAllRoyalties(), /Layanan keuangan backend/);
+    await assert.rejects(invoices.createXenditInvoice('release'), /Layanan keuangan backend/);
+    await assert.rejects(invoices.createCopyrightInvoice('registration'), /Layanan keuangan backend/);
   }
   assert.equal(egress, 0);
   domain = '';
@@ -59,6 +64,8 @@ const dependencies = name => {
   assert.equal(calls.at(-1)[0], '/api/v1/royalties/imports/batch%2Fid?limit=100&offset=200');
   await royalties.royaltiesApi.reconciliation('batch/id');
   assert.equal(calls.at(-1)[0], '/api/v1/admin/royalties/imports/batch%2Fid/reconciliation');
+  await royalties.royaltiesApi.analytics('top', { current_period: ['2026-01'], previous_period: ['2025-12'], group_by: 'title', limit: 10 });
+  assert.equal(calls.at(-1)[0], '/api/v1/royalties/analytics?view=top&current_period=2026-01&previous_period=2025-12&group_by=title&limit=10');
   await royalties.royaltiesApi.reconcile('batch/id', { expected_checksum: '0'.repeat(64), evidence: 'checked' });
   assert.equal(calls.at(-1)[1].method, 'POST');
   const copyright = evaluate('src/api/copyright.ts', () => ({ apiRequest: async (...args) => { calls.push(args); return {}; } }));

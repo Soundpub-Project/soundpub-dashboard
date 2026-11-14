@@ -83,6 +83,18 @@ test('royalty report scopes admin, label, whitelabel and artist without cross-ow
     assert.equal(artistReport.summary.owner_revenue, '70.00');
     assert.equal((await service.report(admin, { search: 'apple', period: '2026-10' })).total, 1);
     assert.equal((await service.report(admin, { release_id: releaseA })).items[0]?.track_id, trackA);
+    const adminStats = await service.analytics(admin, { view: 'stats' });
+    assert.equal(adminStats.total_revenue, '300.00');
+    const labelStats = await service.analytics(label, { view: 'stats' });
+    assert.equal(labelStats.total_revenue, '21.00');
+    const artistStats = await service.analytics(artistA, { view: 'stats' });
+    assert.equal(artistStats.total_revenue, '70.00');
+    const labelPlatform = await service.analytics(label, { view: 'platform', limit: 10 });
+    assert.deepEqual(labelPlatform, [{ name: 'Spotify', revenue: '21.00', streams: '10' }]);
+    const artistTrack = await service.analytics(artistA, { view: 'track', period: '2026-10' });
+    assert.equal(artistTrack[0]?.revenue, '70.00');
+    assert.equal(artistTrack[0]?.isrc, 'FRX762598330');
+    await assert.rejects(service.analytics(user, { view: 'stats' }), { code: 'FORBIDDEN' });
     await assert.rejects(service.report(user), { code: 'FORBIDDEN' });
   } finally { await database.close(); }
 });

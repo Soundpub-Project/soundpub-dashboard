@@ -895,6 +895,100 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
         return { items };
       });
     },
+    async analytics(actor: Principal, input: unknown = {}) {
+      const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
+      const monthList = z.preprocess(value => value === undefined ? [] : Array.isArray(value) ? value : [value], z.array(month).max(24));
+      const query = parse(z.strictObject({
+        view: z.enum(['stats','monthly','platform','country','period','label','artist','track','comparison','top']),
+        period: month.optional(), limit: z.coerce.number().int().min(1).max(200).default(20),
+        group_by: z.enum(['title','platform','country']).default('title'), current_period: monthList, previous_period: monthList,
+      }), input);
+      return authorized(actor, false, async db => {
+        const current = (await usersRepository(db).lock([actor.id], false)).get(actor.id);
+        if (!current) throw new ApiError(403, 'FORBIDDEN');
+        const admin = allows(current, 'admin');
+        const label = current.roles.includes('label') || current.roles.includes('whitelabel');
+        const owner = current.roles.includes('artist') || current.roles.includes('label_custom');
+        if (!admin && !label && !owner) throw new ApiError(403, 'FORBIDDEN');
+        // Centralized visibility and corrected-batch filtering keep every view consistent.
+        const visible = `WITH visible AS MATERIALIZED (
+          SELECT e.period,e.platform,e.country,e.sales_unit,e.source_isrc,e.artist_id,e.track_id,e.label_owner_user_id,
+            t.title AS track_title,r.artist_name,COALESCE(lp.full_name,'Unknown') AS label_name,
+            CASE WHEN $2::boolean THEN e.net_amount ELSE own.amount END AS revenue,
+            CASE WHEN $2::boolean OR $3::boolean THEN shares.artist_amount ELSE own_shares.artist_amount END AS artist_share,
+            CASE WHEN $2::boolean OR $3::boolean THEN shares.label_amount ELSE own_shares.label_amount END AS label_share,
+            CASE WHEN $2::boolean OR $3::boolean THEN shares.soundpub_amount ELSE own_shares.soundpub_amount END AS admin_share
+          FROM soundpub.royalty_import_entries e
+          JOIN soundpub.releases r ON r.id=e.release_id JOIN soundpub.tracks t ON t.id=e.track_id
+          LEFT JOIN soundpub.profiles lp ON lp.id=e.label_owner_user_id
+          LEFT JOIN soundpub.royalty_import_corrections correction ON correction.batch_id=e.batch_id
+          CROSS JOIN LATERAL (SELECT COALESCE(sum(a.amount),0) AS amount FROM soundpub.royalty_import_allocations a
+            WHERE a.entry_id=e.id AND a.owner_id=$1) own
+          CROSS JOIN LATERAL (SELECT COALESCE(sum(a.amount) FILTER (WHERE a.component='ARTIST'),0) AS artist_amount,
+            COALESCE(sum(a.amount) FILTER (WHERE a.component='LABEL'),0) AS label_amount,
+            COALESCE(sum(a.amount) FILTER (WHERE a.component='SOUNDPUB'),0) AS soundpub_amount
+            FROM soundpub.royalty_import_allocations a WHERE a.entry_id=e.id) shares
+          CROSS JOIN LATERAL (SELECT COALESCE(sum(a.amount) FILTER (WHERE a.component='ARTIST'),0) AS artist_amount,
+            COALESCE(sum(a.amount) FILTER (WHERE a.component='LABEL'),0) AS label_amount,
+            COALESCE(sum(a.amount) FILTER (WHERE a.component='SOUNDPUB'),0) AS soundpub_amount
+            FROM soundpub.royalty_import_allocations a WHERE a.entry_id=e.id AND a.owner_id=$1) own_shares
+          WHERE correction.id IS NULL AND ($2::boolean OR ($3::boolean AND e.label_owner_user_id=$1)
+            OR ($4::boolean AND own.amount>0))
+        )`;
+        const base = [actor.id,admin,label,owner];
+        if (query.view==='stats') return (await db.query(`${visible} SELECT COALESCE(sum(revenue),0)::numeric(24,2)::text AS total_revenue,
+          COALESCE(sum(sales_unit),0)::bigint::text AS total_streams,count(DISTINCT artist_id)::text AS unique_artists,
+          count(DISTINCT label_owner_user_id)::text AS unique_labels,count(DISTINCT platform)::text AS unique_platforms,
+          count(DISTINCT track_id)::text AS unique_tracks FROM visible`,base)).rows[0];
+        if (query.view==='monthly') return (await db.query(`${visible} SELECT period,sum(revenue)::numeric(24,2)::text AS revenue,
+          COALESCE(sum(sales_unit),0)::bigint::text AS streams FROM visible GROUP BY period ORDER BY period`,base)).rows;
+        if (query.view==='platform'||query.view==='country') {
+          const dimension=query.view==='platform'?'platform':'country';
+          return (await db.query(`${visible} SELECT COALESCE(${dimension},'Unknown') AS name,sum(revenue)::numeric(24,2)::text AS revenue,
+            COALESCE(sum(sales_unit),0)::bigint::text AS streams FROM visible GROUP BY COALESCE(${dimension},'Unknown')
+            ORDER BY sum(revenue) DESC,name LIMIT $5`,[...base,query.limit])).rows;
+        }
+        if (query.view==='period') return (await db.query(`${visible}, totals AS (SELECT period,sum(revenue) AS revenue,
+          COALESCE(sum(sales_unit),0)::bigint AS streams,count(DISTINCT track_id)::bigint AS unique_tracks,
+          count(DISTINCT artist_id)::bigint AS unique_artists,count(DISTINCT label_owner_user_id)::bigint AS unique_labels FROM visible GROUP BY period
+          ), ranked_platform AS (SELECT period,COALESCE(platform,'Unknown') AS value,row_number() OVER (PARTITION BY period ORDER BY sum(revenue) DESC,COALESCE(platform,'Unknown')) AS rank FROM visible GROUP BY period,COALESCE(platform,'Unknown')
+          ), ranked_country AS (SELECT period,COALESCE(country,'Unknown') AS value,row_number() OVER (PARTITION BY period ORDER BY sum(revenue) DESC,COALESCE(country,'Unknown')) AS rank FROM visible GROUP BY period,COALESCE(country,'Unknown')
+          ) SELECT totals.period,totals.revenue::numeric(24,2)::text AS revenue,totals.streams::text AS streams,totals.unique_tracks::text,
+          totals.unique_artists::text,totals.unique_labels::text,platform.value AS top_platform,country.value AS top_country,
+          CASE WHEN lag(totals.revenue) OVER (ORDER BY totals.period)=0 OR lag(totals.revenue) OVER (ORDER BY totals.period) IS NULL THEN '0.00'
+          ELSE round(((totals.revenue-lag(totals.revenue) OVER (ORDER BY totals.period))/lag(totals.revenue) OVER (ORDER BY totals.period))*100,2)::text END AS growth
+          FROM totals LEFT JOIN ranked_platform platform ON platform.period=totals.period AND platform.rank=1
+          LEFT JOIN ranked_country country ON country.period=totals.period AND country.rank=1 ORDER BY totals.period`,base)).rows;
+        if (query.view==='label') return (await db.query(`${visible} SELECT label_name,sum(revenue)::numeric(24,2)::text AS revenue,
+          COALESCE(sum(sales_unit),0)::bigint::text AS streams,sum(artist_share)::numeric(24,2)::text AS artist_share,
+          sum(label_share)::numeric(24,2)::text AS label_share,sum(admin_share)::numeric(24,2)::text AS admin_share FROM visible
+          WHERE ($5::text IS NULL OR period=$5) GROUP BY label_name ORDER BY sum(revenue) DESC,label_name`,[...base,query.period??null])).rows;
+        if (query.view==='artist') return (await db.query(`${visible} SELECT artist_name,sum(revenue)::numeric(24,2)::text AS revenue,
+          COALESCE(sum(sales_unit),0)::bigint::text AS streams,count(DISTINCT track_id)::text AS track_count,false AS is_soundpub,
+          sum(artist_share)::numeric(24,2)::text AS artist_share,sum(label_share)::numeric(24,2)::text AS label_share,
+          sum(admin_share)::numeric(24,2)::text AS admin_share FROM visible WHERE ($5::text IS NULL OR period=$5)
+          GROUP BY artist_name ORDER BY sum(revenue) DESC,artist_name LIMIT $6`,[...base,query.period??null,query.limit])).rows;
+        if (query.view==='track') return (await db.query(`${visible} SELECT source_isrc AS isrc,MAX(track_title) AS title,MAX(artist_name) AS artist_name,
+          MAX(label_name) AS label,sum(revenue)::numeric(24,2)::text AS revenue,COALESCE(sum(sales_unit),0)::bigint::text AS streams,
+          count(DISTINCT platform)::text AS platform_count,count(DISTINCT country)::text AS country_count,false AS is_soundpub,
+          sum(artist_share)::numeric(24,2)::text AS artist_share,sum(label_share)::numeric(24,2)::text AS label_share,
+          sum(admin_share)::numeric(24,2)::text AS admin_share FROM visible WHERE source_isrc IS NOT NULL AND ($5::text IS NULL OR period=$5)
+          GROUP BY source_isrc ORDER BY sum(revenue) DESC,source_isrc`,[...base,query.period??null])).rows;
+        if (query.view==='comparison') return (await db.query(`${visible} SELECT 'current' AS data_type,period,sum(revenue)::numeric(24,2)::text AS revenue,
+          COALESCE(sum(sales_unit),0)::bigint::text AS streams FROM visible WHERE period=ANY($5::text[]) GROUP BY period UNION ALL
+          SELECT 'previous',period,sum(revenue)::numeric(24,2)::text,COALESCE(sum(sales_unit),0)::bigint::text FROM visible
+          WHERE period=ANY($6::text[]) GROUP BY period`,[...base,query.current_period,query.previous_period])).rows;
+        const group=query.group_by==='title'?'track_title':query.group_by;
+        return (await db.query(`${visible}, current_data AS (SELECT COALESCE(${group},'Unknown') AS name,sum(revenue) AS revenue,
+          COALESCE(sum(sales_unit),0)::bigint AS streams FROM visible WHERE period=ANY($5::text[]) GROUP BY COALESCE(${group},'Unknown')),
+          previous_data AS (SELECT COALESCE(${group},'Unknown') AS name,sum(revenue) AS revenue FROM visible WHERE period=ANY($6::text[])
+          GROUP BY COALESCE(${group},'Unknown')) SELECT current_data.name,current_data.revenue::numeric(24,2)::text AS revenue,
+          current_data.streams::text AS streams,CASE WHEN COALESCE(previous_data.revenue,0)=0 THEN '0.00' ELSE
+          round(((current_data.revenue-previous_data.revenue)/previous_data.revenue)*100,2)::text END AS growth
+          FROM current_data LEFT JOIN previous_data USING(name) ORDER BY current_data.revenue DESC,current_data.name LIMIT $7`,
+          [...base,query.current_period,query.previous_period,query.limit])).rows;
+      });
+    },
     async report(actor: Principal, input: unknown = {}) {
       const query = parse(z.strictObject({
         period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),

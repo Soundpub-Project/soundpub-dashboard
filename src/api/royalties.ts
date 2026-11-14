@@ -222,6 +222,12 @@ export interface RoyaltyReport {
     owner_gross_revenue: string; owner_corrections: string; owner_revenue: string };
 }
 
+export type RoyaltyAnalyticsView = 'stats' | 'monthly' | 'platform' | 'country' | 'period' | 'label' | 'artist' | 'track' | 'comparison' | 'top';
+export interface RoyaltyAnalyticsQuery {
+  period?: string | null; limit?: number; group_by?: 'title' | 'platform' | 'country';
+  current_period?: string[]; previous_period?: string[];
+}
+
 export const royaltiesApi = {
   requestFileUpload: (body: { source: string; filename: string; mime_type: 'text/csv'; size: number; checksum: string }) =>
     apiRequest<RoyaltyFileUploadIntent>('/api/v1/royalties/import-files', { method: 'POST', body }),
@@ -242,6 +248,15 @@ export const royaltiesApi = {
   }>(`/api/v1/admin/royalties/import-files/${encodeURIComponent(id)}/approve`, { method: 'POST', body }),
   commitFileSession: (id: string) => apiRequest<{ id: string; replaced_id?: string; replayed: boolean }>(`/api/v1/royalties/import-files/${encodeURIComponent(id)}/commit`, { method: 'POST', timeoutMs: 120000 }),
   periods: (signal?: AbortSignal) => apiRequest<{ items: string[] }>('/api/v1/royalties/periods', { signal }),
+  analytics: <T>(view: RoyaltyAnalyticsView, query: RoyaltyAnalyticsQuery = {}, signal?: AbortSignal) => {
+    const params = new URLSearchParams({ view });
+    for (const [key, value] of Object.entries(query)) {
+      if (value === undefined || value === null || value === '') continue;
+      if (Array.isArray(value)) for (const item of value) params.append(key, item);
+      else params.set(key, String(value));
+    }
+    return apiRequest<T>(`/api/v1/royalties/analytics?${params}`, { signal });
+  },
   report: (query: RoyaltyReportQuery = {}, signal?: AbortSignal) => {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== '') params.set(key, String(value));

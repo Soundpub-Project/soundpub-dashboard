@@ -48,6 +48,7 @@ export function registerFinancialRoutes(app: FastifyInstance, services: {
   if (services.royalties) {
     const service = services.royalties;
     app.get('/api/v1/royalties/breakdown', async request => service.breakdown(await authenticate(request), request.query));
+    app.get('/api/v1/royalties/analytics', async request => service.analytics(await authenticate(request), request.query));
     app.get('/api/v1/royalties/periods', async request => service.periods(await authenticate(request)));
     app.get('/api/v1/royalties/report', async request => service.report(await authenticate(request), request.query));
     app.get<{ Params: { id: string } }>('/api/v1/royalties/releases/:id', async request =>
@@ -81,6 +82,7 @@ export function registerFinancialRoutes(app: FastifyInstance, services: {
     app.post('/api/v1/royalties/imports/:id/correction', async request => service.correct(await authenticate(request), (request.params as { id: string }).id, request.body, request.id));
     app.post('/api/v1/royalties/imports/:id/replacement/csv', async request => service.replaceCsv(await authenticate(request), (request.params as { id: string }).id, request.body, request.id));
     add('GET', '/api/v1/royalties/breakdown', 'getRoyaltyBreakdown');
+    add('GET', '/api/v1/royalties/analytics', 'getRoyaltyAnalytics');
     add('GET', '/api/v1/royalties/periods', 'listRoyaltyPeriods');
     add('GET', '/api/v1/royalties/report', 'getRoyaltyReport');
     add('GET', '/api/v1/royalties/releases/:id', 'getReleaseRoyaltyBreakdown');
