@@ -13,6 +13,15 @@ export async function mediaAuthority(db: PoolClient, actor: Principal,
     document_type?: UploadInput['document_type'] | null; copyright_document_type?: UploadInput['document_type'] | null }, write: boolean) {
   if (!actor || !allows(actor, 'authenticated')) throw new ApiError(403, 'FORBIDDEN');
   const { resource_type: type, resource_id: id } = binding;
+  if (type === 'payout') {
+    const current = (await usersRepository(db).lock([actor.id], true)).get(actor.id);
+    if (!current || !allows(current, 'authenticated')) throw new ApiError(403, 'FORBIDDEN');
+    const payout = (await db.query<{ user_id: string; status: string }>(
+      'SELECT user_id,status FROM soundpub.payout_requests WHERE id=$1 FOR UPDATE', [id])).rows[0];
+    if (!payout || !(allows(current, 'admin') || (!write && payout.user_id === current.id))) throw new ApiError(404, 'NOT_FOUND');
+    if (write && (binding.category !== 'PAYOUT_PROOF' || payout.status !== 'approved')) throw new ApiError(409, 'MEDIA_RESOURCE_LOCKED');
+    return { current, releaseId: null };
+  }
   if (type === 'copyright_registration') {
     const current = (await usersRepository(db).lock([actor.id], true)).get(actor.id);
     if (!current || !allows(current, 'authenticated')) throw new ApiError(403, 'FORBIDDEN');

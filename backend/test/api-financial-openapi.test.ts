@@ -36,12 +36,13 @@ test('financial OpenAPI preserves every method sharing a path', async () => {
     assert.ok(paths['/api/v1/payouts/destination'].put);
     assert.ok(paths['/api/v1/payouts'].get);
     assert.ok(paths['/api/v1/payouts'].post);
+    assert.ok(paths['/api/v1/admin/payouts/{id}/settle'].post);
     assert.ok(paths['/api/v1/admin/finance/reconciliation/latest'].get);
     assert.ok(paths['/api/v1/admin/finance/reconciliation/runs'].get);
     const operations = Object.values(paths).flatMap(path => Object.values(path as Record<string, unknown>))
       .filter(value => value && typeof value === 'object' && 'operationId' in value);
     assert.equal(operations.filter(operation => String((operation as { operationId: string }).operationId)
-      .match(/Royalty|Payout/)).length, 36);
+      .match(/Royalty|Payout/)).length, 37);
   } finally { await app.close(); }
 });
 

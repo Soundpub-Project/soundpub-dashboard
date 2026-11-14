@@ -2,14 +2,14 @@ import { z } from 'zod';
 import { ApiError } from '../api/types.js';
 
 export const categories = ['USER_AVATAR', 'LABEL_LOGO', 'RELEASE_COVER', 'TRACK_AUDIO', 'COPYRIGHT_DOCUMENT',
-  'COPYRIGHT_REGISTRATION_DOCUMENT', 'TAKEDOWN_DOCUMENT', 'OTHER'] as const;
+  'COPYRIGHT_REGISTRATION_DOCUMENT', 'TAKEDOWN_DOCUMENT', 'PAYOUT_PROOF', 'OTHER'] as const;
 export const uploadCategories = ['USER_AVATAR', 'LABEL_LOGO', 'RELEASE_COVER', 'TRACK_AUDIO',
-  'COPYRIGHT_REGISTRATION_DOCUMENT', 'TAKEDOWN_DOCUMENT', 'OTHER'] as const;
+  'COPYRIGHT_REGISTRATION_DOCUMENT', 'TAKEDOWN_DOCUMENT', 'PAYOUT_PROOF', 'OTHER'] as const;
 export const SETTINGS_MEDIA_RESOURCE_ID = '00000000-0000-4000-8000-0000000003d0';
 export const copyrightDocumentType = z.enum(['IDENTITY','TAX','POWER_OF_ATTORNEY','AUDIO_DEMO','LYRICS','WORK_EVIDENCE',
   'CONTRACT_GENERATED','CONTRACT_STAMPED','CONTRACT_SIGNED','OTHER']);
 export const uploadInput = z.strictObject({
-  category: z.enum(uploadCategories), resource_type: z.enum(['user', 'label', 'release', 'track', 'settings', 'takedown', 'copyright_registration']),
+  category: z.enum(uploadCategories), resource_type: z.enum(['user', 'label', 'release', 'track', 'settings', 'takedown', 'copyright_registration', 'payout']),
   resource_id: z.uuid(), mime_type: z.string().max(100), size: z.number().int().min(1),
   checksum: z.string().regex(/^[a-fA-F0-9]{64}$/).transform(v => v.toLowerCase()),
   filename: z.string().min(1).max(255).regex(/^[^/\\]+$/)
@@ -20,7 +20,7 @@ export const uploadInput = z.strictObject({
 });
 export type UploadInput = z.infer<typeof uploadInput>;
 export const mediaDto = z.strictObject({
-  id: z.uuid(), category: z.enum(categories), resource_type: z.enum(['user', 'label', 'release', 'track', 'settings', 'takedown', 'copyright_registration']), resource_id: z.uuid(),
+  id: z.uuid(), category: z.enum(categories), resource_type: z.enum(['user', 'label', 'release', 'track', 'settings', 'takedown', 'copyright_registration', 'payout']), resource_id: z.uuid(),
   variant: z.enum(['default', 'light', 'dark']), visibility: z.literal('PRIVATE'),
   mime_type: z.string(), size: z.number(), checksum: z.string(), document_type: copyrightDocumentType.nullable(),
   status: z.enum(['PENDING', 'ACTIVE', 'FAILED', 'REPLACED', 'DELETED']),
@@ -36,7 +36,7 @@ export interface MediaRow extends MediaDto {
 }
 export const limits = { USER_AVATAR: 5 * 1024 ** 2, LABEL_LOGO: 1024 ** 2,
   RELEASE_COVER: 5 * 1024 ** 2, TRACK_AUDIO: 500 * 1024 ** 2, COPYRIGHT_REGISTRATION_DOCUMENT: 25 * 1024 ** 2,
-  TAKEDOWN_DOCUMENT: 10 * 1024 ** 2,
+  TAKEDOWN_DOCUMENT: 10 * 1024 ** 2, PAYOUT_PROOF: 10 * 1024 ** 2,
   OTHER: 5 * 1024 ** 2 } as const;
 const extensions: Record<string, string[]> = {
   'image/png': ['png'], 'image/jpeg': ['jpg', 'jpeg'], 'image/webp': ['webp'],
@@ -49,7 +49,7 @@ export function validateUpload(value: unknown): UploadInput {
   if (!parsed.success) throw new ApiError(400, 'BAD_REQUEST');
   const input = parsed.data;
   const type = { USER_AVATAR: 'user', LABEL_LOGO: 'label', RELEASE_COVER: 'release', TRACK_AUDIO: 'track',
-    COPYRIGHT_REGISTRATION_DOCUMENT: 'copyright_registration', TAKEDOWN_DOCUMENT: 'takedown',
+    COPYRIGHT_REGISTRATION_DOCUMENT: 'copyright_registration', TAKEDOWN_DOCUMENT: 'takedown', PAYOUT_PROOF: 'payout',
     OTHER: 'settings' }[input.category as keyof typeof limits];
   if (!type) throw new ApiError(400, 'BAD_REQUEST');
   if (input.resource_type !== type || (!['LABEL_LOGO', 'OTHER'].includes(input.category) && input.variant !== 'default')
@@ -58,7 +58,7 @@ export function validateUpload(value: unknown): UploadInput {
   if (input.size > limits[input.category as keyof typeof limits]) throw new ApiError(400, 'MEDIA_SIZE_LIMIT');
   if (!(extensions[input.mime_type] ?? []).includes(input.filename.split('.').at(-1)!.toLowerCase())
     || !(input.category === 'TRACK_AUDIO' ? input.mime_type.startsWith('audio/')
-      : ['TAKEDOWN_DOCUMENT', 'COPYRIGHT_REGISTRATION_DOCUMENT'].includes(input.category)
+      : ['TAKEDOWN_DOCUMENT', 'COPYRIGHT_REGISTRATION_DOCUMENT', 'PAYOUT_PROOF'].includes(input.category)
         ? input.mime_type === 'application/pdf' || input.mime_type.startsWith('image/') || input.mime_type.startsWith('audio/')
       : input.mime_type.startsWith('image/'))) throw new ApiError(400, 'MEDIA_MIME_INVALID');
   return input;

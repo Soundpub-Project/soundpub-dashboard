@@ -7,7 +7,7 @@ import { ApiError } from '../api/types.js';
 import { createAuthorizer, type Principal } from '../auth/index.js';
 import { usersRepository } from '../users/repository.js';
 import { withTransaction } from '../db/pool.js';
-import { keyInput, money, minor, projection, requestInput, transitionAllowed, type Payout, type PayoutFinance, type State } from './contracts.js';
+import { keyInput, money, minor, projection, requestInput, settlementInput, transitionAllowed, type Payout, type PayoutFinance, type State } from './contracts.js';
 
 const allows = createAuthorizer();
 function parse<T>(schema: z.ZodType<T>, input: unknown): T {
@@ -70,7 +70,7 @@ export function createPayoutsService(pool: Pool, finance: PayoutFinance) {
     return { eligible: reasons.length === 0, reasons, available: e.reconciled ? e.available : null,
       minimum: e.minimum, currency: 'IDR' as const };
   }
-  async function transition(actor: Principal, id: string, input: unknown, key: string, trusted = false) {
+  async function transition(actor: Principal, id: string, input: unknown, key: string, trusted = false, proofId?: string) {
     parse(z.uuid(), id); parse(keyInput, key);
     const value = parse(z.strictObject({ status: z.enum(['approved', 'rejected', 'cancelled', 'failed', 'paid']),
       evidence: z.string().min(1).max(200).optional() }), input);
@@ -90,6 +90,14 @@ export function createPayoutsService(pool: Pool, finance: PayoutFinance) {
         if (!transitionAllowed(row.status, value.status)) throw new ApiError(409, 'PAYOUT_TRANSITION_CONFLICT');
         if (value.status === 'paid') {
           if (!value.evidence) throw new ApiError(409, 'SETTLEMENT_EVIDENCE_REQUIRED');
+          if (proofId) {
+            const proof = await db.query<{ owner_user_id: string }>(`SELECT media.owner_user_id FROM soundpub.media_objects media
+              WHERE media.id=$2 AND media.status='ACTIVE' AND media.category='PAYOUT_PROOF'
+                AND media.resource_type='payout' AND media.resource_id=$1 FOR UPDATE`, [id,proofId]);
+            if (!proof.rowCount) throw new ApiError(409, 'SETTLEMENT_PROOF_REQUIRED');
+            await db.query(`INSERT INTO soundpub.payout_settlement_proofs(payout_id,media_object_id,uploaded_by)
+              VALUES($1,$2,$3)`, [id,proofId,current.id]);
+          } else if (!trusted) throw new ApiError(409, 'SETTLEMENT_PROOF_REQUIRED');
           await finance.settle(db, row.id, value.evidence);
         } else if (['cancelled', 'failed', 'rejected'].includes(value.status)) await finance.release(db, row.id);
         await db.query('UPDATE soundpub.payout_requests SET status=$2,updated_at=now() WHERE id=$1', [id, value.status]);
@@ -248,6 +256,10 @@ export function createPayoutsService(pool: Pool, finance: PayoutFinance) {
     },
     cancel(actor: Principal, id: string, key: string) { return transition(actor, id, { status: 'cancelled' }, key); },
     transition(actor: Principal, id: string, input: unknown, key: string) { return transition(actor, id, input, key); },
+    async settle(actor: Principal, id: string, input: unknown, key: string) {
+      const value = parse(settlementInput, input);
+      return transition(actor, id, { status: 'paid', evidence: `proof:${value.proof_media_id}:${value.evidence}` }, key, true, value.proof_media_id);
+    },
     /** Backend composition only: never bind this capability to browser routes. */
     settleMock(actor: Principal, id: string, evidence: string, key: string) {
       return transition(actor, id, { status: 'paid', evidence }, key, true);

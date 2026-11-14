@@ -9,8 +9,11 @@ export const keyInput = z.string().regex(/^[A-Za-z0-9:_-]{1,128}$/);
 export const states = ['pending', 'approved', 'rejected', 'cancelled', 'failed', 'paid'] as const;
 export type State = typeof states[number];
 export type Payout = { id: string; user_id: string; amount: string; currency: 'IDR'; status: State;
-  bank_name: string; account_holder_name: string; created_at: Date; updated_at: Date };
-export const projection = 'id,user_id,amount::text,currency,status,bank_name,account_holder_name,created_at,updated_at';
+  bank_name: string; account_holder_name: string; proof_media_id: string | null; created_at: Date; updated_at: Date };
+export const projection = `id,user_id,amount::text,currency,status,bank_name,account_holder_name,
+  (SELECT media_object_id FROM soundpub.payout_settlement_proofs WHERE payout_id=payout_requests.id) AS proof_media_id,
+  created_at,updated_at`;
+export const settlementInput = z.strictObject({ proof_media_id: z.uuid(), evidence: z.string().trim().min(1).max(200) });
 
 /** Trusted backend adapter. Use supplied transaction client, common finance locks,
  * current label roster and exact source allocations. Never commit or call providers.

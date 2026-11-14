@@ -3,7 +3,9 @@ import { picPayoutRequest } from './picPayoutRequest';
 import { PicDestinationStatus } from './PicDestinationStatus';
 import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { payoutsApi, type PayoutRequest } from '@/api/payouts';
+import { payoutsApi, type BackendPayout, type PayoutRequest } from '@/api/payouts';
+import { mediaApi } from '@/api/media';
+import { uploadBackendMedia } from '@/services/media';
 import { useAuth } from '@/hooks/useAuth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -17,6 +19,9 @@ export function BackendPayouts({ admin = false }: { admin?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [proofFiles, setProofFiles] = useState<Record<string, File | undefined>>({});
+  const [proofEvidence, setProofEvidence] = useState<Record<string, string>>({});
+  const settlement = useRef<{ payoutId: string; proofId: string; evidence: string; key: string } | null>(null);
   const [draft, setDraft] = useState<PayoutRequest>({ amount: '', currency: 'IDR', bank_name: '', account_number: '', account_holder_name: '' });
   // ponytail: retry keys survive component lifetime only; add persisted operation receipts before cross-session recovery.
   const operation = useRef<{ payload: string; key: string } | null>(null);
@@ -31,8 +36,39 @@ export function BackendPayouts({ admin = false }: { admin?: boolean }) {
     queryFn: ({ signal }) => payoutsApi.destination(signal), retry: false });
   const canRequest = !eligibility.isFetching && !eligibility.isError && eligibility.data?.eligible === true
     && eligibility.data.available !== null && (!custom || (!destination.isFetching && !destination.isError && destination.data?.destination?.verified === true));
-  const perform = async (action: 'request' | 'cancel' | 'approved' | 'rejected' | 'failed', id?: string) => {
-    if (inFlight.current || !allowed || (action === 'request' && !canRequest)) return;
+  const settlePayout = async (payout: BackendPayout) => {
+    const evidence = (proofEvidence[payout.id] ?? '').trim();
+    const file = proofFiles[payout.id];
+    if (!allowed || !isAdmin || payout.status !== 'approved' || !evidence || inFlight.current || operation.current) return;
+    if (settlement.current && (settlement.current.payoutId !== payout.id || settlement.current.evidence !== evidence)) {
+      setError('Selesaikan atau muat ulang settlement sebelumnya sebelum mengubah bukti.'); return;
+    }
+    inFlight.current = true; setBusy(true); setError(''); setMessage('');
+    try {
+      if (!settlement.current) {
+        if (!file) throw new Error('Pilih bukti transfer terlebih dahulu.');
+        const object = await uploadBackendMedia(file, { category: 'PAYOUT_PROOF', resource_type: 'payout', resource_id: payout.id });
+        settlement.current = { payoutId: payout.id, proofId: object.id, evidence, key: crypto.randomUUID() };
+      }
+      const pending = settlement.current;
+      if (!pending || pending.payoutId !== payout.id || pending.evidence !== evidence) throw new Error('Settlement tertunda tidak cocok.');
+      const row = await payoutsApi.settle(payout.id, { proof_media_id: pending.proofId, evidence }, pending.key);
+      settlement.current = null;
+      setProofFiles(current => ({ ...current, [payout.id]: undefined }));
+      setMessage(`Pencairan ${row.id}: ${row.status}`);
+      await query.refetch();
+    } catch {
+      setError('Settlement belum terkonfirmasi. Coba ulangi aksi yang sama; bukti dan kunci idempotensi dipertahankan.');
+    } finally { inFlight.current = false; setBusy(false); }
+  };
+  const downloadProof = async (id: string) => {
+    try {
+      const capability = await mediaApi.download(id);
+      const link = document.createElement('a'); link.href = capability.url; link.rel = 'noopener noreferrer'; link.target = '_blank';
+      document.body.append(link); link.click(); link.remove();
+    } catch { setError('Bukti pembayaran tidak dapat diunduh.'); }
+  };  const perform = async (action: 'request' | 'cancel' | 'approved' | 'rejected' | 'failed', id?: string) => {
+    if (inFlight.current || settlement.current || !allowed || (action === 'request' && !canRequest)) return;
     inFlight.current = true; setBusy(true); setError(''); setMessage('');
     try {
       const request = custom ? (action === 'request' ? picPayoutRequest(draft.amount, destination.data?.destination) : draft) : draft;
@@ -66,7 +102,7 @@ export function BackendPayouts({ admin = false }: { admin?: boolean }) {
       {([['amount', 'Jumlah IDR (contoh 100000.00)'], ['bank_name', 'Bank'], ['account_number', 'Nomor rekening'], ['account_holder_name', 'Nama pemilik rekening']] as const).filter(([key]) => !custom || key === 'amount').map(([key, label]) => <label key={key}>{label}<Input required inputMode={key === 'amount' ? 'decimal' : key === 'account_number' ? 'numeric' : 'text'} pattern={key === 'amount' ? '(0|[1-9][0-9]{0,17})[.][0-9]{2}' : key === 'account_number' ? '[0-9]{4,40}' : undefined} value={draft[key]} disabled={busy || !!operation.current} onChange={event => setDraft({ ...draft, [key]: event.target.value })} /></label>)}
       <Button type="submit" disabled={busy || !canRequest}>Ajukan pencairan</Button>
     </form>}
-    {query.data && !query.isError && <div className="overflow-x-auto"><table className="w-full text-sm"><caption className="sr-only">Riwayat pencairan</caption><thead><tr>{['ID', 'Pemilik rekening', 'Jumlah', 'Status', 'Tanggal', 'Aksi'].map(t => <th scope="col" className="p-2 text-left" key={t}>{t}</th>)}</tr></thead><tbody>{query.data.items.map(item => <tr key={item.id}><td className="p-2 break-all">{item.id}</td><td className="p-2 break-all">{item.account_holder_name}<br />{item.bank_name}</td><td className="p-2">{item.currency} {item.amount}</td><td className="p-2">{item.status}</td><td className="p-2">{new Date(item.created_at).toLocaleString('id-ID')}</td><td className="p-2"><div className="flex flex-wrap gap-2">{!admin && item.status === 'pending' && <Button variant="outline" disabled={busy} onClick={() => void perform('cancel', item.id)}>Batalkan</Button>}{admin && ['pending', 'approved'].includes(item.status) && <>{item.status === 'pending' && <Button variant="outline" disabled={busy} onClick={() => void perform('approved', item.id)}>Setujui</Button>}<Button variant="outline" disabled={busy} onClick={() => void perform('rejected', item.id)}>Tolak</Button><Button variant="outline" disabled={busy} onClick={() => void perform('failed', item.id)}>Gagal</Button></>}</div></td></tr>)}</tbody></table>{!query.data.items.length && <p>Belum ada pencairan.</p>}</div>}
+    {query.data && !query.isError && <div className="overflow-x-auto"><table className="w-full text-sm"><caption className="sr-only">Riwayat pencairan</caption><thead><tr>{['ID', 'Pemilik rekening', 'Jumlah', 'Status', 'Tanggal', 'Aksi'].map(t => <th scope="col" className="p-2 text-left" key={t}>{t}</th>)}</tr></thead><tbody>{query.data.items.map(item => <tr key={item.id}><td className="p-2 break-all">{item.id}</td><td className="p-2 break-all">{item.account_holder_name}<br />{item.bank_name}</td><td className="p-2">{item.currency} {item.amount}</td><td className="p-2">{item.status}</td><td className="p-2">{new Date(item.created_at).toLocaleString('id-ID')}</td><td className="p-2"><div className="flex flex-wrap gap-2">{!admin && item.status === 'pending' && <Button variant="outline" disabled={busy} onClick={() => void perform('cancel', item.id)}>Batalkan</Button>}{admin && ['pending', 'approved'].includes(item.status) && <>{item.status === 'pending' && <Button variant="outline" disabled={busy} onClick={() => void perform('approved', item.id)}>Setujui</Button>}<Button variant="outline" disabled={busy} onClick={() => void perform('rejected', item.id)}>Tolak</Button><Button variant="outline" disabled={busy} onClick={() => void perform('failed', item.id)}>Gagal</Button></>}{admin && item.status === 'approved' && <div className="grid gap-2"><label>Bukti pembayaran <Input type="file" accept="application/pdf,image/png,image/jpeg,image/webp" disabled={busy || (settlement.current !== null && settlement.current.payoutId !== item.id)} onChange={event => setProofFiles(current => ({ ...current, [item.id]: event.target.files?.[0] }))} /></label><label>Catatan transfer <Input required maxLength={200} value={proofEvidence[item.id] ?? ''} disabled={busy || (settlement.current !== null && settlement.current.payoutId !== item.id)} onChange={event => setProofEvidence(current => ({ ...current, [item.id]: event.target.value }))} /></label><Button variant="outline" disabled={busy || !(proofFiles[item.id] || settlement.current?.payoutId === item.id) || !(proofEvidence[item.id] ?? '').trim()} onClick={() => void settlePayout(item)}>Tandai lunas dengan bukti</Button></div>}{item.proof_media_id && <Button variant="outline" disabled={busy} onClick={() => void downloadProof(item.proof_media_id!)}>Lihat bukti</Button>}</div></td></tr>)}</tbody></table>{!query.data.items.length && <p>Belum ada pencairan.</p>}</div>}
     <div className="flex gap-2"><Button variant="outline" disabled={!allowed || query.isFetching || offset === 0} onClick={() => setOffset(offset - 50)}>Sebelumnya</Button><Button variant="outline" disabled={!allowed || query.isFetching || !query.data || query.isError || query.data.items.length < 50} onClick={() => setOffset(offset + 50)}>Berikutnya</Button><Button variant="outline" disabled={!allowed || query.isFetching} onClick={() => { void query.refetch(); if (!admin) void eligibility.refetch(); }}>Muat ulang</Button></div>
   </section></DashboardLayout>;
 }

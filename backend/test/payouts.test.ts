@@ -101,8 +101,28 @@ test('payout PostgreSQL race, replay, rollback, release, settlement and authorit
     await service.transition(admin, second.id, { status: 'approved' }, 'approve');
     await assert.rejects(service.cancel(label, second.id, 'too-late'), { code: 'PAYOUT_TRANSITION_CONFLICT' });
     await assert.rejects(service.transition(admin, second.id, { status: 'paid', evidence: 'forged' }, 'forged-paid'), { code: 'TRUSTED_SETTLEMENT_REQUIRED' });
-    await service.settleMock(admin, second.id, 'synthetic-evidence', 'settle');
-    await service.settleMock(admin, second.id, 'synthetic-evidence', 'settle');
+    await assert.rejects(service.settle(label, second.id, { proof_media_id: randomUUID(), evidence: 'forged' }, 'foreign-settle'), { code: 'FORBIDDEN' });
+    await assert.rejects(service.settle(admin, second.id, { proof_media_id: randomUUID(), evidence: 'missing' }, 'missing-proof'), { code: 'SETTLEMENT_PROOF_REQUIRED' });
+    const invalidProofId = randomUUID();
+    await owner.query(`INSERT INTO soundpub.media_objects
+      (id,bucket,object_key,owner_user_id,category,resource_type,resource_id,variant,mime_type,size,checksum,status,expires_at,cleanup_after)
+      VALUES($1,'synthetic', $2,$3,'PAYOUT_PROOF','payout',$4,'default','application/pdf',8,$5,'ACTIVE',now()+interval '1 day',now()+interval '1 day')`,
+    [invalidProofId, `media/objects/${invalidProofId}`, admin.id, randomUUID(), 'b'.repeat(64)]);
+    await assert.rejects(service.settle(admin, second.id, { proof_media_id: invalidProofId, evidence: 'mismatch' }, 'mismatch-proof'), { code: 'SETTLEMENT_PROOF_REQUIRED' });
+    await assert.rejects(owner.query(`INSERT INTO soundpub.payout_settlement_proofs(payout_id,media_object_id,uploaded_by) VALUES($1,$2,$3)`,
+      [second.id,invalidProofId,admin.id]), (error: { code?: string }) => error.code === '23514');
+    const proofId = randomUUID();
+    await owner.query(`INSERT INTO soundpub.media_objects
+      (id,bucket,object_key,owner_user_id,category,resource_type,resource_id,variant,mime_type,size,checksum,status,expires_at,cleanup_after)
+      VALUES($1,'synthetic', $2,$3,'PAYOUT_PROOF','payout',$4,'default','application/pdf',8,$5,'ACTIVE',now()+interval '1 day',now()+interval '1 day')`,
+    [proofId, `media/objects/${proofId}`, admin.id, second.id, 'a'.repeat(64)]);
+    const settled = await service.settle(admin, second.id, { proof_media_id: proofId, evidence: 'synthetic-evidence' }, 'settle');
+    assert.equal(settled.status, 'paid');
+    assert.equal(settled.proof_media_id, proofId);
+    assert.equal((await owner.query('SELECT count(*) FROM soundpub.payout_settlement_proofs WHERE payout_id=$1 AND media_object_id=$2', [second.id,proofId])).rows[0].count, '1');
+    assert.equal((await owner.query(`SELECT count(*) FROM soundpub.finance_events WHERE kind='PAYOUT_SETTLEMENT' AND business_reference=$1`, [second.id])).rows[0].count, '1');
+    assert.equal((await service.settle(admin, second.id, { proof_media_id: proofId, evidence: 'synthetic-evidence' }, 'settle')).status, 'paid');
+    await assert.rejects(owner.query('DELETE FROM soundpub.media_objects WHERE id=$1', [proofId]), (error: { code?: string }) => error.code === '23503');
     await assert.rejects(service.transition(admin, second.id, { status: 'failed' }, 'regress'), { code: 'PAYOUT_TRANSITION_CONFLICT' });
     const third = await service.request(label, { ...input, amount: '100.00' }, 'third');
     await service.transition(admin, third.id, { status: 'failed' }, 'fail');

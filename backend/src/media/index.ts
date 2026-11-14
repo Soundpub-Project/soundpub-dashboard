@@ -16,7 +16,7 @@ function id(value: unknown) {
   return parsed.data;
 }
 function binding(row: Pick<MediaRow, 'category' | 'variant'>) {
-  if (['TAKEDOWN_DOCUMENT','COPYRIGHT_REGISTRATION_DOCUMENT'].includes(row.category)) return null;
+  if (['TAKEDOWN_DOCUMENT','COPYRIGHT_REGISTRATION_DOCUMENT','PAYOUT_PROOF'].includes(row.category)) return null;
   if (row.category === 'OTHER') return { table: 'application_settings', column: row.variant === 'light' ? 'dashboard_logo_light'
     : row.variant === 'dark' ? 'dashboard_logo_dark' : 'favicon', url: '' };
   if (row.category === 'USER_AVATAR') return { table: 'profiles', column: 'avatar_media_id', url: 'avatar_url' };
@@ -34,7 +34,9 @@ async function referenced(db: Pick<Pool, 'query'> | PoolClient, row: MediaRow) {
   if (!target) return row.category === 'COPYRIGHT_REGISTRATION_DOCUMENT'
     ? !!(await db.query(`SELECT id FROM soundpub.copyright_registration_files
       WHERE media_object_id=$1 AND detached_at IS NULL`, [row.id])).rowCount
-    : !!(await db.query(`SELECT id FROM soundpub.takedown_request_documents WHERE media_object_id=$1`, [row.id])).rowCount;
+    : row.category === 'PAYOUT_PROOF'
+      ? !!(await db.query(`SELECT id FROM soundpub.payout_settlement_proofs WHERE media_object_id=$1`, [row.id])).rowCount
+      : !!(await db.query(`SELECT id FROM soundpub.takedown_request_documents WHERE media_object_id=$1`, [row.id])).rowCount;
   return settingMedia(row)
     ? !!(await db.query(`SELECT id FROM soundpub.application_settings WHERE id=true AND settings->>$1=$2`, [target.column, row.id])).rowCount
     : !!(await db.query(`SELECT id FROM soundpub.${target.table} WHERE id=$1 AND ${target.column}=$2`, [row.resource_id, row.id])).rowCount;
@@ -194,6 +196,7 @@ export function createMediaService(pool: Pool, store: MediaObjectStore) {
           UNION ALL SELECT 1 FROM soundpub.tracks t WHERE t.audio_media_id=m.id
           UNION ALL SELECT 1 FROM soundpub.copyright_registration_files f
             WHERE f.media_object_id=m.id AND f.detached_at IS NULL
+          UNION ALL SELECT 1 FROM soundpub.payout_settlement_proofs p WHERE p.media_object_id=m.id
           UNION ALL SELECT 1 FROM soundpub.application_settings s WHERE s.settings->>'dashboard_logo_light'=m.id::text
           OR s.settings->>'dashboard_logo_dark'=m.id::text OR s.settings->>'favicon'=m.id::text))
         ORDER BY updated_at,id LIMIT $1`, [limit])).rows;

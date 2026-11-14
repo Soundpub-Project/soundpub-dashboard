@@ -28,6 +28,10 @@ test('media trust boundary: strict owner, binding, limits, extensions and signat
     assert.throws(() => validateUpload({ ...input, ...patch }), ApiError);
   }
   assert.throws(() => validateUpload({ ...input, category: 'COPYRIGHT_DOCUMENT' }), denied('BAD_REQUEST'));
+  const proof = validateUpload({ category: 'PAYOUT_PROOF', resource_type: 'payout', resource_id: randomUUID(),
+    mime_type: 'application/pdf', size: 8, checksum: 'a'.repeat(64), filename: 'transfer.pdf' });
+  assert.equal(proof.category, 'PAYOUT_PROOF');
+  assert.throws(() => validateUpload({ ...proof, mime_type: 'text/plain', filename: 'transfer.txt' }), denied('MEDIA_MIME_INVALID'));
   assertMediaSignature(png, 'image/png');
   assert.throws(() => assertMediaSignature(Buffer.from('spoof'), 'image/png'), denied('MEDIA_MIME_INVALID'));
   const wav = Buffer.alloc(44); wav.write('RIFF'); wav.write('WAVE', 8);

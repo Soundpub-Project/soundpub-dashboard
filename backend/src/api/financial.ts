@@ -103,7 +103,8 @@ export function registerFinancialRoutes(app: FastifyInstance, services: {
     app.post('/api/v1/payouts/:id/cancel', async request => service.cancel(await authenticate(request), (request.params as { id: string }).id, key(request)));
     app.get('/api/v1/admin/payouts', async request => service.list(await authenticate(request), request.query, true));
     app.post('/api/v1/admin/payouts/:id/transition', async request => service.transition(await authenticate(request), (request.params as { id: string }).id, request.body, key(request)));
-    for (const [method,path,id] of [['GET','/api/v1/payouts/eligibility','getPayoutEligibility'],['GET','/api/v1/payouts','listPayouts'],['POST','/api/v1/payouts','requestPayout'],['GET','/api/v1/payouts/:id','getPayout'],['POST','/api/v1/payouts/:id/cancel','cancelPayout'],['GET','/api/v1/admin/payouts','listAdminPayouts'],['POST','/api/v1/admin/payouts/:id/transition','transitionPayout']]) add(method!,path!,id!);
+    app.post('/api/v1/admin/payouts/:id/settle', async request => service.settle(await authenticate(request), (request.params as { id: string }).id, request.body, key(request)));
+    for (const [method,path,id] of [['GET','/api/v1/payouts/eligibility','getPayoutEligibility'],['GET','/api/v1/payouts','listPayouts'],['POST','/api/v1/payouts','requestPayout'],['GET','/api/v1/payouts/:id','getPayout'],['POST','/api/v1/payouts/:id/cancel','cancelPayout'],['GET','/api/v1/admin/payouts','listAdminPayouts'],['POST','/api/v1/admin/payouts/:id/transition','transitionPayout'],['POST','/api/v1/admin/payouts/:id/settle','settlePayout']]) add(method!,path!,id!);
   }
   if (services.payments) {
     const service = services.payments;
