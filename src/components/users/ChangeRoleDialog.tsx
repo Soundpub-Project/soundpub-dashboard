@@ -24,6 +24,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AlertTriangle, Loader2, Shield, Music, Building2, User, Crown, ShieldCheck } from 'lucide-react';
 
+function isTransferImpact(value: unknown): value is { releases: number; tracks: number; royalties: number } {
+  if (!value || typeof value !== 'object') return false;
+  const impact = value as Record<string, unknown>;
+  return ['releases', 'tracks', 'royalties'].every(key => Number.isInteger(impact[key]) && Number(impact[key]) >= 0);
+}
 interface LabelOption {
   id: string;
   full_name: string;
@@ -166,16 +171,18 @@ export function ChangeRoleDialog({
           return;
         }
       }
-      await updateUserRole({
+      const updateResult = await updateUserRole({
         userId: user.id, fullName: user.full_name, role: selectedRole,
         previousRole: currentRole, parentLabelId: newParentLabelId,
         previousParentLabelId: user.parent_label_id ?? null, transferConfirmation,
       });
 
+      const affected = updateResult && typeof updateResult === 'object' && 'affected' in updateResult && isTransferImpact(updateResult.affected)
+        ? updateResult.affected : undefined;
       toast.success(roleChanged
         ? `Role ${user.full_name} berhasil diubah menjadi ${selectedRole === 'label_custom' ? 'Label Custom' : selectedRole}`
-        : `Label ${user.full_name} berhasil dipindahkan`
-      );
+        : `Label ${user.full_name} berhasil dipindahkan`,
+      affected ? { description: `Dampak historis: ${affected.releases} release, ${affected.tracks} track, ${affected.royalties} royalty. Ownership historis tetap pada pemilik sebelumnya.` } : undefined);
       onSuccess();
       onOpenChange(false);
     } catch (error) {

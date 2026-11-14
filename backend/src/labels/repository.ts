@@ -52,9 +52,7 @@ export function labelsRepository(db: PoolClient) {
       const result = await db.query<{ releases: number; tracks: number; royalties: number }>(`SELECT
         (SELECT count(*)::integer FROM soundpub.releases WHERE artist_user_id=$1) AS releases,
         (SELECT count(*)::integer FROM soundpub.tracks WHERE artist_user_id=$1) AS tracks,
-        (SELECT count(*)::integer FROM soundpub.royalty_import_entries entry
-          JOIN soundpub.releases release ON release.id=entry.release_id
-          WHERE release.artist_user_id=$1) AS royalties`, [artistId]);
+        (SELECT count(*)::integer FROM soundpub.royalty_import_entries WHERE beneficiary_id=$1) AS royalties`, [artistId]);
       return result.rows[0] ?? { releases: 0, tracks: 0, royalties: 0 };
     },
     async setParent(artistId: string, labelId: string | null, expected: string | null) {
