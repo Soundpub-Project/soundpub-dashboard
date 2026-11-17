@@ -1,16 +1,23 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { ApiError } from '../api/types.js';
 import { createAuthorizer, type Principal } from '../auth/index.js';
+import { calculateReleasePrice, type ReleasePriceSnapshot } from '../releases/pricing.js';
 import { withTransaction } from '../db/pool.js';
 import { receiveWebhook, type WebhookInput } from '../integrations/webhook.js';
 import type { SubmissionContext } from '../submissions/index.js';
 import { callbackInput, invoiceInput, refundInput, parse, toMinor, nextPaymentStatus, paymentStates, type PaymentStatus, type Invoice, type PaymentProvider } from './contracts.js';
 import { MockPaymentProvider } from './provider.js';
 import { formatMoney, postEvent } from '../finance/index.js';
+import { renderInvoicePdf } from './invoice-pdf.js';
+import type { InvoiceDocumentStore } from './invoice-document-store.js';
+import { parseXenditInvoiceCallback, verifyXenditCallbackToken } from './xendit-webhook.js';
+import { webhookSignature } from '../integrations/webhook.js';
+import { idrAmountFromMinor, type XenditInvoiceClient } from './xendit-client.js';
 export * from './contracts.js';
 export { MockPaymentProvider } from './provider.js';
+export { XenditInvoiceClient } from './xendit-client.js';
 const allows = createAuthorizer();
 type PaymentIdentity = { artistId: string; payerOwnerId: string; financialOwnerId: string;
  ownershipPolicy: 'LOGIN_ACCOUNT' | 'LABEL_CUSTOM_PIC' };
@@ -91,23 +98,25 @@ async function audit(db: PoolClient, invoice: Invoice, actor: string | null, ope
  await db.query(`INSERT INTO soundpub.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,metadata)
  VALUES ($1,$2,'payment_invoice',$3,$4,$5::jsonb)`, [actor, operation, invoice.id, reference, JSON.stringify({
   business_reference: invoice.business_id, amount_minor: invoice.amount_minor, currency: invoice.currency,
-  old_state: oldState, new_state: newState, idempotency_reference: reference, system: actor === null ? 'mock_callback' : undefined,
+  old_state: oldState, new_state: newState, idempotency_reference: reference, system: actor === null ? `${invoice.provider}_callback` : undefined,
  })]);
 }
 async function effect(db: PoolClient, invoice: Invoice, kind: 'PAYMENT_CHARGE' | 'PAYMENT_REFUND', reference: string) {
  await db.query(`INSERT INTO soundpub.payment_effects(invoice_id,kind,amount_minor,currency,reference)
  VALUES ($1,$2,$3,$4,$5)`, [invoice.id, kind, invoice.amount_minor, invoice.currency, reference]);
  await postEvent(db, { ownerId: invoice.financial_owner_id, kind, amount: formatMoney(BigInt(invoice.amount_minor)),
-  businessReference: invoice.id, idempotencyKey: `${kind}:${invoice.id}`, systemActor: 'mock-payment', evidence: reference });
+  businessReference: invoice.id, idempotencyKey: `${kind}:${invoice.id}`, systemActor: invoice.provider === 'xendit' ? 'xendit-payment' : 'mock-payment', evidence: reference });
 }
 export async function reconcileInvoice(db: PoolClient, invoice: Invoice, provider: PaymentProvider = new MockPaymentProvider()) {
- const remote = await provider.status(db, invoice.provider_invoice_id);
+ const remote = invoice.provider === 'mock' ? (invoice.provider_invoice_id ? await provider.status(db, invoice.provider_invoice_id) : null) :
+  invoice.provider_status && invoice.provider_invoice_id ? { provider_invoice_id: invoice.provider_invoice_id, amount_minor: invoice.amount_minor, currency: invoice.currency, status: invoice.provider_status as PaymentStatus } : null;
  const effects = (await db.query<{ kind: string; amount_minor: string; currency: string; reference: string }>(
   'SELECT kind,amount_minor,currency,reference FROM soundpub.payment_effects WHERE invoice_id=$1', [invoice.id])).rows;
  const issues: string[] = [];
- const snapshot = (await db.query<{ total: string | null; price: string | null; tracks: number; artist_id: string | null;
+ const snapshot = (await db.query<{ total: string | null; price: string | null; pricing_mode: 'per_track' | 'per_category' | null; pricing_track_count: number | null; tracks: number; artist_id: string | null;
    owner_id: string | null; ownership_policy: string | null }>(
   `SELECT r.total_payment_snapshot::text AS total, r.price_per_track_snapshot::text AS price,
+   r.pricing_snapshot_mode AS pricing_mode,r.pricing_snapshot_track_count AS pricing_track_count,
    (SELECT count(*)::integer FROM soundpub.tracks t WHERE t.release_id=r.id) AS tracks,
    r.artist_id, CASE WHEN a.management_mode='LOGIN_ACCOUNT' AND owner.status='active'
        AND EXISTS(SELECT 1 FROM soundpub.user_roles role WHERE role.user_id=a.artist_user_id AND role.role='artist'
@@ -123,7 +132,8 @@ export async function reconcileInvoice(db: PoolClient, invoice: Invoice, provide
    LEFT JOIN soundpub.backend_users owner ON owner.id=COALESCE(a.artist_user_id,a.label_id)
    WHERE r.id=$1`, [invoice.business_id])).rows[0];
  if (!snapshot?.total || !snapshot.price || snapshot.tracks < 1 || toMinor(snapshot.total) !== invoice.amount_minor ||
-    (BigInt(toMinor(snapshot.price)) * BigInt(snapshot.tracks)).toString() !== invoice.amount_minor)
+    (snapshot.pricing_mode === 'per_category' ? snapshot.pricing_track_count !== snapshot.tracks :
+      (BigInt(toMinor(snapshot.price)) * BigInt(snapshot.tracks)).toString() !== invoice.amount_minor))
    issues.push('RELEASE_PRICE_MISMATCH');
  if (!remote) issues.push('PROVIDER_MISSING');
  else {
@@ -153,13 +163,13 @@ export async function reconcileInvoice(db: PoolClient, invoice: Invoice, provide
  const callbacks = (await db.query<{ event_id: string; provider_invoice_id: string; disposition: string; payload: Record<string, unknown> }>(
    `SELECT receipt.event_id,receipt.provider_invoice_id,receipt.disposition,receipt.payload
     FROM soundpub.payment_callback_receipts receipt JOIN soundpub.webhook_events webhook
-      ON webhook.event_id=receipt.event_id AND webhook.provider='mock-payment' AND webhook.status='processed'
-    WHERE receipt.event_id=ANY($1::text[])`, [callbackReferences])).rows;
+      ON webhook.event_id=receipt.event_id AND webhook.provider=CASE WHEN $2='mock' THEN 'mock-payment' ELSE 'xendit-invoice' END AND webhook.status='processed'
+    WHERE receipt.event_id=ANY($1::text[])`, [callbackReferences, invoice.provider])).rows;
  const auditMatches = (action: string, reference: string, status: string) => auditRows.some(row => row.action === action &&
    row.request_id === reference && row.metadata.amount_minor === invoice.amount_minor &&
    row.metadata.currency === invoice.currency && row.metadata.business_reference === invoice.business_id &&
    row.metadata.idempotency_reference === reference &&
-   (action === 'payment.callback' ? row.actor_user_id === null && row.metadata.system === 'mock_callback' &&
+   (action === 'payment.callback' ? row.actor_user_id === null && row.metadata.system === `${invoice.provider}_callback` &&
       callbacks.some(callback => callback.event_id === reference && callback.disposition === 'applied' &&
         callback.provider_invoice_id === invoice.provider_invoice_id && callback.payload.provider_invoice_id === invoice.provider_invoice_id &&
         callback.payload.amount_minor === invoice.amount_minor && callback.payload.currency === invoice.currency &&
@@ -181,49 +191,65 @@ export const paymentSubmissionDependency = {
   return (await reconcileInvoice(db, invoice)).reconciled;
  },
 };
-export function createPaymentsService(pool: Pool, options: { callbackSecret: string; provider?: PaymentProvider }) {
+export function createPaymentsService(pool: Pool, options: { callbackSecret: string; xenditWebhookToken?: string; provider?: PaymentProvider;
+ documentStore?: InvoiceDocumentStore; xenditEnabled?: boolean }) {
  if (options.callbackSecret.length < 32) throw new Error('Mock callback secret must contain at least 32 characters');
  const provider = options.provider ?? new MockPaymentProvider();
  if (provider.name !== 'mock') throw new Error('Only mock payment provider allowed');
  return {
   async createInvoice(actor: Principal, input: unknown, requestId: string) {
    const data = parse(invoiceInput, input);
+   if (!allows(actor, 'authenticated')) throw new ApiError(403, 'FORBIDDEN');
    return withTransaction(pool, async db => {
+     await db.query("SELECT pg_advisory_xact_lock(hashtextextended('release-invoice:' || $1,17))", [data.release_id]);
      const paymentOwner = await authority(db, actor, data.release_id, true);
-    const snapshot = (await db.query<{ price: string | null; total: string | null; tracks: number }>(
-     `SELECT r.price_per_track_snapshot::text AS price, r.total_payment_snapshot::text AS total,
-       (SELECT count(*)::integer FROM soundpub.tracks t WHERE t.release_id=r.id) AS tracks
-      FROM soundpub.releases r WHERE r.id=$1`, [data.release_id])).rows[0];
-    if (!snapshot?.price || !snapshot.total || snapshot.tracks < 1 ||
-      (BigInt(toMinor(snapshot.price)) * BigInt(snapshot.tracks)).toString() !== toMinor(snapshot.total))
-      throw new ApiError(409, 'PAYMENT_PRICE_UNAVAILABLE');
-    const amount = toMinor(snapshot.total);
-    const existing = await find(db, data.release_id);
-    if (existing) {
-     if (existing.idempotency_key !== data.idempotency_key) throw new ApiError(409, 'CONFLICT');
-     if (existing.amount_minor !== amount) throw new ApiError(409, 'PAYMENT_PRICE_CHANGED');
-     assertPaymentIdentity(existing, paymentOwner);
-     return existing;
-    }
-    await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,17))', [data.idempotency_key]);
-     const replay = (await db.query<Invoice>('SELECT * FROM soundpub.payment_invoices WHERE idempotency_key=$1 FOR UPDATE',
-      [data.idempotency_key])).rows[0];
+     const existing = await find(db, data.release_id);
+     if (existing) {
+      if (existing.idempotency_key !== data.idempotency_key) throw new ApiError(409, 'CONFLICT');
+      assertPaymentIdentity(existing, paymentOwner);
+      return existing;
+     }
+     await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,17))', [data.idempotency_key]);
+     const replay = (await db.query<Invoice>('SELECT * FROM soundpub.payment_invoices WHERE idempotency_key=$1 FOR UPDATE', [data.idempotency_key])).rows[0];
      if (replay) {
-      if (replay.business_id !== data.release_id || replay.amount_minor !== amount ||
-        replay.payer_owner_id !== paymentOwner.payerOwnerId || replay.financial_owner_id !== paymentOwner.financialOwnerId ||
-        replay.artist_id !== paymentOwner.artistId || replay.ownership_policy !== paymentOwner.ownershipPolicy) throw new ApiError(409, 'CONFLICT');
+      if (replay.business_id !== data.release_id || replay.payer_owner_id !== paymentOwner.payerOwnerId ||
+        replay.financial_owner_id !== paymentOwner.financialOwnerId || replay.artist_id !== paymentOwner.artistId || replay.ownership_policy !== paymentOwner.ownershipPolicy) throw new ApiError(409, 'CONFLICT');
       return replay;
      }
-     const invoice = (await db.query<Invoice>(`INSERT INTO soundpub.payment_invoices(business_id,provider_invoice_id,amount_minor,
-       idempotency_key,payer_owner_id,financial_owner_id,artist_id,ownership_policy)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`, [data.release_id, `mock_${randomUUID()}`, amount,
+     const releasePricing = (await db.query<{ release_type: string | null; distribution_service: 'standard' | 'custom_label'; tracks: number }>(
+      "SELECT r.release_type,r.distribution_service,(SELECT count(*)::integer FROM soundpub.tracks t WHERE t.release_id=r.id) AS tracks FROM soundpub.releases r WHERE r.id=$1", [data.release_id])).rows[0];
+     const settings = (await db.query<{ settings: Record<string, string | null> }>('SELECT settings FROM soundpub.application_settings WHERE id=true')).rows[0]?.settings ?? {};
+     let snapshot: ReleasePriceSnapshot;
+     try { snapshot = calculateReleasePrice(settings, releasePricing?.tracks ?? 0, releasePricing?.distribution_service ?? 'standard', releasePricing?.release_type ?? 'single'); }
+     catch { throw new ApiError(409, 'PAYMENT_PRICE_UNAVAILABLE'); }
+     if (!snapshot.price_per_track_snapshot || !snapshot.total_payment_snapshot || !snapshot.pricing_snapshot_mode || !snapshot.pricing_snapshot_track_count) throw new ApiError(409, 'PAYMENT_PRICE_UNAVAILABLE');
+     const amount = toMinor(snapshot.total_payment_snapshot);
+     await db.query('UPDATE soundpub.releases SET price_per_track_snapshot=$2,total_payment_snapshot=$3,pricing_snapshot_mode=$4,pricing_snapshot_track_count=$5 WHERE id=$1 AND (price_per_track_snapshot IS DISTINCT FROM $2 OR total_payment_snapshot IS DISTINCT FROM $3 OR pricing_snapshot_mode IS DISTINCT FROM $4 OR pricing_snapshot_track_count IS DISTINCT FROM $5)',
+      [data.release_id, snapshot.price_per_track_snapshot, snapshot.total_payment_snapshot, snapshot.pricing_snapshot_mode, snapshot.pricing_snapshot_track_count]);
+     let invoice: Invoice;
+     if (options.xenditEnabled) {
+      try { idrAmountFromMinor(amount); } catch { throw new ApiError(409, 'PAYMENT_PRICE_UNAVAILABLE'); }
+      const externalId = `sp-rel-${randomUUID()}`;
+      invoice = (await db.query<Invoice>(`INSERT INTO soundpub.payment_invoices(business_id,provider,provider_invoice_id,provider_external_id,amount_minor,
+       idempotency_key,payer_owner_id,financial_owner_id,artist_id,ownership_policy,status)
+       VALUES ($1,'xendit',NULL,$2,$3,$4,$5,$6,$7,$8,'CREATING') RETURNING *`, [data.release_id, externalId, amount,
        data.idempotency_key, paymentOwner.payerOwnerId, paymentOwner.financialOwnerId,
        paymentOwner.artistId, paymentOwner.ownershipPolicy])).rows[0]!;
-    await provider.create(db, invoice);
-    await audit(db, invoice, actor.id, 'payment.invoice_created', null, 'PENDING', data.idempotency_key);
-    return invoice;
-   });
-  },
+      await db.query(`INSERT INTO soundpub.outbox_events(topic,payload,idempotency_key)
+       VALUES ('payment.invoice_create',$1::jsonb,$2)`, [JSON.stringify({ invoice_id: invoice.id }), `xendit-invoice-create:${invoice.id}`]);
+      await audit(db, invoice, actor.id, 'payment.invoice_created', null, 'CREATING', data.idempotency_key);
+     } else {
+      invoice = (await db.query<Invoice>(`INSERT INTO soundpub.payment_invoices(business_id,provider_invoice_id,amount_minor,
+       idempotency_key,payer_owner_id,financial_owner_id,artist_id,ownership_policy)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`, [data.release_id, `mock_${randomUUID()}`, amount,
+       data.idempotency_key, paymentOwner.payerOwnerId, paymentOwner.financialOwnerId,
+       paymentOwner.artistId, paymentOwner.ownershipPolicy])).rows[0]!;
+      await provider.create(db, invoice);
+      await audit(db, invoice, actor.id, 'payment.invoice_created', null, 'PENDING', data.idempotency_key);
+     }
+     return invoice;
+    });
+   },
   async status(actor: Principal, releaseId: string) {
    const id = parse(z.uuid(), releaseId);
    return withTransaction(pool, async db => {
@@ -233,7 +259,7 @@ export function createPaymentsService(pool: Pool, options: { callbackSecret: str
    });
   },
   async callback(input: WebhookInput) {
-   if (input.provider !== 'mock-payment') throw new ApiError(400, 'BAD_REQUEST');
+   if (!['mock-payment', 'xendit-invoice'].includes(input.provider)) throw new ApiError(400, 'BAD_REQUEST');
    return receiveWebhook({ async connect() {
     const client = await pool.connect();
     // Phase 2 webhook foundation uses unqualified SQL; pin private schema per checkout.
@@ -242,13 +268,23 @@ export function createPaymentsService(pool: Pool, options: { callbackSecret: str
    } }, input, options.callbackSecret, async (payload, client) => {
     const db = client as PoolClient;
     const event = parse(callbackInput, payload);
-    if (!paymentStates.includes(event.status as PaymentStatus)) {
+    if (event.status === 'CREATING' || !paymentStates.includes(event.status as PaymentStatus)) {
      await db.query(`INSERT INTO soundpub.payment_callback_receipts(event_id,provider_invoice_id,disposition,payload)
       VALUES ($1,$2,'unsupported',$3::jsonb)`, [input.eventId,event.provider_invoice_id,JSON.stringify(event)]);
      return;
     }
-     const businessId = (await db.query<{ business_id: string }>(
-      'SELECT business_id FROM soundpub.payment_invoices WHERE provider_invoice_id=$1', [event.provider_invoice_id])).rows[0]?.business_id;
+     const externalInvoice = input.provider === 'xendit-invoice' && event.provider_external_id
+      ? (await db.query<Invoice>('SELECT * FROM soundpub.payment_invoices WHERE provider=$1 AND provider_external_id=$2 FOR UPDATE',
+        ['xendit', event.provider_external_id])).rows[0]
+      : undefined;
+     if (externalInvoice && (externalInvoice.status === 'CREATING' || !externalInvoice.provider_invoice_id)) {
+      throw new ApiError(503, 'PAYMENT_PROVIDER_UNAVAILABLE');
+     }
+     if (externalInvoice && externalInvoice.provider_invoice_id !== event.provider_invoice_id) {
+      throw new ApiError(409, 'CONFLICT');
+     }
+     const businessId = externalInvoice?.business_id ?? (await db.query<{ business_id: string }>(
+      'SELECT business_id FROM soundpub.payment_invoices WHERE provider_invoice_id=$1 AND provider=$2', [event.provider_invoice_id,input.provider === 'mock-payment' ? 'mock' : 'xendit'])).rows[0]?.business_id;
      let ownerSnapshot: PaymentIdentity | null = null;
      if (businessId) {
       try { ownerSnapshot = await systemIdentity(db, businessId); }
@@ -256,6 +292,9 @@ export function createPaymentsService(pool: Pool, options: { callbackSecret: str
      }
      const invoice = (await db.query<Invoice>('SELECT * FROM soundpub.payment_invoices WHERE provider_invoice_id=$1 FOR UPDATE', [event.provider_invoice_id])).rows[0];
      if (invoice && invoice.business_id !== businessId) throw new ApiError(409, 'CONFLICT');
+     if (invoice && input.provider === 'xendit-invoice' && event.provider_external_id &&
+       invoice.provider_external_id !== event.provider_external_id) throw new ApiError(409, 'CONFLICT');
+     if (!invoice && input.provider === 'xendit-invoice') throw new ApiError(503, 'PAYMENT_PROVIDER_UNAVAILABLE');
     let disposition = 'unknown_invoice';
     if (invoice) {
      const next = nextPaymentStatus(invoice.status, event.status as PaymentStatus);
@@ -263,19 +302,23 @@ export function createPaymentsService(pool: Pool, options: { callbackSecret: str
        ownerSnapshot.payerOwnerId === invoice.payer_owner_id &&
        ownerSnapshot.financialOwnerId === invoice.financial_owner_id && ownerSnapshot.ownershipPolicy === invoice.ownership_policy;
       if (!ownerMatches || event.amount_minor !== invoice.amount_minor || event.currency !== invoice.currency) disposition = 'mismatch';
-     else if (event.status === 'REFUNDED' && !['PAID','REFUNDED'].includes(invoice.status)) disposition = 'invalid_transition';
+     else if ((event.status === 'REFUNDED' && !['PAID','REFUNDED'].includes(invoice.status)) ||
+      (event.status === 'PAID' && ['FAILED','EXPIRED'].includes(invoice.status))) disposition = 'invalid_transition';
      else {
       disposition = next === invoice.status ? 'ignored' : 'applied';
       if (next !== invoice.status) {
        if (next === 'PAID') await effect(db, invoice, 'PAYMENT_CHARGE', input.eventId);
        if (next === 'REFUNDED') await effect(db, invoice, 'PAYMENT_REFUND', input.eventId);
-       await db.query('UPDATE soundpub.payment_invoices SET status=$2,updated_at=now() WHERE id=$1', [invoice.id, next]);
-       await db.query('UPDATE soundpub.payment_mock_invoices SET status=$2 WHERE provider_invoice_id=$1', [invoice.provider_invoice_id, next]);
+       await db.query(`UPDATE soundpub.payment_invoices SET status=$2,
+        provider_status=CASE WHEN provider='xendit' THEN $2 ELSE provider_status END,updated_at=now() WHERE id=$1`, [invoice.id, next]);
+       if (input.provider === 'mock-payment' && invoice.provider_invoice_id) await db.query('UPDATE soundpub.payment_mock_invoices SET status=$2 WHERE provider_invoice_id=$1', [invoice.provider_invoice_id, next]);
        await audit(db, invoice, null, 'payment.callback', invoice.status, next, input.eventId);
       }
      }
      if (['mismatch','invalid_transition'].includes(disposition)) {
-      await db.query('UPDATE soundpub.payment_invoices SET reconciliation_required=true,updated_at=now() WHERE id=$1', [invoice.id]);
+      await db.query(`UPDATE soundpub.payment_invoices SET reconciliation_required=true,
+       provider_status=CASE WHEN provider='xendit' AND $2 THEN $3 ELSE provider_status END,updated_at=now()
+       WHERE id=$1`, [invoice.id, disposition === 'invalid_transition' && event.status === 'PAID', event.status]);
       await audit(db, invoice, null, 'payment.manual_review', invoice.status, invoice.status, input.eventId);
      }
     }
@@ -283,7 +326,18 @@ export function createPaymentsService(pool: Pool, options: { callbackSecret: str
      VALUES ($1,$2,$3,$4::jsonb)`, [input.eventId,event.provider_invoice_id,disposition,JSON.stringify(event)]);
    });
   },
-  async refund(actor: Principal, input: unknown, requestId: string) {
+  async xenditCallback(input: { body: Buffer; token: string | undefined }) {
+   if (!options.xenditWebhookToken || !verifyXenditCallbackToken(options.xenditWebhookToken, input.token)) throw new ApiError(401, 'UNAUTHORIZED');
+   const event = parseXenditInvoiceCallback(input.body);
+   if (!event) throw new ApiError(400, 'BAD_REQUEST');
+   const rawBody = Buffer.from(JSON.stringify({ provider_invoice_id: event.invoiceId, status: event.status,
+    ...(event.externalId ? { provider_external_id: event.externalId } : {}),
+    amount_minor: event.amountMinor, currency: event.currency }));
+   const timestamp = Math.floor(Date.now() / 1000).toString();
+   const eventId = `xendit_${createHash('sha256').update(input.body).digest('hex')}`;
+   return this.callback({ provider: 'xendit-invoice', eventId, timestamp, rawBody,
+    signature: webhookSignature(options.callbackSecret, { eventId, timestamp, rawBody }) });
+  },  async refund(actor: Principal, input: unknown, requestId: string) {
    const data = parse(refundInput, input);
    return withTransaction(pool, async db => {
     const businessId = (await db.query<{ business_id: string }>(
@@ -302,6 +356,8 @@ export function createPaymentsService(pool: Pool, options: { callbackSecret: str
      if (prior.idempotency_key !== data.idempotency_key || prior.reason !== data.reason) throw new ApiError(409, 'CONFLICT');
      return invoice;
     }
+    if (invoice.provider !== 'mock') throw new ApiError(503, 'PAYMENT_PROVIDER_UNAVAILABLE');
+    if (!invoice.provider_invoice_id) throw new ApiError(409, 'PAYMENT_INVOICE_UNAVAILABLE');
     if (invoice.status !== 'PAID' || !(await reconcileInvoice(db, invoice, provider)).reconciled) throw new ApiError(409, 'PAYMENT_UNRECONCILED');
     await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,18))', [data.idempotency_key]);
     if ((await db.query('SELECT invoice_id FROM soundpub.payment_refunds WHERE idempotency_key=$1', [data.idempotency_key])).rows.length) throw new ApiError(409, 'CONFLICT');
@@ -325,6 +381,89 @@ export function createPaymentsService(pool: Pool, options: { callbackSecret: str
     return { mode: 'DRY_RUN' as const, results, unresolved_callbacks,
      reconciled: results.every(r => r.reconciled) && unresolved_callbacks.length === 0 };
    });
+  },
+  async listAdminInvoices(actor: Principal, input: unknown = {}) {
+   const query = z.strictObject({ status: z.enum(['all','pending','paid','failed','refunded']).default('all'),
+     limit: z.coerce.number().int().min(1).max(100).default(50), offset: z.coerce.number().int().min(0).max(100_000).default(0) });
+   const parsed = query.safeParse(input);
+   if (!parsed.success) throw new ApiError(400, 'BAD_REQUEST');
+   const { status, limit, offset } = parsed.data;
+   return withTransaction(pool, async db => {
+    const current = (await paymentPrincipals(db, [actor.id])).get(actor.id);
+    if (!current || !allows(current, 'admin')) throw new ApiError(403, 'FORBIDDEN');
+    const params = status === 'all' ? [limit, offset] : [status.toUpperCase(), limit, offset];
+    const where = status === 'all' ? '' : 'WHERE invoice.status=$1';
+    const pageOffset = status === 'all' ? '$2' : '$3';
+    const totalResult = await db.query<{ count: string }>(`SELECT count(*)::text AS count FROM soundpub.payment_invoices invoice ${where}`,
+      status === 'all' ? [] : [status.toUpperCase()]);
+    const rows = (await db.query(`SELECT invoice.id,invoice.business_id AS release_id,invoice.payer_owner_id AS user_id,
+      invoice.amount_minor,invoice.currency,invoice.status,invoice.provider_invoice_id,invoice.created_at,invoice.updated_at,
+      invoice.invoice_number,release.title AS release_title,release.artist_name AS release_artist,
+      profile.full_name AS user_name,owner.email AS user_email,
+      (SELECT count(*)::integer FROM soundpub.tracks track WHERE track.release_id=release.id) AS track_count,
+      release.price_per_track_snapshot::text AS price_per_track,
+      (SELECT event.created_at FROM soundpub.payment_effects event
+        WHERE event.invoice_id=invoice.id AND event.kind='PAYMENT_CHARGE') AS paid_at
+      FROM soundpub.payment_invoices invoice JOIN soundpub.releases release ON release.id=invoice.business_id
+      JOIN soundpub.backend_users owner ON owner.id=invoice.payer_owner_id
+      LEFT JOIN soundpub.profiles profile ON profile.id=owner.id ${where}
+      ORDER BY invoice.created_at DESC,invoice.id DESC LIMIT ${status === 'all' ? '$1' : '$2'} OFFSET ${pageOffset}`,
+      params)).rows;
+    return { invoices: rows, total: Number(totalResult.rows[0]?.count ?? 0), limit, offset };
+   });
+  },
+  async downloadInvoice(actor: Principal, invoiceId: string, requestId: string) {
+   if (!options.documentStore) throw new ApiError(503, 'NOT_READY');
+   const id = parse(z.uuid(), invoiceId);
+   const current = await withTransaction(pool, async db => {
+    const principal = (await paymentPrincipals(db, [actor.id])).get(actor.id);
+    if (!principal || !allows(principal, 'admin')) throw new ApiError(403, 'FORBIDDEN');
+    const row = (await db.query(`SELECT invoice.*,release.title AS release_title,release.artist_name AS artist_name,
+      release.price_per_track_snapshot::text AS price_per_track,owner.email AS payer_email,profile.full_name AS payer_name,
+      (SELECT count(*)::integer FROM soundpub.tracks track WHERE track.release_id=release.id) AS track_count,
+      (SELECT event.created_at FROM soundpub.payment_effects event
+       WHERE event.invoice_id=invoice.id AND event.kind='PAYMENT_CHARGE') AS paid_at
+      FROM soundpub.payment_invoices invoice JOIN soundpub.releases release ON release.id=invoice.business_id
+      JOIN soundpub.backend_users owner ON owner.id=invoice.payer_owner_id
+      LEFT JOIN soundpub.profiles profile ON profile.id=owner.id
+      WHERE invoice.id=$1 FOR UPDATE OF invoice`, [id])).rows[0] as Record<string, unknown> | undefined;
+    if (!row) throw new ApiError(404, 'NOT_FOUND');
+    if (row.status !== 'PAID') throw new ApiError(409, 'INVOICE_NOT_PAID');
+    if (!row.paid_at || !row.price_per_track || Number(row.track_count) < 1) throw new ApiError(409, 'INVOICE_DATA_UNAVAILABLE');
+    const paidAt = new Date(String(row.paid_at));
+    const invoiceNumber = String(row.invoice_number || `SPB-${paidAt.toISOString().slice(0, 7).replace('-', '')}-${id.slice(0, 8).toUpperCase()}`);
+    const path = String(row.invoice_pdf_path || `${String(row.financial_owner_id)}/${id}/${invoiceNumber}.pdf`);
+    return { row, paidAt, invoiceNumber, path };
+   });
+   if (!current.row.invoice_pdf_path) {
+    const pdf = await renderInvoicePdf({ invoiceNumber: current.invoiceNumber, amountMinor: String(current.row.amount_minor),
+      paidAt: current.paidAt, reference: String(current.row.provider_invoice_id), releaseTitle: String(current.row.release_title),
+      artistName: String(current.row.artist_name), trackCount: Number(current.row.track_count),
+      pricePerTrackMinor: toMinor(String(current.row.price_per_track)), payerName: String(current.row.payer_name || ''),
+      payerEmail: String(current.row.payer_email || '') });
+    await options.documentStore.put(current.path, pdf);
+    await withTransaction(pool, async db => {
+      const result = await db.query(`UPDATE soundpub.payment_invoices SET invoice_number=$2,invoice_pdf_path=$3,
+        invoice_pdf_generated_at=COALESCE(invoice_pdf_generated_at,now()) WHERE id=$1 AND status='PAID'
+        AND (invoice_number IS NULL OR (invoice_number=$2 AND invoice_pdf_path=$3))`,
+      [id, current.invoiceNumber, current.path]);
+      if (result.rowCount !== 1) throw new ApiError(409, 'CONFLICT');
+     });
+   }
+   const url = await options.documentStore.signedDownload(current.path, `${current.invoiceNumber}.pdf`, 600);
+   await withTransaction(pool, async db => {
+    const principal = (await paymentPrincipals(db, [actor.id])).get(actor.id);
+    if (!principal || !allows(principal, 'admin')) throw new ApiError(403, 'FORBIDDEN');
+    const invoice = (await db.query<{ status: PaymentStatus; invoice_pdf_path: string | null }>(
+      'SELECT status,invoice_pdf_path FROM soundpub.payment_invoices WHERE id=$1 FOR UPDATE', [id])).rows[0];
+    if (!invoice) throw new ApiError(404, 'NOT_FOUND');
+    if (invoice.status !== 'PAID') throw new ApiError(409, 'INVOICE_NOT_PAID');
+    if (invoice.invoice_pdf_path !== current.path) throw new ApiError(409, 'CONFLICT');
+    await db.query(`INSERT INTO soundpub.audit_logs(actor_user_id,action,resource_type,resource_id,request_id,metadata)
+      VALUES($1,'payment.invoice_pdf_downloaded','payment_invoice',$2,$3,$4::jsonb)`,
+    [actor.id,id,requestId,JSON.stringify({ invoice_number: current.invoiceNumber, document_path: current.path })]);
+   });
+   return { invoice_number: current.invoiceNumber, url };
   },
  };
 }

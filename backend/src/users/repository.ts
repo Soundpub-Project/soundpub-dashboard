@@ -3,7 +3,7 @@ import type { Principal, Role } from '../auth/index.js';
 import type { ListQuery, ProfileDto, ProfilePatch, UserCreate } from './contracts.js';
 
 // Explicit projection: provider bindings, provenance and historical references stay private.
-const projection = `u.id, u.email, COALESCE(p.full_name, '') AS full_name,
+const projection = `u.id, u.email, u.account_kind, COALESCE(p.full_name, '') AS full_name,
   p.phone, p.address, p.avatar_url, p.logo_url, p.logo_url_light, p.logo_url_dark,
   p.parent_label_id, lp.full_name AS parent_label_name, p.composer_code,
   COALESCE(p.balance, 0)::numeric(20,2)::text AS balance, u.status,

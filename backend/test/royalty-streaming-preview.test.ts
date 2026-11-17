@@ -3,6 +3,7 @@ import test from 'node:test';
 import type { PoolClient } from 'pg';
 import { prepareLegacyRoyaltyCsv } from '../src/royalties/legacy-preview.js';
 import { stageLegacyRoyaltyCsvStream } from '../src/royalties/streaming-preview.js';
+import { LEGACY_ROYALTY_POLICY_CHECKSUM } from '../src/royalties/split.js';
 
 const csv = [
   'period,isrc,upc,title,artist,label_name,platform,country,sales_type,sales_unit,net_revenue',
@@ -38,6 +39,8 @@ test('streaming preview stages immutable snapshots and matches legacy checksum',
   const preview = await stageLegacyRoyaltyCsvStream(target.db,
     { id: '00000000-0000-4000-8000-000000000060', source_checksum: 'a'.repeat(64) }, stream(), 'worker');
   assert.equal(preview.checksum, expected.checksum);
+  assert.equal(preview.policy_version, 1);
+  assert.equal(preview.policy_checksum, LEGACY_ROYALTY_POLICY_CHECKSUM);
   assert.equal(preview.total_rows, 1);
   assert.equal(preview.valid_rows, 1);
   const insert = target.calls.find(call => call.sql.includes('INSERT INTO soundpub.royalty_import_session_rows'))!;

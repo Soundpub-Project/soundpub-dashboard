@@ -122,6 +122,36 @@ function scriptedPool(steps: [RegExp, object[]][]) {
     done() { assert.equal(steps.length, 0); assert.equal(released, true); } };
 }
 
+test('admin dashboard summary is authenticated, admin-only, and database-derived', async () => {
+  const admin: Principal = { id: '00000000-0000-4000-8000-000000000001', status: 'active', roles: ['admin'] };
+  const script = scriptedPool([
+    [/^BEGIN$/, []], [/SELECT id, status/, [{ id: admin.id, status: 'active' }]], [/pg_advisory_xact_lock/, []],
+    [/SELECT user_id, role/, [{ user_id: admin.id, role: 'admin' }]],
+    [/SELECT\s+\(SELECT count\(\*\)::int FROM soundpub\.profiles\)/, [{ total_users: 24, pending_payouts: 3 }]],
+    [/^COMMIT$/, []],
+  ]);
+  const app = buildApp({ users: createUsersService(script.pool), auth: { authenticate: async token => token === 'admin' ? admin : null },
+    readiness: { check: async () => true }, rateLimiter: { consume: async () => ({ allowed: true }) },
+    admin: { suspendUser: async () => {} }, webhooks: { receive: async () => false } });
+  try {
+    const openapi = (await app.inject('/openapi.json')).json();
+    assert.equal(openapi.paths['/api/v1/admin/dashboard/summary'].get.operationId, 'getAdminDashboardSummary');
+    assert.equal((await app.inject('/api/v1/admin/dashboard/summary')).statusCode, 401);
+    const response = await app.inject({ url: '/api/v1/admin/dashboard/summary', headers: { authorization: 'Bearer admin' } });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.deepEqual(response.json(), { total_users: 24, pending_payouts: 3 });
+    script.done();
+  } finally { await app.close(); }
+
+  const label: Principal = { id: admin.id, status: 'active', roles: ['label'] };
+  const denied = scriptedPool([
+    [/^BEGIN$/, []], [/SELECT id, status/, [{ id: label.id, status: 'active' }]], [/pg_advisory_xact_lock/, []],
+    [/SELECT user_id, role/, [{ user_id: label.id, role: 'label' }]], [/^ROLLBACK$/, []],
+  ]);
+  await assert.rejects(createUsersService(denied.pool).adminDashboardSummary(label), { statusCode: 403 });
+  denied.done();
+});
+
 test('role replacement preserves custom units, permits admin management and rechecks persisted roles', async () => {
   const actorId = '00000000-0000-4000-8000-000000000001';
   const targetId = '00000000-0000-4000-8000-000000000002';

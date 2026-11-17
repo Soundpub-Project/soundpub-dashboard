@@ -9,7 +9,9 @@ export function BackendMediaUpload({ binding, reference, label, disabled, onChan
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const preview = useMediaUrl(reference, binding.category !== 'TRACK_AUDIO');
+  const [progress, setProgress] = useState<number | null>(null);
+  const audioCategory = binding.category === 'TRACK_AUDIO' || binding.category === 'TRACK_CLIP';
+  const preview = useMediaUrl(reference, !audioCategory);
   const id = mediaIdFromReference(reference);
   const renewing = useRef(false);
   const latestReference = useRef(reference);
@@ -23,7 +25,7 @@ export function BackendMediaUpload({ binding, reference, label, disabled, onChan
     finally { setBusy(false); onBusyChange?.(false); }
   };
   return <section className="space-y-2 rounded-lg border p-3" aria-label={label}>
-    {preview && (binding.category === 'TRACK_AUDIO' ? <audio controls src={preview} preload="none" aria-label={label} onPlay={async event => {
+    {preview && (audioCategory ? <audio controls src={preview} preload="none" aria-label={label} onPlay={async event => {
       if (!reference || renewing.current || (playback.current?.reference === reference && playback.current.expires > Date.now())) return;
       const audio = event.currentTarget;
       const original = reference;
@@ -39,8 +41,8 @@ export function BackendMediaUpload({ binding, reference, label, disabled, onChan
       } catch { setError('Gagal memuat audio. Coba lagi.'); }
       finally { renewing.current = false; }
     }} /> : <img className="h-24 w-24 object-contain" src={preview} alt={label} />)}
-    <label className="block">{label}<Input type="file" disabled={busy || disabled} accept={binding.category === 'TRACK_AUDIO' ? '.wav,.flac,.aiff,.aif,.mp3' : '.png,.jpg,.jpeg,.webp'} onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void run(() => uploadBackendMedia(file, binding)); }} /></label>
+    <label className="block">{label}<Input type="file" disabled={busy || disabled} accept={binding.category === 'TRACK_AUDIO' ? '.wav,.flac,.aiff,.aif,.mp3' : binding.category === 'TRACK_CLIP' ? '.mp3,.m4a,.ogg,.wav' : '.png,.jpg,.jpeg,.webp'} onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void run(async () => { setProgress(0); try { await uploadBackendMedia(file, binding, setProgress); } finally { setProgress(null); } }); }} /></label>
     {id && <Button type="button" variant="destructive" disabled={busy || disabled} onClick={() => void run(() => mediaApi.remove(id))}>Hapus {label}</Button>}
-    {busy && <p role="status">Mengupload dan memverifikasi…</p>}{message && <p role="status">{message}</p>}{error && <p role="alert">{error}</p>}
+    {busy && <p role="status">Mengupload dan memverifikasi{progress === null ? '…' : `… ${progress}%`}</p>}{message && <p role="status">{message}</p>}{error && <p role="alert">{error}</p>}
   </section>;
 }

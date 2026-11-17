@@ -23,6 +23,9 @@ const denied = (code: string) => (error: unknown) => error instanceof ApiError &
 
 test('media trust boundary: strict owner, binding, limits, extensions and signatures', () => {
   assert.equal(validateUpload(input).visibility, 'PRIVATE');
+  const artistPhoto = validateUpload({ ...input, category: 'ARTIST_PROFILE_IMAGE', resource_type: 'artist_profile' });
+  assert.equal(artistPhoto.resource_type, 'artist_profile');
+  assert.throws(() => validateUpload({ ...artistPhoto, resource_type: 'user' }), denied('BAD_REQUEST'));
   for (const patch of [{ owner_user_id: artistId }, { resource_type: 'user' }, { filename: '../x.png' },
     { filename: 'x.jpg' }, { size: 6 * 1024 ** 2 }, { visibility: 'PUBLIC' }, { variant: 'dark' }]) {
     assert.throws(() => validateUpload({ ...input, ...patch }), ApiError);
@@ -32,10 +35,43 @@ test('media trust boundary: strict owner, binding, limits, extensions and signat
     mime_type: 'application/pdf', size: 8, checksum: 'a'.repeat(64), filename: 'transfer.pdf' });
   assert.equal(proof.category, 'PAYOUT_PROOF');
   assert.throws(() => validateUpload({ ...proof, mime_type: 'text/plain', filename: 'transfer.txt' }), denied('MEDIA_MIME_INVALID'));
+  const clip = { ...input, category: 'TRACK_CLIP', resource_type: 'track', mime_type: 'audio/mp4', filename: 'preview.m4a', size: 20 * 1024 ** 2 };
+  assert.equal(validateUpload(clip).category, 'TRACK_CLIP');
+  assert.throws(() => validateUpload({ ...clip, size: clip.size + 1 }), denied('MEDIA_SIZE_LIMIT'));
+  assert.throws(() => validateUpload({ ...clip, mime_type: 'audio/flac', filename: 'preview.flac' }), denied('MEDIA_MIME_INVALID'));
+  assert.throws(() => validateUpload({ ...clip, resource_type: 'release' }), denied('BAD_REQUEST'));
   assertMediaSignature(png, 'image/png');
   assert.throws(() => assertMediaSignature(Buffer.from('spoof'), 'image/png'), denied('MEDIA_MIME_INVALID'));
   const wav = Buffer.alloc(44); wav.write('RIFF'); wav.write('WAVE', 8);
   assertMediaSignature(wav, 'audio/wav');
+  const m4a = Buffer.alloc(12); m4a.write('ftyp', 4);
+  assertMediaSignature(m4a, 'audio/mp4');
+  assertMediaSignature(Buffer.from('OggSsynthetic'), 'audio/ogg');
+  assert.throws(() => assertMediaSignature(Buffer.from('fake'), 'audio/mp4'), denied('MEDIA_MIME_INVALID'));
+  assert.throws(() => assertMediaSignature(Buffer.from('fake'), 'audio/ogg'), denied('MEDIA_MIME_INVALID'));
+});
+
+test('artist profile media is limited to the artist, owning label, or authorized admin', async () => {
+  const { mediaAuthority } = await import('../src/media/authority.js');
+  const artistActor = { id: artistId, status: 'active' as const, roles: ['artist'] as const };
+  const labelActor = { id: labelId, status: 'active' as const, roles: ['label'] as const };
+  const otherId = '00000000-0000-4000-8000-000000000905';
+  const otherActor = { id: otherId, status: 'active' as const, roles: ['label'] as const };
+  const principals = new Map([[artistId, artistActor], [labelId, labelActor], [otherId, otherActor]]);
+  const db = { async query(sql: string, args: unknown[] = []) {
+    let rows: unknown[] = [];
+    if (sql.includes('SELECT id, status FROM soundpub.backend_users')) rows = (args[0] as string[]).flatMap(key => principals.has(key) ? [{ id: key, status: principals.get(key)!.status }] : []);
+    else if (sql.includes('FROM soundpub.user_roles')) rows = (args[0] as string[]).flatMap(key => principals.get(key)?.roles.map(role => ({ user_id: key, role })) ?? []);
+    else if (sql.startsWith('SELECT label_id FROM soundpub.artists')) rows = args[0] === artistId ? [{ label_id: labelId }] : [];
+    else if (sql.startsWith('SELECT id FROM soundpub.profiles')) rows = [{ id: args[0] }];
+    else if (sql.includes('pg_advisory_xact_lock')) rows = [];
+    else throw new Error('Unhandled SQL in artist profile media authority test');
+    return { rows, rowCount: rows.length };
+  } } as unknown as import('pg').PoolClient;
+  const binding = { resource_type: 'artist_profile' as const, category: 'ARTIST_PROFILE_IMAGE', resource_id: artistId };
+  await mediaAuthority(db, artistActor, binding, true);
+  await mediaAuthority(db, labelActor, binding, true);
+  await assert.rejects(mediaAuthority(db, otherActor, binding, true), denied('NOT_FOUND'));
 });
 
 test('media restricted PostgreSQL lifecycle, readiness, revocation, replacement, cleanup and HTTP', { skip: process.env.RUN_DOCKER_TESTS !== '1' }, async () => {
@@ -121,11 +157,26 @@ test('media restricted PostgreSQL lifecycle, readiness, revocation, replacement,
     assert.equal(final.has(cover.id),true);
     const audio = await complete({ ...input, category: 'TRACK_AUDIO', resource_type: 'track', resource_id: trackId,
       mime_type: 'audio/wav', filename: 'x.wav' });
+    const clipInput = { ...input, category: 'TRACK_CLIP', resource_type: 'track', resource_id: trackId,
+      mime_type: 'audio/ogg', filename: 'preview.ogg' };
+    const clip = await complete(clipInput);
+    const clipReference = `/api/v1/storage/objects/${clip.id}/download`;
+    assert.deepEqual((await database.owner.query('SELECT clip_media_id,clip_url FROM soundpub.tracks WHERE id=$1', [trackId])).rows[0],
+      { clip_media_id: clip.id, clip_url: clipReference });
+    assert.equal((await media.download(artist, clip.id)).url, `http://localhost/download/${clip.id}`);
+    const newerClip = await complete(clipInput);
+    assert.equal((await row(clip.id)).status, 'REPLACED');
+    await assert.rejects(media.download(artist, clip.id), denied('NOT_FOUND'));
+    assert.equal((await database.owner.query('SELECT clip_media_id FROM soundpub.tracks WHERE id=$1', [trackId])).rows[0].clip_media_id, newerClip.id);
     assert.equal((await submission.readiness(artist,releaseId)).blockers.some(v => ['COVER_REQUIRED','AUDIO_REQUIRED','MEDIA_UNAVAILABLE'].includes(v.code)),false);
     await database.owner.query("UPDATE soundpub.releases SET status='pending' WHERE id=$1",[releaseId]);
     await assert.rejects(media.delete(artist,audio.id),denied('MEDIA_RESOURCE_LOCKED'));
+    await assert.rejects(media.delete(artist,newerClip.id),denied('MEDIA_RESOURCE_LOCKED'));
     await assert.rejects(request(),denied('MEDIA_RESOURCE_LOCKED'));
     await database.owner.query("UPDATE soundpub.releases SET status='draft' WHERE id=$1",[releaseId]);
+    await media.delete(artist,newerClip.id);
+    assert.deepEqual((await database.owner.query('SELECT clip_media_id,clip_url FROM soundpub.tracks WHERE id=$1', [trackId])).rows[0],
+      { clip_media_id: null, clip_url: null });
     const revoked = await media.requestUpload(label,input); staged.add(revoked.object.id);
     await database.owner.query('UPDATE soundpub.artists SET verified_at=NULL WHERE artist_user_id=$1',[artistId]);
     await assert.rejects(media.completeUpload(label,revoked.object.id),denied('NOT_FOUND'));
@@ -159,6 +210,17 @@ test('media restricted PostgreSQL lifecycle, readiness, revocation, replacement,
     assert.equal(final.has(blocked.object.id),true);
     await media.delete(artist,blocked.object.id);
     assert.equal((await database.owner.query('SELECT cover_media_id FROM soundpub.releases WHERE id=$1',[releaseId])).rows[0].cover_media_id,null);
+    await database.owner.query("INSERT INTO soundpub.artist_profiles(user_id,artist_name) VALUES ($1,'Synthetic') ON CONFLICT (user_id) DO NOTHING", [artistId]);
+    const artistImageUpload = await media.requestUpload(artist, { ...input, category: 'ARTIST_PROFILE_IMAGE', resource_type: 'artist_profile', resource_id: artistId });
+    staged.add(artistImageUpload.object.id);
+    const artistImage = await media.completeUpload(artist, artistImageUpload.object.id);
+    const artistImageRow = (await database.owner.query('SELECT profile_image_media_id,profile_image_url FROM soundpub.artist_profiles WHERE user_id=$1', [artistId])).rows[0];
+    assert.equal(artistImage.status, 'ACTIVE');
+    assert.equal(artistImageRow.profile_image_media_id, artistImage.id);
+    assert.equal((await media.download(label, artistImage.id)).url, `http://localhost/download/${artistImage.id}`);
+    assert.match(artistImageRow.profile_image_url, /^\/api\/v1\/storage\/objects\/[0-9a-f-]+\/download$/);
+    await media.delete(artist, artistImage.id);
+    assert.deepEqual((await database.owner.query('SELECT profile_image_media_id,profile_image_url FROM soundpub.artist_profiles WHERE user_id=$1', [artistId])).rows[0], { profile_image_media_id: null, profile_image_url: null });
     const avatar = await complete({ ...input, category: 'USER_AVATAR', resource_type: 'user', resource_id: artistId });
     assert.equal((await database.owner.query('SELECT avatar_media_id FROM soundpub.profiles WHERE id=$1',[artistId])).rows[0].avatar_media_id,avatar.id);
     const logo = await media.requestUpload(label,{ ...input, category: 'LABEL_LOGO', resource_type: 'label', resource_id: labelId, variant: 'dark' });

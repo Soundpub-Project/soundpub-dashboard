@@ -33,24 +33,25 @@ function moduleAt(file, dependencies, globals = {}) {
     complete: async () => { sequence.push('complete'); if (failComplete) throw Error('CONFLICT'); return { id, status: 'ACTIVE' }; },
     abort: async () => sequence.push('abort'),
   };
-  const service = moduleAt('src/services/media.ts', { '@/api/media': { mediaApi }, '@/api/routing': { usesBackendDomain: () => enabled } }, {
+  const service = moduleAt('src/services/media.ts', { '@/api/media': { mediaApi }, '@/api/routing': { usesBackendDomain: () => enabled },
+    '@/lib/fileChecksum': { sha256File: async input => { assert.equal(input.size, 3); sequence.push('hash'); return 'a'.repeat(64); } } }, {
     crypto: webcrypto, fetch: async (url, options) => { sequence.push('put'); assert.equal(options.credentials, 'omit'); assert.equal(options.headers.Authorization, undefined); assert.equal(options.redirect, 'error'); return { ok: !failPut }; }, AbortController,
   });
   const file = { name: 'synthetic.png', type: 'image/png', size: 3, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer };
   const binding = { category: 'USER_AVATAR', resource_type: 'user', resource_id: id };
   await service.uploadBackendMedia(file, binding);
-  assert.deepEqual(sequence, ['request', 'put', 'complete']);
-  assert.match(intent.checksum, /^[a-f0-9]{64}$/); assert.equal(intent.visibility, 'PRIVATE');
+  assert.deepEqual(sequence, ['hash', 'request', 'put', 'complete']);
+  assert.equal(intent.checksum, 'a'.repeat(64)); assert.equal(intent.visibility, 'PRIVATE');
   assert.equal('owner_user_id' in intent, false);
   assert.equal(service.mediaIdFromReference(`/api/v1/storage/objects/${id}/download`), id);
   assert.equal(service.mediaIdFromReference('https://legacy.invalid/avatar.png'), null);
   assert.throws(() => service.capabilityUrl('javascript:alert(1)'));
   sequence.length = 0; failPut = true;
   await assert.rejects(service.uploadBackendMedia(file, binding));
-  assert.deepEqual(sequence, ['request', 'put', 'abort']);
+  assert.deepEqual(sequence, ['hash', 'request', 'put', 'abort']);
   sequence.length = 0; failPut = false; failComplete = true;
   await assert.rejects(service.uploadBackendMedia(file, binding));
-  assert.deepEqual(sequence, ['request', 'put', 'complete']);
+  assert.deepEqual(sequence, ['hash', 'request', 'put', 'complete']);
   sequence.length = 0; enabled = false;
   await assert.rejects(service.uploadBackendMedia(file, binding), /Backend storage mode required/);
   assert.deepEqual(sequence, []);
@@ -229,7 +230,7 @@ function moduleAt(file, dependencies, globals = {}) {
   assert(myArtistsPage.includes('backendArtists || !isLabel'));
   assert(myArtistsPage.includes('defaultParentLabelId={backendArtists ? profile?.id || user?.id : undefined}'));
   const mediaControls = read('src/components/releases/BackendReleaseForm.tsx').split('\n').filter(line => line.includes('<BackendMediaUpload'));
-  assert.equal(mediaControls.length, 2);
+    assert.equal(mediaControls.length, 3);
   for (const control of mediaControls) assert(/disabled=\{[^}]*\bbusy\b[^}]*\bdirty\b/.test(control), 'media controls require saved, idle aggregate');
   console.log('Backend-mode static scan: isolated API components clean; legacy mount guards, settings export, media scan and announcement guards passed');
   console.log('Phase 3D frontend contracts/lifecycle checks passed');

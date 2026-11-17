@@ -3,6 +3,9 @@ import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import type { Principal } from '../src/auth/index.js';
 import { createRoyaltiesService } from '../src/royalties/index.js';
+import { notifyRoyaltyOwnersAfterReconciliation } from '../src/royalties/notification-handler.js';
+import { withTransaction } from '../src/db/pool.js';
+import { once, type OutboxEvent } from '../src/worker/index.js';
 import { createBalanceService } from '../src/finance/service.js';
 import { postEvent } from '../src/finance/index.js';
 import { concurrencyPostgres } from './support/concurrency-postgres.js';
@@ -101,6 +104,26 @@ test('CSV royalty commit splits ordinary label wallets and reverses exact alloca
       evidence: 'synthetic verification' }, 'reconcile');
     assert.equal(approved.matched, true);
     assert.equal(approved.replayed, false);
+    const notificationEvent = (await owner.query<OutboxEvent>(`SELECT id,topic,payload,idempotency_key,attempts
+      FROM soundpub.outbox_events WHERE idempotency_key=$1`, [`royalty.reconciled:${batch.id}`])).rows[0]!;
+    assert.equal((await runtime.query('SELECT count(*)::int AS count FROM soundpub.notifications')).rows[0].count, 0);
+    await assert.rejects(withTransaction(runtime, db => notifyRoyaltyOwnersAfterReconciliation({
+      ...notificationEvent, id: randomUUID(),
+    }, db)), /ROYALTY_NOTIFICATION_EVIDENCE_MISSING/);
+    assert.equal((await runtime.query('SELECT count(*)::int AS count FROM soundpub.notifications')).rows[0].count, 0);
+    assert.equal(await withTransaction(runtime, db => once(db, 'outbox', notificationEvent.idempotency_key,
+      () => notifyRoyaltyOwnersAfterReconciliation(notificationEvent, db))), true);
+    const notices = (await runtime.query<{ recipient_user_id: string; body: string; metadata_safe: Record<string, unknown> }>(
+      'SELECT recipient_user_id,body,metadata_safe FROM soundpub.notifications ORDER BY recipient_user_id')).rows;
+    assert.deepEqual(notices.map(notice => notice.recipient_user_id).sort(),
+      [admin.id,reviewer.id,label.id,artist.id].sort());
+    assert.match(notices.find(notice => notice.recipient_user_id === artist.id)!.body, /70\.00/);
+    assert.match(notices.find(notice => notice.recipient_user_id === label.id)!.body, /21\.00/);
+    assert.equal(notices.find(notice => notice.recipient_user_id === admin.id)!.metadata_safe.amount, undefined);
+    assert.equal(notices.find(notice => notice.recipient_user_id === artist.id)!.metadata_safe.amount, '70.00');
+    assert.equal(await withTransaction(runtime, db => once(db, 'outbox', notificationEvent.idempotency_key,
+      () => notifyRoyaltyOwnersAfterReconciliation(notificationEvent, db))), false);
+    assert.equal((await runtime.query('SELECT count(*)::int AS count FROM soundpub.notifications')).rows[0].count, 4);
     assert.equal((await service.detail(admin, batch.id)).status, 'RECONCILED');
     const replayed = await service.reconcile(reviewer, batch.id, { expected_checksum: report.snapshot.batch.checksum,
       evidence: 'retry evidence is ignored after immutable approval' }, 'reconcile-replay');
@@ -153,9 +176,6 @@ test('CSV royalty commit splits ordinary label wallets and reverses exact alloca
     const missingEarningClient = await runtime.connect();
     try {
       await missingEarningClient.query('BEGIN');
-      await postEvent(missingEarningClient, { ownerId: artist.id, kind: 'MANUAL_ADJUSTMENT', amount: '1.00',
-        businessReference: 'fixture:other-balance', idempotencyKey: `fixture:other-balance:${missingEarningBatch}`,
-        actorId: admin.id });
       await postEvent(missingEarningClient, { ownerId: artist.id, kind: 'ROYALTY_ADJUSTMENT', amount: '-1.00',
         businessReference: `royalty:${missingEarningBatch}`, idempotencyKey: `fixture:correction:${missingEarningBatch}`,
         actorId: admin.id });
@@ -167,6 +187,8 @@ test('CSV royalty commit splits ordinary label wallets and reverses exact alloca
       missingEarningClient.release();
     }
     await service.correct(admin, batch.id, { reason: 'synthetic reversal' }, 'correct');
+    await withTransaction(runtime, db => notifyRoyaltyOwnersAfterReconciliation(notificationEvent, db));
+    assert.equal((await runtime.query('SELECT count(*)::int AS count FROM soundpub.notifications')).rows[0].count, 4);
     assert.equal((await service.detail(admin, batch.id)).status, 'VOIDED_WITH_OFFSET');
     assert.deepEqual((await owner.query(`SELECT owner_id,kind,amount_minor::text FROM soundpub.finance_events
       WHERE business_reference=$1 ORDER BY owner_id,kind`, [`royalty:${batch.id}`])).rows.map(row => ({ ...row })), [

@@ -93,13 +93,14 @@ export const copyrightRegistrationSubmit = z.strictObject({
 export const copyrightRegistrationInvoiceRequest = z.strictObject({});
 export const copyrightRegistrationPaymentCallback = z.strictObject({
   provider_invoice_id: requiredText(200),
+  provider_external_id: requiredText(200).optional(),
   status: z.enum(['PAID', 'FAILED', 'EXPIRED', 'CANCELLED']),
   amount_minor: z.number().int().positive().max(9007199254740991),
   currency: z.literal('IDR'),
 });
 export const copyrightRegistrationInvoiceDto = z.strictObject({
-  registration_id: z.uuid(), payment_id: z.uuid(), provider: z.literal('mock-copyright-registration'),
-  provider_invoice_id: z.string(), provider_invoice_url: z.url(), amount: z.string(), currency: z.literal('IDR'),
+  registration_id: z.uuid(), payment_id: z.uuid(), provider: z.enum(['mock-copyright-registration','xendit']),
+  provider_invoice_id: z.string().nullable(), provider_invoice_url: z.url().nullable(), amount: z.string(), currency: z.literal('IDR'),
   payment_status: copyrightPaymentStatus,
 });
 export const copyrightRegistrationPaymentCallbackResult = z.strictObject({
@@ -112,6 +113,7 @@ export const copyrightRegistrationListQuery = z.strictObject({
   status: copyrightRegistrationStatus.optional(),
   applicant_type: copyrightApplicantType.optional(),
   payment_status: copyrightPaymentStatus.optional(),
+  payment_review: z.literal('required').optional(),
   search: z.string().trim().min(1).max(200).optional(),
 });
 
@@ -154,8 +156,8 @@ export const copyrightWorkDto = z.strictObject({
 });
 export const copyrightPaymentDto = z.strictObject({
   id: z.uuid(), registration_id: z.uuid(), amount: z.string().regex(/^(0|[1-9]\d{0,15})\.\d{2}$/),
-  currency: z.literal('IDR'), payment_status: copyrightPaymentStatus, provider_invoice_id: z.string().nullable(),
-  provider_invoice_url: z.url().nullable(), paid_at: dateTime.nullable(), created_at: dateTime, updated_at: dateTime,
+  currency: z.literal('IDR'), payment_status: copyrightPaymentStatus, provider: z.enum(['mock-copyright-registration','xendit']).nullable(), provider_invoice_id: z.string().nullable(),
+  provider_invoice_url: z.url().nullable(), reconciliation_required: z.boolean(), paid_at: dateTime.nullable(), created_at: dateTime, updated_at: dateTime,
 });
 export const copyrightContractDto = z.strictObject({
   id: z.uuid(), registration_id: z.uuid(), contract_number: z.string().nullable(), status: copyrightContractStatus,

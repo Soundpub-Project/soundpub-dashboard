@@ -30,13 +30,16 @@ vm.runInNewContext(source, {
     const text = read(`src/components/releases/${name}.tsx`);
     const wrapper = text.slice(text.indexOf(`export function ${name}(`));
     assert(wrapper.indexOf('if (usesBackendReleases())') < wrapper.indexOf(`<Legacy${name}`), name);
-    assert(wrapper.includes('releaseWorkflowUnavailable'), name);
+    assert(wrapper.includes('releaseWorkflowUnavailable') || wrapper.includes(`<Backend${name} `), name);
   }
   for (const name of ['ReleaseCreate', 'ReleaseEdit']) {
     const text = read(`src/pages/${name}.tsx`);
     const wrapper = text.slice(text.indexOf(`export default function ${name}(`));
     assert(wrapper.indexOf('if (usesBackendReleases())') < wrapper.indexOf(`<Legacy${name}`), name);
   }
+  const releaseCreate = read('src/pages/ReleaseCreate.tsx');
+  assert.match(releaseCreate, /<ArtistOnboardingDialog[\s\S]*?onComplete=\{async/);
+
   const callsApi = [];
   for (const file of ['releases', 'tracks']) {
     const apiExports = {};

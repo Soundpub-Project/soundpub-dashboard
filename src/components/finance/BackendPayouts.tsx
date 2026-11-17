@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { z } from 'zod';
 import { SoundpubApiError } from '@/api/client';
+import { BackendFinanceAdjustments } from './BackendFinanceAdjustments';
 
 export function BackendPayouts({ admin = false }: { admin?: boolean }) {
   const { user, isAdmin, role } = useAuth();
@@ -97,6 +98,7 @@ export function BackendPayouts({ admin = false }: { admin?: boolean }) {
     <p>Status lunas hanya berasal dari konfirmasi backend.</p>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     {admin && isAdmin && <PicReadinessReview />}
+    {admin && isAdmin && <BackendFinanceAdjustments />}
     {custom && !admin && <PicDestinationStatus />}
     {!admin && <form className="grid gap-3 sm:grid-cols-2" onSubmit={event => { event.preventDefault(); void perform('request'); }}>
       {([['amount', 'Jumlah IDR (contoh 100000.00)'], ['bank_name', 'Bank'], ['account_number', 'Nomor rekening'], ['account_holder_name', 'Nama pemilik rekening']] as const).filter(([key]) => !custom || key === 'amount').map(([key, label]) => <label key={key}>{label}<Input required inputMode={key === 'amount' ? 'decimal' : key === 'account_number' ? 'numeric' : 'text'} pattern={key === 'amount' ? '(0|[1-9][0-9]{0,17})[.][0-9]{2}' : key === 'account_number' ? '[0-9]{4,40}' : undefined} value={draft[key]} disabled={busy || !!operation.current} onChange={event => setDraft({ ...draft, [key]: event.target.value })} /></label>)}

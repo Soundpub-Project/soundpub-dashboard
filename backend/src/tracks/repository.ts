@@ -9,6 +9,8 @@ const projection = `id, artist_id, release_id, title, artist_name, position, ver
   lyricist, lyrics, isrc, duration::double precision AS duration, explicit_lyrics,
   CASE WHEN EXISTS (SELECT 1 FROM soundpub.media_objects media WHERE media.id=audio_media_id
     AND media.status='ACTIVE' AND media.category='TRACK_AUDIO') THEN audio_url ELSE NULL END AS audio_url,
+  CASE WHEN EXISTS (SELECT 1 FROM soundpub.media_objects media WHERE media.id=clip_media_id
+    AND media.status='ACTIVE' AND media.category='TRACK_CLIP') THEN clip_url ELSE NULL END AS clip_url,
   to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
   to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at`;
 

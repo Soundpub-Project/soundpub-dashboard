@@ -114,3 +114,16 @@ test('invalid config fails without disclosing synthetic credentials', () => {
     AUTH_DELIVERY_PREVIOUS_KEYS_JSON: '{"v1":"synthetic-previous-delivery-secret-32-chars"}' }), /conflicts/);
   assert.throws(() => loadConfig({}));
 });
+
+test('Xendit config only accepts development API keys and optional callback token', () => {
+  assert.equal(loadConfig(valid).XENDIT_SECRET_KEY, undefined);
+  assert.equal(loadConfig({ ...valid, XENDIT_SECRET_KEY: '', XENDIT_WEBHOOK_TOKEN: '' }).XENDIT_WEBHOOK_TOKEN, undefined);
+  const config = loadConfig({ ...valid, XENDIT_SECRET_KEY: 'xnd_development_0123456789abcdef',
+    XENDIT_WEBHOOK_TOKEN: 'synthetic-xendit-token-32-characters-long' });
+  assert.equal(config.XENDIT_SECRET_KEY, 'xnd_development_0123456789abcdef');
+  assert.equal(config.XENDIT_WEBHOOK_TOKEN, 'synthetic-xendit-token-32-characters-long');
+  for (const XENDIT_SECRET_KEY of ['xnd_production_0123456789abcdef', 'xnd_development_short']) {
+    assert.throws(() => loadConfig({ ...valid, XENDIT_SECRET_KEY }));
+  }
+  assert.throws(() => loadConfig({ ...valid, XENDIT_WEBHOOK_TOKEN: 'short' }));
+});

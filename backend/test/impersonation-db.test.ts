@@ -77,7 +77,14 @@ test('secure impersonation revokes parent, enforces read-only access, restores f
       assert.equal((await start(actor, adminId)).statusCode, 403);
       assert.equal((await start(actor, inactiveId)).statusCode, 403);
 
-      const started = await start(actor, artistId);
+      const actualNow = Date.now;
+      let started;
+      try {
+        Date.now = () => actualNow() - 20 * 60 * 1000;
+        started = await start(actor, artistId);
+      } finally {
+        Date.now = actualNow;
+      }
       assert.equal(started.statusCode, 200, started.body);
       const childCookie = started.headers['set-cookie'] as string;
       const childCsrf = started.json().csrfToken as string;

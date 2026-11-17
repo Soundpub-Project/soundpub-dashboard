@@ -48,7 +48,8 @@ test('submit, list and admin transitions reject authority and lifecycle ambiguit
   assert.equal(copyrightRegistrationSubmit.safeParse({ version: 2, declaration_accepted: false,
     declaration_version: 'v1' }).success, false);
   assert.equal(copyrightRegistrationListQuery.safeParse({ limit: '100', status: 'in_review', applicant_type: 'company_label',
-    payment_status: 'paid', search: 'pemohon' }).success, true);
+    payment_status: 'paid', payment_review: 'required', search: 'pemohon' }).success, true);
+  assert.equal(copyrightRegistrationListQuery.safeParse({ payment_review: 'all' }).success, false);
   assert.equal(copyrightRegistrationListQuery.safeParse({ limit: '101' }).success, false);
   assert.equal(copyrightRegistrationReviewTransition.safeParse({ version: 1, status: 'revision_requested', note: null }).success, false);
   assert.equal(copyrightRegistrationReviewTransition.safeParse({ version: 1, status: 'rejected', note: 'Bukti tidak sah' }).success, true);

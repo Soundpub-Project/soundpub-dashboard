@@ -57,6 +57,8 @@ integration('takedown submission is scoped, atomic, replayable, and server-deriv
       id: string; label_id: string; requester_id: string; version: number; items: unknown[];
       targets: Array<{ id: string; version: number; status: string }>; history: unknown[];
     };
+    assert.equal((await db.owner.query(`SELECT count(*)::int AS count FROM soundpub.notifications
+      WHERE recipient_user_id=$1 AND metadata_safe->>'takedown_request_id'=$2`, [label.id,created.id])).rows[0].count, 1);
     assert.equal(created.label_id, labelId);
     assert.equal(created.requester_id, labelId);
     assert.equal(created.items.length, 1);
@@ -69,11 +71,15 @@ integration('takedown submission is scoped, atomic, replayable, and server-deriv
     await media.completeUpload(label, upload.object.id, 'complete-document');
     assert.equal((await service.get(label, created.id) as any).documents[0].file_name, 'evidence.pdf');
     assert.equal((await service.create(label, input(releaseId), 'label-submit-1', 'request-replay') as { id: string }).id, created.id);
+    assert.equal((await db.owner.query(`SELECT count(*)::int AS count FROM soundpub.notifications
+      WHERE recipient_user_id=$1 AND metadata_safe->>'takedown_request_id'=$2`, [label.id,created.id])).rows[0].count, 1);
     await assert.rejects(service.create(label, { ...input(releaseId), reason_detail: 'Changed payload' }, 'label-submit-1', 'request-conflict'),
       (error: any) => error?.statusCode === 409);
     await assert.rejects(service.create(label, input(otherReleaseId), 'cross-label', 'request-cross'),
       (error: any) => error?.statusCode === 404);
     let reviewed = await service.transition(admin, created.id, { version: 1, status: 'UNDER_REVIEW' }, 'review-1', 'request-review-1') as any;
+    assert.equal((await db.owner.query(`SELECT count(*)::int AS count FROM soundpub.notifications
+      WHERE recipient_user_id=$1 AND metadata_safe->>'takedown_request_id'=$2`, [label.id,created.id])).rows[0].count, 2);
     reviewed = await service.transition(admin, created.id, { version: reviewed.version, status: 'APPROVED' }, 'review-2', 'request-review-2') as any;
     reviewed = await service.transition(admin, created.id, { version: reviewed.version, status: 'SENT_TO_DSP' }, 'review-3', 'request-review-3') as any;
     assert.equal(reviewed.status, 'SENT_TO_DSP');

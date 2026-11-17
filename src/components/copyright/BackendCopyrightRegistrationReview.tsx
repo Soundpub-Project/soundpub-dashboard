@@ -35,7 +35,10 @@ export function BackendCopyrightRegistrationReview() {
   const [detail, setDetail] = useState<CopyrightRegistration | null>(null);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
+  const [paymentReviewOnly, setPaymentReviewOnly] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
@@ -43,25 +46,44 @@ export function BackendCopyrightRegistrationReview() {
   const [stampProvider, setStampProvider] = useState('manual');
   const [artifact, setArtifact] = useState<File | null>(null);
   const lock = useRef(false);
+  const pageRequest = useRef(0);
+
+  const listPage = useCallback((cursor?: string) => copyrightRegistrationsApi.list({ limit: 100,
+    ...(cursor ? { cursor } : {}),
+    ...(status === 'all' ? {} : { status: status as CopyrightRegistrationStatus }),
+    ...(paymentReviewOnly ? { payment_review: 'required' as const } : {}),
+    ...(search.trim() ? { search: search.trim() } : {}) }), [search, status, paymentReviewOnly]);
 
   const load = useCallback(async () => {
-    setLoading(true); setError('');
+    const request = ++pageRequest.current;
+    setLoading(true); setError(''); setNextCursor(null);
     try {
       if (registrationId) {
         const value = await copyrightRegistrationsApi.detail(registrationId);
-        setDetail(value); setComposerCode(value.composer_code ?? '');
+        if (pageRequest.current === request) { setDetail(value); setComposerCode(value.composer_code ?? ''); }
       } else {
-        const page = await copyrightRegistrationsApi.list({ limit: 100,
-          ...(status === 'all' ? {} : { status: status as CopyrightRegistrationStatus }),
-          ...(search.trim() ? { search: search.trim() } : {}) });
-        setItems(page.items);
+        const page = await listPage();
+        if (pageRequest.current === request) { setItems(page.items); setNextCursor(page.next_cursor); }
       }
     } catch {
-      setError('Data review belum dapat dimuat. Periksa sesi admin dan koneksi backend.');
-    } finally { setLoading(false); }
-  }, [registrationId, search, status]);
+      if (pageRequest.current === request) setError('Data review belum dapat dimuat. Periksa sesi admin dan koneksi backend.');
+    } finally { if (pageRequest.current === request) setLoading(false); }
+  }, [registrationId, listPage]);
 
   useEffect(() => { void load(); }, [load]);
+  const loadMore = async () => {
+    if (!nextCursor || loadingMore) return;
+    const request = pageRequest.current;
+    setLoadingMore(true); setError('');
+    try {
+      const page = await listPage(nextCursor);
+      if (pageRequest.current === request) {
+        setItems(current => [...current, ...page.items]);
+        setNextCursor(page.next_cursor);
+      }
+    } catch { if (pageRequest.current === request) setError('Halaman berikutnya gagal dimuat. Muat ulang daftar sebelum mencoba lagi.'); }
+    finally { setLoadingMore(false); }
+  };
   const selected = detail;
   const run = async (action: () => Promise<CopyrightRegistration>, success: string) => {
     if (lock.current) return;
@@ -124,10 +146,12 @@ export function BackendCopyrightRegistrationReview() {
         <Card><CardHeader><CardDescription>Butuh review</CardDescription><CardTitle>{counts.review}</CardTitle></CardHeader></Card>
         <Card><CardHeader><CardDescription>Aktif</CardDescription><CardTitle>{counts.active}</CardTitle></CardHeader></Card></section>
       <Card><CardHeader><CardTitle>Antrean review</CardTitle><CardDescription>Filter dijalankan backend.</CardDescription>
-        <div className="grid gap-3 md:grid-cols-[1fr_260px_auto]"><div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+        <div className="grid gap-3 md:grid-cols-[1fr_220px_auto_auto]"><div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
           <Input className="pl-9" value={search} onChange={event => setSearch(event.target.value)} placeholder="Cari nama atau email" /></div>
           <Select value={status} onValueChange={setStatus}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Semua status</SelectItem>
             {statuses.map(value => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
+          <Button type="button" variant={paymentReviewOnly ? 'default' : 'outline'} aria-pressed={paymentReviewOnly}
+            onClick={() => setPaymentReviewOnly(value => !value)}>Perlu rekonsiliasi</Button>
           <Button onClick={() => void load()}>Terapkan</Button></div></CardHeader><CardContent><div className="overflow-x-auto rounded-lg border"><Table><TableHeader><TableRow>
           <TableHead>Nama</TableHead><TableHead>Status</TableHead><TableHead>Tipe</TableHead><TableHead>Versi</TableHead><TableHead>Diperbarui</TableHead></TableRow></TableHeader>
           <TableBody>{loading ? <TableRow><TableCell colSpan={5} className="py-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></TableCell></TableRow>
@@ -135,7 +159,10 @@ export function BackendCopyrightRegistrationReview() {
               <TableCell><p className="font-medium">{item.legal_name}</p><p className="text-xs text-muted-foreground">{item.email}</p></TableCell>
               <TableCell><Badge variant="secondary">{item.status}</Badge></TableCell><TableCell>{item.applicant_type}</TableCell>
               <TableCell>{item.version}</TableCell><TableCell>{date(item.updated_at)}</TableCell></TableRow>)
-            : <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground">Tidak ada registration.</TableCell></TableRow>}</TableBody></Table></div></CardContent></Card>
+            : <TableRow><TableCell colSpan={5} className="py-10 text-center text-muted-foreground">Tidak ada registration.</TableCell></TableRow>}</TableBody></Table></div>
+        {nextCursor && <Button className="mt-4" variant="outline" disabled={loading || loadingMore || busy}
+          onClick={() => void loadMore()}>{loadingMore && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Muat lebih banyak</Button>}
+        </CardContent></Card>
     </> : loading ? <div className="py-20 text-center"><Loader2 className="mx-auto h-7 w-7 animate-spin" /></div> : selected ? <>
       <Button variant="ghost" onClick={() => navigate('/dashboard/copyright-registration/review')}><ArrowLeft className="mr-2 h-4 w-4" />Kembali</Button>
       <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
@@ -153,6 +180,7 @@ export function BackendCopyrightRegistrationReview() {
             <Button size="sm" variant="outline" onClick={() => void download(file.media_object_id)}><Download className="mr-2 h-4 w-4" />Buka</Button></div>)}</CardContent></Card></div>
         <aside className="space-y-6"><Card><CardHeader><CardTitle>Evidence pembayaran</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">
           <p>Status: <strong>{selected.payment?.payment_status ?? 'belum ada'}</strong></p><p>Jumlah: {money(selected.payment?.amount, selected.payment?.currency)}</p>
+          {selected.payment?.reconciliation_required && <Alert variant="destructive"><AlertTitle>Pembayaran perlu rekonsiliasi manual</AlertTitle><AlertDescription>Status dari penyedia berbeda dengan status terminal pembayaran. Jangan tandai lunas sebelum bukti transaksi diverifikasi.</AlertDescription></Alert>}
           <p>Dibayar: {date(selected.payment?.paid_at)}</p>
           {selected.payment?.provider_invoice_url && <Button size="sm" variant="outline" asChild><a href={selected.payment.provider_invoice_url} target="_blank" rel="noreferrer">Buka invoice</a></Button>}
           </CardContent></Card>

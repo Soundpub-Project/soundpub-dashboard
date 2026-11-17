@@ -7,6 +7,7 @@ import type { SubmissionDependencies } from '../submissions/index.js';
 import { dto, validateUpload, type MediaRow } from './contracts.js';
 import { mediaAuthority } from './authority.js';
 import type { MediaObjectStore } from './store.js';
+import { MULTIPART_PART_SIZE_BYTES, MULTIPART_THRESHOLD_BYTES } from './contracts.js';
 export * from './contracts.js';
 export { createMediaObjectStore, type MediaObjectStore, type MediaStoreOptions } from './store.js';
 
@@ -20,10 +21,12 @@ function binding(row: Pick<MediaRow, 'category' | 'variant'>) {
   if (row.category === 'OTHER') return { table: 'application_settings', column: row.variant === 'light' ? 'dashboard_logo_light'
     : row.variant === 'dark' ? 'dashboard_logo_dark' : 'favicon', url: '' };
   if (row.category === 'USER_AVATAR') return { table: 'profiles', column: 'avatar_media_id', url: 'avatar_url' };
+  if (row.category === 'ARTIST_PROFILE_IMAGE') return { table: 'artist_profiles', key: 'user_id', column: 'profile_image_media_id', url: 'profile_image_url' };
   if (row.category === 'LABEL_LOGO') return { table: 'profiles', column: row.variant === 'light' ? 'logo_light_media_id' : row.variant === 'dark' ? 'logo_dark_media_id' : 'logo_media_id',
     url: row.variant === 'light' ? 'logo_url_light' : row.variant === 'dark' ? 'logo_url_dark' : 'logo_url' };
   if (row.category === 'RELEASE_COVER') return { table: 'releases', column: 'cover_media_id', url: 'cover_url' };
   if (row.category === 'TRACK_AUDIO') return { table: 'tracks', column: 'audio_media_id', url: 'audio_url' };
+  if (row.category === 'TRACK_CLIP') return { table: 'tracks', column: 'clip_media_id', url: 'clip_url' };
   throw new ApiError(409, 'MEDIA_CATEGORY_UNSUPPORTED');
 }
 function settingMedia(row: Pick<MediaRow, 'resource_type' | 'category'>) {
@@ -39,7 +42,7 @@ async function referenced(db: Pick<Pool, 'query'> | PoolClient, row: MediaRow) {
       : !!(await db.query(`SELECT id FROM soundpub.takedown_request_documents WHERE media_object_id=$1`, [row.id])).rowCount;
   return settingMedia(row)
     ? !!(await db.query(`SELECT id FROM soundpub.application_settings WHERE id=true AND settings->>$1=$2`, [target.column, row.id])).rowCount
-    : !!(await db.query(`SELECT id FROM soundpub.${target.table} WHERE id=$1 AND ${target.column}=$2`, [row.resource_id, row.id])).rowCount;
+    : !!(await db.query(`SELECT id FROM soundpub.${target.table} WHERE ${'key' in target ? target.key : 'id'}=$1 AND ${target.column}=$2`, [row.resource_id, row.id])).rowCount;
 }
 async function find(db: PoolClient, objectId: string, lock = false) {
   const row = (await db.query<MediaRow>(`SELECT * FROM soundpub.media_objects WHERE id=$1 ${lock ? 'FOR UPDATE' : ''}`, [objectId])).rows[0];
@@ -67,6 +70,7 @@ export function createMediaService(pool: Pool, store: MediaObjectStore) {
         && current.roles.some(role => role === 'admin' || role === 'superadmin');
       if (row.status === 'PENDING' && row.owner_user_id !== current.id && !copyrightAdmin) throw new ApiError(404, 'NOT_FOUND');
       if (row.status === 'DELETED') return { status: 'deleted' as const };
+      if (row.status === 'PENDING' && row.upload_method === 'MULTIPART') await store.abortMultipart!(row);
       const target = binding(row);
       if (!target) {
         if (row.category === 'COPYRIGHT_REGISTRATION_DOCUMENT') {
@@ -79,7 +83,7 @@ export function createMediaService(pool: Pool, store: MediaObjectStore) {
         settings=jsonb_set(settings,ARRAY[$1], 'null'::jsonb),version=version+1
         WHERE id=true AND settings->>$1=$2`, [target!.column,row.id]);
       else if (target) await db.query(`UPDATE soundpub.${target.table} SET ${target.column}=NULL,${target.url}=NULL,updated_at=now()
-        WHERE id=$1 AND ${target.column}=$2`, [row.resource_id, row.id]);
+        WHERE ${'key' in target ? target.key : 'id'}=$1 AND ${target.column}=$2`, [row.resource_id, row.id]);
       if (releaseId && row.resource_type === 'track' && row.status === 'ACTIVE') await db.query('UPDATE soundpub.releases SET updated_at=now() WHERE id=$1', [releaseId]);
       await db.query(`UPDATE soundpub.media_objects SET status='DELETED',updated_at=now(),
         cleanup_after=GREATEST(expires_at + interval '60 seconds',now()+interval '60 seconds') WHERE id=$1`, [row.id]);
@@ -88,8 +92,53 @@ export function createMediaService(pool: Pool, store: MediaObjectStore) {
     });
   }
   return {
+    async requestMultipart(actor: Principal, input: unknown, requestId = 'media') {
+      const value = validateUpload(input);
+      if (value.category !== 'TRACK_AUDIO' || value.size <= MULTIPART_THRESHOLD_BYTES || !store.beginMultipart) throw new ApiError(400, 'BAD_REQUEST');
+      let orphan: { id: string; multipart_upload_id: string } | undefined;
+      try {
+        return await withTransaction(pool, async db => {
+          const { current } = await mediaAuthority(db, actor, value, true);
+          const upload = await store.request(current.id, value);
+          const multipartId = await store.beginMultipart!(upload.metadata.id, value);
+          orphan = { id: upload.metadata.id, multipart_upload_id: multipartId };
+          const expiresAt = new Date(Date.now() + 3_600_000);
+          const row = (await db.query<MediaRow>(`INSERT INTO soundpub.media_objects
+            (id,bucket,object_key,owner_user_id,category,resource_type,resource_id,track_id,original_filename,variant,
+            mime_type,size,checksum,expires_at,cleanup_after,upload_method,multipart_upload_id)
+            VALUES ($1,$2,$3,$4,$5,'track',$6,$6,$7,$8,$9,$10,$11,$12,$12::timestamptz+interval '60 seconds','MULTIPART',$13) RETURNING *`,
+          [upload.metadata.id, store.bucket, store.key(upload.metadata.id), current.id, value.category, value.resource_id,
+            value.filename, value.variant, value.mime_type, value.size, value.checksum, expiresAt, multipartId])).rows[0]!;
+          await audit(db, current, row, 'media.upload_requested', requestId);
+          return { object: dto(row), part_size: MULTIPART_PART_SIZE_BYTES, expires_at: expiresAt.toISOString() };
+        });
+      } catch (error) {
+        if (orphan) await store.abortMultipart!({ ...orphan, upload_method: 'MULTIPART' } as MediaRow).catch(() => undefined);
+        throw error;
+      }
+    },
+    async multipartStatus(actor: Principal, objectId: string) {
+      return withTransaction(pool, async db => {
+        const { row, current } = await authorized(db, actor, id(objectId), true);
+        if (row.owner_user_id !== current.id || row.upload_method !== 'MULTIPART' || row.status !== 'PENDING'
+          || new Date(row.expires_at).getTime() <= Date.now()) throw new ApiError(404, 'NOT_FOUND');
+        const state = await store.multipartParts!(row);
+        return { object: dto(row), part_size: MULTIPART_PART_SIZE_BYTES, parts: state.parts, completed: state.completed,
+          expires_at: new Date(row.expires_at).toISOString() };
+      });
+    },
+    async multipartPart(actor: Principal, objectId: string, partNumber: number) {
+      return withTransaction(pool, async db => {
+        const { row, current } = await authorized(db, actor, id(objectId), true);
+        if (row.owner_user_id !== current.id || row.upload_method !== 'MULTIPART' || row.status !== 'PENDING'
+          || new Date(row.expires_at).getTime() <= Date.now()) throw new ApiError(404, 'NOT_FOUND');
+        const { url, size } = await store.multipartPart!(row, partNumber);
+        return { url, size, expires_at: new Date(Date.now() + 300_000).toISOString() };
+      });
+    },
     async requestUpload(actor: Principal, input: unknown, requestId = 'media') {
       const value = validateUpload(input);
+      if (value.category === 'TRACK_AUDIO' && value.size > MULTIPART_THRESHOLD_BYTES) throw new ApiError(400, 'MEDIA_MULTIPART_REQUIRED');
       return withTransaction(pool, async db => {
         const { current } = await mediaAuthority(db, actor, value, true);
         const upload = await store.request(current.id, value);
@@ -99,7 +148,7 @@ export function createMediaService(pool: Pool, store: MediaObjectStore) {
           takedown_request_id,copyright_registration_id,copyright_document_type,original_filename,variant,mime_type,size,checksum,expires_at,cleanup_after)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$19::timestamptz+interval '60 seconds') RETURNING *`,
         [upload.metadata.id, store.bucket, store.key(upload.metadata.id), current.id, value.category, value.resource_type,
-          value.resource_id, ['user','label'].includes(value.resource_type) ? value.resource_id : null,
+          value.resource_id, ['user','artist_profile','label'].includes(value.resource_type) ? value.resource_id : null,
           value.resource_type === 'release' ? value.resource_id : null, value.resource_type === 'track' ? value.resource_id : null,
           value.resource_type === 'takedown' ? value.resource_id : null,
           value.resource_type === 'copyright_registration' ? value.resource_id : null, value.document_type ?? null, value.filename,
@@ -123,7 +172,10 @@ export function createMediaService(pool: Pool, store: MediaObjectStore) {
         [row.category, row.resource_type, row.resource_id, row.variant])).rows[0] : undefined;
         if (previous && (await db.query(`SELECT 1 FROM soundpub.media_objects newer, soundpub.media_objects older
           WHERE newer.id=$1 AND older.id=$2 AND newer.request_order > older.request_order`, [previous.id,row.id])).rowCount) throw new ApiError(409, 'CONFLICT');
-        try { await store.verify(row); }
+        try {
+          if (row.upload_method === 'MULTIPART') await store.finishMultipart!(row);
+          await store.verify(row);
+        }
         catch (error) {
           if (!(error instanceof ApiError) || error.statusCode !== 400) throw error;
           await db.query("UPDATE soundpub.media_objects SET status='FAILED',updated_at=now() WHERE id=$1", [row.id]);
@@ -134,7 +186,7 @@ export function createMediaService(pool: Pool, store: MediaObjectStore) {
         // Persist stable authenticated API reference, never S3 URL or signed capability.
         if (settingMedia(row)) await db.query(`UPDATE soundpub.application_settings SET
           settings=jsonb_set(settings,ARRAY[$1],to_jsonb($2::text)),version=version+1 WHERE id=true`, [target!.column,row.id]);
-        else if (target) await db.query(`UPDATE soundpub.${target.table} SET ${target.column}=$2,${target.url}=$3,updated_at=now() WHERE id=$1`,
+        else if (target) await db.query(`UPDATE soundpub.${target.table} SET ${target.column}=$2,${target.url}=$3,updated_at=now() WHERE ${'key' in target ? target.key : 'id'}=$1`,
           [row.resource_id, row.id, `/api/v1/storage/objects/${row.id}/download`]);
         if (releaseId && row.resource_type === 'track') await db.query('UPDATE soundpub.releases SET updated_at=now() WHERE id=$1', [releaseId]);
         const active = (await db.query<MediaRow>("UPDATE soundpub.media_objects SET status='ACTIVE',updated_at=now() WHERE id=$1 RETURNING *", [row.id])).rows[0]!;
@@ -192,8 +244,9 @@ export function createMediaService(pool: Pool, store: MediaObjectStore) {
       const active = (await pool.query<MediaRow>(`SELECT m.* FROM soundpub.media_objects m WHERE status='ACTIVE'
         AND (cleanup_after < now() OR NOT EXISTS (
           SELECT 1 FROM soundpub.profiles p WHERE m.id IN (p.avatar_media_id,p.logo_media_id,p.logo_light_media_id,p.logo_dark_media_id)
+          UNION ALL SELECT 1 FROM soundpub.artist_profiles ap WHERE ap.profile_image_media_id=m.id
           UNION ALL SELECT 1 FROM soundpub.releases r WHERE r.cover_media_id=m.id
-          UNION ALL SELECT 1 FROM soundpub.tracks t WHERE t.audio_media_id=m.id
+          UNION ALL SELECT 1 FROM soundpub.tracks t WHERE t.audio_media_id=m.id OR t.clip_media_id=m.id
           UNION ALL SELECT 1 FROM soundpub.copyright_registration_files f
             WHERE f.media_object_id=m.id AND f.detached_at IS NULL
           UNION ALL SELECT 1 FROM soundpub.payout_settlement_proofs p WHERE p.media_object_id=m.id
@@ -207,7 +260,7 @@ export function createMediaService(pool: Pool, store: MediaObjectStore) {
         if (candidate.resource_type === 'track') await db.query(`SELECT r.id FROM soundpub.releases r JOIN soundpub.tracks t
           ON t.release_id=r.id WHERE t.id=$1 FOR UPDATE OF r`, [candidate.resource_id]);
         if (settingMedia(candidate)) await db.query('SELECT id FROM soundpub.application_settings WHERE id=true FOR UPDATE');
-        else if (target) await db.query(`SELECT ${target.column} AS media_id FROM soundpub.${target.table} WHERE id=$1 FOR UPDATE`, [candidate.resource_id]);
+        else if (target) await db.query(`SELECT ${target.column} AS media_id FROM soundpub.${target.table} WHERE ${'key' in target ? target.key : 'id'}=$1 FOR UPDATE`, [candidate.resource_id]);
         const row = await find(db, candidate.id, true);
         if (row.status !== 'ACTIVE') return;
         if (!(await referenced(db,row))) await db.query(`UPDATE soundpub.media_objects SET status='REPLACED',
@@ -225,6 +278,7 @@ export function createMediaService(pool: Pool, store: MediaObjectStore) {
         for (const row of candidates) {
           if (row.bucket !== store.bucket || row.object_key !== store.key(row.id)) continue;
           if (await referenced(db,row)) continue;
+          if (row.upload_method === 'MULTIPART') await store.abortMultipart!(row);
           await store.remove(row);
           await db.query(`UPDATE soundpub.media_objects SET status='DELETED',updated_at=now(),cleanup_after='infinity' WHERE id=$1`, [row.id]);
           deleted++;
@@ -261,7 +315,7 @@ export function createMediaReadinessAdapter(): NonNullable<SubmissionDependencie
       AND m.resource_id=r.id AND m.release_id=r.id`, [release.id])).rowCount;
     const audio = tracks.length > 0 && (await db.query(`SELECT t.id FROM soundpub.tracks t
       JOIN soundpub.media_objects m ON m.id=t.audio_media_id WHERE t.release_id=$1 AND t.id=ANY($2::uuid[])
-      AND m.status='ACTIVE' AND m.category='TRACK_AUDIO' AND m.resource_type='track' AND m.resource_id=t.id AND m.track_id=t.id`,
+          AND m.status='ACTIVE' AND m.category='TRACK_AUDIO' AND m.resource_type='track' AND m.resource_id=t.id AND m.track_id=t.id`,
     [release.id, tracks.map(track => track.id)])).rowCount === tracks.length;
     return { cover, audio };
   } };

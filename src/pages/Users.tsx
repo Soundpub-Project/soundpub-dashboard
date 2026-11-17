@@ -79,11 +79,12 @@ import {
 
 type UserStatus = "active" | "inactive" | "suspended";
 
-type LoginMethod = "email" | "iccn" | "google";
+type LoginMethod = "email" | "iccn" | "google" | "none";
 
 interface UserProfile {
   id: string;
   email: string;
+  account_kind?: 'STANDARD' | 'MANAGED_ARTIST';
   full_name: string;
   phone: string | null;
   status: string;
@@ -334,14 +335,17 @@ export default function Users() {
 
   const getLoginMethod = (
     ssoProvider: string | null | undefined,
+    accountKind?: UserProfile["account_kind"],
   ): LoginMethod => {
+    if (accountKind === "MANAGED_ARTIST") return "none";
     if (ssoProvider === "iccn") return "iccn";
     if (ssoProvider === "google") return "google";
     return "email";
   };
 
-  const getLoginMethodBadge = (ssoProvider: string | null | undefined) => {
-    const method = getLoginMethod(ssoProvider);
+  const getLoginMethodBadge = (ssoProvider: string | null | undefined, accountKind?: UserProfile['account_kind']) => {
+    if (accountKind === 'MANAGED_ARTIST') return <Badge variant="outline">Artis managed - tanpa login</Badge>;
+    const method = getLoginMethod(ssoProvider, accountKind);
     switch (method) {
       case "iccn":
         return (
@@ -352,6 +356,8 @@ export default function Users() {
             SSO ICCN
           </Badge>
         );
+      case "none":
+        return <Badge variant="outline">Artis managed - tanpa login</Badge>;
       case "google":
         return (
           <Badge
@@ -383,7 +389,7 @@ export default function Users() {
       statusFilter === "all" || user.status === statusFilter;
     const matchesLoginMethod =
       loginMethodFilter === "all" ||
-      getLoginMethod(user.sso_provider) === loginMethodFilter;
+      getLoginMethod(user.sso_provider, user.account_kind) === loginMethodFilter;
 
     return matchesSearch && matchesRole && matchesStatus && matchesLoginMethod;
   });
@@ -531,6 +537,7 @@ export default function Users() {
                           <SelectItem value="email">Email</SelectItem>
                           <SelectItem value="iccn">SSO ICCN</SelectItem>
                           <SelectItem value="google">Google</SelectItem>
+                          <SelectItem value="none">Tanpa login</SelectItem>
                         </SelectContent>
                       </Select>
                       {hasActiveFilters && (
@@ -591,7 +598,7 @@ export default function Users() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              {getLoginMethodBadge(user.sso_provider)}
+                              {getLoginMethodBadge(user.sso_provider, user.account_kind)}
                             </TableCell>
                             <TableCell>
                               {user.role === "copyright" &&
@@ -647,7 +654,7 @@ export default function Users() {
                                   <DropdownMenuItem
                                     onClick={() => handleEditRole(user)}
                                     disabled={
-                                      user.id === currentUserId ||
+                                      user.account_kind === "MANAGED_ARTIST" || user.id === currentUserId ||
                                       (user.role === "superadmin" && !isSuperadmin)
                                     }
                                   >
@@ -656,7 +663,7 @@ export default function Users() {
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={() => user.id === currentUserId ? navigate("/dashboard/settings") : handleEditPassword(user)}
-                                    disabled={user.role === "superadmin" && !isSuperadmin}
+                                    disabled={user.account_kind === "MANAGED_ARTIST" || (user.role === "superadmin" && !isSuperadmin)}
                                   >
                                     <KeyRound className="mr-2 h-4 w-4" />
                                     {user.id === currentUserId ? "Ubah Password Saya" : "Ubah Password"}
@@ -675,6 +682,7 @@ export default function Users() {
                                     !user.roles?.some(role => role === "admin" || role === "superadmin") &&
                                     user.role !== "admin" && user.role !== "superadmin" && (
                                       <DropdownMenuItem
+                                        disabled={user.account_kind === "MANAGED_ARTIST"}
                                         onClick={() =>
                                           void handleImpersonate(user)
                                         }

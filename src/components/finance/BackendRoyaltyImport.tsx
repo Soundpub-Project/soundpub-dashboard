@@ -50,6 +50,7 @@ function errorMessage(error: unknown) {
     ROYALTY_IMPORT_APPROVAL_REQUIRED: 'Preview wajib disetujui sebelum batch dapat disimpan.',
     ROYALTY_PREVIEW_APPROVAL_CONFLICT: 'Preview sudah disetujui dengan bukti berbeda. Muat ulang session.',
     ROYALTY_REPLACEMENT_PERIOD_MISMATCH: 'Periode file pengganti harus sama dengan batch lama.',
+    ROYALTY_REPLACEMENT_FILENAME_MISMATCH: 'Nama file pengganti harus persis sama dengan filename batch lama.',
     ROYALTY_REPLACEMENT_UNCHANGED: 'File pengganti sama dengan batch lama.',
     ROYALTY_REPLACEMENT_CONFLICT: 'Batch sudah dikoreksi/diganti atau replacement berbeda sudah tercatat.',
     ROYALTY_REPLACEMENT_POLICY_MISMATCH: 'Batch ini bukan impor CSV legacy dan tidak dapat diganti melalui alur ini.',
@@ -111,6 +112,7 @@ export function BackendRoyaltyImport() {
   const [replacementPreview, setReplacementPreview] = useState<RoyaltyCsvPreview | null>(null);
   const [replacementReason, setReplacementReason] = useState('');
   const [replacementSessionId, setReplacementSessionId] = useState<string | null>(null);
+  const [replacementBatchIds, setReplacementBatchIds] = useState<string[]>([]);
   const [replacementApproved, setReplacementApproved] = useState(false);
   const [replacementRequestKey, setReplacementRequestKey] = useState<string | null>(null);
   const [stagedSessionId, setStagedSessionId] = useState<string | null>(null);
@@ -241,7 +243,7 @@ export function BackendRoyaltyImport() {
   };
 
   const previewReplacement = async () => {
-    if (!replacementTarget || !replacementFile || replacementFile.size > MAX_CSV_BYTES || !replacementReason.trim() || inFlight.current) return;
+    if (!replacementTarget || !replacementFile || replacementFile.name !== replacementTarget.filename || replacementFile.size > MAX_CSV_BYTES || !replacementReason.trim() || inFlight.current) return;
     inFlight.current = true; setBusy('replace-preview'); setError(''); setResult('');
     try {
       const requestKey = replacementRequestKey ?? crypto.randomUUID();
@@ -265,25 +267,28 @@ export function BackendRoyaltyImport() {
       setReplacementSessionId(session.id);
       const ready = await waitForPreview(session.id);
       if (!ready.preview_result) throw new Error('Backend tidak menghasilkan preview replacement.');
+      if (!ready.replacement_batch_ids?.length || !ready.replacement_batch_ids.includes(replacementTarget.id))
+        throw new Error('Daftar batch replacement tidak valid. Buat sesi baru.');
+      setReplacementBatchIds(ready.replacement_batch_ids);
       setReplacementPreview(ready.preview_result);
       setReplacementApproved(Boolean(ready.approval_id));
       await loadStagedRows(ready.id, 'ALL', 0, false);
       await sessions.refetch();
     }
-    catch (failure) { setReplacementPreview(null); setError(errorMessage(failure)); }
+    catch (failure) { setReplacementPreview(null); setReplacementBatchIds([]); setError(errorMessage(failure)); }
     finally { inFlight.current = false; setBusy(null); }
   };
 
   const commitReplacement = async () => {
-    if (!replacementTarget || !replacementSessionId || !replacementApproved || !replacementPreview?.checksum || replacementPreview.invalid_rows ||
+    if (!replacementTarget || !replacementSessionId || !replacementBatchIds.length || !replacementApproved || !replacementPreview?.checksum || replacementPreview.invalid_rows ||
         replacementPreview.file_errors || !replacementReason.trim() || inFlight.current) return;
     inFlight.current = true; setBusy('replace-commit'); setError(''); setResult('');
     try {
       const saved = await royaltiesApi.commitFileSession(replacementSessionId);
       setResult(saved.replayed ? `Replacement ${saved.id} sudah pernah diproses.` :
-        `Batch ${saved.replaced_id ?? replacementTarget.id} dibalik dan diganti batch ${saved.id} secara atomik.`);
-      setReplacementTarget(null); setReplacementFile(null); setReplacementPreview(null); setReplacementReason('');
-      setReplacementSessionId(null); setReplacementApproved(false); setReplacementRequestKey(null); clearStagedRows();
+        `${replacementBatchIds.length} batch dibalik dan diganti batch ${saved.id} secara atomik.`);
+      setReplacementTarget(null); setReplacementBatchIds([]); setReplacementFile(null); setReplacementPreview(null); setReplacementReason('');
+      setReplacementSessionId(null); setReplacementBatchIds([]); setReplacementApproved(false); setReplacementRequestKey(null); clearStagedRows();
       await history.refetch();
       await sessions.refetch();
     } catch (failure) { setError(errorMessage(failure)); }
@@ -299,7 +304,10 @@ export function BackendRoyaltyImport() {
       if (session.operation_kind === 'REPLACEMENT') {
         const target = history.data?.items.find(batch => batch.id === session.replaces_batch_id);
         if (!target) throw new Error('Batch asal replacement tidak ada pada halaman riwayat saat ini.');
+        if (!session.replacement_batch_ids?.length || !session.replacement_batch_ids.includes(target.id))
+          throw new Error('Daftar batch replacement pada sesi tidak valid. Buat sesi baru.');
         setReplacementTarget(target); setReplacementSessionId(session.id); setReplacementPreview(session.preview_result);
+        setReplacementBatchIds(session.replacement_batch_ids);
         setReplacementReason(session.replacement_reason ?? ''); setReplacementApproved(Boolean(session.approval_id));
       } else {
         setSessionId(session.id); setPreview(session.preview_result); setPreviewApproved(Boolean(session.approval_id));
@@ -345,18 +353,20 @@ export function BackendRoyaltyImport() {
       </CardContent></Card>}
       <Card><CardHeader className="flex flex-row items-center justify-between gap-3"><div><CardTitle>Riwayat impor</CardTitle><CardDescription>Batch immutable. Replacement membuat koreksi ledger dan batch baru; data lama tidak dihapus.</CardDescription></div><Button type="button" size="icon" variant="outline" aria-label="Muat ulang riwayat" disabled={history.isFetching} onClick={() => void history.refetch()}><RefreshCw className={`h-4 w-4 ${history.isFetching ? 'animate-spin' : ''}`} /></Button></CardHeader><CardContent className="space-y-4">
         {history.isError && <p role="alert" className="text-sm text-destructive">{errorMessage(history.error)}</p>}
-        <div className="overflow-x-auto rounded-lg border"><Table><TableHeader><TableRow><TableHead>Periode</TableHead><TableHead>Sumber</TableHead><TableHead>File</TableHead><TableHead>Baris</TableHead><TableHead>Total</TableHead><TableHead>Status</TableHead><TableHead /></TableRow></TableHeader><TableBody>{history.data?.items.map(batch => <TableRow key={batch.id}><TableCell>{batch.period}</TableCell><TableCell>{batch.source}</TableCell><TableCell>{batch.filename}</TableCell><TableCell>{batch.row_count}</TableCell><TableCell>{formatIdr(batch.total_amount)}</TableCell><TableCell><StatusBadge batch={batch} /></TableCell><TableCell className="text-right"><div className="flex justify-end gap-1"><Button variant="ghost" size="sm" disabled={!!busy} onClick={() => void loadDetail(batch.id)}>Detail</Button>{batch.status !== 'VOIDED_WITH_OFFSET' && batch.validation_result.policy_code === 'SOUNDPUB_LEGACY_70_21_9' && <Button variant="outline" size="sm" disabled={!!busy} onClick={() => { setReplacementTarget(batch); setReplacementFile(null); setReplacementPreview(null); setReplacementReason(''); setReplacementSessionId(null); setReplacementApproved(false); setReplacementRequestKey(null); setError(''); }}>Ganti</Button>}</div></TableCell></TableRow>)}{history.data?.items.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Belum ada impor.</TableCell></TableRow>}</TableBody></Table></div>
+        <div className="overflow-x-auto rounded-lg border"><Table><TableHeader><TableRow><TableHead>Periode</TableHead><TableHead>Sumber</TableHead><TableHead>File</TableHead><TableHead>Baris</TableHead><TableHead>Total</TableHead><TableHead>Status</TableHead><TableHead /></TableRow></TableHeader><TableBody>{history.data?.items.map(batch => <TableRow key={batch.id}><TableCell>{batch.period}</TableCell><TableCell>{batch.source}</TableCell><TableCell>{batch.filename}</TableCell><TableCell>{batch.row_count}</TableCell><TableCell>{formatIdr(batch.total_amount)}</TableCell><TableCell><StatusBadge batch={batch} /></TableCell><TableCell className="text-right"><div className="flex justify-end gap-1"><Button variant="ghost" size="sm" disabled={!!busy} onClick={() => void loadDetail(batch.id)}>Detail</Button>{batch.status !== 'VOIDED_WITH_OFFSET' && batch.validation_result.policy_code === 'SOUNDPUB_LEGACY_70_21_9' && <Button variant="outline" size="sm" disabled={!!busy} onClick={() => { setReplacementTarget(batch); setReplacementBatchIds([]); setReplacementFile(null); setReplacementPreview(null); setReplacementReason(''); setReplacementSessionId(null); setReplacementApproved(false); setReplacementRequestKey(null); setError(''); }}>Ganti</Button>}</div></TableCell></TableRow>)}{history.data?.items.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Belum ada impor.</TableCell></TableRow>}</TableBody></Table></div>
         <div className="flex justify-between"><Button variant="outline" disabled={offset === 0 || history.isFetching} onClick={() => setOffset(value => Math.max(0, value - PAGE_SIZE))}>Sebelumnya</Button><Button variant="outline" disabled={(history.data?.items.length ?? 0) < PAGE_SIZE || history.isFetching} onClick={() => setOffset(value => value + PAGE_SIZE)}>Berikutnya</Button></div>
       </CardContent></Card>
-      {replacementTarget && <Card><CardHeader><CardTitle>Ganti batch {replacementTarget.id}</CardTitle><CardDescription>Periode wajib tetap {replacementTarget.period}. Batch lama akan dibalik lewat ledger, bukan dihapus.</CardDescription></CardHeader><CardContent className="space-y-4">
-        <Input type="file" accept=".csv,text/csv" onChange={event => { const next = event.target.files?.[0] ?? null; setReplacementFile(next); setReplacementPreview(null); setReplacementSessionId(null); setReplacementApproved(false); setReplacementRequestKey(null); clearStagedRows(); if (next && next.size > MAX_CSV_BYTES) setError('CSV replacement maksimum 100 MB.'); }} />
+      {replacementTarget && <Card><CardHeader><CardTitle>Ganti batch periode {replacementTarget.period}</CardTitle><CardDescription>Semua batch aktif pada periode ini harus memiliki filename yang sama: {replacementTarget.filename}. Batch lama dibalik lewat ledger, bukan dihapus.</CardDescription></CardHeader><CardContent className="space-y-4">
+        <Input type="file" accept=".csv,text/csv" onChange={event => { const next = event.target.files?.[0] ?? null; setReplacementFile(next); setReplacementPreview(null); setReplacementSessionId(null); setReplacementBatchIds([]); setReplacementApproved(false); setReplacementRequestKey(null); clearStagedRows(); if (next && next.size > MAX_CSV_BYTES) setError('CSV replacement maksimum 100 MB.'); }} />
+        {replacementFile && replacementFile.name !== replacementTarget.filename && <p className="text-sm text-destructive">Nama file wajib sama persis: {replacementTarget.filename}</p>}
         <label className="block text-sm font-medium">Alasan replacement<Input value={replacementReason} maxLength={1000} onChange={event => setReplacementReason(event.target.value)} /></label>
         {replacementPreview && <p>Preview: {replacementPreview.valid_rows} valid, {replacementPreview.invalid_rows} invalid, total {formatIdr(replacementPreview.total_net_amount)}.</p>}
+        {replacementBatchIds.length > 0 && <div className="rounded-md border bg-muted/30 p-3 text-sm"><p className="font-medium">{replacementBatchIds.length} batch akan dibalik secara atomik:</p><ul className="mt-1 list-inside list-disc break-all">{replacementBatchIds.map(id => <li key={id}>{id}</li>)}</ul><p className="mt-2 text-muted-foreground">Backend menolak commit bila daftar batch berubah.</p></div>}
         {replacementSessionId && stagedSessionId === replacementSessionId && <StagedRowsReview rows={stagedRows} total={stagedTotal} status={stagedStatus} offset={stagedOffset} busy={busy === 'rows'} onStatus={value => void loadStagedRows(replacementSessionId, value, 0)} onPage={value => void loadStagedRows(replacementSessionId, stagedStatus, value)} />}
-        <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={!replacementFile || replacementFile.size > MAX_CSV_BYTES || !replacementReason.trim() || !!busy} onClick={() => void previewReplacement()}>{busy === 'replace-preview' ? 'Mengupload dan memvalidasi...' : 'Upload dan preview replacement'}</Button><Button variant="outline" disabled={!replacementSessionId || !replacementPreview?.checksum || replacementPreview.invalid_rows > 0 || replacementPreview.file_errors > 0 || replacementApproved || !approvalEvidence.trim() || !!busy} onClick={() => void approvePreview(true)}>{busy === 'replace-approve' ? 'Menyetujui...' : replacementApproved ? 'Sudah disetujui' : 'Setujui replacement'}</Button><Button disabled={!replacementSessionId || !replacementApproved || !replacementPreview?.checksum || replacementPreview.invalid_rows > 0 || replacementPreview.file_errors > 0 || !replacementReason.trim() || !!busy} onClick={() => void commitReplacement()}>{busy === 'replace-commit' ? 'Mengganti...' : 'Konfirmasi replacement atomik'}</Button><Button variant="ghost" disabled={!!busy} onClick={() => { setReplacementTarget(null); setReplacementFile(null); setReplacementPreview(null); setReplacementReason(''); setReplacementSessionId(null); setReplacementApproved(false); setReplacementRequestKey(null); clearStagedRows(); }}>Batal</Button></div>
+        <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={!replacementFile || replacementFile.name !== replacementTarget.filename || replacementFile.size > MAX_CSV_BYTES || !replacementReason.trim() || !!busy} onClick={() => void previewReplacement()}>{busy === 'replace-preview' ? 'Mengupload dan memvalidasi...' : 'Upload dan preview replacement'}</Button><Button variant="outline" disabled={!replacementSessionId || !replacementBatchIds.length || !replacementPreview?.checksum || replacementPreview.invalid_rows > 0 || replacementPreview.file_errors > 0 || replacementApproved || !approvalEvidence.trim() || !!busy} onClick={() => void approvePreview(true)}>{busy === 'replace-approve' ? 'Menyetujui...' : replacementApproved ? 'Sudah disetujui' : 'Setujui replacement'}</Button><Button disabled={!replacementSessionId || !replacementBatchIds.length || !replacementApproved || !replacementPreview?.checksum || replacementPreview.invalid_rows > 0 || replacementPreview.file_errors > 0 || !replacementReason.trim() || !!busy} onClick={() => void commitReplacement()}>{busy === 'replace-commit' ? 'Mengganti...' : 'Konfirmasi replacement atomik'}</Button><Button variant="ghost" disabled={!!busy} onClick={() => { setReplacementTarget(null); setReplacementBatchIds([]); setReplacementFile(null); setReplacementPreview(null); setReplacementReason(''); setReplacementSessionId(null); setReplacementApproved(false); setReplacementRequestKey(null); clearStagedRows(); }}>Batal</Button></div>
       </CardContent></Card>}
       {selected && <Card><CardHeader><CardTitle>Detail batch {selected.id}</CardTitle><CardDescription>{selected.filename} · {selected.period} · {selected.row_count} baris</CardDescription></CardHeader><CardContent className="space-y-3">
-        {(selected.replacement_batch_id || selected.replaces_batch_id) && <div className="rounded-lg border bg-muted/30 p-3 text-sm"><p className="font-medium">{selected.replacement_batch_id ? `Diganti oleh batch ${selected.replacement_batch_id}` : `Menggantikan batch ${selected.replaces_batch_id}`}</p>{selected.change_reason && <p className="mt-1 text-muted-foreground">Alasan: {selected.change_reason}</p>}</div>}
+        {(selected.replacement_batch_id || selected.replaces_batch_id) && <div className="rounded-lg border bg-muted/30 p-3 text-sm"><p className="font-medium">{selected.replacement_batch_id ? `Diganti oleh batch ${selected.replacement_batch_id}` : `Menggantikan ${selected.replaces_batch_ids.length} batch`}</p>{!selected.replacement_batch_id && selected.replaces_batch_ids.map(id => <p key={id} className="break-all text-muted-foreground">{id}</p>)}{selected.change_reason && <p className="mt-1 text-muted-foreground">Alasan: {selected.change_reason}</p>}</div>}
         {selected.status !== 'VOIDED_WITH_OFFSET' && reconciliation && <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="font-medium">Rekonsiliasi batch</p><p className="text-sm text-muted-foreground">Entry, allocation, ledger, audit, dan outbox diperiksa dari backend.</p></div><Badge variant={selected.status === 'RECONCILED' ? 'default' : reconciliation.matched ? 'outline' : 'destructive'}>{selected.status === 'RECONCILED' ? 'Reconciled' : reconciliation.matched ? 'Siap disetujui' : 'Mismatch'}</Badge></div>
           {reconciliation.issues.length > 0 && <ul className="list-disc pl-5 text-sm text-destructive">{reconciliation.issues.map(issue => <li key={issue}>{issue}</li>)}</ul>}

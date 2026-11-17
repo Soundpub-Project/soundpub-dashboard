@@ -42,7 +42,10 @@ test('release/track integrity, snapshots, ordering, concurrency and runtime gran
     await assert.rejects(owner.query('UPDATE soundpub.tracks SET artist_id=NULL WHERE id=$1', [track]), { code: '23514' });
     await assert.rejects(runtime.query(`INSERT INTO soundpub.tracks(release_id,artist_id,title,artist_name,position)
       VALUES ($1,$2,'Mismatch','Artist',3)`, [release, randomUUID()]), { code: '23514' });
-    await owner.query('UPDATE soundpub.profiles SET parent_label_id=$1 WHERE id=$2', [nextLabel, artist]);
+    await withTransaction(owner, async db => {
+      await db.query('UPDATE soundpub.profiles SET parent_label_id=$1 WHERE id=$2', [nextLabel, artist]);
+      await db.query('UPDATE soundpub.artists SET label_id=$1 WHERE artist_user_id=$2', [nextLabel, artist]);
+    });
     const historical = (await runtime.query('SELECT label_id,artist_user_id,created_by,version FROM soundpub.releases WHERE id=$1', [release])).rows[0];
     assert.deepEqual(historical, { label_id: label, artist_user_id: artist, created_by: artist, version: 1 });
     await assert.rejects(owner.query('UPDATE soundpub.releases SET label_id=$1 WHERE id=$2', [nextLabel, release]), { code: '23514' });

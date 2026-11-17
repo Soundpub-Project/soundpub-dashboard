@@ -42,6 +42,8 @@ test('payout PostgreSQL race, replay, rollback, release, settlement and authorit
     await assert.rejects(async () => service.request(label, { ...input, user_id: other.id }, 'forged'), { code: 'BAD_REQUEST' });
     await assert.rejects(service.request(label, { ...input, amount: '99.00' }, 'small'), { code: 'BELOW_MINIMUM' });
     await assert.rejects(service.request(label, { ...input, amount: '1001.00' }, 'large'), { code: 'INSUFFICIENT_BALANCE' });
+    const zeroMinimum = createPayoutsService(runtime, createPgPayoutFinance(async () => ({ minimum: '0.00', destinationReady: true, reconciled: true })));
+    assert.equal((await zeroMinimum.eligibility(label)).eligible, true);
     const blockedPolicy = createPayoutsService(runtime, createPgPayoutFinance(async () => ({ minimum: '100.00', destinationReady: false, reconciled: false })));
     assert.equal((await blockedPolicy.eligibility(label)).eligible, false);
     assert.equal((await blockedPolicy.eligibility(label)).available, null);
@@ -65,7 +67,8 @@ test('payout PostgreSQL race, replay, rollback, release, settlement and authorit
       await blocker.query('COMMIT');
     } finally { await blocker.query('ROLLBACK'); blocker.release(); }
     const race = await concurrent!;
-    assert.equal(race.filter(r => r.status === 'fulfilled').length, 1);
+    assert.equal(race.filter(r => r.status === 'fulfilled').length, 1,
+      JSON.stringify(race.map(result => result.status === 'rejected' ? String(result.reason) : 'fulfilled')));
     const result = race.find(r => r.status === 'fulfilled'); assert.ok(result?.status === 'fulfilled');
     const payout = result.value;
     const app = Fastify();
@@ -87,6 +90,14 @@ test('payout PostgreSQL race, replay, rollback, release, settlement and authorit
     } finally { await app.close(); }
     const key = race[0]?.status === 'fulfilled' ? 'race-a' : 'race-b';
     assert.equal((await service.request(label, input, key)).id, payout.id);
+    const requestNotifications = await owner.query<{ body: string; metadata_safe: Record<string, unknown> }>(
+      `SELECT body,metadata_safe FROM soundpub.notifications WHERE recipient_user_id=$1 AND metadata_safe->>'payout_id'=$2`,
+      [admin.id, payout.id]);
+    assert.equal(requestNotifications.rowCount, 1);
+    assert.match(requestNotifications.rows[0]!.body, /IDR 800\.00 ke Synthetic/);
+    assert.equal(requestNotifications.rows[0]!.body.includes(input.account_number), false);
+    assert.equal(requestNotifications.rows[0]!.metadata_safe.bank_name, 'Synthetic');
+    assert.equal('account_number' in requestNotifications.rows[0]!.metadata_safe, false);
     await assert.rejects(service.request(label, { ...input, amount: '700.00' }, key), { code: 'IDEMPOTENCY_CONFLICT' });
     await assert.rejects(service.detail(other, payout.id), { statusCode: 404 });
     await assert.rejects(service.cancel(other, payout.id, 'foreign'), { statusCode: 404 });

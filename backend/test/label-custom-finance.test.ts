@@ -30,6 +30,8 @@ function fixture() {
 
 test('label-custom-finance active unit required; ordinary label compatibility retained', async () => {
   const f = fixture(); assert.equal(await customFinanceScope(f.db, pic.id), true);
+  const roleCheck = f.calls.find(call => call.sql.includes("role='label_custom'"));
+  assert.match(roleCheck?.sql ?? '', /tenant_id IS NULL AND verified_at IS NOT NULL/);
   f.options.activeUnit = false;
   await assert.rejects(customFinanceScope(f.db, pic.id), /ACTIVE_PIC_UNIT_REQUIRED/);
   f.options.custom = false; assert.equal(await customFinanceScope(f.db, pic.id), false);

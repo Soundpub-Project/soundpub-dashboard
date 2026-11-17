@@ -53,6 +53,7 @@ export function createUsersService(pool: Pool, options: { partnerIdentity?: { la
       verifiedRoles[0] === 'artist' &&
       Boolean((await db.query<{ eligible: boolean }>(`SELECT EXISTS (
         SELECT 1 FROM soundpub.profiles profile
+        JOIN soundpub.backend_users artist_user ON artist_user.id=profile.id AND artist_user.account_kind='STANDARD'
         JOIN soundpub.artists roster ON roster.artist_user_id=profile.id AND roster.label_id=$2
           AND roster.verified_at IS NOT NULL
         JOIN soundpub.backend_users label_user ON label_user.id=$2 AND label_user.status='active'
@@ -111,6 +112,17 @@ export function createUsersService(pool: Pool, options: { partnerIdentity?: { la
         const last = items.at(-1);
         return { items, nextCursor: rows.length > limit && last
           ? Buffer.from(JSON.stringify({ createdAt: last.created_at, id: last.id, filter })).toString('base64url') : null };
+      });
+    },
+    async adminDashboardSummary(actor: Principal) {
+      return withTransaction(pool, async db => {
+        const repo = usersRepository(db);
+        const current = (await repo.lock([actor.id], false)).get(actor.id);
+        requirePolicy(current, 'admin');
+        const row = (await db.query<{ total_users: number; pending_payouts: number }>(`SELECT
+          (SELECT count(*)::int FROM soundpub.profiles) AS total_users,
+          (SELECT count(*)::int FROM soundpub.payout_requests WHERE status='pending') AS pending_payouts`)).rows[0];
+        return row ?? { total_users: 0, pending_payouts: 0 };
       });
     },
     async create(actor: Principal, input: UserCreate, requestId: string) {
@@ -223,7 +235,7 @@ export function createUsersService(pool: Pool, options: { partnerIdentity?: { la
           JOIN soundpub.artists membership ON membership.artist_user_id=artist.id AND membership.label_id=$1
             AND membership.verified_at IS NOT NULL
           JOIN soundpub.profiles pic ON pic.id=$1
-          WHERE artist.id=$2 AND profile.parent_label_id=$1
+          WHERE artist.id=$2 AND artist.account_kind='STANDARD' AND profile.parent_label_id=$1
             AND EXISTS (SELECT 1 FROM soundpub.user_roles role WHERE role.user_id=artist.id
               AND role.role='artist' AND role.tenant_id IS NULL AND role.verified_at IS NOT NULL)`, [current.id,id])).rows[0];
         if (!ownership) throw new ApiError(404, 'NOT_FOUND');
@@ -273,6 +285,7 @@ export function createUsersService(pool: Pool, options: { partnerIdentity?: { la
         if (!target) throw new ApiError(404, 'NOT_FOUND');
         if (!canManageUser(current!, id, await repo.allRoles(id))) throw new ApiError(403, 'FORBIDDEN');
         const user = await repo.find(id);
+        if (user?.account_kind === 'MANAGED_ARTIST') throw new ApiError(409, 'MANAGED_ARTIST_LOGIN_DISABLED');
         if (!user?.email) throw new ApiError(409, 'CONFLICT');
         const duplicate = await db.query('SELECT 1 FROM soundpub.local_auth_credentials WHERE lower(login_email)=lower($1) AND user_id<>$2',
           [user.email, id]);
@@ -430,6 +443,7 @@ export function createUsersService(pool: Pool, options: { partnerIdentity?: { la
         if (!canManageUser(current!, id, previousRoles, change.roles)) throw new ApiError(403, 'FORBIDDEN');
         const previousProfile = await repo.find(id);
         const previousParentLabelId = previousProfile?.parent_label_id ?? null;
+        if (previousProfile?.account_kind === 'MANAGED_ARTIST') throw new ApiError(409, 'MANAGED_ARTIST_IDENTITY_LOCKED');
         const addingArtist = !previousRoles.includes('artist') && change.roles.includes('artist');
         const changingParent = change.parentLabelId !== undefined && previousParentLabelId !== change.parentLabelId;
         const promotingArtist = addingArtist && previousParentLabelId === null && change.parentLabelId != null;

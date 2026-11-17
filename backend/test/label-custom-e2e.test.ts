@@ -151,6 +151,8 @@ test('Label Custom Docker E2E: login-free artist, canonical royalties, admin rea
   assert.equal(breakdown.currency, 'IDR');
   assert.deepEqual(breakdown.items, [{ artist_id: artist.id, release_id: release.id, track_id: track.id,
     platform: 'Spotify', period: statement.period, gross_earnings: '910.00', corrections: '0', net_earnings: '910.00' }]);
+  const picAnalytics = await royalties.analytics(pic, { view: 'stats' });
+  assert.equal(picAnalytics.total_revenue, '910.00');
   assert.equal((await balances.get(pic)).available, null);
 
   const bank = { bank_name: 'Synthetic Bank', account_number: '12345678', account_holder_name: 'Synthetic PIC' };

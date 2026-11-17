@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { buildApp } from '../src/api/index.js';
 import { hashPassword } from '../src/auth/local-crypto.js';
 import { createPool, migrate } from '../src/db/index.js';
 import { createLocalAuthService } from '../src/local-auth/index.js';
+import { concurrencyPostgres, dockerTestsEnabled } from './support/concurrency-postgres.js';
 
 const ownerUrl = process.env.LOCAL_AUTH_DB_TEST_URL;
 const runtimeUrl = process.env.LOCAL_AUTH_DB_RUNTIME_URL;
@@ -145,4 +147,27 @@ test('local auth persists lockout and protects cookie sessions with CSRF', { ski
     await runtime.end();
     await owner.end();
   }
+});
+
+test('local auth session timestamps remain valid across a backward database clock adjustment', {
+  skip: dockerTestsEnabled ? false : 'Set RUN_DOCKER_TESTS=1 for disposable PostgreSQL',
+  timeout: 120_000,
+}, async t => {
+  const database = await concurrencyPostgres();
+  t.after(() => database.close());
+  const id = randomUUID();
+  const email = `clock-${id}@example.test`;
+  const password = 'Synthetic-clock-password-2026';
+  await database.owner.query("INSERT INTO soundpub.backend_users(id,email,status) VALUES($1,$2,'active')", [id,email]);
+  await database.owner.query(`INSERT INTO soundpub.local_auth_credentials(user_id,login_email,password_hash)
+    VALUES($1,$2,$3)`, [id,email,await hashPassword(password)]);
+  await database.owner.query("INSERT INTO soundpub.user_roles(user_id,role,verified_at) VALUES($1,'admin',now())", [id]);
+  const auth = createLocalAuthService(database.runtime, { deliverySecret: 'synthetic-clock-secret-32-characters' });
+  const session = await auth.login({ email, password }, 'clock-login');
+  await database.owner.query(`UPDATE soundpub.auth_sessions
+    SET created_at=now()+interval '5 minutes',last_seen_at=now()+interval '5 minutes' WHERE user_id=$1`, [id]);
+  assert.deepEqual(await auth.authenticate(session.token), { id, roles: ['admin'], status: 'active' });
+  assert.ok((await auth.rotateCsrf(session.token)).csrfToken);
+  assert.equal((await database.owner.query(`SELECT last_seen_at>=created_at AS valid
+    FROM soundpub.auth_sessions WHERE user_id=$1`, [id])).rows[0].valid, true);
 });

@@ -10,16 +10,17 @@ import { usesBackendReleases } from '@/services/releases';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
-type DraftTrack = { id?: string; version?: number; title: string; artist_name: string; lyrics: string | null; audio_url?: string | null };
+type DraftTrack = { id?: string; version?: number; title: string; artist_name: string; lyrics: string | null; audio_url?: string | null; clip_url?: string | null };
 const blankTrack = (): DraftTrack => ({ title: '', artist_name: '', lyrics: null });
 
 export function BackendReleaseForm({ releaseId }: { releaseId?: string }) {
   const navigate = useNavigate();
-  const { isLabelCustom } = useAuth();
+  const { isLabelCustom, isArtist } = useAuth();
   const [artists, setArtists] = useState<LabelCustomArtist[]>([]);
   const [artistsLoading, setArtistsLoading] = useState(isLabelCustom && !releaseId);
   const [artistsError, setArtistsError] = useState('');
   const [artistRetry, setArtistRetry] = useState(0);
+  const [customLabelEligible, setCustomLabelEligible] = useState(false);
   useEffect(() => {
     if (!usesBackendReleases() || !isLabelCustom || releaseId) return;
     let active = true;
@@ -30,6 +31,13 @@ export function BackendReleaseForm({ releaseId }: { releaseId?: string }) {
       .finally(() => { if (active) setArtistsLoading(false); });
     return () => { active = false; };
   }, [isLabelCustom, releaseId, artistRetry]);
+  useEffect(() => {
+    if (!usesBackendReleases() || !isArtist) { setCustomLabelEligible(false); return; }
+    let active = true;
+    releasesApi.customLabelEligibility().then(result => { if (active) setCustomLabelEligible(result.eligible); })
+      .catch(() => { if (active) setCustomLabelEligible(false); });
+    return () => { active = false; };
+  }, [isArtist]);
   const [release, setRelease] = useState<BackendRelease | null>(null);
   const [tracks, setTracks] = useState<DraftTrack[]>([]);
   const [busy, setBusy] = useState(Boolean(releaseId));
@@ -37,7 +45,7 @@ export function BackendReleaseForm({ releaseId }: { releaseId?: string }) {
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState('');
   const [readiness, setReadiness] = useState<SubmissionReadiness | null>(null);
-  const [metadata, setMetadata] = useState<ReleaseMetadata>({ title: '', artist_name: '', release_type: 'single', genre: '', release_date: '' });
+  const [metadata, setMetadata] = useState<ReleaseMetadata>({ title: '', artist_name: '', release_type: 'single', genre: '', release_date: '', distribution_service: 'standard', custom_label_name: null, custom_record_name: null });
   const [artistId, setArtistId] = useState('');
   const [track, setTrack] = useState<DraftTrack>(blankTrack);
   const [trackIndex, setTrackIndex] = useState<number | null>(null);
@@ -45,8 +53,8 @@ export function BackendReleaseForm({ releaseId }: { releaseId?: string }) {
     if (!releaseId) return;
     const [row, page] = await Promise.all([releasesApi.detail(releaseId), tracksApi.list(releaseId)]);
     setRelease({ ...row, version: page.release_version });
-    setMetadata({ title: row.title, artist_name: row.artist_name, release_type: (row.release_type || 'single') as ReleaseMetadata['release_type'], genre: row.genre || '', release_date: row.release_date || '' });
-    setTracks(page.items.map(item => ({ id: item.id, version: item.version, title: item.title, artist_name: item.artist_name, lyrics: item.lyrics, audio_url: item.audio_url })));
+    setMetadata({ title: row.title, artist_name: row.artist_name, release_type: (row.release_type || 'single') as ReleaseMetadata['release_type'], genre: row.genre || '', release_date: row.release_date || '', distribution_service: row.distribution_service, custom_label_name: row.custom_label_name, custom_record_name: row.custom_record_name });
+    setTracks(page.items.map(item => ({ id: item.id, version: item.version, title: item.title, artist_name: item.artist_name, lyrics: item.lyrics, audio_url: item.audio_url, clip_url: item.clip_url })));
     setReadiness(await releasesApi.readiness(releaseId));
     setDirty(false);
     setTrackIndex(null); setTrack(blankTrack);
@@ -65,14 +73,14 @@ export function BackendReleaseForm({ releaseId }: { releaseId?: string }) {
   const save = (event: FormEvent) => {
     event.preventDefault();
     void run(async () => {
-      const fields = { ...metadata, title: metadata.title.trim(), artist_name: metadata.artist_name.trim(), genre: metadata.genre || null, release_date: metadata.release_date || null };
+      const fields = { ...metadata, title: metadata.title.trim(), artist_name: metadata.artist_name.trim(), genre: metadata.genre || null, release_date: metadata.release_date || null, custom_label_name: metadata.distribution_service === 'custom_label' ? metadata.custom_label_name?.trim() || null : null, custom_record_name: metadata.distribution_service === 'custom_label' ? metadata.custom_record_name?.trim() || null : null };
       if (releaseId && !release) throw new Error('Release belum dimuat');
       if (!release && isLabelCustom && (artistsLoading || artistsError || !artists.some(artist => artist.id === artistId))) throw new Error('Pilih artis aktif terlebih dahulu.');
       const result = release
-        ? await releasesApi.updateAggregate(release.id, { ...fields, version: release.version, tracks: tracks.map(({ audio_url, ...item }) => item) })
-        : await releasesApi.createAggregate({ ...fields, ...(isLabelCustom ? { artist_id: artistId } : { artist_user_id: artistId.trim() }), status: 'draft', tracks });
+        ? await releasesApi.updateAggregate(release.id, { ...fields, version: release.version, tracks: tracks.map(({ audio_url, clip_url, ...item }) => item) })
+        : await releasesApi.createAggregate({ ...fields, ...(isLabelCustom ? { artist_id: artistId } : { artist_user_id: artistId.trim() }), status: 'draft', tracks: tracks.map(({ audio_url, clip_url, ...item }) => item) });
       setRelease(result.release);
-      setTracks(result.tracks.map(item => ({ id: item.id, version: item.version, title: item.title, artist_name: item.artist_name, lyrics: item.lyrics, audio_url: item.audio_url })));
+      setTracks(result.tracks.map(item => ({ id: item.id, version: item.version, title: item.title, artist_name: item.artist_name, lyrics: item.lyrics, audio_url: item.audio_url, clip_url: item.clip_url })));
       setReadiness(await releasesApi.readiness(result.release.id));
       setDirty(false);
       setMessage('Release dan tracks tersimpan dalam satu transaksi.');
@@ -115,6 +123,10 @@ export function BackendReleaseForm({ releaseId }: { releaseId?: string }) {
       <label className="block">Jenis release<select className="block border bg-background" value={metadata.release_type} onChange={event => setMetadata({ ...metadata, release_type: event.target.value as ReleaseMetadata['release_type'] })}>{['single', 'ep', 'album', 'compilation'].map(value => <option key={value}>{value}</option>)}</select></label>
       <label className="block">Genre<Input maxLength={100} value={metadata.genre || ''} onChange={event => setMetadata({ ...metadata, genre: event.target.value })} /></label>
       <label className="block">Tanggal rilis<Input type="date" value={metadata.release_date || ''} onChange={event => setMetadata({ ...metadata, release_date: event.target.value })} /></label>
+      {isArtist && <>
+        <label className="block">Layanan distribusi<select className="block border bg-background" value={metadata.distribution_service || 'standard'} onChange={event => setMetadata({ ...metadata, distribution_service: event.target.value as 'standard' | 'custom_label' })}><option value="standard">Standard</option>{(customLabelEligible || metadata.distribution_service === 'custom_label') && <option value="custom_label">Custom Label</option>}</select></label>
+        {metadata.distribution_service === 'custom_label' && <label className="block">Nama Label & Record DSP<Input required maxLength={200} value={metadata.custom_label_name || ''} onChange={event => setMetadata({ ...metadata, custom_label_name: event.target.value, custom_record_name: event.target.value })} /><span className="text-sm">Nama yang sama dipakai untuk metadata label dan record. Server memverifikasi izin Custom Label.</span></label>}
+      </>}
       <Button type="submit" disabled={!releaseId && isLabelCustom && (artistsLoading || Boolean(artistsError) || !artistId || !artists.some(artist => artist.id === artistId))}>Simpan release dan tracks</Button>
     </fieldset></form>
     {release && usesBackendDomain('storage') && <BackendMediaUpload label="Cover release" binding={{ category: 'RELEASE_COVER', resource_type: 'release', resource_id: release.id }} reference={release.cover_url} disabled={busy || Boolean(release?.archived_at) || dirty || !['draft', 'rejected'].includes(release.status)} onChange={load} onBusyChange={setBusy} />}
@@ -132,6 +144,7 @@ export function BackendReleaseForm({ releaseId }: { releaseId?: string }) {
       <ol className="space-y-2">{tracks.map((item, index) => <li key={item.id || `draft-${index}`} className="flex flex-wrap items-center gap-2">
         <span>{index + 1}. {item.title} — {item.artist_name}</span>
         {release && item.id && usesBackendDomain('storage') && <BackendMediaUpload label={`Audio ${item.title}`} binding={{ category: 'TRACK_AUDIO', resource_type: 'track', resource_id: item.id }} reference={item.audio_url} disabled={busy || Boolean(release?.archived_at) || dirty || !['draft', 'rejected'].includes(release.status)} onChange={load} onBusyChange={setBusy} />}
+        {release && item.id && usesBackendDomain('storage') && <BackendMediaUpload label={`Cuplikan ${item.title}`} binding={{ category: 'TRACK_CLIP', resource_type: 'track', resource_id: item.id }} reference={item.clip_url} disabled={busy || Boolean(release?.archived_at) || dirty || !['draft', 'rejected'].includes(release.status)} onChange={load} onBusyChange={setBusy} />}
 
         <Button type="button" disabled={busy || Boolean(release?.archived_at) || index === 0} onClick={() => { setDirty(true); setTracks(current => { const next = [...current]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next; }); }}>Naik</Button>
         <Button type="button" disabled={busy || Boolean(release?.archived_at) || index === tracks.length - 1} onClick={() => { setDirty(true); setTracks(current => { const next = [...current]; [next[index + 1], next[index]] = [next[index], next[index + 1]]; return next; }); }}>Turun</Button>

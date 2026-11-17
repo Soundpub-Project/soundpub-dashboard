@@ -12,6 +12,7 @@ function fixture(event: Record<string, unknown> | undefined = { id: '1', topic: 
     async query(sql: string, values?: unknown[]) {
       statements.push({ sql, values });
       if (sql.includes('FOR UPDATE SKIP LOCKED')) return { rows: event ? [event] : [], rowCount: event ? 1 : 0 };
+      if (sql.includes("UPDATE outbox_events SET status='processing'")) return { rows: [], rowCount: 1 };
       if (sql.startsWith('INSERT INTO integration_effects')) {
         if (guard) return { rows: [], rowCount: 0 };
         guard = true;
@@ -54,6 +55,32 @@ test('failed delivery rolls back effect guard then schedules bounded retry or de
   assert.throws(() => retryDelay(0));
 });
 
+test('external delivery runs after claim transaction commits and finalizes lease', async () => {
+  const f = fixture({ id: 'external-1', topic: 'external', payload: {}, idempotency_key: 'external-key', attempts: 0 });
+  const timeline: string[] = [];
+  const originalQuery = f.db.query.bind(f.db);
+  f.db.query = async (sql, values) => {
+    if (sql === 'BEGIN') timeline.push('begin');
+    if (sql === 'COMMIT') timeline.push('commit');
+    return originalQuery(sql, values);
+  };
+  assert.equal(await pollOutbox(f.pool, { external: {
+    delivery: 'external',
+    async handle() { timeline.push('provider'); },
+  } }), 'processed');
+  assert.deepEqual(timeline, ['begin', 'commit', 'provider', 'begin', 'commit']);
+});
+
+test('failed external delivery retries without persisting provider error', async () => {
+  const f = fixture({ id: 'external-1', topic: 'external', payload: {}, idempotency_key: 'external-key', attempts: 0 });
+  assert.equal(await pollOutbox(f.pool, { external: {
+    delivery: 'external',
+    async handle() { throw new Error('provider secret'); },
+  } }), 'retry');
+  const retry = f.statements.find(statement => statement.sql.includes("last_error='Delivery failed'"));
+  assert.ok(retry);
+  assert.ok(!JSON.stringify(retry).includes('secret'));
+});
 test('idle, unknown topic, invalid options and transaction failure release connections', async () => {
   const idle = fixture();
   // Empty claim result, without changing production API.

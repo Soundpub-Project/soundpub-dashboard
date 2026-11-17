@@ -50,7 +50,12 @@ const schema = z.object({
   OBJECT_STORAGE_ACCESS_KEY: z.string().min(8),
   OBJECT_STORAGE_SECRET_KEY: z.string().min(12),
   OBJECT_STORAGE_BUCKET: z.string().min(3).default("soundpub-development"),
+  INVOICE_DOCUMENT_PREFIX: z.string().regex(/^[A-Za-z0-9_-]{1,32}$/).default('invoices'),
   WEBHOOK_MOCK_SECRET: z.string().min(16),
+  XENDIT_SECRET_KEY: z.preprocess(value => value === '' ? undefined : value, z.string().regex(/^xnd_development_[A-Za-z0-9+/=_-]{16,}$/).optional()),
+  XENDIT_WEBHOOK_TOKEN: z.preprocess(value => value === '' ? undefined : value, z.string().min(32).optional()),
+  XENDIT_SUCCESS_REDIRECT_URL: z.string().url().default('http://127.0.0.1:8281/dashboard/invoices'),
+  XENDIT_FAILURE_REDIRECT_URL: z.string().url().default('http://127.0.0.1:8281/dashboard/invoices'),
   AUTH_DELIVERY_SECRET: z.string().min(32),
   AUTH_DELIVERY_KEY_ID: z.string().regex(/^[A-Za-z0-9_-]{1,32}$/).default('legacy'),
   AUTH_DELIVERY_PREVIOUS_KEYS_JSON: z.string().default('{}').transform((raw, context) => {
@@ -98,6 +103,17 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     throw new Error(`Invalid backend configuration: ${details}`);
   }
 
+  if (parsed.data.XENDIT_SECRET_KEY && !parsed.data.XENDIT_WEBHOOK_TOKEN) {
+    throw new Error('Xendit development invoices require a callback token');
+  }
+  if (parsed.data.XENDIT_SECRET_KEY) {
+    for (const redirect of [parsed.data.XENDIT_SUCCESS_REDIRECT_URL, parsed.data.XENDIT_FAILURE_REDIRECT_URL]) {
+      const url = new URL(redirect);
+      if (!parsed.data.PARTNER_REDIRECT_ORIGINS.includes(url.origin)) {
+        throw new Error('Xendit redirect URLs must use an allowed local browser origin');
+      }
+    }
+  }
   if (parsed.data.PARTNER_LABEL_ID && (environment.IDENTITY_PROVIDER !== 'oidc' || !environment.OIDC_CLIENT_ID)) {
     throw new Error('Partner SSO requires OIDC identity provider and client ID');
   }

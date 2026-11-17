@@ -1,4 +1,5 @@
 import { BackendPaymentStatus } from '@/components/finance/BackendPaymentStatus';
+import { BackendAdminInvoices } from '@/components/finance/BackendAdminInvoices';
 import { usesBackendFinance } from '@/components/finance/mode';
 import { usesBackendReleases } from '@/services/releases';
 import { useEffect, useState } from 'react';
@@ -279,7 +280,7 @@ function LegacyInvoices() {
 }
 
 export default function Invoices() {
-  if (usesBackendReleases()) return <BackendPaymentStatus />;
-  if (usesBackendFinance()) return <BackendPaymentStatus />;
+  if (usesBackendReleases()) return <BackendAdminInvoices />;
+  if (usesBackendFinance()) return <BackendAdminInvoices />;
   return <LegacyInvoices />;
 }

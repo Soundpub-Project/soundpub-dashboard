@@ -5,7 +5,7 @@ const projection = `r.id, r.artist_id, r.label_id, (SELECT p.full_name FROM soun
   r.release_type, r.genre, to_char(r.release_date, 'YYYY-MM-DD') AS release_date,
   CASE WHEN EXISTS (SELECT 1 FROM soundpub.media_objects media WHERE media.id=r.cover_media_id
     AND media.status='ACTIVE' AND media.category='RELEASE_COVER') THEN r.cover_url ELSE NULL END AS cover_url,
-  r.upc, r.status, r.rejection_reason, r.version,
+  r.upc, r.distribution_service, r.custom_label_name, r.custom_record_name, r.status, r.rejection_reason, r.version,
   to_char(r.archived_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS archived_at,
   to_char(r.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
   to_char(r.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at`;
@@ -35,17 +35,21 @@ export function releasesRepository(db: PoolClient) {
       [actorId, admin, label, artist, query.search ?? null, query.status ?? null, cursor, limit + 1, custom])).rows;
     },
     async create(id: string, actorId: string, labelId: string | null, input: ReleaseCreate,
-      snapshot: { price_per_track_snapshot: string | null; total_payment_snapshot: string | null } | null = null) {
+      snapshot: { price_per_track_snapshot: string | null; total_payment_snapshot: string | null;
+        pricing_snapshot_mode: 'per_track' | 'per_category' | null; pricing_snapshot_track_count: number | null } | null = null) {
       await db.query(`INSERT INTO soundpub.releases
         (id,label_id,artist_user_id,created_by,title,artist_name,release_type,genre,release_date,cover_url,upc,status,
-          price_per_track_snapshot,total_payment_snapshot,artist_id)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+          distribution_service,custom_label_name,custom_record_name,price_per_track_snapshot,total_payment_snapshot,pricing_snapshot_mode,pricing_snapshot_track_count,artist_id)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
       [id, labelId, input.artist_user_id, actorId, input.title, input.artist_name, input.release_type,
         input.genre ?? null, input.release_date ?? null, input.cover_url ?? null, input.upc ?? null, input.status ?? 'draft',
-        snapshot?.price_per_track_snapshot ?? null, snapshot?.total_payment_snapshot ?? null, input.artist_id ?? null]);
+        input.distribution_service ?? 'standard', input.custom_label_name ?? null, input.custom_record_name ?? null,
+        snapshot?.price_per_track_snapshot ?? null, snapshot?.total_payment_snapshot ?? null, snapshot?.pricing_snapshot_mode ?? null,
+        snapshot?.pricing_snapshot_track_count ?? null, input.artist_id ?? null]);
     },
     async update(id: string, input: ReleasePatch & {
       price_per_track_snapshot?: string | null; total_payment_snapshot?: string | null;
+      pricing_snapshot_mode?: 'per_track' | 'per_category' | null; pricing_snapshot_track_count?: number | null;
     }) {
       const { version, ...patch } = input;
       // Keys originate in strict contracts; ownership never enters this patch.

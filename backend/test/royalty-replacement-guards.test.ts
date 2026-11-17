@@ -6,13 +6,14 @@ import type { PoolClient } from 'pg';
 import { postEvent } from '../src/finance/index.js';
 import { concurrencyPostgres, dockerTestsEnabled } from './support/concurrency-postgres.js';
 
-const migration = readFileSync(new URL('../migrations/0034_royalty_replacement_guards.sql', import.meta.url), 'utf8');
+const migration = readFileSync(new URL('../migrations/0034_royalty_replacement_guards.sql', import.meta.url), 'utf8') + readFileSync(new URL('../migrations/0077_royalty_filename_period_replacements.sql', import.meta.url), 'utf8');
 
 test('royalty replacement guard is deferred and not publicly executable', () => {
   assert.match(migration, /CREATE CONSTRAINT TRIGGER royalty_replacement_relation_guard/);
   assert.match(migration, /DEFERRABLE INITIALLY DEFERRED FOR EACH ROW/);
+  assert.match(migration, /to_jsonb\(replacement_session\.replacement_batch_ids\)=new_validation->'replaces_batch_ids'/);
   assert.match(migration, /ROYALTY_REPLACEMENT_CORRECTION_REQUIRED/);
-  assert.match(migration, /ROYALTY_REPLACEMENT_SOURCE_MISMATCH/);
+  assert.match(migration, /ROYALTY_REPLACEMENT_FILENAME_MISMATCH/);
   assert.match(migration, /ROYALTY_REPLACEMENT_PERIOD_MISMATCH/);
   assert.match(migration, /ROYALTY_REPLACEMENT_CURRENCY_MISMATCH/);
   assert.match(migration, /ROYALTY_REPLACEMENT_POLICY_MISMATCH/);
@@ -37,6 +38,7 @@ test('royalty replacement relation commits only with correction, matching dimens
     correction?: boolean;
     oldSource?: string;
     newSource?: string;
+    newFilename?: string;
     oldPeriod?: string;
     newPeriod?: string;
     oldCurrency?: string;
@@ -69,7 +71,7 @@ test('royalty replacement relation commits only with correction, matching dimens
       ($9,$10,$11,$12,$13,$14,$7,1,'120.00',$15::jsonb)`, [
       oldBatchId, oldSource, oldPeriod, oldCurrency, checksum(0), `old-${index}.csv`, actorId,
       JSON.stringify({ policy_code: oldPolicy }),
-      newBatchId, newSource, newPeriod, newCurrency, checksum(1), `new-${index}.csv`,
+      newBatchId, newSource, newPeriod, newCurrency, checksum(1), relation.newFilename ?? `old-${index}.csv`,
       JSON.stringify({ policy_code: newPolicy, replaces_batch_id: relation.provenance ?? oldBatchId }),
     ]);
     await client.query(`INSERT INTO soundpub.royalty_import_entries
@@ -155,7 +157,7 @@ test('royalty replacement relation commits only with correction, matching dimens
       WHERE old_batch_id=$1`, [valid.oldBatchId]), /FINANCE_IMMUTABLE/);
 
     await expectCommitRejected('missing correction', { correction: false }, /ROYALTY_REPLACEMENT_CORRECTION_REQUIRED/);
-    await expectCommitRejected('source mismatch', { newSource: 'other-source' }, /ROYALTY_REPLACEMENT_SOURCE_MISMATCH/);
+    await expectCommitRejected('filename mismatch', { newFilename: 'other.csv' }, /ROYALTY_REPLACEMENT_FILENAME_MISMATCH/);
     await expectCommitRejected('period mismatch', { newPeriod: '2026-11' }, /ROYALTY_REPLACEMENT_PERIOD_MISMATCH/);
     await expectCommitRejected('policy mismatch', { newPolicy: 'OTHER_POLICY' }, /ROYALTY_REPLACEMENT_POLICY_MISMATCH/);
     await expectCommitRejected('provenance mismatch', { provenance: randomUUID() },

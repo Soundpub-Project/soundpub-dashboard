@@ -12,7 +12,8 @@ test('money and state rules reject ambiguous precision and terminal regressions'
  for (const value of ['1.001','-1','0','NaN','1e4','90071992547410']) assert.throws(() => toMinor(value));
  assert.equal(nextPaymentStatus('PAID','PENDING'), 'PAID');
  assert.equal(nextPaymentStatus('REFUNDED','PAID'), 'REFUNDED');
- assert.equal(nextPaymentStatus('FAILED','PAID'), 'PAID');
+ assert.equal(nextPaymentStatus('FAILED','PAID'), 'FAILED');
+ assert.equal(nextPaymentStatus('EXPIRED','PAID'), 'EXPIRED');
 });
 
 test('durable payments: races, signed callbacks, refund, rollback, authority and readiness', { skip: process.env.RUN_DOCKER_TESTS !== '1', timeout: 120000 }, async () => {
@@ -71,15 +72,14 @@ test('durable payments: races, signed callbacks, refund, rollback, authority and
   assert.equal((await blockedStatus).invoice?.id,invoice.id);
   await assert.rejects(service.createInvoice(artist, { release_id: releaseId, idempotency_key: 'x', amount_minor: '1' }, 'bad'));
   await assert.rejects(service.status(outsider,releaseId));
-  await assert.rejects(service.createInvoice(artist, { release_id: await release(null), idempotency_key: 'no-price' }, 'bad'));
+  const unpriced = await release(null);
+  assert.equal((await service.createInvoice(artist, { release_id: unpriced, idempotency_key: 'legacy-default-price' }, 'default-price')).amount_minor, '5000000');
   const stalePrice = await release();
-  await owner.query('UPDATE soundpub.releases SET price_per_track_snapshot=NULL WHERE id=$1',[stalePrice]);
-  await assert.rejects(service.createInvoice(artist, { release_id: stalePrice, idempotency_key: 'missing-unit-price' }, 'bad'),
-   { code: 'PAYMENT_PRICE_UNAVAILABLE' });
+  await owner.query('UPDATE soundpub.releases SET price_per_track_snapshot=NULL,total_payment_snapshot=NULL,pricing_snapshot_mode=NULL,pricing_snapshot_track_count=NULL WHERE id=$1',[stalePrice]);
+  assert.equal((await service.createInvoice(artist, { release_id: stalePrice, idempotency_key: 'missing-unit-price' }, 'default-price')).amount_minor, '5000000');
   const staleCount = await release();
   await owner.query("INSERT INTO soundpub.tracks(release_id,title,artist_name,position) VALUES($1,'Second','Synthetic',2)",[staleCount]);
-  await assert.rejects(service.createInvoice(artist, { release_id: staleCount, idempotency_key: 'stale-track-count' }, 'bad'),
-   { code: 'PAYMENT_PRICE_UNAVAILABLE' });
+  assert.equal((await service.createInvoice(artist, { release_id: staleCount, idempotency_key: 'stale-track-count' }, 'stale-count')).amount_minor, '10000000');
   const other = await release();
   await assert.rejects(service.createInvoice(artist, { release_id: other, idempotency_key: 'create-1' }, 'bad'));
   function envelope(eventId: string, status: string, amount = invoice.amount_minor, reference = invoice.provider_invoice_id) {
@@ -121,6 +121,36 @@ test('durable payments: races, signed callbacks, refund, rollback, authority and
   await assert.rejects(service.callback(stale));
   assert.deepEqual((await Promise.all([service.callback(paid),service.callback(paid)])).sort(), ['accepted','duplicate']);
   await service.callback(envelope('paid-2','PAID'));
+  const writtenDocuments: { path: string; bytes: Uint8Array }[] = [];
+  const signedDownloads: { path: string; filename: string; expires: number }[] = [];
+  const documentService = createPaymentsService(runtime, { callbackSecret: secret, documentStore: {
+   async put(path, bytes) { writtenDocuments.push({ path, bytes }); },
+   async signedDownload(path, filename, expires) {
+    signedDownloads.push({ path, filename, expires });
+    return 'https://private-storage.test/signed?signature=synthetic-secret';
+   },
+   close() {},
+  } });
+  const invoiceRows = await documentService.listAdminInvoices(admin);
+  assert.ok(invoiceRows.invoices.some((row: { id: string }) => row.id === invoice.id));
+  await assert.rejects(documentService.listAdminInvoices(artist), { code: 'FORBIDDEN' });
+  const invoicePdf = await documentService.downloadInvoice(admin, invoice.id, 'invoice-download-request');
+  assert.match(invoicePdf.invoice_number, /^SPB-[0-9]{6}-[A-F0-9]{8}$/);
+  assert.equal(writtenDocuments.length, 1);
+  assert.equal(Buffer.from(writtenDocuments[0]!.bytes).subarray(0, 5).toString(), '%PDF-');
+  assert.equal(signedDownloads[0]?.expires, 600);
+  assert.equal(signedDownloads[0]?.filename, `${invoicePdf.invoice_number}.pdf`);
+  assert.ok(!JSON.stringify((await runtime.query(`SELECT metadata FROM soundpub.audit_logs
+    WHERE action='payment.invoice_pdf_downloaded' AND resource_id=$1`, [invoice.id])).rows).includes('synthetic-secret'));
+  const sameInvoicePdf = await documentService.downloadInvoice(admin, invoice.id, 'invoice-download-retry');
+  assert.equal(sameInvoicePdf.invoice_number, invoicePdf.invoice_number);
+  assert.equal(writtenDocuments.length, 1);
+  await assert.rejects(documentService.downloadInvoice(artist, invoice.id, 'forbidden-download'), { code: 'FORBIDDEN' });
+  const unpaidRelease = await release();
+  const unpaidInvoice = await documentService.createInvoice(artist,
+   { release_id: unpaidRelease, idempotency_key: 'invoice-pending-document' }, 'invoice-pending');
+  await assert.rejects(documentService.downloadInvoice(admin, unpaidInvoice.id, 'unpaid-download'), { code: 'INVOICE_NOT_PAID' });
+  assert.equal(writtenDocuments.length, 1);
   await service.callback(envelope('unsupported','SOMETHING_NEW'));
   assert.equal((await runtime.query("SELECT disposition FROM soundpub.payment_callback_receipts WHERE event_id='unsupported'")).rows[0].disposition,'unsupported');
   assert.equal((await service.reconcile(admin)).reconciled,false);

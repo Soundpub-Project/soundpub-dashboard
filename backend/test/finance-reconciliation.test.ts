@@ -12,7 +12,9 @@ test('scheduled finance reconciliation records deterministic read-only evidence'
       'royalties',(SELECT count(*) FROM soundpub.royalty_import_batches),
       'events',(SELECT count(*) FROM soundpub.finance_events),
       'payouts',(SELECT count(*) FROM soundpub.payout_requests),
-      'payments',(SELECT count(*) FROM soundpub.payment_invoices)) AS value`)).rows[0].value;
+      'payments',(SELECT count(*) FROM soundpub.payment_invoices),
+      'copyright_payments',(SELECT count(*) FROM soundpub.copyright_registration_payments),
+      'copyright_receipts',(SELECT count(*) FROM soundpub.copyright_registration_payment_callback_receipts)) AS value`)).rows[0].value;
     assert.equal((await owner.query(`SELECT pg_has_role('soundpub_auditor','soundpub_app','member') AS member`)).rows[0].member, false);
     assert.equal((await owner.query(`SELECT pg_has_role('soundpub_reconciler','soundpub_app','member') AS member`)).rows[0].member, false);
     await assert.rejects(reconciler.query(`INSERT INTO soundpub.finance_reconciliation_runs
@@ -69,7 +71,9 @@ test('scheduled finance reconciliation records deterministic read-only evidence'
       'royalties',(SELECT count(*) FROM soundpub.royalty_import_batches),
       'events',(SELECT count(*) FROM soundpub.finance_events),
       'payouts',(SELECT count(*) FROM soundpub.payout_requests),
-      'payments',(SELECT count(*) FROM soundpub.payment_invoices)) AS value`)).rows[0].value;
+      'payments',(SELECT count(*) FROM soundpub.payment_invoices),
+      'copyright_payments',(SELECT count(*) FROM soundpub.copyright_registration_payments),
+      'copyright_receipts',(SELECT count(*) FROM soundpub.copyright_registration_payment_callback_receipts)) AS value`)).rows[0].value;
     assert.deepEqual(businessAfter, businessBefore);
     assert.equal((await owner.query('SELECT count(*) FROM soundpub.finance_reconciliation_runs')).rows[0].count, '4');
     const alerts = await owner.query(`SELECT payload FROM soundpub.outbox_events WHERE topic='finance.reconciliation' ORDER BY created_at,id`);

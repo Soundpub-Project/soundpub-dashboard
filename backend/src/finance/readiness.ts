@@ -27,6 +27,8 @@ export async function reconciliationSnapshot(db: PoolClient, owner: string) {
       WHERE (reconciled OR (correction IS NOT NULL AND correction_intact)) AND amount<>0
     UNION ALL SELECT 'ROYALTY_ADJUSTMENT','copyright-royalty:'||batch_id::text,-amount FROM copyright_batches
       WHERE correction IS NOT NULL AND correction_intact AND amount<>0
+    UNION ALL SELECT 'MANUAL_ADJUSTMENT','manual-adjustment:'||id::text,amount_minor
+      FROM soundpub.finance_adjustment_requests WHERE owner_id=$1 AND status='APPROVED' AND finance_event_id IS NOT NULL
   ), actual AS (
     SELECT * FROM soundpub.finance_events WHERE owner_id=$1 AND currency='IDR'
       AND kind IN ('ROYALTY_EARNING','ROYALTY_ADJUSTMENT','MANUAL_ADJUSTMENT')
@@ -34,7 +36,9 @@ export async function reconciliationSnapshot(db: PoolClient, owner: string) {
     'batches',COALESCE((SELECT jsonb_agg(jsonb_build_array(batch_id,amount::text,correction,reconciliation) ORDER BY batch_id) FROM batches),'[]'::jsonb),
     'copyrightBatches',COALESCE((SELECT jsonb_agg(jsonb_build_array(batch_id,amount::text,correction,reconciled,correction_intact)
       ORDER BY batch_id) FROM copyright_batches),'[]'::jsonb),
-    'events',COALESCE((SELECT jsonb_agg(id ORDER BY id) FROM actual),'[]'::jsonb)
+    'events',COALESCE((SELECT jsonb_agg(id ORDER BY id) FROM actual),'[]'::jsonb),
+    'manualAdjustments',COALESCE((SELECT jsonb_agg(jsonb_build_array(id,status,finance_event_id) ORDER BY id)
+      FROM soundpub.finance_adjustment_requests WHERE owner_id=$1),'[]'::jsonb)
   ) AS snapshot,
   NOT EXISTS(SELECT kind,reference,amount FROM expected EXCEPT SELECT kind,business_reference,amount_minor FROM actual)
   AND NOT EXISTS(SELECT kind,business_reference,amount_minor FROM actual EXCEPT SELECT kind,reference,amount FROM expected)
@@ -46,7 +50,8 @@ export async function reconciliationSnapshot(db: PoolClient, owner: string) {
      OR o.idempotency_key IS DISTINCT FROM 'finance:'||e.id::text))
   AND NOT EXISTS(SELECT 1 FROM batches WHERE correction IS NULL AND reconciliation IS NULL)
   AND NOT EXISTS(SELECT 1 FROM copyright_batches WHERE
-    (correction IS NULL AND NOT reconciled) OR (correction IS NOT NULL AND NOT correction_intact)) AS intact`, [owner])).rows[0];
+    (correction IS NULL AND NOT reconciled) OR (correction IS NOT NULL AND NOT correction_intact))
+  AND soundpub.finance_adjustments_intact($1) AS intact`, [owner])).rows[0];
   return { snapshot: row?.snapshot, intact: row?.intact === true };
 }
 export async function currentDestination(db: PoolClient, owner: string) {

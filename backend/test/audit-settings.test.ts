@@ -87,6 +87,20 @@ test('audit/settings: restricted local DB, HTTP allowlists, no secrets, concurre
       const response = await call('admin', 'GET', `admin/audit?actor=${user.id}&action=profile.updated&resource=backend_user&resource_id=${user.id}&limit=1`);
       assert.equal(response.statusCode, 200, response.body);
       assert.equal(response.json().items.length, 1);
+      await database.owner.query(`INSERT INTO soundpub.audit_logs(actor_user_id,action,resource_type,resource_id)
+        VALUES ($1,'payment.callback','payment_invoice',$2), ($1,'finance.adjustment.requested','finance_adjustment',$2),
+          ($1,'label_custom.artist_archived','label_custom_unit',$2), ($1,'takedown.target.transitioned','takedown',$2),
+          ($1,'destination.pending','payout_readiness',$2), ($1,'payout.pending','payout',$2),
+          ($1,'unregistered.event','unregistered_resource',$2)`,
+      [admin.id, '00000000-0000-4000-8000-000000000902']);
+      const eventLabels = (await call('admin', 'GET', `admin/audit?actor=${admin.id}&limit=100`)).json().items;
+      for (const [action, resource] of [['payment.callback', 'payment_invoice'],
+        ['finance.adjustment.requested', 'finance_adjustment'], ['label_custom.artist_archived', 'label_custom_unit'],
+        ['takedown.target.transitioned', 'takedown'], ['destination.pending', 'payout_readiness'],
+        ['payout.pending', 'payout']]) {
+        assert.ok(eventLabels.some((item: { action: string; resource_type: string }) => item.action === action && item.resource_type === resource));
+      }
+      assert.ok(eventLabels.some((item: { action: string; resource_type: string }) => item.action === 'other' && item.resource_type === 'other'));
       const detail = (await call('admin', 'GET', `admin/audit/${auditId}`)).json();
       assert.deepEqual(Object.keys(detail).sort(), ['id', 'actor_user_id', 'action', 'resource_type', 'resource_id', 'created_at'].sort());
       assert.deepEqual(response.json().items[0], detail);
@@ -132,7 +146,7 @@ test('audit/settings: restricted local DB, HTTP allowlists, no secrets, concurre
       }
       assert.equal((await call('user', 'PATCH', 'admin/settings', { version: 1, settings: { maintenance_enabled: true } })).statusCode, 403);
       assert.equal((await call('admin', 'PATCH', 'admin/settings', { version: 1, settings: { maintenance_enabled: true } })).statusCode, 403);
-      assert.equal((await call('admin', 'PATCH', 'admin/settings', { version: 1, settings: { min_payout_amount: '10.00' } })).statusCode, 200);
+      assert.equal((await call('admin', 'PATCH', 'admin/settings', { version: 1, settings: { min_payout_amount: '0.00' } })).statusCode, 200);
       assert.equal((await call('superadmin', 'PATCH', 'admin/settings', { version: 2, settings: { maintenance_enabled: true } })).statusCode, 200);
       assert.equal((await call('admin', 'PATCH', 'admin/settings', { version: 3, settings: { release_price_per_track: '1.00', maintenance_enabled: false } })).statusCode, 403);
       assert.ok(!(await call('admin', 'GET', 'admin/settings')).body.includes(marker));

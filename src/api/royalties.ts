@@ -31,10 +31,10 @@ export interface RoyaltyCsvSampleRow {
   sales_type: string | null;
   sales_unit: number;
   net_revenue: string;
-  track_id: string;
-  release_id: string;
+  track_id: string | null;
+  release_id: string | null;
   artist_id: string | null;
-  artist_owner_user_id: string;
+  artist_owner_user_id: string | null;
   label_owner_user_id: string | null;
 }
 
@@ -66,6 +66,7 @@ export interface RoyaltyImportSession {
   source_checksum: string;
   operation_kind: 'IMPORT' | 'REPLACEMENT';
   replaces_batch_id: string | null;
+  replacement_batch_ids: string[];
   replacement_reason: string | null;
   request_key: string | null;
   approval_id: string | null;
@@ -143,6 +144,7 @@ export interface RoyaltyBatch {
   reconciled_at: string | null;
   replacement_batch_id: string | null;
   replaces_batch_id: string | null;
+  replaces_batch_ids: string[];
   change_reason: string | null;
   change_actor_id: string | null;
   changed_at: string | null;
@@ -207,17 +209,17 @@ export interface RoyaltyReconciliation {
 export interface RoyaltyBreakdownQuery { artist_id?: string; release_id?: string; period?: string; offset?: number }
 export interface RoyaltyBreakdown {
   owner_id: string; currency: 'IDR'; status: 'UNRECONCILED';
-  items: { artist_id: string; release_id: string; track_id: string; platform: string; period: string; gross_earnings: string; corrections: string; net_earnings: string }[];
+  items: { artist_id: string; release_id: string | null; track_id: string | null; platform: string; period: string; gross_earnings: string; corrections: string; net_earnings: string }[];
 }
-export interface RoyaltyReportQuery extends RoyaltyBreakdownQuery { track_id?: string; search?: string; limit?: number }
+export interface RoyaltyReportQuery extends RoyaltyBreakdownQuery { track_id?: string; search?: string; limit?: number; cursor?: string }
 export interface RoyaltyReportRow {
   id: string; period: string; isrc: string | null; upc: string | null; artist_id: string | null;
-  release_id: string; track_id: string; release_title: string; track_title: string; artist_name: string;
+  release_id: string | null; track_id: string | null; release_title: string | null; track_title: string; artist_name: string;
   label_name: string | null; platform: string | null; country: string | null; sales_type: string | null;
   sales_unit: number | null; net_revenue: string; owner_revenue: string; corrected: boolean; created_at: string;
 }
 export interface RoyaltyReport {
-  items: RoyaltyReportRow[]; total: number; limit: number; offset: number;
+  items: RoyaltyReportRow[]; total: number; limit: number; offset: number; next_cursor: string | null;
   summary: { gross_revenue: string; corrections: string; net_revenue: string;
     owner_gross_revenue: string; owner_corrections: string; owner_revenue: string };
 }

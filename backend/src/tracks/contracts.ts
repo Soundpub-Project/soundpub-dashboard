@@ -25,6 +25,7 @@ export const trackDto = z.strictObject({
   genre: z.string().nullable(), composer: z.string().nullable(), lyricist: z.string().nullable(),
   lyrics: z.string().nullable(), isrc: z.string().nullable(), duration: z.number().nullable(),
   audio_url: z.string().nullable().optional(),
+  clip_url: z.string().nullable().optional(),
   explicit_lyrics: z.boolean(), created_at: z.string(), updated_at: z.string(),
 });
 export type TrackCreate = z.infer<typeof trackCreate>;

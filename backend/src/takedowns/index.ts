@@ -76,6 +76,12 @@ const requestProjection = `r.id,r.request_code,r.requester_id,r.label_id,r.reque
     WHERE d.request_id=r.id AND m.status='ACTIVE'),'[]'::jsonb) AS documents`;
 
 export function createTakedownsService(pool: Pool) {
+  async function notifyRequester(db: PoolClient, actorId: string, recipientId: string, requestId: string,
+    type: 'info' | 'error', title: string, body: string, status?: string) {
+    await db.query(`INSERT INTO soundpub.notifications(recipient_user_id,kind,type,title,body,metadata_safe,created_by)
+      VALUES($1,'USER_NOTIFICATION',$2,$3,$4,$5::jsonb,$6::uuid)`,
+    [recipientId,type,title,body,JSON.stringify({ takedown_request_id: requestId, ...(status ? { status } : {}) }),actorId]);
+  }
   async function lockedActor(db: PoolClient, actor: Principal, write: boolean) {
     const current = (await usersRepository(db).lock([actor.id], write)).get(actor.id);
     requireActor(current);
@@ -210,6 +216,8 @@ export function createTakedownsService(pool: Pool) {
           resourceId: id, metadata: { releaseId: release.id, labelId: release.label_id, targets: normalized.targets } });
         await repository.outbox.enqueue({ topic: 'takedown.submitted', payload: { requestId: id, requesterId: current.id,
           releaseId: release.id, labelId: release.label_id }, idempotencyKey: `takedown.submitted:${id}` });
+        await notifyRequester(db, current.id, current.id, id, 'info', 'Permohonan Takedown Dikirim',
+          'Permohonan takedown sedang menunggu review.');
         const response = (await find(db, current, id)).row;
         if (!await repository.idempotency.complete({ scope, key: idempotencyKey, responseStatus: 200, responseBody: response })) {
           throw new ApiError(409, 'CONFLICT');
@@ -254,6 +262,8 @@ export function createTakedownsService(pool: Pool) {
         await repository.outbox.enqueue({ topic: 'takedown.status.changed', payload: { requestId: id,
           requesterId: row.requester_id, from: row.status, to: input.status },
         idempotencyKey: `takedown.status.changed:${id}:${input.version + 1}` });
+        await notifyRequester(db, current.id, row.requester_id, id, input.status === 'REJECTED' ? 'error' : 'info',
+          'Status Takedown Diperbarui', `Status permohonan berubah menjadi ${input.status}.`, input.status);
         const response = (await find(db, current, id)).row;
         if (!await repository.idempotency.complete({ scope, key: idempotencyKey, responseStatus: 200, responseBody: response })) {
           throw new ApiError(409, 'CONFLICT');

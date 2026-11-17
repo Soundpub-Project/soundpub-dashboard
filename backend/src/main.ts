@@ -10,6 +10,7 @@ import { databasePayoutPolicy } from './payouts/policy.js';
 import { createRoyaltiesService } from './royalties/index.js';
 import { createRoyaltyImportObjectStore } from './royalties/store.js';
 import { createPaymentsService, paymentSubmissionDependency } from './payments/index.js';
+import { createInvoiceDocumentStore } from './payments/invoice-document-store.js';
 import { createUsersService } from './users/index.js';
 import { createArtistsService } from './artists/index.js';
 import { assertArtistCanDetachFromLabel } from './artists/detachment.js';
@@ -27,8 +28,10 @@ import { createConfiguredIdentityProvider, createIdentityAuthenticator, OidcIden
 import { createPartnerOAuthService, createPgPartnerOAuthReplayStore } from './auth/partner-oauth.js';
 import { createLocalAuthService } from './local-auth/index.js';
 import { createFinanceReconciliationService } from './reconciliation/index.js';
+import { createFinanceAdjustmentsService } from './finance/manual-adjustments.js';
 import { createComposerRoyaltiesService } from './composer-royalties/index.js';
 import { createCopyrightRegistrationsService } from './copyright-registrations/index.js';
+import { parseXenditInvoiceCallback, verifyXenditCallbackToken } from './payments/xendit-webhook.js';
 import { createSharedRateLimiter } from './api/rate-limiter.js';
 import { createExportsService } from './exports/index.js';
 
@@ -58,8 +61,13 @@ const releaseMigration = await pool.query(`SELECT to_regclass('soundpub.releases
   to_regclass('soundpub.royalty_import_sessions') AS royalty_files,
   to_regclass('soundpub.payout_requests') AS payouts,
   to_regclass('soundpub.payment_invoices') AS payments,
+  to_regclass('soundpub.finance_adjustment_requests') AS finance_adjustments,
   to_regclass('soundpub.copyright_registrations') AS copyright_registrations`);
-if (Object.values(releaseMigration.rows[0] ?? {}).some(value => !value)) throw new Error('Phase 3E database migration required before API boot');
+if (Object.values(releaseMigration.rows[0] ?? {}).some(value => !value)) throw new Error('Required domain database migration missing before API boot');
+const invoiceDocumentMigration = await pool.query(`SELECT count(*)::int AS count FROM information_schema.columns
+  WHERE table_schema='soundpub' AND table_name='payment_invoices'
+    AND column_name IN ('invoice_number','invoice_pdf_path','invoice_pdf_generated_at')`);
+if (invoiceDocumentMigration.rows[0]?.count !== 3) throw new Error('Payment invoice document migration required before API boot');
 const repositories = createRepositories(pool);
 const users = createUsersService(pool, config.PARTNER_LABEL_ID && identityProvider instanceof OidcIdentityProvider
   ? { partnerIdentity: { labelId: config.PARTNER_LABEL_ID, issuer: identityProvider.configuredIssuer() } } : {});
@@ -71,7 +79,17 @@ const labelCustom = createLabelCustomService(pool);
 const releases = createReleasesService(pool);
 const takedowns = createTakedownsService(pool);
 const tracks = createTracksService(pool);
-const payments = createPaymentsService(pool, { callbackSecret: config.WEBHOOK_MOCK_SECRET });
+const invoiceDocumentStore = createInvoiceDocumentStore({
+  environment: config.NODE_ENV,
+  endpoint: `${config.OBJECT_STORAGE_USE_SSL ? 'https' : 'http'}://${config.OBJECT_STORAGE_ENDPOINT}:${config.OBJECT_STORAGE_PORT}`,
+  publicEndpoint: config.OBJECT_STORAGE_PUBLIC_ENDPOINT,
+  credentials: { accessKeyId: config.OBJECT_STORAGE_ACCESS_KEY, secretAccessKey: config.OBJECT_STORAGE_SECRET_KEY },
+  bucket: config.OBJECT_STORAGE_BUCKET,
+  prefix: config.INVOICE_DOCUMENT_PREFIX,
+});
+const payments = createPaymentsService(pool, { callbackSecret: config.WEBHOOK_MOCK_SECRET,
+  ...(config.XENDIT_WEBHOOK_TOKEN ? { xenditWebhookToken: config.XENDIT_WEBHOOK_TOKEN } : {}),
+  xenditEnabled: !!config.XENDIT_SECRET_KEY, documentStore: invoiceDocumentStore });
 const payouts = createPayoutsService(pool, createPgPayoutFinance(databasePayoutPolicy));
 const mediaStore = await createMediaObjectStore(pool, {
   environment: config.NODE_ENV === 'test' ? 'test' : 'development',
@@ -93,6 +111,11 @@ const royaltyImportStore = await createRoyaltyImportObjectStore(pool, {
 });
 pool.on('error', () => { console.error(JSON.stringify({ level: 'error', message: 'database idle connection failed' })); });
 
+const copyrightRegistrations = createCopyrightRegistrationsService(pool, {
+  environment: config.NODE_ENV, callbackSecret: config.WEBHOOK_MOCK_SECRET,
+  xenditEnabled: !!config.XENDIT_SECRET_KEY, xenditWebhookToken: config.XENDIT_WEBHOOK_TOKEN,
+});
+
 const app = buildApp({
   publicCatalog: createPublicCatalogService(pool),
   localAuth,
@@ -104,10 +127,9 @@ const app = buildApp({
   users, artists, labels, labelCustom, releases, tracks, takedowns,
   balance: createBalanceService(pool), royalties: createRoyaltiesService(pool, royaltyImportStore, reconciliationPool), payouts, payments,
   financeReconciliation: createFinanceReconciliationService(pool),
+  financeAdjustments: createFinanceAdjustmentsService(pool),
   composerRoyalties: createComposerRoyaltiesService(pool),
-  copyrightRegistrations: createCopyrightRegistrationsService(pool, {
-    environment: config.NODE_ENV, callbackSecret: config.WEBHOOK_MOCK_SECRET,
-  }),
+  copyrightRegistrations,
   submissions: createSubmissionService(pool, { media: createMediaReadinessAdapter(), payment: paymentSubmissionDependency, provider: new MockSubmissionProvider() }),
   notifications: createNotificationsService(pool), exports,
   media,
@@ -149,10 +171,22 @@ const app = buildApp({
         return true;
       } catch { return false; }
     },
+    async receiveXendit({ body, token }) {
+      if (!verifyXenditCallbackToken(config.XENDIT_WEBHOOK_TOKEN, token)) throw new ApiError(401, 'UNAUTHORIZED');
+      const callback = parseXenditInvoiceCallback(body);
+      if (!callback) throw new ApiError(400, 'BAD_REQUEST');
+      const isCopyrightPayment = await copyrightRegistrations.hasXenditInvoice(callback.invoiceId) ||
+        (callback.externalId ? await copyrightRegistrations.hasXenditExternalId(callback.externalId) : false);
+      if (isCopyrightPayment) {
+        await copyrightRegistrations.xenditCallback({ body, token });
+      } else {
+        await payments.xenditCallback({ body, token });
+      }
+    },
   },
 });
 
-const shutdown = async () => { await app.close(); mediaStore.close(); royaltyImportStore.close();
+const shutdown = async () => { await app.close(); mediaStore.close(); royaltyImportStore.close(); invoiceDocumentStore.close();
   await Promise.all([pool.end(), reconciliationPool.end()]); process.exit(0); };
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);

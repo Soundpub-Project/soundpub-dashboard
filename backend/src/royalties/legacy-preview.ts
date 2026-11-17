@@ -2,9 +2,20 @@ import { createHash } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { formatMoney } from '../finance/money.js';
 import { parseLegacyRoyaltyCsv } from './legacy-csv.js';
-import { matchLegacyRoyaltyRows } from './legacy-matcher.js';
-import { LEGACY_ROYALTY_POLICY, splitLegacyRoyalty } from './split.js';
+import { matchLegacyRoyaltyRows, type MatchedLegacyRoyaltyRow } from './legacy-matcher.js';
+import { LEGACY_ROYALTY_POLICY, LEGACY_ROYALTY_POLICY_CHECKSUM, splitLegacyRoyalty } from './split.js';
 
+export function legacyRoyaltyChecksumRow(row: MatchedLegacyRoyaltyRow) {
+  return { sourceRowNumber: row.sourceRowNumber, period: row.period, isrc: row.isrc,
+    upc: row.upc || row.catalogUpc, platform: row.platform, country: row.country, salesType: row.salesType ?? null,
+    salesUnit: row.salesUnit, netMinor: row.netMinor.toString(), trackId: row.trackId, releaseId: row.releaseId,
+    artistId: row.trackId ? row.artistId : null, artistOwnerUserId: row.trackId ? row.artistOwnerUserId : null,
+    labelOwnerUserId: row.labelOwnerUserId,
+    ...(row.trackId ? {} : { sourceTitle: row.title ?? null,
+      sourceArtist: row.artist?.trim().toLocaleLowerCase('id-ID').replace(/\s+/g, ' ') ?? '',
+      sourceLabel: row.labelName?.trim().toLocaleLowerCase('id-ID').replace(/\s+/g, ' ') ?? '' }),
+  };
+}
 export async function prepareLegacyRoyaltyCsv(db: PoolClient, text: string) {
   const parsed = parseLegacyRoyaltyCsv(text);
   const matching = await matchLegacyRoyaltyRows(db, parsed.rows);
@@ -23,11 +34,8 @@ export async function prepareLegacyRoyaltyCsv(db: PoolClient, text: string) {
   });
   const checksum = issues.length || !rows.length ? null : createHash('sha256').update(JSON.stringify({
     policy: LEGACY_ROYALTY_POLICY.code,
-    rows: rows.map(row => ({ sourceRowNumber: row.sourceRowNumber, period: row.period, isrc: row.isrc,
-      upc: row.upc || row.catalogUpc, platform: row.platform, country: row.country, salesType: row.salesType ?? null,
-      salesUnit: row.salesUnit, netMinor: row.netMinor.toString(), trackId: row.trackId, releaseId: row.releaseId,
-      artistId: row.artistId, artistOwnerUserId: row.artistOwnerUserId, labelOwnerUserId: row.labelOwnerUserId,
-    })).sort((left, right) => left.sourceRowNumber - right.sourceRowNumber),
+    policy_checksum: LEGACY_ROYALTY_POLICY_CHECKSUM,
+    rows: rows.map(legacyRoyaltyChecksumRow).sort((left, right) => left.sourceRowNumber - right.sourceRowNumber),
   })).digest('hex');
   return { parsed, matching, issues, rows, checksum, totals: { net, artist, label, soundpub } };
 }
@@ -44,6 +52,8 @@ export async function previewLegacyRoyaltyCsv(db: PoolClient, text: string) {
     period: periods.length === 1 ? periods[0]! : null,
     currency: 'IDR' as const,
     policy_code: LEGACY_ROYALTY_POLICY.code,
+    policy_version: LEGACY_ROYALTY_POLICY.version,
+    policy_checksum: LEGACY_ROYALTY_POLICY_CHECKSUM,
     checksum: prepared.checksum,
     total_net_amount: formatMoney(prepared.totals.net),
     artist_amount: formatMoney(prepared.totals.artist),

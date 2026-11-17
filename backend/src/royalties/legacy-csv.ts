@@ -134,6 +134,9 @@ function parseValues(headers: string[], values: string[], rowNumber: number):
   const title = optional(values, index('title'));
   const artist = optional(values, index('artist'));
   const labelName = optional(values, index('label_name'));
+  for (const [field, name] of [['title', title], ['artist', artist], ['label_name', labelName]] as const) {
+    if (name && name.length > 200) return fail(field, 'FIELD_TOO_LONG', `${field} maksimal 200 karakter.`);
+  }
   const salesType = optional(values, index('sales_type'));
   if (salesType && salesType.length > 100) return fail('sales_type', 'INVALID_SALES_TYPE', 'Sales type maksimal 100 karakter.');
   return { row: { sourceRowNumber: rowNumber, period, isrc, upc, platform, country, salesUnit, netMinor,

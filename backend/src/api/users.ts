@@ -16,6 +16,8 @@ export function registerUsersRoutes(app: FastifyInstance, users: UsersService,
     { method: 'PATCH', url: '/api/v1/profile', operationId: 'updateProfile', body: profilePatch, response: profileResponse },
     { method: 'GET', url: '/api/v1/admin/users', operationId: 'listUsers', query: listQuery,
       response: z.strictObject({ items: z.array(profileDto.extend({ roles: z.array(z.enum(ROLES)) })), nextCursor: z.string().nullable() }) },
+    { method: 'GET', url: '/api/v1/admin/dashboard/summary', operationId: 'getAdminDashboardSummary',
+      response: z.strictObject({ total_users: z.number().int().nonnegative(), pending_payouts: z.number().int().nonnegative() }) },
     { method: 'POST', url: '/api/v1/admin/users', operationId: 'createUser', body: userCreate,
       response: profileDto.extend({ roles: z.array(z.enum(ROLES)) }) },
     { method: 'GET', url: '/api/v1/whitelabel/dashboard', operationId: 'getWhitelabelDashboard', response: whitelabelDashboardDto },
@@ -54,6 +56,7 @@ export function registerUsersRoutes(app: FastifyInstance, users: UsersService,
           ? users.profile(actor) : users.updateProfile(actor, request.body as ProfilePatch, request.id);
         if (def.url === '/api/v1/admin/users') return def.method === 'GET'
           ? users.list(actor, request.query as ListQuery) : users.create(actor, request.body as UserCreate, request.id);
+        if (def.url === '/api/v1/admin/dashboard/summary') return users.adminDashboardSummary(actor);
         if (def.url === '/api/v1/whitelabel/dashboard') return users.whitelabelDashboard(actor);
         if (def.url === '/api/v1/whitelabel/artists') return users.createWhitelabelArtist(actor,
           request.body as WhitelabelArtistCreate, request.id);

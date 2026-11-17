@@ -70,24 +70,27 @@ const checks: Check[] = [
     jsonb_build_object('status',status,'amount',amount::text,'allocated',allocated::text) AS detail
     FROM broken ORDER BY id LIMIT $1` },
   { code: 'PAYMENT_INTEGRITY', sql: `WITH broken AS (
-    SELECT i.id,i.status,i.reconciliation_required,m.status AS provider_status
+    SELECT i.id,i.status,i.reconciliation_required,CASE WHEN i.provider='mock' THEN m.status ELSE i.provider_status END AS provider_status
     FROM soundpub.payment_invoices i LEFT JOIN soundpub.payment_mock_invoices m ON m.provider_invoice_id=i.provider_invoice_id
     LEFT JOIN soundpub.releases r ON r.id=i.business_id
-    WHERE i.reconciliation_required OR m.provider_invoice_id IS NULL OR m.amount_minor<>i.amount_minor OR m.currency<>i.currency OR m.status<>i.status
+    WHERE i.reconciliation_required OR (i.provider='mock' AND (m.provider_invoice_id IS NULL OR m.amount_minor<>i.amount_minor OR m.currency<>i.currency OR m.status<>i.status))
+      OR (i.provider='xendit' AND i.status<>'CREATING' AND i.provider_status IS DISTINCT FROM i.status)
       OR r.id IS NULL OR r.total_payment_snapshot IS NULL OR r.price_per_track_snapshot IS NULL
+      OR r.pricing_snapshot_mode IS NULL OR r.pricing_snapshot_track_count IS NULL
       OR (r.total_payment_snapshot*100)::bigint<>i.amount_minor
-      OR (r.price_per_track_snapshot*100*(SELECT count(*) FROM soundpub.tracks t WHERE t.release_id=r.id))::bigint<>i.amount_minor
+      OR (r.pricing_snapshot_mode='per_category' AND r.pricing_snapshot_track_count<>(SELECT count(*) FROM soundpub.tracks t WHERE t.release_id=r.id))
+      OR (r.pricing_snapshot_mode='per_track' AND (r.price_per_track_snapshot*100*(SELECT count(*) FROM soundpub.tracks t WHERE t.release_id=r.id))::bigint<>i.amount_minor)
       OR (SELECT count(*) FROM soundpub.payment_effects e WHERE e.invoice_id=i.id AND e.kind='PAYMENT_CHARGE')
            <>CASE WHEN i.status IN ('PAID','REFUNDED') THEN 1 ELSE 0 END
       OR (SELECT count(*) FROM soundpub.payment_effects e WHERE e.invoice_id=i.id AND e.kind='PAYMENT_REFUND')
            <>CASE WHEN i.status='REFUNDED' THEN 1 ELSE 0 END
       OR EXISTS(SELECT 1 FROM soundpub.payment_effects e WHERE e.invoice_id=i.id AND (e.amount_minor<>i.amount_minor OR e.currency<>i.currency
         OR NOT EXISTS(SELECT 1 FROM soundpub.finance_events f WHERE f.business_reference=i.id::text AND f.kind=e.kind
-          AND f.amount_minor=e.amount_minor AND f.currency=e.currency AND f.evidence=e.reference AND f.owner_id=r.artist_user_id)))
+          AND f.amount_minor=e.amount_minor AND f.currency=e.currency AND f.evidence=e.reference AND f.owner_id=i.financial_owner_id)))
       OR EXISTS(SELECT 1 FROM soundpub.finance_events f WHERE f.business_reference=i.id::text
         AND f.kind IN ('PAYMENT_CHARGE','PAYMENT_REFUND') AND NOT EXISTS(SELECT 1 FROM soundpub.payment_effects e
           WHERE e.invoice_id=i.id AND e.kind=f.kind AND e.amount_minor=f.amount_minor AND e.currency=f.currency
-            AND e.reference=f.evidence AND f.owner_id=r.artist_user_id))
+            AND e.reference=f.evidence AND f.owner_id=i.financial_owner_id))
       OR NOT EXISTS(SELECT 1 FROM soundpub.audit_logs a WHERE a.resource_type='payment_invoice' AND a.resource_id=i.id::text
         AND a.action='payment.invoice_created' AND a.metadata->>'idempotency_reference'=i.idempotency_key)
       OR EXISTS(SELECT 1 FROM soundpub.payment_effects e WHERE e.invoice_id=i.id AND e.kind='PAYMENT_CHARGE'
@@ -103,7 +106,7 @@ const checks: Check[] = [
         AND NOT EXISTS(SELECT 1 FROM soundpub.payment_refunds pr WHERE pr.invoice_id=i.id
           AND e.reference='refund:'||pr.idempotency_key)
         AND NOT EXISTS(SELECT 1 FROM soundpub.payment_callback_receipts receipt JOIN soundpub.webhook_events webhook
-          ON webhook.event_id=receipt.event_id AND webhook.provider='mock-payment' AND webhook.status='processed'
+          ON webhook.event_id=receipt.event_id AND webhook.provider=CASE WHEN i.provider='mock' THEN 'mock-payment' ELSE 'xendit-invoice' END AND webhook.status='processed'
           WHERE receipt.event_id=e.reference AND receipt.provider_invoice_id=i.provider_invoice_id
             AND receipt.disposition='applied' AND receipt.payload->>'provider_invoice_id'=i.provider_invoice_id
             AND receipt.payload->>'amount_minor'=i.amount_minor::text AND receipt.payload->>'currency'=i.currency
@@ -111,9 +114,25 @@ const checks: Check[] = [
   ) SELECT 'PAYMENT_INTEGRITY' AS code,'payment_invoice' AS resource_type,id::text AS resource_id,
     jsonb_build_object('status',status,'providerStatus',provider_status,'reconciliationRequired',reconciliation_required) AS detail
     FROM broken ORDER BY id LIMIT $1` },
+  { code: 'COPYRIGHT_PAYMENT_MANUAL_REVIEW', sql: `SELECT 'COPYRIGHT_PAYMENT_MANUAL_REVIEW' AS code,
+    'copyright_payment' AS resource_type,p.id::text AS resource_id,
+    jsonb_build_object('registrationId',p.registration_id,'status',p.status,
+      'providerStatus',p.provider_status,'reconciliationRequired',p.reconciliation_required) AS detail
+    FROM soundpub.copyright_registration_payments p
+    WHERE p.reconciliation_required OR p.status='RECONCILIATION_REQUIRED'
+      OR (p.status IN ('FAILED','EXPIRED') AND p.provider_status='PAID')
+    ORDER BY p.id LIMIT $1` },
+  { code: 'COPYRIGHT_PAYMENT_CALLBACK_UNRESOLVED', sql: `SELECT 'COPYRIGHT_PAYMENT_CALLBACK_UNRESOLVED' AS code,
+    'copyright_payment_callback' AS resource_type,r.provider||':'||r.event_id AS resource_id,
+    jsonb_build_object('paymentId',r.payment_id,'providerInvoiceId',r.provider_invoice_id,
+      'callbackStatus',r.callback_status,'disposition',r.disposition) AS detail
+    FROM soundpub.copyright_registration_payment_callback_receipts r
+    WHERE r.disposition<>'APPLIED'
+    ORDER BY r.provider,r.event_id LIMIT $1` },
   { code: 'MANUAL_ADJUSTMENT_UNAPPROVED', sql: `SELECT 'MANUAL_ADJUSTMENT_UNAPPROVED' AS code,'finance_event' AS resource_type,
     e.id::text AS resource_id,jsonb_build_object('ownerId',e.owner_id,'businessReference',e.business_reference) AS detail
-    FROM soundpub.finance_events e WHERE e.kind='MANUAL_ADJUSTMENT' ORDER BY e.id LIMIT $1` },
+    FROM soundpub.finance_events e WHERE e.kind='MANUAL_ADJUSTMENT' AND NOT soundpub.finance_adjustments_intact(e.owner_id)
+    ORDER BY e.id LIMIT $1` },
   { code: 'ORPHAN_LEDGER_EVENT', sql: `SELECT 'ORPHAN_LEDGER_EVENT' AS code,'finance_event' AS resource_type,e.id::text AS resource_id,
     jsonb_build_object('kind',e.kind,'businessReference',e.business_reference) AS detail
     FROM soundpub.finance_events e WHERE
@@ -183,6 +202,9 @@ async function counts(db: PoolClient) {
     (SELECT count(*) FROM soundpub.finance_events)::text AS finance_events,
     (SELECT count(*) FROM soundpub.payout_requests)::text AS payouts,
     (SELECT count(*) FROM soundpub.payment_invoices)::text AS payment_invoices,
+    (SELECT count(*) FROM soundpub.copyright_registration_payments)::text AS copyright_payments,
+    (SELECT count(*) FROM soundpub.copyright_registration_payments WHERE reconciliation_required)::text AS copyright_payment_manual_reviews,
+    (SELECT count(*) FROM soundpub.copyright_registration_payment_callback_receipts WHERE disposition<>'APPLIED')::text AS copyright_payment_unresolved_callbacks,
     (SELECT count(*) FROM soundpub.finance_events WHERE kind='MANUAL_ADJUSTMENT')::text AS manual_adjustments,
     (SELECT count(*) FROM soundpub.payment_callback_receipts WHERE disposition NOT IN ('applied','ignored'))::text AS unresolved_callbacks`)).rows[0]!;
   return Object.fromEntries(Object.entries(row).map(([key, value]) => [key, Number(value)])) as Record<string, number>;

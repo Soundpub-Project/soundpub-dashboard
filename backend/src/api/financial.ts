@@ -6,6 +6,7 @@ import type { RoyaltiesService } from '../royalties/index.js';
 import type { PayoutsService } from '../payouts/index.js';
 import type { PaymentsService } from '../payments/index.js';
 import type { FinanceReconciliationService } from '../reconciliation/index.js';
+import type { FinanceAdjustmentsService } from '../finance/manual-adjustments.js';
 
 const secured = [{ bearerAuth: [] }];
 const key = (request: FastifyRequest) => {
@@ -17,6 +18,7 @@ const key = (request: FastifyRequest) => {
 export function registerFinancialRoutes(app: FastifyInstance, services: {
   balance?: BalanceService; royalties?: RoyaltiesService; payouts?: PayoutsService; payments?: PaymentsService;
   financeReconciliation?: FinanceReconciliationService;
+  financeAdjustments?: FinanceAdjustmentsService;
 }, authenticate: (request: FastifyRequest) => Promise<Principal>, paths: Record<string, Record<string, unknown>>, errorSchema: object) {
   const add = (method: string, path: string, operationId: string) => {
     const normalized = path.replaceAll(':id', '{id}');
@@ -44,6 +46,20 @@ export function registerFinancialRoutes(app: FastifyInstance, services: {
       services.financeReconciliation!.history(await authenticate(request), request.query));
     add('GET', '/api/v1/admin/finance/reconciliation/latest', 'getLatestFinanceReconciliation');
     add('GET', '/api/v1/admin/finance/reconciliation/runs', 'listFinanceReconciliationRuns');
+  }
+  if (services.financeAdjustments) {
+    const service = services.financeAdjustments;
+    app.get('/api/v1/admin/finance/adjustment-owners', async request =>
+      service.eligibleOwners(await authenticate(request), request.query));
+    app.get('/api/v1/admin/finance/adjustments', async request => service.list(await authenticate(request), request.query));
+    app.post('/api/v1/admin/finance/adjustments', async request =>
+      service.request(await authenticate(request), request.body, key(request), request.id));
+    app.post<{ Params: { id: string } }>('/api/v1/admin/finance/adjustments/:id/review', async request =>
+      service.review(await authenticate(request), request.params.id, request.body, key(request), request.id));
+    add('GET', '/api/v1/admin/finance/adjustment-owners', 'listFinanceAdjustmentOwners');
+    add('GET', '/api/v1/admin/finance/adjustments', 'listFinanceAdjustments');
+    add('POST', '/api/v1/admin/finance/adjustments', 'requestFinanceAdjustment');
+    add('POST', '/api/v1/admin/finance/adjustments/:id/review', 'reviewFinanceAdjustment');
   }
   if (services.royalties) {
     const service = services.royalties;
@@ -112,7 +128,14 @@ export function registerFinancialRoutes(app: FastifyInstance, services: {
     app.get('/api/v1/payments/releases/:id', async request => service.status(await authenticate(request), (request.params as { id: string }).id));
     app.post('/api/v1/admin/payments/refunds', async request => service.refund(await authenticate(request), request.body, request.id));
     app.get('/api/v1/admin/payments/reconciliation', async request => service.reconcile(await authenticate(request)));
-    for (const [method,path,id] of [['POST','/api/v1/payments/invoices','createPaymentInvoice'],['GET','/api/v1/payments/releases/:id','getReleasePayment'],['POST','/api/v1/admin/payments/refunds','refundPayment'],['GET','/api/v1/admin/payments/reconciliation','reconcilePayments']]) add(method!,path!,id!);
+    app.get('/api/v1/admin/payments/invoices', async (request, reply) => {
+      reply.header('cache-control', 'no-store');
+      return service.listAdminInvoices(await authenticate(request), request.query);
+    });
+    app.get('/api/v1/admin/payments/invoices/:id/download', async (request, reply) => {
+      reply.header('cache-control', 'no-store');
+      return service.downloadInvoice(await authenticate(request), (request.params as { id: string }).id, request.id);
+    });
+    for (const [method,path,id] of [['POST','/api/v1/payments/invoices','createPaymentInvoice'],['GET','/api/v1/payments/releases/:id','getReleasePayment'],['POST','/api/v1/admin/payments/refunds','refundPayment'],['GET','/api/v1/admin/payments/reconciliation','reconcilePayments'],['GET','/api/v1/admin/payments/invoices','listAdminPaymentInvoices'],['GET','/api/v1/admin/payments/invoices/:id/download','downloadPaymentInvoice']]) add(method!,path!,id!);
   }
 }
-

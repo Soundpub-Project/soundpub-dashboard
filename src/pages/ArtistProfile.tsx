@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useMediaUrl } from "@/hooks/useMediaUrl";
+import { uploadBackendMedia } from "@/services/media";
 import { supabase } from "@/integrations/supabase/client";
 import { getArtist, saveArtistProfile, usesBackendArtistLabels, artistMediaUnavailable } from "@/services/artists";
 import { labelsApi } from "@/api/labels";
@@ -54,6 +56,7 @@ import {
 
 interface ArtistProfileData {
   id: string;
+  profile_id?: string | null;
   user_id?: string;
   artist_name: string;
   artist_type: string;
@@ -162,6 +165,7 @@ export default function ArtistProfile() {
 
   const [artistUserProfile, setArtistUserProfile] = useState<any>(null);
   const targetUserId = userId || (backendArtists ? profile?.id : user?.id);
+  const artistPhotoUrl = useMediaUrl(artistProfile?.profile_image_url);
   const isViewingOther = !!userId && userId !== (backendArtists ? profile?.id : user?.id);
   const isParentLabel = backendArtists ? artistUserProfile?.label_user_id === profile?.id : artistUserProfile?.parent_label_id === user?.id;
   const canEdit = (!isViewingOther || isAdmin || isParentLabel) && (!backendArtists || !loadError);
@@ -271,7 +275,6 @@ export default function ArtistProfile() {
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (backendArtists || usesBackendDomain('storage')) return;
     const file = e.target.files?.[0];
     if (!file || !targetUserId) return;
     if (!file.type.startsWith("image/")) {
@@ -284,6 +287,15 @@ export default function ArtistProfile() {
     }
     setUploadingPhoto(true);
     try {
+      if (backendArtists) {
+        if (!usesBackendDomain('storage')) throw new Error("Backend storage belum aktif");
+        if (!artistProfile?.profile_id) await saveArtistProfile(targetUserId, { artist_name: formData.artist_name || profile?.full_name || "Artist" });
+        await uploadBackendMedia(file, { category: 'ARTIST_PROFILE_IMAGE', resource_type: 'artist_profile', resource_id: targetUserId });
+        await fetchArtistProfile();
+        toast.success("Foto artis berhasil diupload");
+        return;
+      }
+      if (usesBackendDomain('storage')) throw new Error("Gunakan penyimpanan backend untuk upload foto artis");
       const ext = file.name.split(".").pop() || "jpg";
       // RLS storage policy requires first folder = auth.uid()
       const path = `${targetUserId}/artist-photo-${Date.now()}.${ext}`;
@@ -822,13 +834,13 @@ export default function ArtistProfile() {
             <div className="flex items-center gap-6">
               <Avatar className="h-24 w-24 border-2 border-border">
                 <AvatarImage
-                  src={artistProfile?.profile_image_url || undefined}
+                  src={artistPhotoUrl || undefined}
                 />
                 <AvatarFallback className="text-xl">
                   {formData.artist_name?.[0]?.toUpperCase() || <User />}
                 </AvatarFallback>
               </Avatar>
-              {canEdit && !backendArtists && (
+              {canEdit && (!backendArtists || usesBackendDomain('storage')) && (
                 <div>
                   <input
                     type="file"

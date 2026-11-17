@@ -15,7 +15,8 @@ test('API boundaries, safe failures, validation, raw webhook and OpenAPI', async
     } },
     readiness: { check: async () => ready },
     admin: { suspendUser: async input => { assert.equal(input.actor.id, 'user-1'); suspended++; } },
-    webhooks: { receive: async input => { raw = input.body.toString(); return input.signature === 'valid'; } },
+    webhooks: { receive: async input => { raw = input.body.toString(); return input.signature === 'valid'; },
+      receiveXendit: async input => { raw = input.body.toString(); assert.equal(input.token, 'synthetic-callback-token'); } },
     rateLimiter: { consume: async () => ({ allowed: !denied, retryAfterSeconds: 3 }) },
   };
   const app = buildApp(deps);
@@ -69,6 +70,12 @@ test('API boundaries, safe failures, validation, raw webhook and OpenAPI', async
     assert.equal((await webhook('bad')).statusCode, 401);
     assert.equal((await webhook('valid')).statusCode, 200);
     assert.equal(raw, payload);
+    const xenditBody = '{"id":"invoice-test","status":"PAID","amount":50000,"currency":"IDR"}';
+    const xendit = await app.inject({ method: 'POST', url: '/api/v1/webhooks/xendit/invoices',
+      headers: { 'content-type': 'application/json', 'x-callback-token': 'synthetic-callback-token' }, payload: xenditBody });
+    assert.equal(xendit.statusCode, 200);
+    assert.equal(raw, xenditBody);
+    assert.ok((await app.inject('/openapi.json')).json().paths['/api/v1/webhooks/xendit/invoices'].post);
     denied = true;
     const throttled = await app.inject('/api/v1/me');
     assert.equal(throttled.statusCode, 429);

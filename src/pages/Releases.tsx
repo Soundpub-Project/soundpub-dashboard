@@ -329,8 +329,9 @@ export default function Releases() {
   const handleContinuePayment = async (release: Release) => {
     if (usesBackendReleases()) {
       try {
-        await paymentsApi.create(release.id);
-        navigate(`/dashboard/invoices?release_id=${encodeURIComponent(release.id)}`);
+        const invoice = await paymentsApi.create(release.id);
+        if (invoice.provider_invoice_url) window.open(invoice.provider_invoice_url, '_blank', 'noopener,noreferrer');
+        else navigate(`/dashboard/invoices?release_id=${encodeURIComponent(release.id)}`);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Gagal membuat invoice backend');
       }

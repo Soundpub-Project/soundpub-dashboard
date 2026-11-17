@@ -63,13 +63,18 @@ test('private replacement file session is idempotent, requester-bound and commit
     const originalPreview = await service.previewCsv(principal(ids.admin), { csv: originalCsv });
     const original = await service.commitCsv(principal(ids.admin), { csv: originalCsv, source: 'replacement-session',
       filename: 'original.csv', expected_checksum: originalPreview.checksum! }, 'original');
+    const additionalCsv = replacementCsv.replace('150.00', '25.00');
+    const additionalPreview = await service.previewCsv(principal(ids.admin), { csv: additionalCsv });
+    const additional = await service.commitCsv(principal(ids.admin), { csv: additionalCsv, source: 'replacement-session-2',
+      filename: 'original.csv', expected_checksum: additionalPreview.checksum! }, 'second-original');
     const checksum = createHash('sha256').update(replacementCsv).digest('hex');
-    const body = { filename: 'replacement.csv', mime_type: 'text/csv' as const,
+    const body = { filename: 'original.csv', mime_type: 'text/csv' as const,
       size: Buffer.byteLength(replacementCsv), checksum, reason: 'corrected provider statement' };
     const requested = await service.requestReplacementFileUpload(principal(ids.admin), original.id, body,
       'replacement-session-key', 'request');
     assert.equal(requested.session.operation_kind, 'REPLACEMENT');
     assert.equal(requested.session.replaces_batch_id, original.id);
+    assert.deepEqual(requested.session.replacement_batch_ids, [original.id,additional.id].sort());
     assert.equal(requested.session.replacement_reason, body.reason);
     assert.equal((await service.requestReplacementFileUpload(principal(ids.admin), original.id, body,
       'replacement-session-key', 'request-replay')).session.id, requested.session.id);
@@ -84,11 +89,23 @@ test('private replacement file session is idempotent, requester-bound and commit
       { code: 'NOT_FOUND' });
     await assert.rejects(service.fileDownload(principal(ids.otherAdmin), requested.session.id), { code: 'NOT_FOUND' });
     const preview = await service.fileSession(principal(ids.admin), requested.session.id);
+    const lateCsv = replacementCsv.replace('150.00', '5.00');
+    const latePreview = await service.previewCsv(principal(ids.admin), { csv: lateCsv });
+    const lateBatch = await service.commitCsv(principal(ids.admin), { csv: lateCsv,
+      source: 'replacement-session-late', filename: 'original.csv', expected_checksum: latePreview.checksum! }, 'late');
     await service.approveFileSession(principal(ids.otherAdmin), requested.session.id, {
       expected_checksum: preview.preview_checksum, evidence: 'Replacement ownership and totals reviewed',
     }, 'replacement-approve');
+    await assert.rejects(service.commitFileSession(principal(ids.admin), requested.session.id, 'stale-scope'),
+      { code: 'ROYALTY_REPLACEMENT_CONFLICT' });
+    assert.equal((await database.owner.query(`SELECT count(*)::int AS count FROM soundpub.royalty_import_corrections
+      WHERE batch_id=ANY($1::uuid[])`, [[original.id,additional.id]])).rows[0].count, 0);
+    await service.correct(principal(ids.admin), lateBatch.id, { reason: 'Remove later synthetic batch' }, 'late-correction');
     const committed = await service.commitFileSession(principal(ids.admin), requested.session.id, 'commit');
     assert.equal(committed.replaced_id, original.id);
+    assert.deepEqual((await service.detail(principal(ids.admin), committed.id)).replaces_batch_ids, [original.id,additional.id].sort());
+    assert.equal((await service.detail(principal(ids.admin), additional.id)).replacement_batch_id, committed.id);
+    assert.equal((await database.owner.query('SELECT soundpub.royalty_correction_intact($1) AS intact', [additional.id])).rows[0].intact, true);
     assert.equal((await service.fileSession(principal(ids.admin), requested.session.id)).status, 'COMMITTED');
     assert.deepEqual((await database.owner.query(`SELECT old_batch_id,new_batch_id,session_id
       FROM soundpub.royalty_import_replacements WHERE old_batch_id=$1`, [original.id])).rows,

@@ -1,6 +1,7 @@
 import { apiRequest } from './client';
 export interface BackendTrack {
   audio_url?: string | null;
+  clip_url?: string | null;
   id: string; artist_id: string | null; release_id: string; title: string; artist_name: string; position: number; version: number;
   genre: string | null; composer: string | null; lyricist: string | null; lyrics: string | null;
   isrc: string | null; duration: number | null; explicit_lyrics: boolean; created_at: string; updated_at: string;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { royaltiesApi, type RoyaltyReportRow } from '@/api/royalties';
 import { balanceApi } from '@/api/balance';
@@ -15,11 +15,16 @@ export function BackendRoyalties() {
   const admin = role === 'admin' || role === 'superadmin';
   const [draft, setDraft] = useState({ period: '', search: '', artist_id: '', release_id: '' });
   const [filters, setFilters] = useState({ ...draft });
-  const [offset, setOffset] = useState(0);
+  const [cursors, setCursors] = useState<(string | null)[]>([null]);
+  const [pageIndex, setPageIndex] = useState(0);
+  const cursor = cursors[pageIndex] ?? null;
+  const [exportError, setExportError] = useState('');
+  useEffect(() => { setCursors([null]); setPageIndex(0); }, [user?.id]);
   const [exporting, setExporting] = useState(false);
   const report = useQuery({
-    queryKey: ['backend-royalty-report', user?.id, filters, offset], enabled: !!user,
-    queryFn: ({ signal }) => royaltiesApi.report({ ...filters, limit: PAGE_SIZE, offset }, signal), retry: false,
+    queryKey: ['backend-royalty-report', user?.id, filters, cursor], enabled: !!user,
+    queryFn: ({ signal }) => royaltiesApi.report({ ...filters, limit: PAGE_SIZE,
+      ...(cursor ? { cursor } : {}) }, signal), retry: false,
   });
   const periods = useQuery({ queryKey: ['backend-royalty-periods', user?.id], enabled: !!user,
     queryFn: ({ signal }) => royaltiesApi.periods(signal), retry: false });
@@ -28,15 +33,23 @@ export function BackendRoyalties() {
   const loading = report.isFetching || periods.isFetching || balance.isFetching;
   const reload = () => { void report.refetch(); void periods.refetch(); if (custom) void balance.refetch(); };
   const exportCsv = async () => {
-    setExporting(true);
+    setExporting(true); setExportError('');
     try {
       const rows: RoyaltyReportRow[] = [];
-      for (let exportOffset = 0;; exportOffset += 200) {
-        const page = await royaltiesApi.report({ ...filters, limit: 200, offset: exportOffset });
+      let exportCursor: string | undefined;
+      for (;;) {
+        const page = await royaltiesApi.report({ ...filters, limit: 200,
+          ...(exportCursor ? { cursor: exportCursor } : {}) });
+        if (rows.length + page.items.length > 100_000) throw new Error('EXPORT_ROW_LIMIT');
         rows.push(...page.items);
-        if (page.items.length < 200) break;
+        if (!page.next_cursor) break;
+        exportCursor = page.next_cursor;
       }
-      const quote = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+      const quote = (value: unknown) => {
+        const raw = String(value ?? '');
+        const safe = /^[\u0000-\u0020]*[=+@-]/.test(raw) ? `'${raw}` : raw;
+        return `"${safe.replaceAll('"', '""')}"`;
+      };
       const header = ['period','isrc','upc','release_title','track_title','artist_name','label_name','platform','country',
         'sales_type','sales_unit','net_revenue','owner_revenue','corrected'];
       const csv = [header, ...rows.map(row => header.map(key => row[key as keyof RoyaltyReportRow]))]
@@ -45,6 +58,10 @@ export function BackendRoyalties() {
       const anchor = document.createElement('a'); anchor.href = url;
       anchor.download = `royalti-${filters.period || 'semua'}-${new Date().toISOString().slice(0,10)}.csv`;
       anchor.click(); URL.revokeObjectURL(url);
+    } catch (error) {
+      setExportError(error instanceof Error && error.message === 'EXPORT_ROW_LIMIT'
+        ? 'Ekspor melebihi 100.000 baris. Sempitkan periode atau filter sebelum mencoba lagi.'
+        : 'Ekspor gagal. Coba lagi setelah koneksi pulih.');
     } finally { setExporting(false); }
   };
   const summary = report.data?.summary;
@@ -64,7 +81,7 @@ export function BackendRoyalties() {
       ['Dicadangkan', `IDR ${balance.data.reserved}`], ['Dibayar', `IDR ${balance.data.settled}`],
     ].map(([title, value]) => <div key={title} className="rounded-lg border p-4"><dt>{title}</dt><dd className="break-all">{value}</dd></div>)}</dl>}
     <form className="grid gap-3 rounded-lg border p-4 md:grid-cols-5" onSubmit={event => {
-      event.preventDefault(); setFilters({ ...draft }); setOffset(0);
+      event.preventDefault(); setFilters({ ...draft }); setCursors([null]); setPageIndex(0);
     }}>
       <label>Periode<select className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm" value={draft.period}
         onChange={event => setDraft({ ...draft, period: event.target.value })}><option value="">Semua periode</option>
@@ -77,15 +94,20 @@ export function BackendRoyalties() {
     {report.data && <div className="overflow-x-auto rounded-lg border"><table className="w-full text-sm"><caption className="sr-only">Laporan royalti sesuai scope role</caption>
       <thead><tr>{['Periode','ISRC','Release / Track','Artis / Label','Platform','Negara','Unit','Net DSP','Hak akun','Status'].map(title => <th scope="col" className="p-3 text-left" key={title}>{title}</th>)}</tr></thead>
       <tbody>{report.data.items.map(item => <tr className="border-t" key={item.id}>{[
-        item.period,item.isrc || '-',`${item.release_title} / ${item.track_title}`,`${item.artist_name} / ${item.label_name || '-'}`,
+        item.period,item.isrc || '-',`${item.release_title ?? 'Belum di katalog'} / ${item.track_title}`,`${item.artist_name} / ${item.label_name || '-'}`,
         item.platform || '-',item.country || '-',item.sales_unit ?? '-',`IDR ${item.net_revenue}`,`IDR ${item.owner_revenue}`,
         item.corrected ? 'Dikoreksi' : 'Aktif',
       ].map((value,index) => <td className="min-w-28 p-3 align-top" key={index}>{value}</td>)}</tr>)}</tbody></table>
       {!report.data.items.length && <p className="p-4">Belum ada data royalti sesuai filter.</p>}</div>}
-    <div className="flex flex-wrap items-center gap-2"><Button variant="outline" disabled={loading || offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>Sebelumnya</Button>
-      <Button variant="outline" disabled={loading || !report.data || offset + PAGE_SIZE >= report.data.total} onClick={() => setOffset(offset + PAGE_SIZE)}>Berikutnya</Button>
+    <div className="flex flex-wrap items-center gap-2"><Button variant="outline" disabled={loading || pageIndex === 0} onClick={() => setPageIndex(index => index - 1)}>Sebelumnya</Button>
+      <Button variant="outline" disabled={loading || !report.data?.next_cursor} onClick={() => {
+        if (!report.data?.next_cursor) return;
+        setCursors(current => [...current.slice(0, pageIndex + 1), report.data.next_cursor]);
+        setPageIndex(index => index + 1);
+      }}>Berikutnya</Button>
       <Button variant="outline" disabled={loading || exporting || report.isError} onClick={() => void exportCsv()}>{exporting ? 'Mengekspor...' : 'Export CSV sesuai filter'}</Button>
       <Button variant="outline" disabled={loading} onClick={reload}>Muat ulang</Button>
       {report.data && <span className="text-sm text-muted-foreground">{report.data.total.toLocaleString('id-ID')} baris</span>}</div>
+    {exportError && <p role="alert">{exportError}</p>}
   </section></DashboardLayout>;
 }

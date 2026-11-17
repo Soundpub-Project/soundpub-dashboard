@@ -2,11 +2,12 @@ import type { PoolClient } from 'pg';
 import { z } from 'zod';
 import { ApiError } from '../api/types.js';
 
-export const paymentStates = ['PENDING', 'PAID', 'FAILED', 'REFUNDED'] as const;
+export const paymentStates = ['CREATING', 'PENDING', 'PAID', 'FAILED', 'EXPIRED', 'REFUNDED'] as const;
 export type PaymentStatus = typeof paymentStates[number];
 export const invoiceInput = z.strictObject({ release_id: z.uuid(), idempotency_key: z.string().min(1).max(200) });
 export const refundInput = z.strictObject({ invoice_id: z.uuid(), idempotency_key: z.string().min(1).max(200), reason: z.string().trim().min(1).max(500) });
 export const callbackInput = z.strictObject({ provider_invoice_id: z.string().min(1).max(200), status: z.string().min(1).max(64),
+ provider_external_id: z.string().min(1).max(200).optional(),
  amount_minor: z.string().regex(/^[1-9][0-9]{0,15}$/).refine(v => BigInt(v) <= 9007199254740991n), currency: z.string().regex(/^[A-Z]{3}$/) });
 export function parse<T>(schema: z.ZodType<T>, value: unknown): T {
  const result = schema.safeParse(value);
@@ -22,13 +23,16 @@ export function toMinor(value: string): string {
  return amount.toString();
 }
 export function nextPaymentStatus(current: PaymentStatus, incoming: PaymentStatus): PaymentStatus {
- if (current === 'REFUNDED' || incoming === 'PENDING') return current;
+ if (current === 'REFUNDED') return current;
+ if (current === 'FAILED' || current === 'EXPIRED') return current;
+ if (incoming === 'PENDING') return current === 'CREATING' ? 'PENDING' : current;
  if (incoming === 'REFUNDED') return current === 'PAID' ? incoming : current;
  if (current === 'PAID') return current;
  return incoming;
 }
 export interface Invoice {
- id: string; business_type: 'release'; business_id: string; provider: 'mock'; provider_invoice_id: string;
+ id: string; business_type: 'release'; business_id: string; provider: 'mock' | 'xendit'; provider_invoice_id: string | null;
+ provider_external_id?: string | null; provider_invoice_url?: string | null; provider_status?: string | null;
  amount_minor: string; currency: 'IDR'; precision: 2; status: PaymentStatus; idempotency_key: string;
  payer_owner_id: string; financial_owner_id: string; artist_id: string;
  ownership_policy: 'LOGIN_ACCOUNT' | 'LABEL_CUSTOM_PIC';

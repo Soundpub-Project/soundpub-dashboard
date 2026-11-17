@@ -22,6 +22,8 @@ test('royalty report scopes admin, label, whitelabel and artist without cross-ow
   const releaseA = randomUUID(), releaseB = randomUUID();
   const trackA = randomUUID(), trackB = randomUUID();
   try {
+    assert.equal((await owner.query(`SELECT 1 FROM pg_indexes WHERE schemaname='soundpub'
+      AND indexname='royalty_import_entries_report_page_idx'`)).rowCount, 1);
     await owner.query(`INSERT INTO soundpub.backend_users(id,status) VALUES
       ($1,'active'),($2,'active'),($3,'active'),($4,'active'),($5,'active'),($6,'active')`,
     [admin.id,label.id,whitelabel.id,artistA.id,artistB.id,user.id]);
@@ -94,7 +96,31 @@ test('royalty report scopes admin, label, whitelabel and artist without cross-ow
     const artistTrack = await service.analytics(artistA, { view: 'track', period: '2026-10' });
     assert.equal(artistTrack[0]?.revenue, '70.00');
     assert.equal(artistTrack[0]?.isrc, 'FRX762598330');
+    const artistLabelView = await service.analytics(artistA, { view: 'label', period: '2026-10' });
+    assert.equal(artistLabelView[0]?.artist_share, '70.00');
+    assert.equal(artistLabelView[0]?.label_share, '0.00');
+    assert.equal(artistLabelView[0]?.admin_share, '0.00');
     await assert.rejects(service.analytics(user, { view: 'stats' }), { code: 'FORBIDDEN' });
     await assert.rejects(service.report(user), { code: 'FORBIDDEN' });
+    await service.commit(admin, { source: 'reporting-null-row', period: '2026-10', currency: 'IDR', filename: 'null-row.json', rows: [{
+      source_row_id: 'null-row', beneficiary_id: artistA.id, release_id: releaseA, track_id: trackA,
+      gross_amount: '10.00', deduction_amount: '0.00', net_amount: '10.00',
+    }] }, 'reporting-null-row-commit');
+    const firstPage = await service.report(admin, { limit: 1 });
+    assert.equal(firstPage.items.length, 1);
+    assert.ok(firstPage.next_cursor);
+    const nextPage = await service.report(admin, { limit: 1, cursor: firstPage.next_cursor! });
+    assert.equal(nextPage.items.length, 1);
+    assert.ok(nextPage.next_cursor);
+    const lastPage = await service.report(admin, { limit: 1, cursor: nextPage.next_cursor! });
+    assert.equal(lastPage.items.length, 1);
+    assert.equal(lastPage.next_cursor, null);
+    const nullRowId = (await owner.query(`SELECT id FROM soundpub.royalty_import_entries
+      WHERE source='reporting-null-row' AND source_row_number IS NULL`)).rows[0].id;
+    assert.equal(lastPage.items[0]?.id, nullRowId);
+    assert.equal((await service.report(admin, { limit: 1, offset: 1 })).items[0]?.id, nextPage.items[0]?.id);
+    await assert.rejects(service.report(label, { limit: 1, cursor: firstPage.next_cursor! }), { code: 'BAD_REQUEST' });
+    await assert.rejects(service.report(admin, { limit: 1, cursor: firstPage.next_cursor!, search: 'apple' }), { code: 'BAD_REQUEST' });
+    await assert.rejects(service.report(admin, { limit: 1, offset: 1, cursor: firstPage.next_cursor! }), { code: 'BAD_REQUEST' });
   } finally { await database.close(); }
 });

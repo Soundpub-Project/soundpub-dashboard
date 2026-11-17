@@ -25,7 +25,7 @@ export interface CopyrightRegistration {
   revision_notes: string | null; admin_notes: string | null; version: number;
   submitted_at: string | null; reviewed_at: string | null; approved_at: string | null; rejected_at: string | null;
   works: (CopyrightWorkInput & { id: string })[]; files: CopyrightFile[];
-  payment: null | { amount: string; currency: 'IDR'; payment_status: string; provider_invoice_url: string | null; paid_at: string | null };
+  payment: null | { amount: string; currency: 'IDR'; payment_status: string; provider: 'mock-copyright-registration' | 'xendit' | null; provider_invoice_url: string | null; reconciliation_required: boolean; paid_at: string | null };
   contract: null | { contract_number: string | null; status: string; version: number;
     signed_at: string | null; download_reference: string | null };
   allowed_actions: string[];
@@ -37,7 +37,8 @@ export interface CopyrightDraft {
 }
 export interface CopyrightRegistrationListQuery {
   limit?: number; cursor?: string; status?: CopyrightRegistrationStatus; applicant_type?: CopyrightApplicantType;
-  payment_status?: 'pending' | 'paid' | 'expired' | 'failed' | 'cancelled' | 'refunded'; search?: string;
+  payment_status?: 'pending' | 'paid' | 'expired' | 'failed' | 'cancelled' | 'refunded';
+  payment_review?: 'required'; search?: string;
 }
 export type CopyrightRegistrationSummary = Pick<CopyrightRegistration, 'id' | 'user_id' | 'legal_name' | 'email'
   | 'applicant_type' | 'status' | 'version' | 'submitted_at' | 'reviewed_at' | 'approved_at' | 'rejected_at'> & {
@@ -45,8 +46,8 @@ export type CopyrightRegistrationSummary = Pick<CopyrightRegistration, 'id' | 'u
   };
 export interface CopyrightRegistrationPage { items: CopyrightRegistrationSummary[]; next_cursor: string | null }
 export interface CopyrightInvoice {
-  registration_id: string; payment_id: string; provider: 'mock-copyright-registration'; provider_invoice_id: string;
-  provider_invoice_url: string; amount: string; currency: 'IDR'; payment_status: string;
+  registration_id: string; payment_id: string; provider: 'mock-copyright-registration' | 'xendit'; provider_invoice_id: string | null;
+  provider_invoice_url: string | null; amount: string; currency: 'IDR'; payment_status: string;
 }
 const key = (operation: string) => `${operation}:${crypto.randomUUID()}`;
 export const copyrightRegistrationsApi = {

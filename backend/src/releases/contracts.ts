@@ -12,6 +12,9 @@ const fields = {
     return !url.username && !url.password;
   }).nullable().optional(),
   upc: z.string().trim().regex(/^\d{12,13}$/).nullable().optional(),
+  distribution_service: z.enum(['standard', 'custom_label']).optional(),
+  custom_label_name: text(200),
+  custom_record_name: text(200),
 };
 export const releaseCreate = z.strictObject({ ...fields, artist_id: z.uuid().optional(), artist_user_id: z.uuid().optional(), status: z.literal('draft').optional() });
 export const releasePatch = z.strictObject({
@@ -43,10 +46,13 @@ export const releaseListQuery = z.strictObject({
   cursor: z.string().min(1).max(300).optional(),
   search: z.string().trim().min(1).max(200).optional(), status: releaseStatus.optional(),
 });
+export const customLabelEligibilityDto = z.strictObject({ eligible: z.boolean() });
 export const releaseDto = z.strictObject({
   id: z.uuid(), artist_id: z.uuid().nullable(), label_id: z.uuid().nullable(), label_name: z.string().nullable(), artist_user_id: z.uuid().nullable(), created_by: z.uuid().nullable(),
   title: z.string(), artist_name: z.string(), release_type: z.string().nullable(), genre: z.string().nullable(),
   release_date: z.string().nullable(), cover_url: z.string().nullable(), upc: z.string().nullable(),
+  distribution_service: z.enum(['standard', 'custom_label']), custom_label_name: z.string().nullable(),
+  custom_record_name: z.string().nullable(),
   status: releaseStatus, rejection_reason: z.string().nullable(), archived_at: z.string().nullable(),
   version: z.number().int().min(1), created_at: z.string(), updated_at: z.string(),
 });

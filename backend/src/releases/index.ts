@@ -12,7 +12,7 @@ import { releaseActivation, releaseCreate, releasePatch, releaseListQuery,
 import { catalogIdentity, customAuthority } from './ownership.js';
 import { releasesRepository } from './repository.js';
 import { tracksRepository } from '../tracks/repository.js';
-import { formatMoney } from '../finance/index.js';
+import { calculateReleasePrice, type ReleasePriceSnapshot } from './pricing.js';
 import { aggregateCreate, aggregatePatch } from './aggregate-contracts.js';
 export * from './contracts.js';
 
@@ -33,23 +33,42 @@ const transitions: Record<ReleaseStatus, readonly ReleaseStatus[]> = {
   rejected: ['revision_submitted', 'inactive'], revision_submitted: ['processing', 'inactive'], inactive: ['pending'],
 };
 export function createReleasesService(pool: Pool) {
-  async function priceSnapshot(db: PoolClient, releaseId: string | null, trackCount: number) {
-    const configuredPrice = (await db.query<{ price: string | null }>(
-      "SELECT settings->>'release_price_per_track' AS price FROM soundpub.application_settings WHERE id=true")).rows[0]?.price;
+  async function priceSnapshot(db: PoolClient, releaseId: string | null, trackCount: number,
+    service: 'standard' | 'custom_label' = 'standard', releaseType = 'single') {
+    const configured = (await db.query<{ settings: Record<string, string | null> }>(
+      'SELECT settings FROM soundpub.application_settings WHERE id=true')).rows[0]?.settings ?? {};
     const invoice = releaseId ? (await db.query<{ amount_minor: string }>(
       'SELECT amount_minor FROM soundpub.payment_invoices WHERE business_id=$1', [releaseId])).rows[0] : undefined;
-    const price = invoice ? (await db.query<{ price: string | null }>(
-      'SELECT price_per_track_snapshot::text AS price FROM soundpub.releases WHERE id=$1', [releaseId])).rows[0]?.price : configuredPrice;
-    if (!price) {
-      if (invoice) throw new ApiError(409, 'PAYMENT_PRICE_UNAVAILABLE');
-      return { price_per_track_snapshot: null, total_payment_snapshot: null };
+    const stored = invoice ? (await db.query<{ price: string | null; total: string | null; pricing_mode: 'per_track' | 'per_category' | null; pricing_track_count: number | null }>(
+      'SELECT price_per_track_snapshot::text AS price,total_payment_snapshot::text AS total,pricing_snapshot_mode AS pricing_mode,pricing_snapshot_track_count AS pricing_track_count FROM soundpub.releases WHERE id=$1', [releaseId])).rows[0] : null;
+    if (invoice) {
+      if (!stored?.price || !stored.total || !stored.pricing_mode || !stored.pricing_track_count ||
+          String((BigInt(stored.total.split('.')[0]!) * 100n) + BigInt(stored.total.split('.')[1]!)) !== invoice.amount_minor)
+        throw new ApiError(409, 'PAYMENT_PRICE_CHANGED');
+      return { price_per_track_snapshot: stored.price, total_payment_snapshot: stored.total,
+        pricing_snapshot_mode: stored.pricing_mode, pricing_snapshot_track_count: stored.pricing_track_count };
     }
-    if (!/^[1-9][0-9]{0,15}\.[0-9]{2}$/.test(price) || trackCount < 1) throw new ApiError(409, 'PAYMENT_PRICE_UNAVAILABLE');
-    const [whole, cents] = price.split('.');
-    if (invoice && invoice.amount_minor !== String((BigInt(whole!) * 100n + BigInt(cents!)) * BigInt(trackCount)))
-      throw new ApiError(409, 'PAYMENT_PRICE_CHANGED');
-    return { price_per_track_snapshot: price, total_payment_snapshot: formatMoney(
-      (BigInt(whole!) * 100n + BigInt(cents!)) * BigInt(trackCount)) };
+    try { return calculateReleasePrice(configured, trackCount, service, releaseType); }
+    catch { throw new ApiError(409, 'PAYMENT_PRICE_UNAVAILABLE'); }
+  }
+  async function customLabelEligible(db: PoolClient, actorId: string, labelId: string) {
+    return Boolean((await db.query(`SELECT 1 FROM soundpub.profiles artist_profile
+      JOIN soundpub.user_roles artist_role ON artist_role.user_id=artist_profile.id AND artist_role.role='artist'
+        AND artist_role.tenant_id IS NULL AND artist_role.verified_at IS NOT NULL
+      JOIN soundpub.profiles label_profile ON label_profile.id=artist_profile.parent_label_id
+      JOIN soundpub.user_roles label_role ON label_role.user_id=label_profile.id AND label_role.role='label'
+        AND label_role.tenant_id IS NULL AND label_role.verified_at IS NOT NULL
+      WHERE artist_profile.id=$1 AND artist_profile.parent_label_id=$2
+        AND lower(regexp_replace(trim(label_profile.full_name), '\\s+', ' ', 'g'))=ANY($3::text[])
+        AND EXISTS (SELECT 1 FROM soundpub.backend_users user_record WHERE user_record.id=$1 AND user_record.status='active')
+      LIMIT 1`,
+    [actorId,labelId,['soundpub','soundpub music','soundpub music ecosystem']])).rowCount);
+  }
+  async function assertDistributionService(db: PoolClient, actorId: string, creatorId: string | null,
+    labelId: string | null, service: string, labelName: string | null | undefined, recordName: string | null | undefined) {
+    if (service !== 'custom_label') return;
+    if (!labelId || creatorId !== actorId || !labelName?.trim() || !recordName?.trim() ||
+        !await customLabelEligible(db, actorId, labelId)) throw new ApiError(403, 'CUSTOM_LABEL_NOT_ALLOWED');
   }
   async function authority(db: PoolClient, actor: Principal, artistId: string | null, write: boolean, canonicalId?: string | null) {
     const canonical = canonicalId ? await catalogIdentity(db, canonicalId, artistId) : null;
@@ -84,6 +103,16 @@ export function createReleasesService(pool: Pool) {
     return { ...auth, repo, release };
   }
   return {
+    async customLabelEligibility(actor: Principal) {
+      requireActor(actor);
+      return withTransaction(pool, async db => {
+        const current = (await usersRepository(db).lock([actor.id], false)).get(actor.id);
+        if (!current || current.status !== 'active' || !current.roles.includes('artist')) return { eligible: false };
+        const labelId = (await db.query<{ parent_label_id: string | null }>(
+          'SELECT parent_label_id FROM soundpub.profiles WHERE id=$1', [actor.id])).rows[0]?.parent_label_id;
+        return { eligible: labelId ? await customLabelEligible(db, actor.id, labelId) : false };
+      });
+    },
     async createAggregate(actor: Principal, input: z.infer<typeof aggregateCreate>, requestId: string) {
       requireActor(actor);
       const { tracks, ...value } = parse(aggregateCreate, input);
@@ -93,10 +122,14 @@ export function createReleasesService(pool: Pool) {
         value.artist_id = canonical.id;
         value.artist_user_id = canonical.artist_user_id ?? undefined;
         if (!artist) throw new ApiError(400, 'BAD_REQUEST');
+        await assertDistributionService(db, current.id, current.id, artist.label_user_id,
+          value.distribution_service ?? 'standard', value.custom_label_name, value.custom_record_name);
+        if (!value.distribution_service) value.distribution_service = 'standard';
+        if (value.distribution_service === 'standard') { value.custom_label_name = null; value.custom_record_name = null; }
         const repo = releasesRepository(db);
         const trackRepo = tracksRepository(db);
         const id = randomUUID();
-        const snapshot = await priceSnapshot(db, null, tracks.length);
+        const snapshot = await priceSnapshot(db, null, tracks.length, value.distribution_service ?? 'standard', value.release_type);
         await repo.create(id, current.id, artist.label_user_id, value, snapshot);
         for (const fields of tracks) await trackRepo.create(randomUUID(), id, fields);
         await repo.audit(current.id, id, requestId, 'release.aggregate.created', { tracks: tracks.length, artistId: canonical.id, labelId: artist.label_user_id });
@@ -112,9 +145,24 @@ export function createReleasesService(pool: Pool) {
         if (release.version !== version || release.archived_at || !['draft', 'pending', 'rejected'].includes(release.status)) {
           throw new ApiError(409, 'CONFLICT');
         }
+        const distributionChanged = metadata.distribution_service !== undefined || metadata.custom_label_name !== undefined || metadata.custom_record_name !== undefined;
+        if (distributionChanged) {
+          const service = metadata.distribution_service ?? release.distribution_service;
+          const labelName = metadata.custom_label_name !== undefined ? metadata.custom_label_name : release.custom_label_name;
+          const recordName = metadata.custom_record_name !== undefined ? metadata.custom_record_name : release.custom_record_name;
+          await assertDistributionService(db, current.id, release.created_by, release.label_id, service, labelName, recordName);
+          if (service === 'standard') {
+            metadata.distribution_service = 'standard'; metadata.custom_label_name = null; metadata.custom_record_name = null;
+          }
+        }
         if (!allows(current, 'admin') && metadata.upc !== undefined) throw new ApiError(403, 'FORBIDDEN');
         const trackRepo = tracksRepository(db);
         const existing = await trackRepo.list(id);
+        const invoiceExists = Boolean((await db.query('SELECT 1 FROM soundpub.payment_invoices WHERE business_id=$1', [id])).rowCount);
+        if (invoiceExists && (tracks.length !== existing.length ||
+            metadata.release_type !== undefined && metadata.release_type !== release.release_type ||
+            metadata.distribution_service !== undefined && metadata.distribution_service !== release.distribution_service))
+          throw new ApiError(409, 'PAYMENT_PRICE_CHANGED');
         const byId = new Map(existing.map(track => [track.id, track]));
         const retained = new Set<string>();
         const diff: Record<'CREATE' | 'UPDATE' | 'REMOVE' | 'UNCHANGED', string[]> = {
@@ -159,7 +207,8 @@ export function createReleasesService(pool: Pool) {
         await db.query(`UPDATE soundpub.tracks t SET position=ordered.position::integer, updated_at=now()
           FROM unnest($2::uuid[]) WITH ORDINALITY AS ordered(id,position)
           WHERE t.release_id=$1 AND t.id=ordered.id AND t.position<>ordered.position`, [id, ordered]);
-        const snapshot = await priceSnapshot(db, id, tracks.length);
+        const snapshot = await priceSnapshot(db, id, tracks.length,
+          metadata.distribution_service ?? release.distribution_service);
         if (Object.keys(metadata).length || snapshot) {
           if (!await repo.update(id, { ...metadata, ...snapshot, version })) throw new ApiError(409, 'CONFLICT');
         } else if (!await trackRepo.bumpParent(id, version)) throw new ApiError(409, 'CONFLICT');
@@ -209,6 +258,10 @@ export function createReleasesService(pool: Pool) {
         value.artist_id = canonical.id;
         value.artist_user_id = canonical.artist_user_id ?? undefined;
         if (!artist) throw new ApiError(400, 'BAD_REQUEST');
+        await assertDistributionService(db, current.id, current.id, artist.label_user_id,
+          value.distribution_service ?? 'standard', value.custom_label_name, value.custom_record_name);
+        if (!value.distribution_service) value.distribution_service = 'standard';
+        if (value.distribution_service === 'standard') { value.custom_label_name = null; value.custom_record_name = null; }
         const repo = releasesRepository(db);
         const id = randomUUID();
         await repo.create(id, current.id, artist.label_user_id, value);
@@ -224,6 +277,24 @@ export function createReleasesService(pool: Pool) {
         const { current, repo, release } = await resource(db, actor, id, true);
         if (patch.version !== release.version) throw new ApiError(409, 'CONFLICT');
         const admin = allows(current, 'admin');
+        const distributionChanged = patch.distribution_service !== undefined || patch.custom_label_name !== undefined || patch.custom_record_name !== undefined;
+        if (distributionChanged) {
+          const service = patch.distribution_service ?? release.distribution_service;
+          const labelName = patch.custom_label_name !== undefined ? patch.custom_label_name : release.custom_label_name;
+          const recordName = patch.custom_record_name !== undefined ? patch.custom_record_name : release.custom_record_name;
+          await assertDistributionService(db, current.id, release.created_by, release.label_id, service, labelName, recordName);
+          if (service === 'standard') { patch.distribution_service = 'standard'; patch.custom_label_name = null; patch.custom_record_name = null; }
+        }
+        const invoiceExists = Boolean((await db.query('SELECT 1 FROM soundpub.payment_invoices WHERE business_id=$1', [id])).rowCount);
+        const pricingChanged = patch.release_type !== undefined && patch.release_type !== release.release_type ||
+          patch.distribution_service !== undefined && patch.distribution_service !== release.distribution_service;
+        if (invoiceExists && pricingChanged) throw new ApiError(409, 'PAYMENT_PRICE_CHANGED');
+        if (!invoiceExists && pricingChanged) {
+          const priceTrackCount = Number((await db.query<{ count: number }>(
+            'SELECT count(*)::integer AS count FROM soundpub.tracks WHERE release_id=$1', [id])).rows[0]?.count ?? 0);
+          Object.assign(patch, await priceSnapshot(db, id, priceTrackCount,
+            patch.distribution_service ?? release.distribution_service, patch.release_type ?? release.release_type ?? 'single'));
+        }
         const next = patch.status ?? release.status;
         if (patch.status !== undefined && patch.status === release.status) throw new ApiError(409, 'CONFLICT');
         if (release.status === 'pending_paid' && (!admin || next !== 'processing' ||
@@ -275,8 +346,12 @@ export function createReleasesService(pool: Pool) {
           throw new ApiError(409, 'IDENTIFIER_CONFLICT');
         }
         const isrcs = value.tracks.map(track => track.isrc);
-        if ((await db.query(`SELECT 1 FROM soundpub.tracks WHERE isrc=ANY($1::text[]) AND release_id<>$2 LIMIT 1`,
-          [isrcs,id])).rowCount) throw new ApiError(409, 'IDENTIFIER_CONFLICT');
+        if ((await db.query(`SELECT 1 FROM soundpub.tracks existing
+          JOIN soundpub.releases existing_release ON existing_release.id=existing.release_id
+          WHERE existing.isrc=ANY($1::text[]) AND existing.release_id<>$2
+            AND (existing.artist_id IS DISTINCT FROM $3::uuid
+              OR existing_release.label_id IS DISTINCT FROM $4::uuid) LIMIT 1`,
+        [isrcs,id,release.artist_id,release.label_id])).rowCount) throw new ApiError(409, 'IDENTIFIER_CONFLICT');
         for (const track of tracks) {
           const next = requested.get(track.id);
           if (!next || next.version !== track.version) throw new ApiError(409, 'CONFLICT');

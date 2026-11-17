@@ -51,7 +51,7 @@ export const listQuery = z.strictObject({
   status: statusPatch.shape.status.optional(), role: z.enum(ROLES).optional(),
 });
 export const profileDto = z.strictObject({
-  id: z.uuid(), email: z.string().nullable(), full_name: z.string(),
+  id: z.uuid(), email: z.string().nullable(), account_kind: z.enum(['STANDARD', 'MANAGED_ARTIST']), full_name: z.string(),
   phone: z.string().nullable(), address: z.string().nullable(),
   avatar_url: z.string().nullable(), logo_url: z.string().nullable(),
   logo_url_light: z.string().nullable(), logo_url_dark: z.string().nullable(),

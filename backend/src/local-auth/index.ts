@@ -149,7 +149,7 @@ export function createLocalAuthService(pool: Pool, options: { deliverySecret: st
             AND target_role.role IN ('admin','superadmin'))))
       GROUP BY s.id,u.id,i.id`, [digest]);
     const row = result.rows[0] ?? null;
-    if (row && write) await pool.query('UPDATE soundpub.auth_sessions SET last_seen_at=now() WHERE id=$1', [row.id]);
+    if (row && write) await pool.query('UPDATE soundpub.auth_sessions SET last_seen_at=GREATEST(last_seen_at,now()) WHERE id=$1', [row.id]);
     return row;
   }
   return {
@@ -255,7 +255,7 @@ export function createLocalAuthService(pool: Pool, options: { deliverySecret: st
       const row = await session(token);
       if (!row || row.status !== 'active') throw new ApiError(401, 'UNAUTHORIZED');
       const csrfToken = createOpaqueToken();
-      await pool.query('UPDATE soundpub.auth_sessions SET csrf_sha256=$2,last_seen_at=now() WHERE id=$1',
+      await pool.query('UPDATE soundpub.auth_sessions SET csrf_sha256=$2,last_seen_at=GREATEST(last_seen_at,now()) WHERE id=$1',
         [row.id, digestOpaqueToken(csrfToken)]);
       return { csrfToken, expiresAt: row.expires_at.toISOString(), principal: principal(row), impersonation: impersonation(row) };
     },
@@ -279,11 +279,12 @@ export function createLocalAuthService(pool: Pool, options: { deliverySecret: st
         if (!actorRoles.includes('superadmin')) throw new ApiError(403, 'FORBIDDEN');
         if (!await verifyPassword(value.data.currentPassword, actor.password_hash)) return null;
         if (actor.user_id === value.data.targetUserId) throw new ApiError(409, 'CONFLICT');
-        const targetResult = await db.query<{ id: string; status: Principal['status'] }>(
-          'SELECT id,status FROM soundpub.backend_users WHERE id=$1 FOR UPDATE', [value.data.targetUserId]);
+        const targetResult = await db.query<{ id: string; status: Principal['status']; account_kind: string }>(
+          'SELECT id,status,account_kind FROM soundpub.backend_users WHERE id=$1 FOR UPDATE', [value.data.targetUserId]);
         const target = targetResult.rows[0];
         if (!target) throw new ApiError(404, 'NOT_FOUND');
         if (target.status !== 'active') throw new ApiError(403, 'FORBIDDEN');
+        if (target.account_kind === 'MANAGED_ARTIST') throw new ApiError(409, 'MANAGED_ARTIST_LOGIN_DISABLED');
         const targetRoles = await roles(db, target.id);
         if (targetRoles.length === 0 || targetRoles.some(role => role === 'admin' || role === 'superadmin')) {
           throw new ApiError(403, 'FORBIDDEN');
@@ -303,11 +304,12 @@ export function createLocalAuthService(pool: Pool, options: { deliverySecret: st
         const active = await db.query(`SELECT 1 FROM soundpub.auth_impersonations
           WHERE ended_at IS NULL AND (actor_user_id=$1 OR target_user_id=$2) LIMIT 1`, [actor.user_id, target.id]);
         if (active.rowCount) throw new ApiError(409, 'CONFLICT');
-        const expiresAt = new Date(Date.now() + impersonationSessionMs);
-        const created = await db.query<{ id: string }>(`INSERT INTO soundpub.auth_impersonations
+        const created = await db.query<{ id: string; expires_at: Date }>(`INSERT INTO soundpub.auth_impersonations
           (actor_user_id,target_user_id,actor_user_id_snapshot,target_user_id_snapshot,initiating_session_id,reason,expires_at)
-          VALUES($1,$2,$1,$2,$3,$4,$5) RETURNING id`,
-        [actor.user_id, target.id, actor.session_id, value.data.reason, expiresAt]);
+          VALUES($1,$2,$1,$2,$3,$4,clock_timestamp() + ($5::bigint * interval '1 millisecond'))
+          RETURNING id,expires_at`,
+        [actor.user_id, target.id, actor.session_id, value.data.reason, impersonationSessionMs]);
+        const expiresAt = created.rows[0]!.expires_at;
         const childToken = createOpaqueToken();
         const childCsrf = createOpaqueToken();
         const child = await db.query<{ id: string }>(`INSERT INTO soundpub.auth_sessions

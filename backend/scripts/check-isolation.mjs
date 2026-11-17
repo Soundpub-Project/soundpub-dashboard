@@ -8,7 +8,8 @@ const textExtensions = new Set(['.ts', '.js', '.mjs', '.json', '.sql', '.md', '.
 const secretPatterns = [
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
   /\b(?:service_role|SUPABASE_SERVICE_ROLE_KEY)\s*[:=]\s*["']?[A-Za-z0-9._-]{20,}/i,
-  /\b(?:SPOTIFY_CLIENT_SECRET|XENDIT_SECRET_KEY|SMTP_PASS(?:WORD)?)\s*[:=]\s*["']?[^$\s{][^\s"']{7,}/i,
+  /\b(?:SPOTIFY_CLIENT_SECRET|XENDIT_SECRET_KEY|SMTP_PASS(?:WORD)?)[ \t]*=[ \t]*["']?[^$\s{][^\s"']{7,}/i,
+  /\b(?:SPOTIFY_CLIENT_SECRET|XENDIT_SECRET_KEY|SMTP_PASS(?:WORD)?)[ \t]*:[ \t]*["'](?!xnd_development_)[^"']{12,}["']/i,
 ];
 const forbiddenTargets = /(?:20\.20\.20\.(?:3|173)|supabase\.carubra\.(?:space|com))/i;
 const targetAllowlist = new Set(['src/config/index.ts', 'test/config.test.ts', 'test/orphan-repair.test.ts']);

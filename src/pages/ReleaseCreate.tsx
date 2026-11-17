@@ -129,7 +129,7 @@ function LegacyReleaseCreate() {
             handleClose();
           }
         }}
-        onSuccess={async () => {
+        onComplete={async () => {
           await refreshProfile();
           setOnboardingOpen(false);
         }}

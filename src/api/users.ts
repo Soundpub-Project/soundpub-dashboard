@@ -5,6 +5,7 @@ export type AppRole = 'superadmin' | 'admin' | 'label' | 'label_custom' | 'artis
 export interface BackendUser {
   id: string;
   email: string | null;
+  account_kind?: 'STANDARD' | 'MANAGED_ARTIST';
   full_name?: string | null;
   phone?: string | null;
   address?: string | null;
@@ -48,6 +49,9 @@ export const usersApi = {
   profile: (signal?: AbortSignal) => apiRequest<{ profile: BackendUser; roles: AppRole[] }>('/api/v1/profile', { signal }),
   list: (cursor?: string, signal?: AbortSignal) => apiRequest<{ items: BackendUser[]; nextCursor: string | null }>(
     `/api/v1/admin/users?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { signal },
+  ),
+  dashboardSummary: (signal?: AbortSignal) => apiRequest<{ total_users: number; pending_payouts: number }>(
+    '/api/v1/admin/dashboard/summary', { signal },
   ),
   status: (id: string, status: BackendUser['status']) => apiRequest<{ status: BackendUser['status'] }>(
     `/api/v1/admin/users/${encodeURIComponent(id)}/status`, { method: 'PATCH', body: { status } },

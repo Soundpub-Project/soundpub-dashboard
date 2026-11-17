@@ -4,7 +4,7 @@ import { ApiError } from '../api/types.js';
 /** Custom role overrides pooled label scope; caller holds principal authority lock. */
 export async function customFinanceScope(db: PoolClient, ownerId: string): Promise<boolean> {
   const custom = Boolean((await db.query(`SELECT 1 FROM soundpub.user_roles
-    WHERE user_id=$1 AND role='label_custom'`, [ownerId])).rowCount);
+    WHERE user_id=$1 AND role='label_custom' AND tenant_id IS NULL AND verified_at IS NOT NULL`, [ownerId])).rowCount);
   if (!custom) return false;
   const unit = (await db.query(`SELECT unit.id FROM soundpub.label_custom_units unit
     JOIN soundpub.backend_users u ON u.id=unit.owner_user_id

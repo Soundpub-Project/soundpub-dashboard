@@ -90,6 +90,56 @@ test('live synthetic HTTP API + disposable PostgreSQL/RustFS signed lifecycle an
         {expiresIn:1,signingDate:new Date(Date.now()-120000)});
       assert.equal((await fetch(expired)).status,403);
     } finally { signer.destroy(); }
+    const multipartBytes = Buffer.alloc(24 * 1024 * 1024 + 1, 7);
+    multipartBytes.write('RIFF'); multipartBytes.write('WAVE',8);
+    const multipartInput = { category:'TRACK_AUDIO',resource_type:'track',resource_id:trackId,mime_type:'audio/wav',
+      filename:'multipart.wav',size:multipartBytes.length,checksum:createHash('sha256').update(multipartBytes).digest('hex') };
+    assert.equal((await fetch(`${address}/api/v1/storage/uploads`,{
+      method:'POST',headers,body:JSON.stringify(multipartInput) })).status,400);
+    const multipartResponse = await fetch(`${address}/api/v1/storage/uploads/multipart`,{
+      method:'POST',headers,body:JSON.stringify(multipartInput) });
+    assert.equal(multipartResponse.status,200,await multipartResponse.clone().text());
+    const multipart = await multipartResponse.json() as { object:{id:string};part_size:number };
+    assert.equal(multipart.part_size,6 * 1024 * 1024);
+    const partUrl = `${address}/api/v1/storage/uploads/${multipart.object.id}/multipart/parts`;
+    const statusUrl = `${address}/api/v1/storage/uploads/${multipart.object.id}/multipart`;
+    assert.equal((await fetch(statusUrl)).status,401);
+    assert.equal((await fetch(`${address}/api/v1/storage/uploads/${multipart.object.id}/complete`,{method:'POST',headers,body:'{}'})).status,409);
+    const count = Math.ceil(multipartBytes.length / multipart.part_size);
+    for (let partNumber = 1; partNumber <= count; partNumber++) {
+      const signedResponse = await fetch(partUrl,{method:'POST',headers,body:JSON.stringify({part_number:partNumber})});
+      assert.equal(signedResponse.status,200,await signedResponse.clone().text());
+      const signedPart = await signedResponse.json() as {url:string;size:number};
+      const start = (partNumber - 1) * multipart.part_size;
+      const slice = multipartBytes.subarray(start,start + multipart.part_size);
+      assert.equal(signedPart.size,slice.length);
+      if (partNumber === 1) {
+        const partCors = await fetch(signedPart.url,{method:'OPTIONS',headers:{Origin:origin,'Access-Control-Request-Method':'PUT'}});
+        assert.equal(partCors.headers.get('access-control-allow-origin'),origin);
+      }
+      const uploadedPart = await fetch(signedPart.url,{method:'PUT',body:slice,headers:{Origin:origin}});
+      assert.ok(uploadedPart.ok,await uploadedPart.text());
+      if (partNumber === 2) {
+        const resumed = await fetch(statusUrl,{headers});
+        assert.equal(resumed.status,200);
+        assert.deepEqual((await resumed.json() as {parts:number[]}).parts,[1,2]);
+      }
+    }
+    const multipartComplete = await fetch(`${address}/api/v1/storage/uploads/${multipart.object.id}/complete`,{method:'POST',headers,body:'{}'});
+    assert.equal(multipartComplete.status,200,await multipartComplete.clone().text());
+    assert.equal((await multipartComplete.json() as {status:string}).status,'ACTIVE');
+    const multipartDownload = await fetch(`${address}/api/v1/storage/objects/${multipart.object.id}/download`,{headers});
+    assert.equal(multipartDownload.status,200);
+    const multipartCapability = await multipartDownload.json() as {url:string};
+    assert.deepEqual(Buffer.from(await (await fetch(multipartCapability.url)).arrayBuffer()),multipartBytes);
+    assert.equal((await database.owner.query('SELECT audio_media_id FROM soundpub.tracks WHERE id=$1',[trackId])).rows[0].audio_media_id,multipart.object.id);
+    const abortResponse = await fetch(`${address}/api/v1/storage/uploads/multipart`,{
+      method:'POST',headers,body:JSON.stringify(multipartInput) });
+    assert.equal(abortResponse.status,200,await abortResponse.clone().text());
+    const pending = await abortResponse.json() as typeof multipart;
+    const aborted = await fetch(`${address}/api/v1/storage/uploads/${pending.object.id}`,{method:'DELETE',headers,body:'{}'});
+    assert.equal(aborted.status,200,await aborted.text());
+    assert.equal((await fetch(`${address}/api/v1/storage/uploads/${pending.object.id}/multipart`,{headers})).status,404);
     const badBytes = Buffer.alloc(24,65);
     const badIntentResponse = await fetch(`${address}/api/v1/storage/uploads`,{method:'POST',headers,body:JSON.stringify({
       category:'USER_AVATAR',resource_type:'user',resource_id:actorId,mime_type:'image/png',filename:'spoof.png',
@@ -107,7 +157,7 @@ test('live synthetic HTTP API + disposable PostgreSQL/RustFS signed lifecycle an
     assert.equal(deleted.status,200);
     assert.equal((await fetch(`${address}/api/v1/storage/objects/${intent.object.id}/download`,{headers})).status,404);
     await database.owner.query("UPDATE soundpub.media_objects SET expires_at=now()-interval '10 minutes',cleanup_after=now()-interval '1 minute'");
-    assert.equal((await media.cleanup()).deleted,2);
+    assert.equal((await media.cleanup()).deleted,3);
     assert.ok([403,404].includes((await fetch(capability.url)).status));
   } finally {
     try { await app.close(); } finally { store?.close(); }

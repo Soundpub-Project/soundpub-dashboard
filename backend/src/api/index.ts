@@ -31,6 +31,7 @@ const errorSchema = {
 const messages: Record<string, string> = {
   BAD_REQUEST: 'Invalid request', UNAUTHORIZED: 'Authentication required', FORBIDDEN: 'Access denied',
   NOT_FOUND: 'Resource not found', CONFLICT: 'Conflict', RATE_LIMITED: 'Too many requests',
+  INVOICE_NOT_PAID: 'Invoice is not paid', INVOICE_DATA_UNAVAILABLE: 'Invoice data is unavailable',
   NOT_READY: 'Service unavailable', MAINTENANCE_MODE: 'Service unavailable', INTERNAL_ERROR: 'Internal server error',
   SUBMISSION_BLOCKED: 'Submission prerequisites are not satisfied', EXPORT_TOO_LARGE: 'Export exceeds safe size limit',
   IMPERSONATION_READ_ONLY: 'Impersonation sessions are read-only',
@@ -131,6 +132,7 @@ export function buildApp(deps: ApiDependencies) {
       '/api/v1/settings/public', '/api/v1/settings/public-media/:key',
       '/api/v1/public/releases', '/api/v1/public/releases/:id',
       '/api/v1/webhooks/events',
+      '/api/v1/webhooks/xendit/invoices',
     ]).has(request.routeOptions.url ?? '');
   }
   function resolvePrincipal(request: FastifyRequest): Promise<Principal | null> {
@@ -207,7 +209,7 @@ export function buildApp(deps: ApiDependencies) {
   registerTakedownRoutes(app, deps, authenticate, paths, errorSchema);
   registerCopyrightRegistrationRoutes(app, deps, authenticate, paths, errorSchema);
   if (deps.composerRoyalties) registerComposerRoyaltiesRoutes(app, deps.composerRoyalties, authenticate, paths, errorSchema);
-  if (deps.balance || deps.royalties || deps.payouts || deps.payments || deps.financeReconciliation) {
+  if (deps.balance || deps.royalties || deps.payouts || deps.payments || deps.financeReconciliation || deps.financeAdjustments) {
     registerFinancialRoutes(app, deps, authenticate, paths, errorSchema);
   }
   const uploadBody = { type: 'object', required: ['dataBase64', 'mimeType', 'checksum'], additionalProperties: false,
@@ -302,13 +304,30 @@ export function buildApp(deps: ApiDependencies) {
       if (!await deps.webhooks.receive({ body: request.body, signature, requestId: request.id })) throw new ApiError(401, 'UNAUTHORIZED');
       return { status: 'accepted' };
     });
+    if (deps.webhooks.receiveXendit) {
+      scope.post('/api/v1/webhooks/xendit/invoices', async request => {
+        if (!Buffer.isBuffer(request.body)) throw new ApiError(400, 'BAD_REQUEST');
+        await deps.webhooks.receiveXendit!({ body: request.body,
+          token: typeof request.headers['x-callback-token'] === 'string' ? request.headers['x-callback-token'] : undefined,
+          requestId: request.id });
+        return { status: 'accepted' };
+      });
+      paths['/api/v1/webhooks/xendit/invoices'] = { post: { operationId: 'receiveXenditInvoiceCallback',
+        security: [{ xenditCallbackToken: [] }], requestBody: { required: true,
+          content: { 'application/json': { schema: { type: 'object' } } } },
+        responses: Object.fromEntries([200,400,401,409,429,500,503].map(status => [status, {
+          description: status === 200 ? 'Accepted' : 'Error',
+          content: { 'application/json': { schema: status === 200 ? statusSchema : errorSchema } },
+        }])),
+      } };
+    }
   });
   paths['/api/v1/webhooks/events'] = { post: { operationId: 'receiveWebhook', security: [{ webhookSignature: [] }],
     requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
     responses: Object.fromEntries([200, 400, 401, 413, 415, 429, 500].map(status => [status, { description: status === 200 ? 'Accepted' : 'Error', content: { 'application/json': { schema: status === 200 ? statusSchema : errorSchema } } }])),
   } };
   app.get('/openapi.json', async () => ({ openapi: '3.0.3', info: { title: 'Soundpub API', version: '1.0.0' }, paths,
-    components: { securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer' }, webhookSignature: { type: 'apiKey', in: 'header', name: 'x-webhook-signature' } } },
+    components: { securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer' }, webhookSignature: { type: 'apiKey', in: 'header', name: 'x-webhook-signature' }, xenditCallbackToken: { type: 'apiKey', in: 'header', name: 'x-callback-token' } } },
   }));
   return app;
 }

@@ -12,7 +12,7 @@ export interface PublicSettings {
 export interface UserSettings {
   email_notif_payout: boolean; email_notif_release: boolean; email_notif_payment: boolean; email_notif_announcement: boolean;
 }
-export type AdminSettings = PublicSettings & { maintenance_enabled: boolean; min_payout_amount: string | null; release_price_per_track: string | null };
+export type AdminSettings = PublicSettings & { maintenance_enabled: boolean; min_payout_amount: string | null; release_pricing_mode: 'per_track' | 'per_category'; release_price_per_track: string | null; release_price_single: string | null; release_price_ep: string | null; release_price_album: string | null; release_price_custom_label: string | null };
 export type VersionedSettings<T> = { settings: T; version: number };
 export const settingsApi = {
   public: () => apiRequest<{ settings: PublicSettings }>('/api/v1/settings/public', { authenticated: false }),

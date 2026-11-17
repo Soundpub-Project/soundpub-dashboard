@@ -14,6 +14,7 @@ import type { RoyaltiesService } from '../royalties/index.js';
 import type { PayoutsService } from '../payouts/index.js';
 import type { PaymentsService } from '../payments/index.js';
 import type { FinanceReconciliationService } from '../reconciliation/index.js';
+import type { FinanceAdjustmentsService } from '../finance/manual-adjustments.js';
 import type { ComposerRoyaltiesService } from '../composer-royalties/index.js';
 import type { TakedownsService } from '../takedowns/index.js';
 import type { ExportsService } from '../exports/index.js';
@@ -51,6 +52,7 @@ export interface ApiDependencies {
   payouts?: PayoutsService;
   payments?: PaymentsService;
   financeReconciliation?: FinanceReconciliationService;
+  financeAdjustments?: FinanceAdjustmentsService;
   composerRoyalties?: ComposerRoyaltiesService;
   takedowns?: TakedownsService;
   exports?: ExportsService;
@@ -62,6 +64,7 @@ export interface ApiDependencies {
   webhooks: {
     // Verify signatures against these exact bytes; reject invalid signatures with false.
     receive(input: { body: Buffer; signature: string; requestId: string }): Promise<boolean>;
+    receiveXendit?(input: { body: Buffer; token: string | undefined; requestId: string }): Promise<void>;
   };
   storage?: {
     upload(actor: Principal, input: { data: Uint8Array; mimeType: string; checksum: string }): Promise<{ id: string }>;

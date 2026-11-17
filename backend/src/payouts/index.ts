@@ -53,6 +53,18 @@ export function createPayoutsService(pool: Pool, finance: PayoutFinance) {
     await db.query(`INSERT INTO soundpub.outbox_events(topic,payload,idempotency_key) VALUES('payout.changed',$1::jsonb,$2)`,
       [JSON.stringify({ payout_id: row.id, user_id: row.user_id, ...metadata }), `payout:${actor.id}:${key}`]);
   }
+  async function notifyAdminsOfRequest(db: PoolClient, actor: Principal, row: Payout) {
+    const name = (await db.query<{ full_name: string }>(
+      'SELECT full_name FROM soundpub.profiles WHERE id=$1', [actor.id])).rows[0]?.full_name || 'Pengguna';
+    await db.query(`INSERT INTO soundpub.notifications(recipient_user_id,kind,type,title,body,metadata_safe,created_by)
+      SELECT DISTINCT role.user_id,'USER_NOTIFICATION','payout','Pengajuan Payout Baru',
+        $1 || ' mengajukan penarikan IDR ' || $2 || ' ke ' || $3 || '.',
+        jsonb_build_object('payout_id',$4::text,'amount',$2::text,'currency',$5::text,'bank_name',$3::text),$6::uuid
+      FROM soundpub.user_roles role
+      JOIN soundpub.backend_users user_record ON user_record.id=role.user_id AND user_record.status='active'
+      WHERE role.role IN ('admin','superadmin') AND role.verified_at IS NOT NULL`,
+    [name, row.amount, row.bank_name, row.id, row.currency, actor.id]);
+  }
   async function eligibility(db: PoolClient, current: Principal) {
     const custom = await customFinanceScope(db, current.id);
     const e = await finance.eligibility(db, current.id);
@@ -61,7 +73,7 @@ export function createPayoutsService(pool: Pool, finance: PayoutFinance) {
       e.reconciled = readiness.reconciled; e.destinationReady = readiness.destinationReady;
     }
     // Unknown threshold, readiness or reconciliation fails closed. No defaults from browser/cache.
-    if (!money.safeParse(e.available).success || !money.safeParse(e.minimum).success || minor(e.minimum) <= 0n)
+    if (!money.safeParse(e.available).success || !money.safeParse(e.minimum).success)
       throw new ApiError(409, 'FINANCIAL_RECONCILIATION_REQUIRED');
     const pending = Boolean((await db.query(`SELECT 1 FROM soundpub.payout_requests WHERE user_id=$1 AND status IN ('pending','approved') LIMIT 1`, [current.id])).rowCount);
     const reasons = [!isLabel(current) && 'ROLE_REQUIRED', !e.verified && 'VERIFICATION_REQUIRED',
@@ -236,6 +248,7 @@ export function createPayoutsService(pool: Pool, finance: PayoutFinance) {
             VALUES($1,$2,$3,$4,$5,$6) RETURNING ${projection}`, [current.id, value.amount, value.currency, destination.bank_name, destination.account_number, destination.account_holder_name])).rows[0]!;
           await finance.reserve(db, { payoutId: row.id, ownerId: current.id, amount: value.amount, currency: value.currency });
           await emit(db, current, row, null, key);
+          await notifyAdminsOfRequest(db, current, row);
           return row;
         });
       });

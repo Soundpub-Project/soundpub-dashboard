@@ -31,6 +31,16 @@ export function registerMediaRoutes(app: FastifyInstance, media: MediaService,
   route('POST', '/api/v1/storage/uploads', 'requestMediaUpload', z.strictObject({ object: mediaDto,
     url: z.string(), method: z.literal('PUT'), headers: z.record(z.string(), z.string()), expires_at: z.string() }),
   (actor, request) => media.requestUpload(actor, request.body, request.id), uploadInput);
+  route('POST', '/api/v1/storage/uploads/multipart', 'requestMediaMultipartUpload', z.strictObject({ object: mediaDto,
+    part_size: z.number().int(), expires_at: z.string() }),
+  (actor, request) => media.requestMultipart(actor, request.body, request.id), uploadInput);
+  route('GET', '/api/v1/storage/uploads/:id/multipart', 'getMediaMultipartStatus', z.strictObject({ object: mediaDto,
+    part_size: z.number().int(), parts: z.array(z.number().int()), completed: z.boolean(), expires_at: z.string() }),
+  (actor, request) => media.multipartStatus(actor, objectId(request)));
+  const multipartPart = z.strictObject({ part_number: z.number().int().min(1).max(100) });
+  route('POST', '/api/v1/storage/uploads/:id/multipart/parts', 'signMediaMultipartPart', z.strictObject({
+    url: z.string(), size: z.number().int(), expires_at: z.string() }),
+  (actor, request) => media.multipartPart(actor, objectId(request), (request.body as z.infer<typeof multipartPart>).part_number), multipartPart);
   route('POST', '/api/v1/storage/uploads/:id/complete', 'completeMediaUpload', mediaDto,
     (actor, request) => media.completeUpload(actor, objectId(request), request.id));
   route('DELETE', '/api/v1/storage/uploads/:id', 'abortMediaUpload', z.strictObject({ status: z.literal('deleted') }),

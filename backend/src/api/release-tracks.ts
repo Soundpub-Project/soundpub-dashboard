@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { ApiDependencies, Principal } from './types.js';
-import { releaseActivation, releaseCreate, releasePatch, releaseListQuery, releaseDto } from '../releases/contracts.js';
+import { releaseActivation, releaseCreate, releasePatch, releaseListQuery, releaseDto, customLabelEligibilityDto } from '../releases/contracts.js';
 import { trackCreate, trackPatch, trackDelete, trackReorder, trackDto } from '../tracks/contracts.js';
 import { aggregateCreate, aggregatePatch, aggregateDto } from '../releases/aggregate-contracts.js';
 
@@ -46,6 +46,8 @@ export function registerReleaseTrackRoutes(app: FastifyInstance, deps: ApiDepend
       (actor, request) => releases.createAggregate(actor, request.body as z.infer<typeof aggregateCreate>, request.id), aggregateCreate);
     route('PATCH', '/api/v1/releases/:id/aggregate', 'updateReleaseAggregate', aggregateDto,
       (actor, request) => releases.updateAggregate(actor, id(request), request.body as z.infer<typeof aggregatePatch>, request.id), aggregatePatch);
+    route('GET', '/api/v1/releases/custom-label-eligibility', 'getCustomLabelEligibility', customLabelEligibilityDto,
+      actor => releases.customLabelEligibility(actor));
     route('GET', '/api/v1/releases', 'listReleases', releasePage,
       (actor, request) => releases.list(actor, request.query as z.infer<typeof releaseListQuery>), undefined, releaseListQuery);
     route('POST', '/api/v1/releases', 'createRelease', releaseDto,

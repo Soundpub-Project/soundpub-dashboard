@@ -3,7 +3,8 @@ import type { PoolClient } from 'pg';
 import { formatMoney } from '../finance/money.js';
 import { parseLegacyRoyaltyCsvStream, type LegacyRoyaltyCsvIssue } from './legacy-csv.js';
 import { matchLegacyRoyaltyRows } from './legacy-matcher.js';
-import { LEGACY_ROYALTY_POLICY, splitLegacyRoyalty } from './split.js';
+import { legacyRoyaltyChecksumRow } from './legacy-preview.js';
+import { LEGACY_ROYALTY_POLICY, LEGACY_ROYALTY_POLICY_CHECKSUM, splitLegacyRoyalty } from './split.js';
 
 interface StreamingSession {
   id: string;
@@ -52,7 +53,8 @@ export async function stageLegacyRoyaltyCsvStream(db: PoolClient, session: Strea
   let firstHashRow = true;
   const hash = createHash('sha256');
   const stagingHash = createHash('sha256');
-  hash.update(JSON.stringify({ policy: LEGACY_ROYALTY_POLICY.code, rows: [] }).slice(0, -2));
+  hash.update(JSON.stringify({ policy: LEGACY_ROYALTY_POLICY.code,
+    policy_checksum: LEGACY_ROYALTY_POLICY_CHECKSUM, rows: [] }).slice(0, -2));
   const issues: LegacyRoyaltyCsvIssue[] = [];
   let issuesTruncated = false;
   const sampleRows: Record<string, unknown>[] = [];
@@ -98,11 +100,7 @@ export async function stageLegacyRoyaltyCsvStream(db: PoolClient, session: Strea
           artist += split.artistMinor;
           label += split.labelMinor;
           soundpub += split.soundpubMinor;
-          const canonical = { sourceRowNumber: row.sourceRowNumber, period: row.period, isrc: row.isrc,
-            upc: row.upc || row.catalogUpc, platform: row.platform, country: row.country,
-            salesType: row.salesType ?? null, salesUnit: row.salesUnit, netMinor: row.netMinor.toString(),
-            trackId: row.trackId, releaseId: row.releaseId, artistId: row.artistId,
-            artistOwnerUserId: row.artistOwnerUserId, labelOwnerUserId: row.labelOwnerUserId };
+          const canonical = legacyRoyaltyChecksumRow(row);
           const canonicalPayload = JSON.stringify(canonical);
           const rowChecksum = createHash('sha256').update(canonicalPayload).digest('hex');
           hash.update(`${firstHashRow ? '' : ','}${canonicalPayload}`);
@@ -148,6 +146,7 @@ export async function stageLegacyRoyaltyCsvStream(db: PoolClient, session: Strea
   return { parsed_rows: parsed.parsedRows, valid_rows: validRows, invalid_rows: invalidRows,
     file_errors: fileErrors, period: parsed.periods.length === 1 ? parsed.periods[0]! : null,
     currency: 'IDR' as const, policy_code: LEGACY_ROYALTY_POLICY.code,
+    policy_version: LEGACY_ROYALTY_POLICY.version, policy_checksum: LEGACY_ROYALTY_POLICY_CHECKSUM,
     checksum: hasErrors || !validRows ? null : hash.digest('hex'), total_net_amount: formatMoney(net),
     artist_amount: formatMoney(artist), label_amount: formatMoney(label), soundpub_amount: formatMoney(soundpub),
     issues, issues_truncated: issuesTruncated, sample_rows: sampleRows, total_rows: parsed.dataRows,

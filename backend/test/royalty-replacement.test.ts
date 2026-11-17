@@ -41,13 +41,29 @@ test('CSV replacement atomically reverses old allocations and posts immutable re
     const originalPreview = await service.previewCsv(admin, { csv: originalCsv });
     const original = await service.commitCsv(admin, { csv: originalCsv, source: 'replacement-dsp', filename: 'old.csv',
       expected_checksum: originalPreview.checksum! }, 'original');
+    const secondCsv = csv('2026-10', '25.00');
+    const secondPreview = await service.previewCsv(admin, { csv: secondCsv });
+    const second = await service.commitCsv(admin, { csv: secondCsv, source: 'replacement-dsp-2', filename: 'old.csv',
+      expected_checksum: secondPreview.checksum! }, 'second-original');
+    const otherCsv = csv('2026-10', '10.00');
+    const otherPreview = await service.previewCsv(admin, { csv: otherCsv });
+    const other = await service.commitCsv(admin, { csv: otherCsv, source: 'replacement-dsp-3', filename: 'other.csv',
+      expected_checksum: otherPreview.checksum! }, 'other-original');
     const replacementCsv = csv('2026-10', '150.00');
     const replacementPreview = await service.previewCsv(admin, { csv: replacementCsv });
+    await assert.rejects(service.replaceCsv(admin, original.id, { csv: replacementCsv, filename: 'old.csv',
+      expected_checksum: replacementPreview.checksum!, reason: 'conflicting period file' }, 'period-file-conflict'),
+    { code: 'ROYALTY_REPLACEMENT_CONFLICT' });
+    assert.equal((await owner.query('SELECT count(*)::int AS count FROM soundpub.royalty_import_corrections')).rows[0].count, 0);
+    await service.correct(admin, other.id, { reason: 'Remove unrelated synthetic file' }, 'other-correction');
+    await assert.rejects(service.replaceCsv(admin, original.id, { csv: replacementCsv, filename: 'new.csv',
+      expected_checksum: replacementPreview.checksum!, reason: 'wrong filename' }, 'filename-conflict'),
+    { code: 'ROYALTY_REPLACEMENT_FILENAME_MISMATCH' });
     await assert.rejects(service.replaceCsv(admin, original.id, { csv: replacementCsv, filename: 'new.csv',
       expected_checksum: '0'.repeat(64), reason: 'corrected provider statement' }, 'stale'), { code: 'ROYALTY_PREVIEW_STALE' });
     assert.equal((await owner.query('SELECT count(*)::int AS count FROM soundpub.royalty_import_corrections WHERE batch_id=$1', [original.id])).rows[0].count, 0);
 
-    const input = { csv: replacementCsv, filename: 'new.csv', expected_checksum: replacementPreview.checksum!,
+    const input = { csv: replacementCsv, filename: 'old.csv', expected_checksum: replacementPreview.checksum!,
       reason: 'corrected provider statement' };
     const replacement = await service.replaceCsv(admin, original.id, input, 'replace');
     assert.equal(replacement.replayed, false);
@@ -68,7 +84,11 @@ test('CSV replacement atomically reverses old allocations and posts immutable re
     assert.equal(originalDetail.change_reason, input.reason);
     assert.equal(replacementDetail.status, 'UNRECONCILED');
     assert.equal(replacementDetail.replaces_batch_id, original.id);
+    assert.deepEqual(replacementDetail.replaces_batch_ids, [original.id,second.id].sort());
+    assert.equal((await service.detail(admin, second.id)).replacement_batch_id, replacement.id);
+    assert.equal((await owner.query('SELECT soundpub.royalty_correction_intact($1) AS intact', [second.id])).rows[0].intact, true);
     const history = await service.history(admin);
+    assert.equal(new Set(history.items.map(batch => batch.id)).size, history.items.length);
     assert.equal(history.items.find(batch => batch.id === original.id)?.replacement_batch_id, replacement.id);
     assert.equal(history.items.find(batch => batch.id === replacement.id)?.replaces_batch_id, original.id);
     assert.equal((await service.summary(artist)).net_earnings, '105.00');
@@ -84,7 +104,7 @@ test('CSV replacement atomically reverses old allocations and posts immutable re
     await owner.query("UPDATE soundpub.artists SET name='Replacement Artist' WHERE id=$1", [artistId]);
     const wrongPeriod = csv('2026-11', '200.00');
     const wrongPreview = await service.previewCsv(admin, { csv: wrongPeriod });
-    await assert.rejects(service.replaceCsv(admin, replacement.id, { csv: wrongPeriod, filename: 'wrong.csv',
+    await assert.rejects(service.replaceCsv(admin, replacement.id, { csv: wrongPeriod, filename: 'old.csv',
       expected_checksum: wrongPreview.checksum!, reason: 'wrong period' }, 'wrong-period'),
     { code: 'ROYALTY_REPLACEMENT_PERIOD_MISMATCH' });
 

@@ -6,10 +6,15 @@ import { pollOutbox, type OutboxHandler } from './worker/index.js';
 import { assertOutboxHandlers } from './worker/topics.js';
 import { createLogger, Metrics, poolMetrics, sampleQueue } from './observability/index.js';
 import { createRoyaltyImportObjectStore } from './royalties/store.js';
+import { notifyRoyaltyOwnersAfterReconciliation } from './royalties/notification-handler.js';
 import { createRoyaltyImportCleanupProcessor, createRoyaltyImportJobProcessor } from './royalties/jobs.js';
+import { createMediaObjectStore, createMediaService } from './media/index.js';
 import { runFinanceReconciliation } from './reconciliation/index.js';
 import { createAuthDeliveryHandler } from './local-auth/delivery-handler.js';
 import { MockSubmissionProvider, createSubmissionDeliveryHandler } from './submissions/index.js';
+import { XenditInvoiceClient } from './payments/xendit-client.js';
+import { createXenditInvoiceOutboxHandler } from './payments/xendit-outbox.js';
+import { copyrightRegistrationRedirects, createCopyrightInvoiceDeliveryHandler } from './copyright-registrations/xendit-outbox.js';
 
 const config = loadConfig();
 const logger = createLogger(config.LOG_LEVEL);
@@ -30,8 +35,21 @@ const royaltyImportStore = await createRoyaltyImportObjectStore(pool, {
 });
 const royaltyJobs = createRoyaltyImportJobProcessor(pool, royaltyImportStore);
 const royaltyCleanup = createRoyaltyImportCleanupProcessor(pool, royaltyImportStore);
+const mediaStore = await createMediaObjectStore(pool, {
+  environment: config.NODE_ENV === 'test' ? 'test' : 'development',
+  endpoint: `${config.OBJECT_STORAGE_USE_SSL ? 'https' : 'http'}://${config.OBJECT_STORAGE_ENDPOINT}:${config.OBJECT_STORAGE_PORT}`,
+  publicEndpoint: config.OBJECT_STORAGE_PUBLIC_ENDPOINT,
+  credentials: { accessKeyId: config.OBJECT_STORAGE_ACCESS_KEY, secretAccessKey: config.OBJECT_STORAGE_SECRET_KEY },
+  bucket: config.OBJECT_STORAGE_BUCKET,
+  allowedOrigins: config.OBJECT_STORAGE_BROWSER_ORIGINS,
+});
+const media = createMediaService(pool, mediaStore);
 const providers = createMockProviders();
 const submissionProvider = new MockSubmissionProvider();
+const xenditInvoiceHandler = config.XENDIT_SECRET_KEY
+  ? createXenditInvoiceOutboxHandler(pool, new XenditInvoiceClient({ secretKey: config.XENDIT_SECRET_KEY }),
+    { success: config.XENDIT_SUCCESS_REDIRECT_URL, failure: config.XENDIT_FAILURE_REDIRECT_URL })
+  : { delivery: 'external' as const, async handle() { throw new Error('Xendit development provider is not configured'); } };
 const authDeliveryKeys = { ...config.AUTH_DELIVERY_PREVIOUS_KEYS_JSON,
   [config.AUTH_DELIVERY_KEY_ID]: config.AUTH_DELIVERY_SECRET };
 const handlers: Record<string, OutboxHandler> = {
@@ -43,8 +61,13 @@ const handlers: Record<string, OutboxHandler> = {
   'audit.notification': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-audit-notification', payload: event.payload }); },
   'webhook.received': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-webhook', payload: event.payload }); },
   'finance.event': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-finance-event', payload: event.payload }); },
+  'payment.invoice_create': xenditInvoiceHandler,
+  'copyright_registration.payment_invoice_create': config.XENDIT_SECRET_KEY
+    ? createCopyrightInvoiceDeliveryHandler(pool, new XenditInvoiceClient({ secretKey: config.XENDIT_SECRET_KEY }),
+      copyrightRegistrationRedirects(config.XENDIT_SUCCESS_REDIRECT_URL, config.XENDIT_FAILURE_REDIRECT_URL))
+    : { delivery: 'external' as const, async handle() { throw new Error('Xendit development provider is not configured'); } },
   'release.submission.requested': createSubmissionDeliveryHandler(submissionProvider),
-  'royalty.changed': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-royalty-change', payload: event.payload }); },
+  'royalty.changed': async (event, db) => { await notifyRoyaltyOwnersAfterReconciliation(event, db); await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-royalty-change', payload: event.payload }); },
   'payout.changed': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-payout-change', payload: event.payload }); },
   'payout.readiness': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-payout-readiness', payload: event.payload }); },
   'finance.reconciliation': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-finance-reconciliation', payload: event.payload }); },
@@ -54,6 +77,7 @@ const handlers: Record<string, OutboxHandler> = {
   'copyright_registration.submitted': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-copyright-registration-submitted', payload: event.payload }); },
   'copyright_registration.reviewed': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-copyright-registration-review', payload: event.payload }); },
   'copyright_contract.changed': async event => { await providers.analytics.execute({ idempotencyKey: event.idempotency_key, operation: 'record-copyright-contract-change', payload: event.payload }); },
+  'copyright_registration.payment_invoice_requested': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-copyright-registration-payment-invoice', payload: event.payload }); },
   'copyright_registration.payment_changed': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-copyright-registration-payment-change', payload: event.payload }); },
   'takedown.submitted': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-takedown-submitted', payload: event.payload }); },
   'takedown.status.changed': async event => { await providers.email.execute({ idempotencyKey: event.idempotency_key, operation: 'send-takedown-status-change', payload: event.payload }); },
@@ -62,6 +86,7 @@ const handlers: Record<string, OutboxHandler> = {
 assertOutboxHandlers(handlers);
 let stopping = false;
 let nextFinanceReconciliationAt = 0;
+let nextMediaCleanupAt = Date.now() + 60_000;
 await pool.query('SELECT 1');
 await writeFile('/tmp/worker-ready', new Date().toISOString(), 'utf8');
 process.on('SIGTERM', () => { stopping = true; });
@@ -75,6 +100,11 @@ while (!stopping) {
     metrics.increment(`royaltyCleanup.${cleanupOutcome}`);
     const outcome = royaltyOutcome === 'idle' && cleanupOutcome === 'idle' ? await pollOutbox(pool, handlers) : 'idle';
     metrics.increment(`poll.${outcome}`);
+    if (Date.now() >= nextMediaCleanupAt) {
+      nextMediaCleanupAt = Date.now() + 60_000;
+      const cleanup = await media.cleanup();
+      metrics.increment('mediaCleanup.deleted', cleanup.deleted);
+    }
     if (Date.now() >= nextFinanceReconciliationAt) {
       nextFinanceReconciliationAt = Date.now() + config.FINANCE_RECONCILIATION_INTERVAL_MS;
       const reconciliation = await runFinanceReconciliation(reconciliationPool, { runner: 'worker',
@@ -100,6 +130,7 @@ while (!stopping) {
   await new Promise(resolve => setTimeout(resolve, config.WORKER_POLL_MS));
 }
 royaltyImportStore.close();
+mediaStore.close();
 await Promise.all([pool.end(), reconciliationPool.end()]);
 
 

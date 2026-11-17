@@ -47,6 +47,7 @@ const dependencies = name => {
   domain = '';
   assert.equal(mode.usesBackendFinance(), false);
   assert.doesNotThrow(mode.requireLegacyFinance);
+  const controller = new AbortController();
   for (const name of ['Royalties', 'RoyaltySummary', 'AllRoyalties', 'UploadRoyalty', 'ComposerRoyalties', 'Payouts', 'AdminPayouts', 'Invoices', 'PaymentCallback', 'CopyrightAnalytics', 'CopyrightRoyaltySummary', 'CopyrightRoyaltyUpload', 'CopyrightRoyaltyUploadHistory']) {
     const file = read(`src/pages/${name}.tsx`);
     const wrapper = file.slice(file.indexOf(`export default function ${name}()`));
@@ -112,6 +113,13 @@ const dependencies = name => {
   const whitelabelDashboard = read('src/components/whitelabel/BackendWhitelabelDashboard.tsx');
   assert(!whitelabelDashboard.includes('@/integrations/supabase'));
   assert(!whitelabelDashboard.match(/from\s+['\"][^'\"]*supabase[^'\"]*['\"]/i));
+  const dashboard = read('src/pages/Dashboard.tsx');
+  assert.match(dashboard, /balanceApi\.get\(\)/);
+  assert.match(dashboard, /backendBalance\?\.status === 'RECONCILED'[\s\S]*backendBalance\.available !== null/);
+  assert.match(dashboard, /RECONCILIATION_REQUIRED/);
+  assert.match(dashboard, /usesBackendFinance\(\) \? formatCurrency\(royaltyStats\?\.totalRevenue/);
+  assert.match(dashboard, /royaltyStats\?\.totalStreams/);
+  assert.match(dashboard, /backendBalance\?\.status === 'RECONCILED'/);
   const app = read('src/App.tsx');
   assert.match(app, /path=[\"']\/dashboard\/whitelabel[\"'][\s\S]*?<WhitelabelDashboard\s*\/>/);
   const royaltyImport = read('src/components/finance/BackendRoyaltyImport.tsx');
@@ -134,6 +142,15 @@ const dependencies = name => {
   assert.equal(calls.at(-1)[1].idempotencyKey, 'retry-key');
   await api.paymentsApi.create('release');
   assert.equal(calls.at(-1)[1].body.idempotency_key, 'release-invoice:release');
+  await api.paymentsApi.adminInvoices('paid', 100, controller.signal);
+  assert.equal(calls.at(-1)[0], '/api/v1/admin/payments/invoices?status=paid&limit=100&offset=100');
+  assert.equal(calls.at(-1)[1].signal, controller.signal);
+  await api.paymentsApi.downloadInvoice('invoice/id');
+  assert.equal(calls.at(-1)[0], '/api/v1/admin/payments/invoices/invoice%2Fid/download');
+  assert.match(read('src/components/finance/BackendAdminInvoices.tsx'), /paymentsApi\.adminInvoices/);
+  assert.match(read('src/components/finance/BackendAdminInvoices.tsx'), /paymentsApi\.downloadInvoice/);
+  assert.match(read('src/components/finance/BackendAdminInvoices.tsx'), /!isAdmin/);
+  assert.doesNotMatch(read('src/components/finance/BackendAdminInvoices.tsx'), /supabase/i);
   const paymentStatus = read('src/components/finance/BackendPaymentStatus.tsx');
   assert(!paymentStatus.includes("params.get('status')"));
   assert.match(paymentStatus, /LABEL_CUSTOM_PIC/);
@@ -161,6 +178,9 @@ const dependencies = name => {
   assert.match(maintenanceScreen, /Coba lagi/);
   assert.match(maintenanceScreen, /window\.location\.reload\(\)/);
   assert.doesNotMatch(maintenanceScreen, /supabase|signOut/i);
+  assert.match(dashboard, /if \(usesBackendReleases\(\)\) \{[\s\S]*usersApi\.dashboardSummary\(\)[\s\S]*return;/);
+  assert.match(dashboard, /usesBackendDomain\('users'\) \? Promise\.resolve\(null\) : supabase\.from\('profiles'\)/);
+  assert.match(dashboard, /usesBackendFinance\(\) \? Promise\.resolve\(null\) : supabase\.from\('payout_requests'\)/);
   const auth = read('src/hooks/useAuth.tsx');
   const maintenanceBranchStart = auth.indexOf("error.status === 503 && error.code === 'MAINTENANCE_MODE'");
   const maintenanceBranch = auth.slice(maintenanceBranchStart, auth.indexOf('if (!(error instanceof SoundpubApiError)', maintenanceBranchStart));
@@ -170,5 +190,12 @@ const dependencies = name => {
   assert.match(backendSettings, /canManageMaintenance=\{role === 'superadmin'\}/);
   assert.match(backendSettings, /\.\.\.\(canManageMaintenance \? \{ maintenance_enabled \} : \{\}\)/);
   assert.match(backendSettings, /disabled=\{!canManageMaintenance\}/);
+  const royaltyReport = read('src/components/finance/BackendRoyalties.tsx');
+  assert.match(royaltyReport, /setCursors\(current => \[\.\.\.current\.slice/);
+  assert.match(royaltyReport, /if \(!page\.next_cursor\) break/);
+  assert.match(royaltyReport, /EXPORT_ROW_LIMIT/);
+  assert.match(royaltyReport, /Belum di katalog/);
+  assert.doesNotMatch(royaltyReport, /offset: exportOffset/);
+  assert.ok(royaltyReport.includes("const safe = /^[\\u0000-\\u0020]*[=+@-]/.test(raw)"));
   console.log('Financial guards and maintenance mode contract passed; session preserved and 0 new Supabase accesses.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

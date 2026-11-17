@@ -53,7 +53,7 @@ const queries: Record<ExportDataset, string> = {
     FROM soundpub.tracks t ORDER BY t.created_at ASC,t.id ASC`,
   royalties: `SELECT e.id,e.batch_id,e.source,e.period,e.source_row_id,e.source_row_number,
     e.beneficiary_id,e.financial_owner_user_id,e.label_owner_user_id,e.artist_id,e.release_id,e.track_id,
-    e.platform,e.country,e.sales_type,e.sales_unit,e.source_isrc,e.source_upc,e.gross_amount,
+    e.platform,e.country,e.sales_type,e.sales_unit,e.source_isrc,e.source_upc,e.source_title,e.source_artist,e.source_label,e.gross_amount,
     e.deduction_amount,e.net_amount,e.calculation_policy_code
     FROM soundpub.royalty_import_entries e ORDER BY e.batch_id ASC,e.source_row_number ASC,e.id ASC`,
   royalty_uploads: `SELECT b.id,b.source,b.period,b.currency,b.filename,b.uploader_id,b.row_count,

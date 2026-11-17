@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { allocateRoyaltyOwners, splitLegacyRoyalty } from '../src/royalties/split.js';
+import { allocateRoyaltyOwners, LEGACY_ROYALTY_POLICY, LEGACY_ROYALTY_POLICY_CHECKSUM,
+  splitLegacyRoyalty } from '../src/royalties/split.js';
+
+test('legacy royalty policy exposes immutable versioned calculation metadata', () => {
+  assert.deepEqual(LEGACY_ROYALTY_POLICY, {
+    code: 'SOUNDPUB_LEGACY_70_21_9', version: 1, artistPercent: '70', soundpubPercent: '9',
+    denominator: '100', rounding: 'HALF_UP_PER_ROW', remainderComponent: 'LABEL',
+  });
+  assert.match(LEGACY_ROYALTY_POLICY_CHECKSUM, /^[0-9a-f]{64}$/);
+});
 
 test('legacy royalty split matches production row rounding and remainder rules', () => {
   assert.deepEqual(splitLegacyRoyalty(10_000n), {

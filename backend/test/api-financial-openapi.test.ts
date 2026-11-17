@@ -9,6 +9,7 @@ test('financial OpenAPI preserves every method sharing a path', async () => {
     rateLimiter: { consume: async () => ({ allowed: true }) },
     royalties: {} as ApiDependencies['royalties'], payouts: {} as ApiDependencies['payouts'],
     financeReconciliation: {} as ApiDependencies['financeReconciliation'],
+    payments: {} as ApiDependencies['payments'],
   });
   try {
     const paths = (await app.inject('/openapi.json')).json().paths;
@@ -39,10 +40,42 @@ test('financial OpenAPI preserves every method sharing a path', async () => {
     assert.ok(paths['/api/v1/admin/payouts/{id}/settle'].post);
     assert.ok(paths['/api/v1/admin/finance/reconciliation/latest'].get);
     assert.ok(paths['/api/v1/admin/finance/reconciliation/runs'].get);
+    assert.ok(paths['/api/v1/admin/payments/invoices'].get);
+    assert.ok(paths['/api/v1/admin/payments/invoices/{id}/download'].get);
     const operations = Object.values(paths).flatMap(path => Object.values(path as Record<string, unknown>))
       .filter(value => value && typeof value === 'object' && 'operationId' in value);
     assert.equal(operations.filter(operation => String((operation as { operationId: string }).operationId)
       .match(/Royalty|Payout/)).length, 37);
+  } finally { await app.close(); }
+});
+
+test('admin invoice routes forward authenticated admin identity and request id', async () => {
+  const actor = { id: '00000000-0000-4000-8000-000000000001', status: 'active' as const, roles: ['admin'] as const };
+  const calls: unknown[][] = [];
+  const app = buildApp({
+    auth: { authenticate: async token => token === 'admin' ? actor : null },
+    readiness: { check: async () => true }, admin: { suspendUser: async () => undefined },
+    webhooks: { receive: async () => false }, rateLimiter: { consume: async () => ({ allowed: true }) },
+    payments: {
+      listAdminInvoices: async (...args: unknown[]) => { calls.push(args); return { invoices: [], total: 0, limit: 5, offset: 0 }; },
+      downloadInvoice: async (...args: unknown[]) => { calls.push(args); return { invoice_number: 'SPB-202611-00000000', url: 'http://localhost/signed' }; },
+    } as ApiDependencies['payments'],
+  });
+  try {
+    const listed = await app.inject({ method: 'GET', url: '/api/v1/admin/payments/invoices?status=paid&limit=5&offset=10',
+      headers: { authorization: 'Bearer admin' } });
+    assert.equal(listed.statusCode, 200);
+    assert.equal(listed.headers['cache-control'], 'no-store');
+    assert.deepEqual(calls[0]?.[0], actor);
+    assert.deepEqual({ ...(calls[0]?.[1] as Record<string, unknown>) }, { status: 'paid', limit: '5', offset: '10' });
+    const downloaded = await app.inject({ method: 'GET', url: '/api/v1/admin/payments/invoices/00000000-0000-4000-8000-000000000002/download',
+      headers: { authorization: 'Bearer admin' } });
+    assert.equal(downloaded.statusCode, 200);
+    assert.equal(downloaded.headers['cache-control'], 'no-store');
+    assert.deepEqual(calls[1]?.slice(0, 2), [actor, '00000000-0000-4000-8000-000000000002']);
+    assert.equal(typeof calls[1]?.[2], 'string');
+    const denied = await app.inject({ method: 'GET', url: '/api/v1/admin/payments/invoices' });
+    assert.equal(denied.statusCode, 401);
   } finally { await app.close(); }
 });
 

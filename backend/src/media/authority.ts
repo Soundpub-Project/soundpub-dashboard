@@ -36,6 +36,19 @@ export async function mediaAuthority(db: PoolClient, actor: Principal,
       : !['DRAFT','REVISION_REQUESTED'].includes(registration.status))) throw new ApiError(409, 'MEDIA_RESOURCE_LOCKED');
     return { current, releaseId: null };
   }
+  if (type === 'artist_profile') {
+    if (binding.category !== 'ARTIST_PROFILE_IMAGE') throw new ApiError(404, 'NOT_FOUND');
+    const users = usersRepository(db);
+    const principals = await users.lock([actor.id, id], true);
+    const current = principals.get(actor.id);
+    const target = principals.get(id);
+    if (!current || !target || !allows(current, 'authenticated')) throw new ApiError(404, 'NOT_FOUND');
+    const roster = (await db.query<{ label_id: string }>(
+      'SELECT label_id FROM soundpub.artists WHERE artist_user_id=$1 FOR UPDATE', [id])).rows[0];
+    if (!canManageArtist(current, target, roster?.label_id ?? null, write)) throw new ApiError(404, 'NOT_FOUND');
+    if (!(await db.query('SELECT id FROM soundpub.profiles WHERE id=$1 FOR UPDATE', [id])).rowCount) throw new ApiError(404, 'NOT_FOUND');
+    return { current, releaseId: null };
+  }
   let releaseId: string | null = type === 'release' ? id : null;
   if (type === 'track') {
     releaseId = (await db.query('SELECT release_id FROM soundpub.tracks WHERE id=$1', [id])).rows[0]?.release_id ?? null;

@@ -65,6 +65,7 @@ integration('Label Custom PIC owns invoice, payment ledger and submission readin
     const callback = { provider:'mock-payment',eventId:'custom-paid',timestamp:String(Math.floor(Date.now()/1000)),rawBody,signature:'' };
     callback.signature = webhookSignature(secret, callback);
     assert.equal(await payments.callback(callback), 'accepted');
+    assert.equal((await database.owner.query<{ provider_status: string | null }>('SELECT provider_status FROM soundpub.payment_invoices WHERE id=$1', [invoice.id])).rows[0]?.provider_status, null);
     assert.deepEqual((await database.owner.query(`SELECT owner_id,kind,amount_minor::text amount_minor
       FROM soundpub.finance_events WHERE business_reference=$1`, [invoice.id])).rows,
     [{ owner_id:pic,kind:'PAYMENT_CHARGE',amount_minor:invoice.amount_minor }]);

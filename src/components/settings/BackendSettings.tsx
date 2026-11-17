@@ -17,6 +17,8 @@ import { Check, ImageIcon, Loader2, Megaphone, Moon, RefreshCw, Save, Settings2,
 
 const moneyInputPattern = /^[1-9][0-9]{0,15}$/;
 const moneyStoragePattern = /^[1-9][0-9]{0,15}\.[0-9]{2}$/;
+const minimumPayoutInputPattern = /^(?:0|[1-9][0-9]{0,15})$/;
+const minimumPayoutStoragePattern = /^(?:0|[1-9][0-9]{0,15})\.[0-9]{2}$/;
 export function displayMoneyValue(value: string | null) {
   return value?.endsWith('.00') ? value.slice(0, -3) : value ?? '';
 }
@@ -24,6 +26,11 @@ export function normalizeMoneyValue(value: string | null) {
   if (value === null) return null;
   if (moneyStoragePattern.test(value)) return value;
   return moneyInputPattern.test(value) ? value + '.00' : undefined;
+}
+export function normalizeMinimumPayout(value: string | null) {
+  if (value === null) return null;
+  if (minimumPayoutStoragePattern.test(value)) return value;
+  return minimumPayoutInputPattern.test(value) ? value + '.00' : undefined;
 }
 function errorMessage(error: unknown, fallback: string) {
   if (error instanceof SoundpubApiError && error.status === 409) return 'Pengaturan berubah di sesi lain. Muat ulang, periksa perubahan terbaru, lalu simpan kembali.';
@@ -70,9 +77,14 @@ function AdminSettingsForm({ canManageMaintenance }: { canManageMaintenance: boo
 
   const save = async () => {
     if (!row || busy) return;
-    const minimumPayout = normalizeMoneyValue(row.settings.min_payout_amount);
+    const minimumPayout = normalizeMinimumPayout(row.settings.min_payout_amount);
     const releasePrice = normalizeMoneyValue(row.settings.release_price_per_track);
-    if (minimumPayout === undefined || releasePrice === undefined) {
+    const customLabelPrice = normalizeMoneyValue(row.settings.release_price_custom_label);
+    const singlePrice = normalizeMoneyValue(row.settings.release_price_single);
+    const epPrice = normalizeMoneyValue(row.settings.release_price_ep);
+    const albumPrice = normalizeMoneyValue(row.settings.release_price_album);
+    if (minimumPayout === undefined || releasePrice === undefined || customLabelPrice === undefined ||
+        singlePrice === undefined || epPrice === undefined || albumPrice === undefined) {
       setError('Nominal hanya boleh berisi angka bulat tanpa Rp, titik, koma, atau spasi. Contoh: 100000.');
       setMessage('');
       return;
@@ -82,7 +94,9 @@ function AdminSettingsForm({ canManageMaintenance }: { canManageMaintenance: boo
       const { maintenance_enabled, ...sharedSettings } = row.settings;
       setRow(await settingsApi.updateAdmin(row.version, { ...sharedSettings,
         ...(canManageMaintenance ? { maintenance_enabled } : {}),
-        min_payout_amount: minimumPayout, release_price_per_track: releasePrice }));
+        min_payout_amount: minimumPayout, release_pricing_mode: row.settings.release_pricing_mode,
+        release_price_per_track: releasePrice, release_price_single: singlePrice, release_price_ep: epPrice,
+        release_price_album: albumPrice, release_price_custom_label: customLabelPrice }));
       setMessage('Pengaturan berhasil disimpan.');
     }
     catch (caught) { setError(errorMessage(caught, 'Gagal menyimpan pengaturan. Muat ulang sebelum mencoba lagi.')); }
@@ -175,10 +189,15 @@ function AdminSettingsForm({ canManageMaintenance }: { canManageMaintenance: boo
               <div><div className="flex flex-wrap items-center gap-2"><Label htmlFor="maintenance-mode" className="text-sm font-medium">Mode maintenance</Label><Badge variant="outline" className="text-amber-600 dark:text-amber-400">Khusus Super Admin</Badge></div><p className="mt-1 text-sm text-muted-foreground">Saat aktif, akses API pengguna dibatasi sementara. Admin dan Super Admin tetap dapat masuk untuk pemulihan layanan.</p></div>
               <Switch id="maintenance-mode" checked={row.settings.maintenance_enabled} disabled={!canManageMaintenance} onCheckedChange={value => setRow({ ...row, settings: { ...row.settings, maintenance_enabled: value } })} />
             </div>
+            <div className="space-y-2"><Label htmlFor="release-pricing-mode">Mode harga release</Label><select id="release-pricing-mode" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={row.settings.release_pricing_mode} onChange={event => setRow({ ...row, settings: { ...row.settings, release_pricing_mode: event.target.value as AdminSettings['release_pricing_mode'] } })}><option value="per_track">Per track</option><option value="per_category">Per kategori</option></select><p className="text-xs text-muted-foreground">Per kategori mengenakan satu tarif berdasarkan tipe release (single, EP, atau album).</p></div>
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-              <div className="space-y-2"><Label htmlFor="minimum-payout" className="flex items-center gap-2"><WalletCards className="h-4 w-4" />Minimum payout</Label><div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">IDR</span><Input id="minimum-payout" className="pl-12" inputMode="numeric" placeholder="100000" pattern="[1-9][0-9]{0,15}" value={displayMoneyValue(row.settings.min_payout_amount)} onChange={event => { const value = event.target.value.replace(/\D/g, ''); setRow({ ...row, settings: { ...row.settings, min_payout_amount: value || null } }); }} /></div><p className="text-xs text-muted-foreground">Masukkan angka saja. Contoh Rp 100.000 ditulis 100000.</p></div>
+              <div className="space-y-2"><Label htmlFor="minimum-payout" className="flex items-center gap-2"><WalletCards className="h-4 w-4" />Minimum payout</Label><div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">IDR</span><Input id="minimum-payout" className="pl-12" inputMode="numeric" placeholder="50000" pattern="(?:0|[1-9][0-9]{0,15})" value={displayMoneyValue(row.settings.min_payout_amount)} onChange={event => { const value = event.target.value.replace(/\D/g, ''); setRow({ ...row, settings: { ...row.settings, min_payout_amount: value || null } }); }} /></div><p className="text-xs text-muted-foreground">Masukkan angka saja. Kosong memakai default Rp 50.000; isi 0 untuk menonaktifkan batas minimum.</p></div>
               <div className="space-y-2"><Label htmlFor="release-price" className="flex items-center gap-2"><WalletCards className="h-4 w-4" />Harga release per track</Label><div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">IDR</span><Input id="release-price" className="pl-12" inputMode="numeric" placeholder="10000" pattern="[1-9][0-9]{0,15}" value={displayMoneyValue(row.settings.release_price_per_track)} onChange={event => { const value = event.target.value.replace(/\D/g, ''); setRow({ ...row, settings: { ...row.settings, release_price_per_track: value || null } }); }} /></div><p className="text-xs text-muted-foreground">Masukkan angka saja untuk biaya setiap track. Contoh: 10000.</p></div>
+              <div className="space-y-2"><Label htmlFor="release-price-single">Harga kategori Single (IDR)</Label><Input id="release-price-single" inputMode="numeric" placeholder="50000" value={displayMoneyValue(row.settings.release_price_single)} onChange={event => { const value = event.target.value.replace(/\D/g, ''); setRow({ ...row, settings: { ...row.settings, release_price_single: value || null } }); }} /></div>
+              <div className="space-y-2"><Label htmlFor="release-price-ep">Harga kategori EP (IDR)</Label><Input id="release-price-ep" inputMode="numeric" placeholder="150000" value={displayMoneyValue(row.settings.release_price_ep)} onChange={event => { const value = event.target.value.replace(/\D/g, ''); setRow({ ...row, settings: { ...row.settings, release_price_ep: value || null } }); }} /></div>
+              <div className="space-y-2"><Label htmlFor="release-price-album">Harga kategori Album (IDR)</Label><Input id="release-price-album" inputMode="numeric" placeholder="300000" value={displayMoneyValue(row.settings.release_price_album)} onChange={event => { const value = event.target.value.replace(/\D/g, ''); setRow({ ...row, settings: { ...row.settings, release_price_album: value || null } }); }} /></div>
             </div>
+              <div className="space-y-2"><Label htmlFor="custom-label-price" className="flex items-center gap-2"><WalletCards className="h-4 w-4" />Harga Custom Label per track</Label><div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">IDR</span><Input id="custom-label-price" className="pl-12" inputMode="numeric" placeholder="75000" pattern="[1-9][0-9]{0,15}" value={displayMoneyValue(row.settings.release_price_custom_label)} onChange={event => { const value = event.target.value.replace(/\D/g, ''); setRow({ ...row, settings: { ...row.settings, release_price_custom_label: value || null } }); }} /></div><p className="text-xs text-muted-foreground">Harga khusus release Custom Label SoundPub. Kosongkan untuk menonaktifkan harga khusus.</p></div>
           </CardContent>
         </Card>
 

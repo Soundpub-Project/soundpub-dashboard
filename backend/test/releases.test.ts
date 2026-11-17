@@ -18,13 +18,13 @@ const fail = (status: number) => (error: unknown) => error instanceof ApiError &
 const row: ReleaseDto = {
   id: releaseId, artist_id: null, label_id: labelId, label_name: 'Historic Label', artist_user_id: artistId, created_by: labelId,
   title: 'Synthetic', artist_name: 'Artist', release_type: 'single', genre: null, release_date: null,
-  cover_url: 'https://example.invalid/synthetic-cover.png', upc: null, status: 'draft', rejection_reason: null, archived_at: null, version: 1,
+  cover_url: 'https://example.invalid/synthetic-cover.png', upc: null, distribution_service: 'standard', custom_label_name: null, custom_record_name: null, status: 'draft', rejection_reason: null, archived_at: null, version: 1,
   created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
 };
 const input = { title: 'Synthetic', artist_name: 'Artist', release_type: 'single' as const, artist_user_id: artistId };
 
 function fixture(current: Principal = label, options: {
-  currentLabel?: string | null; status?: ReleaseStatus; auditFailure?: boolean; conflict?: boolean;
+  currentLabel?: string | null; status?: ReleaseStatus; auditFailure?: boolean; conflict?: boolean; customEligible?: boolean;
   targetRoles?: Role[]; missing?: boolean; orphan?: boolean; listRows?: ReleaseDto[];
 } = {}) {
   const queries: { sql: string; values: unknown[] }[] = [];
@@ -37,6 +37,7 @@ function fixture(current: Principal = label, options: {
       let rows: unknown[] = [];
       if (sql === 'BEGIN') snapshot = { ...state };
       if (sql === 'ROLLBACK') state = { ...snapshot };
+      if (sql.includes('FROM soundpub.profiles artist_profile')) rows = options.customEligible && values[0] === artistId ? [{}] : [];
       if (sql.includes('AS missing_audio')) rows = [{ count: 1, missing_audio: 0 }];
       if (sql.includes('SELECT id, status FROM soundpub.backend_users')) {
         rows = [current, ...(current.id === artistId ? [] : [principal(artistId, options.targetRoles ?? ['artist'])])]
@@ -53,7 +54,8 @@ function fixture(current: Principal = label, options: {
       else if (sql.startsWith('SELECT r.id')) rows = options.missing ? [] : sql.includes('ORDER BY r.id') ? options.listRows ?? [state] : [state];
       else if (sql.startsWith('INSERT INTO soundpub.releases')) {
         state = { ...row, id: values[0] as string, label_id: values[1] as string | null,
-          created_by: values[3] as string, status: values[11] as ReleaseStatus };
+          created_by: values[3] as string, status: values[11] as ReleaseStatus, distribution_service: values[12] as 'standard' | 'custom_label',
+          custom_label_name: values[13] as string | null, custom_record_name: values[14] as string | null };
       } else if (sql.startsWith('UPDATE soundpub.releases')) {
         if (options.conflict) return { rows: [], rowCount: 0 };
         const assignments = [...sql.matchAll(/(\w+)=\$(\d+)/g)].filter(([, key]) => key !== 'id' && key !== 'version');
@@ -130,6 +132,23 @@ test('create derives historic owner from locked roster and audits transactionall
   assert.match(audit.sql, /'release'/);
   assert.equal(audit.values[1], 'release.created');
   assert.equal(f.queries.at(-1)?.sql, 'COMMIT');
+});
+
+test('Custom Label release metadata matches production eligibility and persistence rules', async () => {
+  const custom = { ...input, distribution_service: 'custom_label' as const, custom_label_name: 'Synthetic SoundPub', custom_record_name: 'Synthetic SoundPub' };
+  const permitted = fixture(artist, { currentLabel: labelId, customEligible: true });
+  const created = await permitted.service.create(artist, custom, 'request');
+  assert.equal(created.distribution_service, 'custom_label');
+  assert.equal(created.custom_label_name, 'Synthetic SoundPub');
+  assert.equal(created.custom_record_name, 'Synthetic SoundPub');
+  const insert = permitted.queries.find(query => query.sql.startsWith('INSERT INTO soundpub.releases'))!;
+  assert.deepEqual(insert.values.slice(12, 15), ['custom_label', 'Synthetic SoundPub', 'Synthetic SoundPub']);
+
+  const denied = fixture(label, { customEligible: true });
+  await assert.rejects(denied.service.create(label, custom, 'request'), fail(403));
+  assert.equal(denied.queries.some(query => query.sql.startsWith('INSERT INTO soundpub.releases')), false);
+  await assert.rejects(fixture(artist, { currentLabel: labelId }).service.create(artist,
+    { ...custom, custom_record_name: null }, 'request'), fail(403));
 });
 
 test('optimistic version mismatch and conditional update race both roll back', async () => {

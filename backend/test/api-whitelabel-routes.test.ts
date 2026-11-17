@@ -17,7 +17,7 @@ test('whitelabel routes publish correct OpenAPI methods and dispatch authenticat
     },
     createWhitelabelArtist: async (...args: unknown[]) => {
       calls.push({ method: 'createArtist', args });
-      return { id: artistId, email: 'artist@example.test', full_name: 'Artist', phone: null, address: null,
+      return { id: artistId, email: 'artist@example.test', account_kind: 'STANDARD', full_name: 'Artist', phone: null, address: null,
         avatar_url: null, logo_url: null, logo_url_light: null, logo_url_dark: null, parent_label_id: whitelabelId,
         parent_label_name: 'Whitelabel', composer_code: null, balance: '0.00', status: 'active', email_verified: false,
         password_set: false, subscription_status: null, subscription_upgraded_at: null, sso_provider: null,

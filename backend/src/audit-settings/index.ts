@@ -16,24 +16,38 @@ export function parse<T>(schema: z.ZodType<T>, input: unknown): T {
 // Project each field independently, rejecting malformed persisted values and unknown keys.
 export function projectSettings<T extends z.ZodRawShape>(schema: z.ZodObject<T>, defaults: z.infer<z.ZodObject<T>>, input: unknown) {
   const source = input && typeof input === 'object' && !Array.isArray(input) ? input as Record<string, unknown> : {};
+  const integerMoneyKeys = new Set(['min_payout_amount', 'release_price_per_track', 'release_price_single',
+    'release_price_ep', 'release_price_album', 'release_price_custom_label']);
   return Object.fromEntries(Object.entries(schema.shape).map(([key, validator]) => {
-    const parsed = (validator as z.ZodType).safeParse(source[key]);
-    return [key, parsed.success ? parsed.data : (defaults as Record<string, unknown>)[key]];
+    const raw = source[key];
+    const compatible = integerMoneyKeys.has(key) && typeof raw === 'string' && /^(?:0|[1-9][0-9]{0,15})$/.test(raw)
+      ? raw + '.00' : raw;
+    const parsed = (validator as z.ZodType).safeParse(compatible);
+    const fallback = (defaults as Record<string, unknown>)[key];
+    return [key, key === 'min_payout_amount' && compatible === null ? fallback : parsed.success ? parsed.data : fallback];
   })) as z.infer<z.ZodObject<T>>;
 }
-const actions = new Set(['profile.updated', 'user.suspended', 'user.status_changed', 'user.roles_changed',
-  'auth.iccn_identity_bound', 'auth.iccn_identity_binding_confirmed', 'auth.iccn_identity_unbound',
-  'artist.created', 'artist.updated', 'artist.removed_from_label', 'artist.deletion_requested', 'artist.deletion_reviewed',
-  'label.updated', 'release.created', 'release.updated', 'release.aggregate.created', 'release.aggregate.updated',
-  'release.submitted', 'track.created', 'track.updated', 'track.deleted', 'notification.created', 'notification.updated',
-  'notification.deleted', 'announcement.created', 'settings.updated', 'user_settings.updated',
-  'media.upload_requested', 'media.finalized', 'media.deleted',
-  'royalty.file_upload_requested', 'royalty.file_uploaded', 'data.exported']);
-const resources = new Set(['backend_user', 'artist', 'label', 'release', 'track', 'notification', 'announcement', 'settings', 'user_settings', 'storage_asset', 'media', 'royalty_import_session', 'data_export']);
+const actionNamespaces = new Set(['announcement', 'artist', 'audit', 'auth', 'copyright', 'copyright_contract',
+  'copyright_registration', 'copyright_royalty', 'data', 'destination', 'finance', 'label', 'label_custom', 'media', 'notification',
+  'orphan', 'payment', 'payout', 'profile', 'release', 'royalty', 'settings', 'submission', 'takedown', 'track',
+  'user', 'user_settings', 'webhook', 'whitelabel']);
+const resourceTypes = new Set(['announcement', 'artist', 'auth_impersonation', 'auth_session', 'backend_user',
+  'copyright_registration', 'copyright_royalty', 'data_export', 'finance_adjustment', 'finance_event',
+  'finance_reconciliation', 'label', 'label_custom_unit', 'media', 'notification', 'payment_invoice', 'payout',
+  'payout_readiness', 'release', 'royalty_import', 'royalty_import_session', 'settings', 'storage_asset', 'takedown',
+  'track', 'user_settings']);
+function safeAction(value: unknown) {
+  const action = String(value);
+  const namespace = action.split('.')[0];
+  return action.length <= 120 && /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/.test(action) && actionNamespaces.has(namespace!) ? action : 'other';
+}
+function safeResource(value: unknown) {
+  const resource = String(value);
+  return resource.length <= 64 && resourceTypes.has(resource) ? resource : 'other';
+}
 export function safeAudit(row: Record<string, unknown>) {
   return { id: row.id as string, actor_user_id: row.actor_user_id as string | null,
-    action: actions.has(String(row.action)) ? String(row.action) : 'other',
-    resource_type: resources.has(String(row.resource_type)) ? String(row.resource_type) : 'other',
+    action: safeAction(row.action), resource_type: safeResource(row.resource_type),
     resource_id: z.uuid().safeParse(row.resource_id).success ? row.resource_id as string : null,
     created_at: row.created_at as string };
 }
@@ -99,6 +113,7 @@ export function createAuditSettingsService(pool: Pool) {
           [mediaId, '00000000-0000-4000-8000-0000000003d0', variant])).rowCount) throw new ApiError(409, 'MEDIA_REFERENCE_INVALID');
         }
         const settings = { ...projectSettings(adminSettings, adminDefaults, row.settings), ...patch.settings };
+        if (settings.min_payout_amount === null) settings.min_payout_amount = adminDefaults.min_payout_amount;
         await db.query('UPDATE soundpub.application_settings SET settings=$1::jsonb, version=version+1 WHERE id=true', [JSON.stringify(settings)]);
         await db.query(`INSERT INTO soundpub.audit_logs(actor_user_id,action,resource_type,request_id,metadata)
           VALUES ($1,'settings.updated','settings',$2,$3::jsonb)`,

@@ -55,7 +55,9 @@ test('global reconciliation recognizes existing copyright refs and audits batch 
     if (sql.startsWith('WITH raw AS')) return { rows: [{ total_count: '0', fingerprint: 'empty',
       code: null, resource_type: null, resource_id: null, detail: null }], rowCount: 1 };
     if (sql.includes('AS royalty_batches')) return { rows: [{ royalty_batches: '0', copyright_royalty_batches: '0',
-      finance_events: '0', payouts: '0', payment_invoices: '0', manual_adjustments: '0', unresolved_callbacks: '0' }], rowCount: 1 };
+      finance_events: '0', payouts: '0', payment_invoices: '0', copyright_payments: '0',
+      copyright_payment_manual_reviews: '0', copyright_payment_unresolved_callbacks: '0',
+      manual_adjustments: '0', unresolved_callbacks: '0' }], rowCount: 1 };
     if (sql.includes('INSERT INTO soundpub.finance_reconciliation_runs')) return { rows: [{ id: owner, status: 'PASS',
       issue_count: 0, issues: [], snapshot: {}, snapshot_checksum: 'x', runner: 'test', started_at: new Date(), finished_at: new Date() }], rowCount: 1 };
     return { rows: [], rowCount: 0 };
@@ -68,4 +70,7 @@ test('global reconciliation recognizes existing copyright refs and audits batch 
   assert.match(sql, /copyright-royalty:\[0-9a-f-\]\{36\}/);
   assert.match(sql, /FROM soundpub\.copyright_royalty_batches b/);
   assert.match(sql, /AS copyright_royalty_batches/);
+  assert.match(sql, /COPYRIGHT_PAYMENT_MANUAL_REVIEW/);
+  assert.match(sql, /COPYRIGHT_PAYMENT_CALLBACK_UNRESOLVED/);
+  assert.match(sql, /AS copyright_payment_manual_reviews/);
 });

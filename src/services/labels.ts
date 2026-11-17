@@ -9,7 +9,7 @@ export const usesBackendArtistLabels = () => ['users', 'artists', 'labels'].some
 export const artistLabelApiReady = () => ['users', 'artists', 'labels'].every(usesBackendDomain);
 export const requireArtistLabelApi = () => { if (!artistLabelApiReady()) throw new Error('Artist/Label backend belum tersedia'); };
 export const artistAuthUnavailable = 'Pembuatan akun dan penghapusan permanen artis belum tersedia melalui backend.';
-export const artistMediaUnavailable = 'Upload foto, logo, dan integrasi Spotify belum tersedia melalui backend.';
+export const artistMediaUnavailable = 'Integrasi Spotify belum tersedia melalui backend.';
 
 export async function listLabels() {
   if (!usesBackendArtistLabels()) return listLegacyLabels();

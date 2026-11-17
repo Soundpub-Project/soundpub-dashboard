@@ -1,9 +1,13 @@
 import { usesBackendFinance } from '@/components/finance/mode';
+import { balanceApi, type BackendBalance } from '@/api/balance';
+import { usersApi } from '@/api/users';
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { usesBackendReleases, listBackendReleases } from '@/services/releases';
+import { usesBackendDomain } from '@/api/routing';
 import { listBackendTracks } from '@/services/tracks';
 import { useRoyaltyStats, useRoyaltyMonthlySummary, useRoyaltyPlatformSummary } from '@/hooks/useRoyaltyData';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -76,6 +80,13 @@ export default function Dashboard() {
 
 function LabelCustomDashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const balance = useQuery({
+    queryKey: ['backend-finance-balance', user?.id],
+    enabled: !!user,
+    queryFn: ({ signal }) => balanceApi.get(signal),
+    retry: false,
+  });
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -113,10 +124,32 @@ function LabelCustomDashboard() {
             <CardTitle>Keuangan PIC</CardTitle>
             <CardDescription>Royalti seluruh artis unit diakumulasi ke saldo PIC. Artis tidak memiliki wallet, akses dashboard, atau penerima payout sendiri.</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
-            <Button onClick={() => navigate('/dashboard/royalties')}>Lihat Royalti</Button>
-            <Button variant="outline" onClick={() => navigate('/dashboard/payouts')}>Kelola Payout</Button>
-            <Button variant="outline" onClick={() => navigate('/dashboard/settings')}>Pengaturan Akun</Button>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border bg-background p-3">
+                <p className="text-sm text-muted-foreground">Saldo tersedia</p>
+                <p className="mt-1 font-semibold">
+                  {balance.isLoading ? 'Memuat...' : balance.data?.status === 'RECONCILED' && balance.data.available !== null
+                    ? `IDR ${balance.data.available}` : 'Belum dikonfirmasi'}
+                </p>
+              </div>
+              <div className="rounded-lg border bg-background p-3">
+                <p className="text-sm text-muted-foreground">Dicadangkan</p>
+                <p className="mt-1 font-semibold">{balance.data ? `IDR ${balance.data.reserved}` : '-'}</p>
+              </div>
+              <div className="rounded-lg border bg-background p-3">
+                <p className="text-sm text-muted-foreground">Sudah dibayar</p>
+                <p className="mt-1 font-semibold">{balance.data ? `IDR ${balance.data.settled}` : '-'}</p>
+              </div>
+            </div>
+            {balance.data?.status === 'RECONCILIATION_REQUIRED' &&
+              <p role="status" className="text-sm text-amber-700">Payout ditahan sampai rekonsiliasi disetujui admin independen.</p>}
+            {balance.isError && <p role="alert" className="text-sm text-destructive">Saldo backend gagal dimuat.</p>}
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => navigate('/dashboard/royalties')}>Lihat Royalti</Button>
+              <Button variant="outline" onClick={() => navigate('/dashboard/payouts')}>Kelola Payout</Button>
+              <Button variant="outline" onClick={() => navigate('/dashboard/settings')}>Pengaturan Akun</Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -139,6 +172,7 @@ function StandardDashboard() {
     pendingReleases: 0,
   });
   const [recentReleases, setRecentReleases] = useState<RecentRelease[]>([]);
+  const [backendBalance, setBackendBalance] = useState<BackendBalance | null>(null);
   const [loading, setLoading] = useState(true);
 
   const { data: royaltyStats, isLoading: royaltyLoading } = useRoyaltyStats();
@@ -179,11 +213,21 @@ function StandardDashboard() {
 
   const fetchBasicStats = async () => {
     try {
+      const backendBalanceRequest = usesBackendFinance()
+        ? balanceApi.get().catch(() => null)
+        : Promise.resolve(null);
       if (usesBackendReleases()) {
-        const [releases, tracks] = await Promise.all([listBackendReleases(), listBackendTracks()]);
+        const [releases, balance] = await Promise.all([listBackendReleases(), backendBalanceRequest]);
+        setBackendBalance(balance);
+        const [tracks, adminSummary] = await Promise.all([
+          listBackendTracks(releases.map(release => release.id)),
+          isAdmin ? usersApi.dashboardSummary() : Promise.resolve(null),
+        ]);
         setStats(previous => ({ ...previous, totalReleases: releases.length, totalTracks: tracks.length,
-          pendingReleases: releases.filter(release => release.status === 'pending').length }));
-        setRecentReleases(releases.sort((left, right) => right.created_at.localeCompare(left.created_at)).slice(0, 5).map(release => ({
+          pendingReleases: releases.filter(release => release.status === 'pending').length,
+          totalUsers: adminSummary?.total_users ?? previous.totalUsers,
+          pendingPayouts: adminSummary?.pending_payouts ?? previous.pendingPayouts }));
+        setRecentReleases(releases.slice(0, 5).map(release => ({
           id: release.id, title: release.title, artist_name: release.artist_name, cover_url: release.cover_url,
           status: release.status, release_date: release.release_date, release_type: release.release_type ?? 'single',
         })));
@@ -211,24 +255,28 @@ function StandardDashboard() {
       }
 
       // Fetch counts in parallel - these are fast queries
-      const [releasesRes, pendingRes, tracksRes, recentReleasesRes] = await Promise.all([
+      const [releasesRes, pendingRes, tracksRes, recentReleasesRes, balance] = await Promise.all([
         releasesQuery,
         pendingQuery,
         supabase.from('tracks').select('*', { count: 'exact', head: true }),
         recentQuery,
+        backendBalanceRequest,
       ]);
+      setBackendBalance(balance);
 
       // Admin-only stats
       let usersCount = 0;
       let pendingPayoutsCount = 0;
 
       if (isAdmin) {
-        const [userRes, payoutRes] = await Promise.all([
-          supabase.from('profiles').select('*', { count: 'exact', head: true }),
-          usesBackendFinance() ? Promise.resolve({ count: null }) : supabase.from('payout_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        const useBackendSummary = usesBackendDomain('users') || usesBackendFinance();
+        const [adminSummary, userRes, payoutRes] = await Promise.all([
+          useBackendSummary ? usersApi.dashboardSummary() : Promise.resolve(null),
+          usesBackendDomain('users') ? Promise.resolve(null) : supabase.from('profiles').select('*', { count: 'exact', head: true }),
+          usesBackendFinance() ? Promise.resolve(null) : supabase.from('payout_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
         ]);
-        usersCount = userRes.count || 0;
-        pendingPayoutsCount = payoutRes.count || 0;
+        usersCount = usesBackendDomain('users') ? adminSummary?.total_users || 0 : userRes?.count || 0;
+        pendingPayoutsCount = usesBackendFinance() ? adminSummary?.pending_payouts || 0 : payoutRes?.count || 0;
       }
 
       let roleRevenue = isAdmin ? (royaltyStats?.totalRevenue || 0) : 0;
@@ -312,7 +360,7 @@ function StandardDashboard() {
 
   return (
     <DashboardLayout>
-      {usesBackendFinance() && <p role="status">Ringkasan keuangan belum tersedia; saldo belum dikonfirmasi.</p>}
+      {usesBackendFinance() && !isAdmin && backendBalance?.status !== 'RECONCILED' && <p role="status">Saldo ditahan sampai rekonsiliasi keuangan backend terkonfirmasi.</p>}
       <div className="space-y-6">
         {/* Welcome Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -394,7 +442,7 @@ function StandardDashboard() {
                 <>
                   <div className="text-2xl font-bold">{stats.totalTracks}</div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {formatNumber(stats.totalStreams)} total streams
+                    {formatNumber(usesBackendFinance() ? royaltyStats?.totalStreams ?? 0 : stats.totalStreams)} total streams
                   </p>
                 </>
               )}
@@ -416,7 +464,7 @@ function StandardDashboard() {
               ) : (
                 <>
                   <div className="text-2xl font-bold">
-                    {usesBackendFinance() ? "—" : formatCurrency(stats.totalRevenue)}
+                    {usesBackendFinance() ? formatCurrency(royaltyStats?.totalRevenue ?? 0) : formatCurrency(stats.totalRevenue)}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     {isLabel || isWhitelabel ? 'Akumulasi semua artis label' : 'Dari semua royalties'}
@@ -441,12 +489,12 @@ function StandardDashboard() {
               ) : (
                 <>
                   <div className="text-2xl font-bold">
-                    {usesBackendFinance() ? "—" : formatCurrency(stats.balance)}
+                    {usesBackendFinance() ? (isAdmin ? 'Tidak tersedia' : backendBalance?.status === 'RECONCILED' && backendBalance.available !== null ? 'IDR ' + backendBalance.available : 'Belum dikonfirmasi') : formatCurrency(stats.balance)}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {isLabel || isWhitelabel ? 'Akumulasi saldo artis di bawah label' : 'Bisa ditarik kapan saja'}
+                    {usesBackendFinance() && isAdmin ? 'Pendapatan SoundPub tersedia di laporan, bukan saldo wallet.' : isLabel || isWhitelabel ? 'Akumulasi saldo artis di bawah label' : 'Bisa ditarik kapan saja'}
                   </p>
-                  {(isLabel || isWhitelabel) && stats.balance > 0 && (
+                  {(isLabel || isWhitelabel) && (usesBackendFinance() ? backendBalance?.status === 'RECONCILED' && Number(backendBalance.available) > 0 : stats.balance > 0) && (
                     <Button size="sm" variant="outline" className="mt-3" onClick={() => navigate('/dashboard/payouts')}>
                       Tarik Dana Artis
                       <ArrowRight className="h-3.5 w-3.5 ml-1" />
@@ -499,7 +547,7 @@ function StandardDashboard() {
                   <Loader2 className="h-6 w-6 animate-spin" />
                 ) : (
                   <>
-                    <div className="text-2xl font-bold">{usesBackendFinance() ? "—" : stats.pendingPayouts}</div>
+                    <div className="text-2xl font-bold">{usesBackendFinance() && !usesBackendReleases() ? "—" : stats.pendingPayouts}</div>
                     <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/payouts')}>
                       Review
                       <ArrowRight className="h-4 w-4 ml-1" />
