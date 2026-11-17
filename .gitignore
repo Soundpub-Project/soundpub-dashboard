@@ -77,3 +77,4 @@ npm-cache/
 .codegraphy/*
 /.codegraph/
 /%SystemDrive%/
+.env.dev

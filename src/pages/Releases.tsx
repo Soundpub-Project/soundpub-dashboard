@@ -47,7 +47,7 @@ import { ReleaseStatusBadge } from '@/components/releases/ReleaseStatusBadge';
 import { DeleteReleaseDialog } from '@/components/releases/DeleteReleaseDialog';
 import { ArchiveReleaseDialog } from '@/components/releases/ArchiveReleaseDialog';
 import { toast } from 'sonner';
-import { createXenditInvoice, openXenditInvoice } from '@/lib/xendit';
+import { createXenditInvoice } from '@/lib/xendit';
 
 interface Release {
   id: string;
@@ -55,6 +55,8 @@ interface Release {
   title: string;
   artist_name: string;
   artist_user_id: string | null;
+  created_by: string | null;
+  distribution_service: string | null;
   release_date: string | null;
   cover_url: string | null;
   genre: string | null;
@@ -81,7 +83,7 @@ const PAGE_SIZE_OPTIONS = [
 
 export default function Releases() {
   const navigate = useNavigate();
-  const { isAdmin, isLabel, isArtist, isWhitelabel, isSsoUser, isArtistProfileCompleted, refreshProfile, loading: authLoading } = useAuth();
+  const { user, isAdmin, isLabel, isArtist, isWhitelabel, isSsoUser, isArtistProfileCompleted, refreshProfile, loading: authLoading } = useAuth();
   const [releases, setReleases] = useState<Release[]>([]);
   const [labels, setLabels] = useState<LabelInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -300,14 +302,97 @@ export default function Releases() {
   };
 
   const handleContinuePayment = async (release: Release) => {
+    const paymentWindow = window.open('about:blank', '_blank');
+    if (paymentWindow) paymentWindow.opener = null;
     try {
       const invoiceData = await createXenditInvoice(release.id);
       toast.success('Mengarahkan ke halaman pembayaran...');
-      openXenditInvoice(invoiceData.invoice_url);
-    } catch (error: any) {
+      if (paymentWindow) {
+        paymentWindow.location.replace(invoiceData.invoice_url);
+      } else {
+        window.location.assign(invoiceData.invoice_url);
+      }
+    } catch (error: unknown) {
+      paymentWindow?.close();
       console.error('Payment error:', error);
-      toast.error(error.message || 'Gagal memproses pembayaran');
+      toast.error(error instanceof Error ? error.message : 'Gagal memproses pembayaran');
     }
+  };
+
+  const renderReleaseMenu = (release: Release) => {
+    const isOwnArtistRelease = isArtist && (
+      release.artist_user_id === user?.id ||
+      release.created_by === user?.id ||
+      (!release.artist_user_id && release.artist_name === user?.user_metadata?.full_name)
+    );
+    const canEdit = ((isAdmin || isLabel || isWhitelabel) && ['draft', 'pending', 'rejected', 'active'].includes(release.status)) ||
+      (isOwnArtistRelease && ['draft', 'pending', 'rejected'].includes(release.status));
+    const canPay = ['draft', 'pending'].includes(release.status) &&
+      (isAdmin || release.label_id === user?.id || release.created_by === user?.id) &&
+      (release.distribution_service !== 'custom_label' || (isOwnArtistRelease && release.created_by === user?.id));
+
+    if (!isAdmin && !canManageReleases && !isOwnArtistRelease) return null;
+
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="sm" aria-label={`Aksi untuk ${release.title}`}>
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {(release.status === 'pending_paid' || release.status === 'revision_submitted') && isAdmin && (
+            <DropdownMenuItem onClick={() => handleConfirmRelease(release)}>
+              <CheckCircle className="h-4 w-4 mr-2" />
+              {release.status === 'revision_submitted' ? 'Tinjau Revisi' : 'Konfirmasi'}
+            </DropdownMenuItem>
+          )}
+          {release.status === 'processing' && isAdmin && (
+            <>
+              <DropdownMenuItem onClick={() => handleOpenActivateDialog(release)}>
+                <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
+                Aktifkan
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleOpenRejectDialog(release)} className="text-destructive">
+                <Trash2 className="h-4 w-4 mr-2" />
+                Reject
+              </DropdownMenuItem>
+            </>
+          )}
+          {canEdit && (
+            <DropdownMenuItem onClick={() => handleEditRelease(release)}>
+              <Pencil className="h-4 w-4 mr-2" />
+              {release.status === 'draft' ? 'Edit Draft' : release.status === 'rejected' ? 'Edit & Upload Ulang' : release.status === 'active' && !isAdmin ? 'Edit Lyrics' : 'Edit'}
+            </DropdownMenuItem>
+          )}
+          {canPay && (
+            <DropdownMenuItem onClick={() => handleContinuePayment(release)}>
+              <DollarSign className="h-4 w-4 mr-2" />
+              Lanjutkan Pembayaran
+            </DropdownMenuItem>
+          )}
+          {release.status === 'pending_paid' && !isAdmin && (
+            <DropdownMenuItem disabled>
+              <Pencil className="h-4 w-4 mr-2 opacity-50" />
+              Terkunci (sudah dibayar)
+            </DropdownMenuItem>
+          )}
+          {canManageReleases && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => handleArchiveRelease(release)}>
+                {release.archived_at ? <ArchiveRestore className="h-4 w-4 mr-2" /> : <Archive className="h-4 w-4 mr-2" />}
+                {release.archived_at ? 'Pulihkan' : 'Arsipkan'}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleDeleteRelease(release)} className="text-destructive">
+                <Trash2 className="h-4 w-4 mr-2" />
+                Hapus
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
   };
 
   const handleDeleteRelease = (release: Release) => {
@@ -722,30 +807,7 @@ export default function Releases() {
                                 <Eye className="h-4 w-4 mr-1" /> Detail
                               </Link>
                             </Button>
-                            {(release.status === 'pending' || release.status === 'draft' || release.status === 'rejected' || (release.status === 'active' && isAdmin)) && (
-                              <Button variant="outline" size="sm" onClick={() => handleEditRelease(release)}>
-                                <Pencil className="h-4 w-4 mr-1" /> Edit
-                              </Button>
-                            )}
-                            {canManageReleases && (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleArchiveRelease(release)}>
-                                    {release.archived_at ? <ArchiveRestore className="h-4 w-4 mr-2" /> : <Archive className="h-4 w-4 mr-2" />}
-                                    {release.archived_at ? 'Pulihkan' : 'Arsipkan'}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => handleDeleteRelease(release)} className="text-destructive">
-                                    <Trash2 className="h-4 w-4 mr-2" /> Hapus
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            )}
+                            {renderReleaseMenu(release)}
                           </div>
                         </div>
                       </div>
@@ -836,115 +898,7 @@ export default function Releases() {
                                   <Eye className="h-4 w-4" />
                                 </Link>
                               </Button>
-                              {(canManageReleases || isArtist) && (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="sm">
-                                      <MoreHorizontal className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                   <DropdownMenuContent align="end">
-                                    {(release.status === 'pending_paid' || release.status === 'revision_submitted') && isAdmin && (
-                                      <>
-                                        <DropdownMenuItem onClick={() => handleConfirmRelease(release)}>
-                                          <CheckCircle className="h-4 w-4 mr-2" />
-                                          {release.status === 'revision_submitted' ? 'Tinjau Revisi' : 'Konfirmasi'}
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                      </>
-                                    )}
-                                    {release.status === 'processing' && isAdmin && (
-                                      <>
-                                        <DropdownMenuItem onClick={() => handleOpenActivateDialog(release)}>
-                                          <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
-                                          Aktifkan
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleOpenRejectDialog(release)} className="text-destructive">
-                                          <Trash2 className="h-4 w-4 mr-2" />
-                                          Reject
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                      </>
-                                    )}
-                                    {/* Draft: allow edit and continue payment */}
-                                    {release.status === 'draft' && (
-                                      <>
-                                        <DropdownMenuItem onClick={() => handleEditRelease(release)}>
-                                          <Pencil className="h-4 w-4 mr-2" />
-                                          Edit Draft
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleContinuePayment(release)}>
-                                          <DollarSign className="h-4 w-4 mr-2" />
-                                          Lanjutkan Pembayaran
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                      </>
-                                    )}
-                                    {/* Pending (unpaid): allow edit and continue payment */}
-                                    {release.status === 'pending' && (
-                                      <>
-                                        <DropdownMenuItem onClick={() => handleEditRelease(release)}>
-                                          <Pencil className="h-4 w-4 mr-2" />
-                                          Edit
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleContinuePayment(release)}>
-                                          <DollarSign className="h-4 w-4 mr-2" />
-                                          Lanjutkan Pembayaran
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                      </>
-                                    )}
-                                    {release.status === 'rejected' && (
-                                      <>
-                                        <DropdownMenuItem onClick={() => handleEditRelease(release)}>
-                                          <Pencil className="h-4 w-4 mr-2" />
-                                          Edit & Upload Ulang
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                      </>
-                                    )}
-                                    {/* Active: admin can always edit, others lyrics only */}
-                                    {release.status === 'active' && isAdmin && (
-                                      <DropdownMenuItem onClick={() => handleEditRelease(release)}>
-                                        <Pencil className="h-4 w-4 mr-2" />
-                                        Edit
-                                      </DropdownMenuItem>
-                                    )}
-                                    {/* pending_paid: locked, no edit */}
-                                    {release.status === 'pending_paid' && !isAdmin && (
-                                      <DropdownMenuItem disabled>
-                                        <Pencil className="h-4 w-4 mr-2 opacity-50" />
-                                        Terkunci (sudah dibayar)
-                                      </DropdownMenuItem>
-                                    )}
-                                    {canManageReleases && (
-                                      <>
-                                        <DropdownMenuItem onClick={() => handleArchiveRelease(release)}>
-                                          {release.archived_at ? (
-                                            <>
-                                              <ArchiveRestore className="h-4 w-4 mr-2" />
-                                              Pulihkan
-                                            </>
-                                          ) : (
-                                            <>
-                                              <Archive className="h-4 w-4 mr-2" />
-                                              Arsipkan
-                                            </>
-                                          )}
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem
-                                          onClick={() => handleDeleteRelease(release)}
-                                          className="text-destructive"
-                                        >
-                                          <Trash2 className="h-4 w-4 mr-2" />
-                                          Hapus
-                                        </DropdownMenuItem>
-                                      </>
-                                    )}
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              )}
+                              {renderReleaseMenu(release)}
                             </div>
                           </TableCell>
                         </TableRow>
