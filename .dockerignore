@@ -54,3 +54,4 @@ docs/
 # Configuration files not required by production build
 eslint.config.js
 components.json
+backups
