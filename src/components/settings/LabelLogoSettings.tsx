@@ -7,8 +7,22 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Upload, Image as ImageIcon, Check, Trash2, Sun, Moon } from 'lucide-react';
 
+const readImageDimensions = (file: File) => new Promise<{ width: number; height: number }>((resolve, reject) => {
+  const objectUrl = URL.createObjectURL(file);
+  const image = new Image();
+  image.onload = () => {
+    URL.revokeObjectURL(objectUrl);
+    resolve({ width: image.naturalWidth, height: image.naturalHeight });
+  };
+  image.onerror = () => {
+    URL.revokeObjectURL(objectUrl);
+    reject(new Error('Gambar tidak dapat dibaca'));
+  };
+  image.src = objectUrl;
+});
+
 export function LabelLogoSettings() {
-  const { profile, user } = useAuth();
+  const { profile, user, refreshProfile } = useAuth();
   const { toast } = useToast();
   const [uploadingLight, setUploadingLight] = useState(false);
   const [uploadingDark, setUploadingDark] = useState(false);
@@ -19,8 +33,8 @@ export function LabelLogoSettings() {
 
   useEffect(() => {
     if (profile) {
-      setLogoLight((profile as any).logo_url_light || profile.logo_url || null);
-      setLogoDark((profile as any).logo_url_dark || null);
+      setLogoLight(profile.logo_url_light || profile.logo_url || null);
+      setLogoDark(profile.logo_url_dark || null);
     }
   }, [profile]);
 
@@ -31,12 +45,13 @@ export function LabelLogoSettings() {
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
-    if (!file.type.startsWith('image/')) {
+    if (!['image/png', 'image/jpeg', 'image/svg+xml'].includes(file.type)) {
       toast({
         title: 'Error',
-        description: 'File harus berupa gambar',
+        description: 'Gunakan PNG, JPG, atau SVG',
         variant: 'destructive',
       });
+      e.target.value = '';
       return;
     }
 
@@ -46,6 +61,29 @@ export function LabelLogoSettings() {
         description: 'Ukuran file maksimal 1MB',
         variant: 'destructive',
       });
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      const { width, height } = await readImageDimensions(file);
+      const ratio = width / height;
+      if (width < 256 || height < 64 || ratio < 2 || ratio > 5) {
+        toast({
+          title: 'Rasio logo tidak sesuai',
+          description: 'Gunakan logo horizontal dengan rasio 2:1 sampai 5:1. Rekomendasi 600 x 200 px (3:1).',
+          variant: 'destructive',
+        });
+        e.target.value = '';
+        return;
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Gambar tidak valid',
+        description: error.message || 'File tidak dapat dibaca sebagai gambar',
+        variant: 'destructive',
+      });
+      e.target.value = '';
       return;
     }
 
@@ -77,6 +115,7 @@ export function LabelLogoSettings() {
       if (updateError) throw updateError;
 
       setLogo(urlData.publicUrl);
+      await refreshProfile();
       
       toast({
         title: 'Berhasil',
@@ -112,6 +151,7 @@ export function LabelLogoSettings() {
       if (error) throw error;
 
       setLogo(null);
+      await refreshProfile();
       
       toast({
         title: 'Berhasil',
@@ -146,7 +186,7 @@ export function LabelLogoSettings() {
         
         {logo ? (
           <div className="flex items-center gap-3">
-            <div className={`relative w-16 h-16 border rounded-lg overflow-hidden ${bgClass}`}>
+            <div className={`relative w-48 h-16 border rounded-lg overflow-hidden ${bgClass}`}>
               <img 
                 src={logo} 
                 alt={`Logo ${label}`}
@@ -179,7 +219,7 @@ export function LabelLogoSettings() {
           <input
             ref={inputRef}
             type="file"
-            accept="image/*"
+            accept="image/png,image/jpeg,image/svg+xml"
             onChange={(e) => handleLogoUpload(e, type)}
             className="hidden"
             id={`label-logo-${type}-upload`}
@@ -227,11 +267,12 @@ export function LabelLogoSettings() {
         <div className="p-3 rounded-lg bg-muted/50 text-sm">
           <p className="font-medium">📐 Ketentuan Gambar:</p>
           <ul className="text-muted-foreground mt-1 space-y-1 list-disc list-inside">
-            <li>Ukuran rekomendasi: <strong>512 x 512 px</strong> (rasio 1:1)</li>
-            <li>Ukuran minimal: 128 x 128 px</li>
+            <li>Rasio horizontal: <strong>2:1 sampai 5:1</strong> (rekomendasi 600 x 200 px / 3:1)</li>
+            <li>Ukuran minimal: 256 x 64 px</li>
             <li>Ukuran maksimal file: <strong>1 MB</strong></li>
             <li>Format: PNG, JPG, SVG</li>
           </ul>
+          <p className="mt-2 text-xs text-muted-foreground">Logo persegi lama tidak diregangkan agar tetap proporsional. Ganti dengan logo horizontal agar tampil jelas di sidebar.</p>
         </div>
       </CardContent>
     </Card>

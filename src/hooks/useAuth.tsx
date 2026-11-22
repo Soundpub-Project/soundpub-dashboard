@@ -17,6 +17,8 @@ interface Profile {
   status: string;
   balance: number;
   logo_url: string | null;
+  logo_url_light: string | null;
+  logo_url_dark: string | null;
   avatar_url: string | null;
   password_set: boolean | null;
   subscription_status: string | null;

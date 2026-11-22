@@ -32,11 +32,8 @@ import {
   Save,
   Upload,
   BadgeCheck,
-  ExternalLink,
-  RefreshCw,
-  Unlink,
-  Search,
   TrendingUp,
+  Wrench,
 } from "lucide-react";
 import {
   Area,
@@ -121,15 +118,10 @@ export default function ArtistProfile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [syncingSpotify, setSyncingSpotify] = useState(false);
   const [artistProfile, setArtistProfile] = useState<ArtistProfileData | null>(
     null,
   );
   const [ownerName, setOwnerName] = useState("");
-  const [spotifyInput, setSpotifyInput] = useState("");
-  const [spotifySearch, setSpotifySearch] = useState("");
-  const [spotifyResults, setSpotifyResults] = useState<any[] | null>(null);
-  const [searchingSpotify, setSearchingSpotify] = useState(false);
   const [artistSummary, setArtistSummary] = useState<ArtistSummary | null>(
     null,
   );
@@ -313,109 +305,6 @@ export default function ArtistProfile() {
     }
   };
 
-  const handleSpotifySync = async () => {
-    const input =
-      spotifyInput.trim() ||
-      artistProfile?.spotify_artist_url ||
-      artistProfile?.spotify_artist_id ||
-      "";
-    if (!input) {
-      toast.error("Masukkan URL atau ID Spotify Artist");
-      return;
-    }
-    await runSpotifyFetch(input);
-  };
-
-  const runSpotifyFetch = async (input: string) => {
-    setSyncingSpotify(true);
-    try {
-      const { data, error } = await supabase.functions.invoke(
-        "spotify-fetch-artist",
-        {
-          body: { action: "fetch", artist_url_or_id: input },
-        },
-      );
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      const sp = data.data;
-
-      const { error: updErr } = await (supabase as any)
-        .from("artist_profiles")
-        .upsert(
-          {
-            user_id: targetUserId,
-            artist_name:
-              artistProfile?.artist_name || formData.artist_name || sp.name,
-            artist_type:
-              artistProfile?.artist_type || formData.artist_type || "solo",
-            spotify_artist_id: sp.id,
-            spotify_artist_url: sp.url,
-            spotify_data: sp,
-            spotify_synced_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id" },
-        );
-      if (updErr) throw updErr;
-
-      toast.success(`Berhasil sync data Spotify: ${sp.name}`);
-      setSpotifyResults(null);
-      setSpotifySearch("");
-      setSpotifyInput("");
-      fetchArtistProfile();
-    } catch (err: any) {
-      toast.error(err.message || "Gagal sync Spotify");
-    } finally {
-      setSyncingSpotify(false);
-    }
-  };
-
-  // Debounced live search
-  useEffect(() => {
-    if (!spotifySearch.trim() || spotifySearch.trim().length < 2) {
-      setSpotifyResults(null);
-      return;
-    }
-    const t = setTimeout(async () => {
-      setSearchingSpotify(true);
-      try {
-        const { data, error } = await supabase.functions.invoke(
-          "spotify-fetch-artist",
-          {
-            body: { action: "search", q: spotifySearch.trim() },
-          },
-        );
-        if (error) throw error;
-        if (data?.error) throw new Error(data.error);
-        setSpotifyResults(data.data || []);
-      } catch (err: any) {
-        toast.error(err.message || "Gagal search Spotify");
-      } finally {
-        setSearchingSpotify(false);
-      }
-    }, 400);
-    return () => clearTimeout(t);
-  }, [spotifySearch]);
-
-  const handleSpotifyDisconnect = async () => {
-    if (!targetUserId) return;
-    const { error } = await (supabase as any)
-      .from("artist_profiles")
-      .update({
-        spotify_artist_id: null,
-        spotify_artist_url: null,
-        spotify_data: null,
-        spotify_synced_at: null,
-      })
-      .eq("user_id", targetUserId);
-    if (error) {
-      toast.error("Gagal disconnect");
-      return;
-    }
-    setSpotifyInput("");
-    toast.success("Spotify disconnected");
-    fetchArtistProfile();
-  };
-
   const handleSave = async () => {
     if (!targetUserId || !canEdit) return;
     if (!formData.artist_name.trim()) {
@@ -510,8 +399,6 @@ export default function ArtistProfile() {
     const value = formData[field];
     return value && String(value).trim() !== "";
   });
-
-  const sp = artistProfile?.spotify_data;
 
   return (
     <DashboardLayout>
@@ -1086,231 +973,28 @@ export default function ArtistProfile() {
           </CardContent>
         </Card>
 
-        {/* Spotify Integration */}
         <Card className="bg-card/50 border-border/50">
           <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <svg
-                className="h-5 w-5 text-[#1DB954]"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z" />
-              </svg>
-              Spotify Artist
-            </CardTitle>
+            <div className="flex flex-wrap items-center gap-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Music className="h-5 w-5 text-[#1DB954]" aria-hidden="true" />
+                Spotify Artist
+              </CardTitle>
+              <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                Dalam Perbaikan
+              </Badge>
+            </div>
             <CardDescription>
-              Hubungkan Spotify Artist untuk auto-sync data publik (foto,
-              follower, top tracks).
+              Hubungkan Spotify Artist untuk auto-sync data publik (foto, follower, top tracks).
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {sp ? (
-              <div className="space-y-4">
-                <div className="flex gap-4 items-start">
-                  {sp.images?.[0]?.url && (
-                    <img
-                      src={sp.images[0].url}
-                      alt={sp.name}
-                      className="h-20 w-20 rounded-full object-cover"
-                    />
-                  )}
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-lg">{sp.name}</h3>
-                      <a
-                        href={sp.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-muted-foreground hover:text-primary"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {sp.followers?.toLocaleString()} followers · Popularity{" "}
-                      {sp.popularity}/100
-                    </p>
-                    {sp.genres?.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {sp.genres.slice(0, 4).map((g: string) => (
-                          <Badge
-                            key={g}
-                            variant="secondary"
-                            className="text-xs"
-                          >
-                            {g}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {sp.top_tracks?.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">Top Tracks</h4>
-                    <div className="space-y-1">
-                      {sp.top_tracks.map((t: any) => (
-                        <a
-                          key={t.id}
-                          href={t.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-3 p-2 rounded hover:bg-muted/50 transition"
-                        >
-                          {t.image && (
-                            <img
-                              src={t.image}
-                              alt={t.name}
-                              className="h-10 w-10 rounded object-cover"
-                            />
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm truncate">{t.name}</p>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {t.album}
-                            </p>
-                          </div>
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {artistProfile?.spotify_synced_at && (
-                  <p className="text-xs text-muted-foreground">
-                    Last synced:{" "}
-                    {new Date(artistProfile.spotify_synced_at).toLocaleString()}
-                  </p>
-                )}
-
-                {canEdit && (
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleSpotifySync}
-                      disabled={syncingSpotify}
-                    >
-                      {syncingSpotify ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                      )}
-                      Refresh Data
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={handleSpotifyDisconnect}
-                    >
-                      <Unlink className="h-4 w-4 mr-2" />
-                      Disconnect
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              canEdit && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Cari Artis di Spotify</Label>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        value={spotifySearch}
-                        onChange={(e) => setSpotifySearch(e.target.value)}
-                        placeholder="Ketik nama artis (mis. Tulus, Raisa, ...)"
-                        className="pl-9"
-                      />
-                      {searchingSpotify && (
-                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Pilih artis yang sesuai. Pastikan benar — link ini jadi
-                      profil resmi Spotify Anda.
-                    </p>
-                  </div>
-
-                  {spotifyResults &&
-                    spotifyResults.length === 0 &&
-                    !searchingSpotify && (
-                      <p className="text-sm text-muted-foreground">
-                        Tidak ada hasil. Coba kata kunci lain.
-                      </p>
-                    )}
-
-                  {spotifyResults && spotifyResults.length > 0 && (
-                    <div className="space-y-2 max-h-80 overflow-y-auto border border-border/50 rounded-lg p-2">
-                      {spotifyResults.map((a: any) => (
-                        <button
-                          key={a.id}
-                          type="button"
-                          disabled={syncingSpotify}
-                          onClick={() => runSpotifyFetch(a.id)}
-                          className="w-full flex items-center gap-3 p-2 rounded hover:bg-muted/50 transition text-left disabled:opacity-50"
-                        >
-                          {a.image ? (
-                            <img
-                              src={a.image}
-                              alt={a.name}
-                              className="h-12 w-12 rounded-full object-cover flex-shrink-0"
-                            />
-                          ) : (
-                            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-                              <User className="h-5 w-5 text-muted-foreground" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{a.name}</p>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {a.followers?.toLocaleString()} followers
-                              {a.genres?.length > 0 &&
-                                ` · ${a.genres.slice(0, 2).join(", ")}`}
-                            </p>
-                          </div>
-                          {syncingSpotify ? (
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                          ) : (
-                            <span className="text-xs text-primary">
-                              Connect
-                            </span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  <Separator />
-
-                  <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground">
-                      Atau paste URL manual
-                    </Label>
-                    <div className="flex gap-2">
-                      <Input
-                        value={spotifyInput}
-                        onChange={(e) => setSpotifyInput(e.target.value)}
-                        placeholder="https://open.spotify.com/artist/..."
-                      />
-                      <Button
-                        onClick={handleSpotifySync}
-                        disabled={syncingSpotify || !spotifyInput.trim()}
-                        variant="outline"
-                      >
-                        {syncingSpotify ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          "Connect"
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )
-            )}
+          <CardContent>
+            <div role="status" className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+              <Wrench className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+              <p className="text-sm text-muted-foreground">
+                Fitur Spotify sementara dinonaktifkan selama pemeliharaan. Data profil Spotify yang sudah tersimpan tetap aman.
+              </p>
+            </div>
           </CardContent>
         </Card>
 

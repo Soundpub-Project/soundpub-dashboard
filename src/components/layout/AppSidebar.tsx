@@ -289,7 +289,7 @@ const getRoleBadge = (role: string | null) => {
 
 export function AppSidebar() {
   const location = useLocation();
-  const { user, role, signOut, isAdmin, isLabel, isWhitelabel, isArtist, isCopyright, isSuperAdmin } = useAuth();
+  const { user, profile: authProfile, role, signOut, isAdmin, isLabel, isWhitelabel, isArtist, isCopyright, isSuperAdmin } = useAuth();
   const { isSsoUser, triggerSsoLogout } = useSsoAuth();
   const { resolvedTheme } = useTheme();
   const { state } = useSidebar(); const isCollapsed = state === "collapsed";
@@ -303,32 +303,44 @@ export function AppSidebar() {
   }, [user]);
 
   useEffect(() => {
+    let cancelled = false;
     const fetchLogo = async () => {
       try {
+        let labelProfile: { logo_url: string | null; logo_url_light: string | null; logo_url_dark: string | null } | null =
+          isLabel || isWhitelabel ? authProfile : null;
+        if (isArtist && authProfile?.parent_label_id) {
+          const { data: parentProfile, error: parentError } = await supabase
+            .from('profiles')
+            .select('logo_url, logo_url_light, logo_url_dark')
+            .eq('id', authProfile.parent_label_id)
+            .maybeSingle();
+          if (parentError) console.error('Error fetching label logo:', parentError);
+          else labelProfile = parentProfile;
+        }
+
         const { data, error } = await supabase
           .from('app_settings')
           .select('key, value')
           .in('key', ['dashboard_logo_light', 'dashboard_logo_dark', 'dashboard_logo']);
+        if (error) console.error('Error fetching global dashboard logo:', error);
 
-        if (!error && data) {
-          const settingsMap: Record<string, string | null> = {};
-          data.forEach(row => {
-            settingsMap[row.key] = row.value;
-          });
-          
-          const themeLogo = resolvedTheme === 'dark'
-            ? settingsMap.dashboard_logo_dark || settingsMap.dashboard_logo_light || settingsMap.dashboard_logo
-            : settingsMap.dashboard_logo_light || settingsMap.dashboard_logo;
-          
-          setLogoUrl(themeLogo || null);
-        }
+        const settingsMap: Record<string, string | null> = {};
+        if (!error) data?.forEach(row => { settingsMap[row.key] = row.value; });
+        const labelLogo = resolvedTheme === 'dark'
+          ? labelProfile?.logo_url_dark || labelProfile?.logo_url_light || labelProfile?.logo_url
+          : labelProfile?.logo_url_light || labelProfile?.logo_url;
+        const dashboardLogo = resolvedTheme === 'dark'
+          ? settingsMap.dashboard_logo_dark || settingsMap.dashboard_logo_light || settingsMap.dashboard_logo
+          : settingsMap.dashboard_logo_light || settingsMap.dashboard_logo;
+        if (!cancelled) setLogoUrl(labelLogo || dashboardLogo || null);
       } catch (error) {
         console.error('Error fetching dashboard logo:', error);
       }
     };
 
-    fetchLogo();
-  }, [resolvedTheme]);
+    void fetchLogo();
+    return () => { cancelled = true; };
+  }, [authProfile, isArtist, isLabel, isWhitelabel, resolvedTheme]);
 
   const fetchProfile = async () => {
     const { data, error } = await supabase
@@ -363,7 +375,7 @@ export function AppSidebar() {
             <img 
               src={logoUrl} 
               alt="Dashboard Logo" 
-              className="h-8 w-auto object-contain"
+              className={isCollapsed ? "h-8 max-w-8 w-auto object-contain" : "h-10 max-w-40 w-auto object-contain"}
             />
           ) : (
             <div className="flex items-center gap-2">
