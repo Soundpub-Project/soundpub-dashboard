@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createServer } from 'node:net';
 
-const chrome = process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+const chrome = process.env.CHROME_PATH || (process.platform === 'win32' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : '/usr/bin/google-chrome');
 const pageUrl = process.env.SOUNDPUB_EGRESS_URL || 'http://127.0.0.1:8281/auth';
 const port = await new Promise((resolvePort, rejectPort) => {
   const server = createServer();
@@ -19,6 +19,7 @@ const port = await new Promise((resolvePort, rejectPort) => {
 const userDataDir = await mkdtemp(join(tmpdir(), 'soundpub-egress-chrome-'));
 const browser = spawn(chrome, [
   '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
+  ...(process.platform === 'win32' ? [] : ['--no-sandbox', '--disable-dev-shm-usage']),
   `--remote-debugging-port=${port}`, `--user-data-dir=${userDataDir}`, 'about:blank',
 ], { stdio: 'ignore', windowsHide: true });
 
@@ -49,8 +50,16 @@ try {
   socket.addEventListener('message', message => {
     const payload = JSON.parse(String(message.data));
     if (payload.method === 'Network.requestWillBeSent') requests.push(payload.params.request.url);
-    if (payload.method === 'Runtime.exceptionThrown') exceptions.push(
-      String(payload.params.exceptionDetails.text).slice(0, 100));
+    if (payload.method === 'Runtime.exceptionThrown') {
+      const details = payload.params.exceptionDetails;
+      exceptions.push([
+        details.text,
+        details.exception?.description,
+        details.url,
+        details.lineNumber,
+        details.columnNumber,
+      ].filter(Boolean).join(' | ').slice(0, 1000));
+    }
     if (payload.id && pending.has(payload.id)) {
       const resolveCommand = pending.get(payload.id);
       pending.delete(payload.id);

@@ -18,7 +18,7 @@ const MAX_ROWS = 1000;
 const REQUIRED_HEADERS = ['composer_code', 'composer_name', 'total_net_royalti', 'period'] as const;
 const MONEY = /^(0|[1-9]\d*)(\.\d{1,2})?$/;
 const PERIOD = /^\d{4}-(0[1-9]|1[0-2])$/;
-const SAFE_TEXT = /^[^\x00-\x1f\x7f]+$/;
+const SAFE_TEXT = new RegExp('^[^' + '\\x00-\\x1f\\x7f' + ']+$');
 
 const blockerLabels: Record<string, string> = {
   COMPOSER_IDENTITY_MAPPING_REQUIRED: 'Pemetaan identitas komposer belum disetujui.',

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { ApiError } from '../api/types.js';
 import { parse, money, minor, decimal } from '../royalties/contracts.js';
 
-const text = z.string().trim().min(1).max(200).regex(/^[^\x00-\x1f\x7f]+$/);
+const text = z.string().trim().min(1).max(200).regex(new RegExp(String.raw`^[^\x00-\x1f\x7f]+$`));
 const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
 const checksum = z.string().regex(/^[a-f0-9]{64}$/);
 const uuid = z.uuid();

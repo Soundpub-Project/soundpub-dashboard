@@ -518,12 +518,6 @@ export default function Releases() {
           </div>
           {!authLoading && canCreateRelease && (
             <div className="flex items-center gap-2">
-              {false && (
-                <Badge variant="secondary" className="bg-amber-500/10 text-amber-600 border-amber-500/30">
-                  <Beaker className="h-3 w-3 mr-1" />
-                  BETA
-                </Badge>
-              )}
               <Button className="gradient-primary" onClick={handleAddRelease}>
                 <Plus className="h-4 w-4 mr-2" />
                 Tambah Release

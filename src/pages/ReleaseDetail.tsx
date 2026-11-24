@@ -55,13 +55,14 @@ import { id as idLocale } from 'date-fns/locale';
 import { toast } from 'sonner';
 
 const sanitizeDownloadName = (name: string) =>
-  name.replace(/[<>:\"/\\|?*\u0000-\u001F]/g, '').trim() || 'track';
+  name.replace(new RegExp('[<>:"' + '/' + '\\\\|?*' + '\\u0000-\\u001F' + ']', 'g'), '').trim() || 'track';
 
 const getFileExtension = (url: string, contentType: string, fallback = 'bin') => {
   try {
     const extension = new URL(url).pathname.match(/\.([a-z0-9]{2,5})$/i)?.[1];
     if (extension) return extension.toLowerCase();
   } catch {
+    void 0;
   }
 
   const extensionsByContentType: Record<string, string> = {

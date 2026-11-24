@@ -42,7 +42,7 @@ Jalankan script test:
 - ✅ Events dipilih: invoice.paid, invoice.expired
 - ✅ Custom Header:
   - Name: x-callback-token
-  - Value: O5BcVNSpFouYSTIjwaKAEr8fd4t9DravtWr2tA9nq50Efnsn
+  - Value: YOUR_XENDIT_WEBHOOK_TOKEN
 
 **Jika belum ada**, tambahkan webhook baru:
 
@@ -56,7 +56,7 @@ Events:
 
 Custom Headers:
   Name: x-callback-token
-  Value: O5BcVNSpFouYSTIjwaKAEr8fd4t9DravtWr2tA9nq50Efnsn
+  Value: YOUR_XENDIT_WEBHOOK_TOKEN
 ```
 
 **Test webhook** dengan tombol "Send Test Webhook" di Xendit Dashboard.
@@ -77,13 +77,13 @@ grep XENDIT_WEBHOOK_TOKEN .env
 
 **Expected output**:
 ```
-XENDIT_WEBHOOK_TOKEN="O5BcVNSpFouYSTIjwaKAEr8fd4t9DravtWr2tA9nq50Efnsn"
+XENDIT_WEBHOOK_TOKEN="YOUR_XENDIT_WEBHOOK_TOKEN"
 ```
 
 **Jika tidak ada**:
 
 ```bash
-echo 'XENDIT_WEBHOOK_TOKEN="O5BcVNSpFouYSTIjwaKAEr8fd4t9DravtWr2tA9nq50Efnsn"' >> .env
+echo 'XENDIT_WEBHOOK_TOKEN="YOUR_XENDIT_WEBHOOK_TOKEN"' >> .env
 docker compose up -d --force-recreate functions
 ```
 

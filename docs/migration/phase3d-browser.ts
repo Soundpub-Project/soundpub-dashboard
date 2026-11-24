@@ -29,7 +29,7 @@ db=await concurrencyPostgres();
 const access='synthetic'+randomUUID().replaceAll('-','').slice(0,12),secret=randomUUID();
 docker('run','-d','--name',name,'--user','0:0','-p','127.0.0.1::9000','-e',`RUSTFS_ACCESS_KEY=${access}`,'-e',`RUSTFS_SECRET_KEY=${secret}`,'-e','RUSTFS_CONSOLE_ENABLE=false','-e','RUSTFS_OBS_LOGGER_LEVEL=error','rustfs/rustfs:1.0.4','/data');
 const sp=JSON.parse(docker('inspect',name))[0].NetworkSettings.Ports['9000/tcp'][0].HostPort, endpoint=`http://127.0.0.1:${sp}`;
-for(let i=0;i<220;i++){try{if((await fetch(endpoint+'/health')).ok)break;}catch{}await new Promise(r=>setTimeout(r,200));if(i===219)throw Error('RustFS unavailable');}
+for(let i=0;i<220;i++){try{if((await fetch(endpoint+'/health')).ok)break;}catch{void 0;}await new Promise(r=>setTimeout(r,200));if(i===219)throw Error('RustFS unavailable');}
 for(const role of ['label','artist','admin','other']){
 const id=ids[role];await db.owner.query("INSERT INTO soundpub.backend_users(id,status) VALUES ($1,'active')",[id]);await db.owner.query('INSERT INTO soundpub.profiles(id,full_name) VALUES ($1,$2)',[id,'QA '+role]);await db.owner.query('INSERT INTO soundpub.user_roles(user_id,role,verified_at) VALUES ($1,$2,now())',[id,role==='other'?'user':role==='admin'?'superadmin':role]);await db.owner.query("INSERT INTO soundpub.external_identities(application_user_id,provider,issuer,subject,verified_at) VALUES ($1,'mock','qa-local',($1::uuid)::text,now())",[id]);}
 await db.owner.query('UPDATE soundpub.profiles SET parent_label_id=$1 WHERE id=$2',[ids.label,ids.artist]);await db.owner.query("INSERT INTO soundpub.artists(label_id,artist_user_id,name,verified_at) VALUES ($1,$2,'QA artist',now())",[ids.label,ids.artist]);
@@ -86,7 +86,7 @@ await check('Audit real multi-page traversal and safe UI projection',async()=>{a
 await page.screenshot({path:join(output,viewport+'-expanded-audit.png'),fullPage:true});
 await ctx.close();}
 }catch(e){evidence.push({viewport:'environment',check:'Stack/browser setup',status:'FAIL',detail:String(e.stack??e)});}
-finally{await browser?.close();await front?.close();await app?.close();store?.close();await db?.close();try{docker('rm','-f','-v',name);}catch{}for(const k of Object.keys(process.env))if(k.startsWith('VITE_'))delete process.env[k];Object.assign(process.env,saved);writeFileSync(join(output,'browser-results.json'),JSON.stringify({evidence,network,blocked,errors,gaps},null,2));console.log(JSON.stringify({evidence,blocked,errors},null,2));if(evidence.some(e=>e.status==='FAIL'))process.exitCode=1;}
+finally{await browser?.close();await front?.close();await app?.close();store?.close();await db?.close();try{docker('rm','-f','-v',name);}catch{void 0;}for(const k of Object.keys(process.env))if(k.startsWith('VITE_'))delete process.env[k];Object.assign(process.env,saved);writeFileSync(join(output,'browser-results.json'),JSON.stringify({evidence,network,blocked,errors,gaps},null,2));console.log(JSON.stringify({evidence,blocked,errors},null,2));if(evidence.some(e=>e.status==='FAIL'))process.exitCode=1;}
 
 
 

@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
     const body = await readBody(req)
     if (typeof body.upload_id !== 'string' || !UUID.test(body.upload_id)) throw new Error('upload_id must be a UUID')
     const reason = body.reason === undefined ? 'Deleted by administrator' : body.reason
-    if (typeof reason !== 'string' || !reason.trim() || reason.length > 1000 || /[\u0000-\u001f\u007f]/.test(reason)) throw new Error('reason must contain 1 to 1000 characters without control characters')
+    if (typeof reason !== 'string' || !reason.trim() || reason.length > 1000 || new RegExp(`[\u0000-\u001f\u007f]`).test(reason)) throw new Error('reason must contain 1 to 1000 characters without control characters')
 
     const { data, error } = await service.rpc('reverse_royalty_upload', {
       p_upload_id: body.upload_id.toLowerCase(), p_actor_id: user.id, p_reason: reason.trim(),

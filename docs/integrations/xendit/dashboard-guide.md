@@ -78,7 +78,7 @@ Setelah klik "Add New Webhook" atau "+ Create Webhook", kamu akan melihat form s
 │  Custom Headers (Optional but IMPORTANT!)                       │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │ Header Name:  x-callback-token                          │   │
-│  │ Header Value: O5BcVNSpFouYSTIjwaKAEr8fd4t9DravtWr...   │   │
+│  │ Header Value: YOUR_XENDIT_WEBHOOK_TOKEN...   │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │  [+ Add Header]                                                 │
 │                                                                 │

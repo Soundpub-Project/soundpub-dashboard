@@ -69,7 +69,7 @@ Berdasarkan analisis kode webhook, masalah paling sering terjadi karena:
    - Events: ☑ invoice.paid, ☑ invoice.expired
    - Custom Headers:
      - Name: x-callback-token
-     - Value: O5BcVNSpFouYSTIjwaKAEr8fd4t9DravtWr2tA9nq50Efnsn
+     - Value: YOUR_XENDIT_WEBHOOK_TOKEN
 
 ### 2. **Environment Variable Missing** (Probabilitas: SEDANG)
 
@@ -82,7 +82,7 @@ grep XENDIT_WEBHOOK_TOKEN .env
 
 **Jika tidak ada, tambahkan**:
 ```bash
-echo 'XENDIT_WEBHOOK_TOKEN="O5BcVNSpFouYSTIjwaKAEr8fd4t9DravtWr2tA9nq50Efnsn"' >> .env
+echo 'XENDIT_WEBHOOK_TOKEN="YOUR_XENDIT_WEBHOOK_TOKEN"' >> .env
 docker compose up -d --force-recreate functions
 ```
 

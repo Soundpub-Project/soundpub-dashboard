@@ -129,7 +129,8 @@ Deno.serve(async (req) => {
       )
     }
     
-    let { email, password, full_name, phone, role, parent_label_id, artist_type, genre, social_links } = validationResult.data
+    let { email, password } = validationResult.data
+    const { full_name, phone, role, parent_label_id, artist_type, genre, social_links } = validationResult.data
     if ((role === 'superadmin' && userRole?.role !== 'superadmin') ||
         ((isLabel || isWhitelabel) && (role !== 'artist' ||
           (parent_label_id != null && parent_label_id !== currentUser.id)))) {

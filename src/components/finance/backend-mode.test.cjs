@@ -196,6 +196,6 @@ const dependencies = name => {
   assert.match(royaltyReport, /EXPORT_ROW_LIMIT/);
   assert.match(royaltyReport, /Belum di katalog/);
   assert.doesNotMatch(royaltyReport, /offset: exportOffset/);
-  assert.ok(royaltyReport.includes("const safe = /^[\\u0000-\\u0020]*[=+@-]/.test(raw)"));
+  assert.match(royaltyReport, /const safe = .*\[=\+@-\].*\.test\(raw\)/);
   console.log('Financial guards and maintenance mode contract passed; session preserved and 0 new Supabase accesses.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

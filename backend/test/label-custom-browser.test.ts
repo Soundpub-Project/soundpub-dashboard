@@ -179,11 +179,10 @@ test('browser E2E: Label Custom PIC artist lifecycle and payout readiness gate',
   const apiOrigin = new URL(address).origin;
   const debugPort = await freePort();
   const dataDir = await mkdtemp(join(tmpdir(), 'soundpub-browser-'));
-  let browser: ChildProcess | undefined;
-  let socket: WebSocket | undefined;
+  const resources: { browser?: ChildProcess; socket?: WebSocket } = {};
   t.after(async () => {
-    socket?.close();
-    if (browser && browser.exitCode === null) browser.kill();
+    resources.socket?.close();
+    if (resources.browser && resources.browser.exitCode === null) resources.browser.kill();
     if (!resolve(dataDir).startsWith(`${resolve(tmpdir())}${sep}`) || !basename(dataDir).startsWith('soundpub-browser-'))
       throw new Error('Unsafe browser temp directory');
     for (let attempt = 0; attempt < 10; attempt++) {
@@ -194,23 +193,25 @@ test('browser E2E: Label Custom PIC artist lifecycle and payout readiness gate',
       }
     }
   });
-  browser = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
+  const browser = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
     `--remote-debugging-port=${debugPort}`, `--user-data-dir=${dataDir}`, 'about:blank'],
   { stdio: 'ignore', windowsHide: true });
+  resources.browser = browser;
   const deadline = Date.now() + 10_000;
   let tab: { webSocketDebuggerUrl: string } | undefined;
   while (!tab) {
     try {
       const reply = await fetch(`http://127.0.0.1:${debugPort}/json/new?about:blank`, { method: 'PUT' });
       if (reply.ok) tab = await reply.json() as { webSocketDebuggerUrl: string };
-    } catch {}
+    } catch { void 0; }
     if (Date.now() >= deadline) throw new Error('Chrome debugging endpoint unavailable');
     if (!tab) await delay(100);
   }
-  socket = new WebSocket(tab.webSocketDebuggerUrl);
+  const socket = new WebSocket(tab.webSocketDebuggerUrl);
+  resources.socket = socket;
   await new Promise<void>((done, fail) => {
-    socket!.addEventListener('open', () => done(), { once: true });
-    socket!.addEventListener('error', () => fail(new Error('Chrome websocket unavailable')), { once: true });
+    socket.addEventListener('open', () => done(), { once: true });
+    socket.addEventListener('error', () => fail(new Error('Chrome websocket unavailable')), { once: true });
   });
   const protocol = new BrowserProtocol(socket, apiOrigin);
   await protocol.command('Page.enable');
@@ -291,7 +292,7 @@ test('browser E2E: catalogless CSV, independent reconciliation and PIC payout li
   const storageDeadline = Date.now() + 45_000;
   for (;;) {
     try { if ((await fetch(`${storageOrigin}/health`, { signal: AbortSignal.timeout(1000) })).ok) break; }
-    catch {}
+    catch { void 0; }
     if (Date.now() >= storageDeadline) throw new Error('Disposable browser RustFS readiness timeout');
     await delay(200);
   }  const picId = randomUUID();
@@ -410,11 +411,10 @@ test('browser E2E: catalogless CSV, independent reconciliation and PIC payout li
   t.after(() => clearInterval(worker));
   const debugPort = await freePort();
   const dataDir = await mkdtemp(join(tmpdir(), 'soundpub-browser-'));
-  let browser: ChildProcess | undefined;
-  let socket: WebSocket | undefined;
+  const resources: { browser?: ChildProcess; socket?: WebSocket } = {};
   t.after(async () => {
-    socket?.close();
-    if (browser && browser.exitCode === null) browser.kill();
+    resources.socket?.close();
+    if (resources.browser && resources.browser.exitCode === null) resources.browser.kill();
     if (!resolve(dataDir).startsWith(`${resolve(tmpdir())}${sep}`) || !basename(dataDir).startsWith('soundpub-browser-'))
       throw new Error('Unsafe browser temp directory');
     for (let attempt = 0; attempt < 10; attempt++) {
@@ -429,23 +429,25 @@ test('browser E2E: catalogless CSV, independent reconciliation and PIC payout li
   await writeFile(csvPath, csv);
   const proofPath = join(dataDir, 'synthetic-transfer.pdf');
   await writeFile(proofPath, '%PDF-1.7\nSynthetic browser-only transfer evidence\n');
-  browser = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
+  const browser = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
     `--remote-debugging-port=${debugPort}`, `--user-data-dir=${dataDir}`, 'about:blank'],
   { stdio: 'ignore', windowsHide: true });
+  resources.browser = browser;
   const deadline = Date.now() + 10_000;
   let tab: { webSocketDebuggerUrl: string } | undefined;
   while (!tab) {
     try {
       const reply = await fetch(`http://127.0.0.1:${debugPort}/json/new?about:blank`, { method: 'PUT' });
       if (reply.ok) tab = await reply.json() as { webSocketDebuggerUrl: string };
-    } catch {}
+    } catch { void 0; }
     if (Date.now() >= deadline) throw new Error('Chrome debugging endpoint unavailable');
     if (!tab) await delay(100);
   }
-  socket = new WebSocket(tab.webSocketDebuggerUrl);
+  const socket = new WebSocket(tab.webSocketDebuggerUrl);
+  resources.socket = socket;
   await new Promise<void>((done, fail) => {
-    socket!.addEventListener('open', () => done(), { once: true });
-    socket!.addEventListener('error', () => fail(new Error('Chrome websocket unavailable')), { once: true });
+    socket.addEventListener('open', () => done(), { once: true });
+    socket.addEventListener('error', () => fail(new Error('Chrome websocket unavailable')), { once: true });
   });
   const protocol = new BrowserProtocol(socket, new URL(address).origin, [uploadOrigin, storageOrigin]);
   await protocol.command('Page.enable');

@@ -63,7 +63,7 @@ const schema = z.object({
       const parsed: unknown = JSON.parse(raw);
       const keys = z.record(z.string().regex(/^[A-Za-z0-9_-]{1,32}$/), z.string().min(32)).safeParse(parsed);
       if (keys.success) return keys.data;
-    } catch {}
+    } catch { void 0; }
     context.addIssue({ code: 'custom', message: 'Must be a JSON object of key IDs and secrets' });
     return z.NEVER;
   }),

@@ -5,7 +5,7 @@ import { parseMoney, formatMoney } from '../finance/money.js';
 
 // ponytail: synthetic IDR statements only; add currencies after approved precision/allocation contracts.
 export const money = z.string().regex(/^(0|[1-9]\d{0,15})(\.\d{1,2})?$/);
-const text = z.string().trim().min(1).max(200).regex(/^[^\x00-\x1f\x7f]+$/);
+const text = z.string().trim().min(1).max(200).regex(new RegExp(String.raw`^[^\x00-\x1f\x7f]+$`));
 export const royaltyRow = z.strictObject({
   source_row_id: text, beneficiary_id: z.uuid().optional(), artist_id: z.uuid().optional(), release_id: z.uuid(), track_id: z.uuid(),
   platform: text.default('UNKNOWN'),

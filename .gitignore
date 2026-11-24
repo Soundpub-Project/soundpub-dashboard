@@ -85,3 +85,4 @@ npm-cache/
 !backend/.env.example
 
 /backup/
+/backend/backups/

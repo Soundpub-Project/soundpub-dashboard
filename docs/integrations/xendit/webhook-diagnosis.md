@@ -37,7 +37,7 @@ if (webhookToken && callbackToken !== webhookToken) {
 Yang harus dicek di Xendit Dashboard:
 - Webhook settings harus punya custom header:
   - Name: `x-callback-token`
-  - Value: `O5BcVNSpFouYSTIjwaKAEr8fd4t9DravtWr2tA9nq50Efnsn`
+  - Value: `YOUR_XENDIT_WEBHOOK_TOKEN`
 
 ### 3. **Environment Variable XENDIT_WEBHOOK_TOKEN Tidak Ter-set di Edge Function**
 **Probabilitas: SEDANG**
@@ -53,7 +53,7 @@ cat .env | grep XENDIT_WEBHOOK_TOKEN
 
 Jika tidak ada, tambahkan:
 `ash
-echo 'XENDIT_WEBHOOK_TOKEN="O5BcVNSpFouYSTIjwaKAEr8fd4t9DravtWr2tA9nq50Efnsn"' >> .env
+echo 'XENDIT_WEBHOOK_TOKEN="YOUR_XENDIT_WEBHOOK_TOKEN"' >> .env
 docker compose up -d --force-recreate functions
 `
 
@@ -66,7 +66,7 @@ Test dari luar:
 `ash
 curl -X POST https://api.yourdomain.com/functions/v1/xendit-webhook \
   -H "Content-Type: application/json" \
-  -H "x-callback-token: O5BcVNSpFouYSTIjwaKAEr8fd4t9DravtWr2tA9nq50Efnsn" \
+  -H "x-callback-token: YOUR_XENDIT_WEBHOOK_TOKEN" \
   -d '{
     "id": "test-invoice-id",
     "status": "PAID"
@@ -132,7 +132,7 @@ cd ~/docker/supabase/supabase-1.26.05/docker
 grep XENDIT_WEBHOOK_TOKEN .env
 
 # Jika tidak ada, tambahkan
-echo 'XENDIT_WEBHOOK_TOKEN="O5BcVNSpFouYSTIjwaKAEr8fd4t9DravtWr2tA9nq50Efnsn"' >> .env
+echo 'XENDIT_WEBHOOK_TOKEN="YOUR_XENDIT_WEBHOOK_TOKEN"' >> .env
 
 # Restart functions service
 docker compose up -d --force-recreate functions
@@ -146,7 +146,7 @@ docker compose up -d --force-recreate functions
    - **Events**: Pilih `invoice.paid`, `invoice.expired`
    - **Custom Headers**:
      - Name: `x-callback-token`
-     - Value: `O5BcVNSpFouYSTIjwaKAEr8fd4t9DravtWr2tA9nq50Efnsn`
+     - Value: `YOUR_XENDIT_WEBHOOK_TOKEN`
 4. Save dan test dengan "Send Test Webhook"
 
 ### Langkah 3: Test Manual Webhook
@@ -158,7 +158,7 @@ INVOICE_ID="your-xendit-invoice-id"
 
 curl -X POST https://api.yourdomain.com/functions/v1/xendit-webhook \
   -H "Content-Type: application/json" \
-  -H "x-callback-token: O5BcVNSpFouYSTIjwaKAEr8fd4t9DravtWr2tA9nq50Efnsn" \
+  -H "x-callback-token: YOUR_XENDIT_WEBHOOK_TOKEN" \
   -d '{"id":"'$INVOICE_ID'","status":"PAID","paid_at":"2026-09-03T15:00:00Z"}'
 `
 

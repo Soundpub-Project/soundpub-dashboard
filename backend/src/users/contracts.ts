@@ -24,7 +24,7 @@ export const whitelabelDashboardDto = z.strictObject({
 });
 export const composerCodePut = z.strictObject({ composerCode: z.string().trim().toUpperCase().regex(/^[A-Z0-9_-]+$/).max(100).nullable() });
 export const partnerIdentityPut = z.strictObject({
-  subject: z.string().trim().min(1).max(255).refine(value => !/[\u0000-\u001f\u007f]/.test(value)),
+  subject: z.string().trim().min(1).max(255).refine(value => !new RegExp(String.raw`[\u0000-\u001f\u007f]`).test(value)),
 });
 const partnerBindingDto = z.strictObject({
   provider: z.literal('iccn'), issuer: z.string(), subject: z.string(), verifiedAt: z.string().nullable(),

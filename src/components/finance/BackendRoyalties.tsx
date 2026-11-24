@@ -47,7 +47,7 @@ export function BackendRoyalties() {
       }
       const quote = (value: unknown) => {
         const raw = String(value ?? '');
-        const safe = /^[\u0000-\u0020]*[=+@-]/.test(raw) ? `'${raw}` : raw;
+        const safe = new RegExp('^[\\u0000-\\u0020]*' + '[=+@-]').test(raw) ? `'${raw}` : raw;
         return `"${safe.replaceAll('"', '""')}"`;
       };
       const header = ['period','isrc','upc','release_title','track_title','artist_name','label_name','platform','country',

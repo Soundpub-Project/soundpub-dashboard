@@ -1,6 +1,6 @@
 import { usesBackendFinance } from '@/components/finance/mode';
 import { BackendCopyrightRoyaltyHistory } from '@/components/finance/BackendCopyrightRoyaltyHistory';
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';

@@ -25,7 +25,7 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. Daftar webhook di Xendit Dashboard
    URL: https://supabase.carubra.com/functions/v1/xendit-webhook
-   Header: x-callback-token = O5BcVNSpFouYSTIjwaKAEr8fd4t9DravtWr2tA9nq50Efnsn
+   Header: x-callback-token = YOUR_XENDIT_WEBHOOK_TOKEN
    Events: invoice.paid, invoice.expired
 
 2. Cek/tambah XENDIT_WEBHOOK_TOKEN di server .env

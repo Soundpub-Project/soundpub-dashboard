@@ -214,7 +214,7 @@ Deno.serve(async (req) => {
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #374151; margin: 0; padding: 0; background-color: #f3f4f6;">
           <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
             <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px 12px 0 0; padding: 30px; text-align: center;">
-              <h1 style="color: white; margin: 0; font-size: 24px;">Ã°Å¸â€œÅ  Royalty Upload Notification</h1>
+              <h1 style="color: white; margin: 0; font-size: 24px;">Ã°Å¸â€œÅ\u00A0 Royalty Upload Notification</h1>
             </div>
             
             <div style="background: white; border-radius: 0 0 12px 12px; padding: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
@@ -329,7 +329,7 @@ Deno.serve(async (req) => {
               </div>
               
               <div style="background: #f9fafb; border-radius: 8px; padding: 20px; margin: 20px 0;">
-                <h3 style="margin-top: 0; color: #1f2937;">Ã°Å¸â€œÅ  Rincian Pembagian</h3>
+                <h3 style="margin-top: 0; color: #1f2937;">Ã°Å¸â€œÅ\u00A0 Rincian Pembagian</h3>
                 <table style="width: 100%; border-collapse: collapse;">
                   <tr>
                     <td style="padding: 10px 0; color: #6b7280;">Label Revenue:</td>

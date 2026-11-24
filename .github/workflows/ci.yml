@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CI: "true"
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VITE_SUPABASE_URL: http://127.0.0.1:54321
+      VITE_SUPABASE_PROJECT_ID: local
+      VITE_SUPABASE_PUBLISHABLE_KEY: local-dummy-publishable-key
+      VITE_DATABASE_SCHEMA: Soundpub
+      VITE_PDF_SERVICE_URL: http://127.0.0.1:8281
+      VITE_CONTRACT_BUCKET: contracts
+      VITE_SSO_BASE_URL: http://127.0.0.1:8080
+      VITE_SSO_REALM: local
+      VITE_SSO_CLIENT_ID: local
+      VITE_SSO_AUTO_REDIRECT: "false"
+      VITE_GA4_MEASUREMENT_ID: ""
+      VITE_SOUNDPUB_API_URL: http://127.0.0.1:8281
+      VITE_SOUNDPUB_BACKEND_DOMAINS: auth,settings
+      VITE_ENV: local
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run test:secrets
+      - run: npm run lint
+      - run: npm run test:contracts
+      - run: npm run build
+      - name: Browser egress check
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 8281 --strictPort &
+          for attempt in $(seq 1 50); do
+            if curl -fsS http://127.0.0.1:8281/auth > /dev/null; then
+              ready=1
+              break
+            fi
+            sleep 0.2
+          done
+          if [ "${ready:-0}" != "1" ]; then
+            echo "Preview server did not become ready"
+            exit 1
+          fi
+          npm run test:egress
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test

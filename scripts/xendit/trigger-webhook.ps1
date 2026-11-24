@@ -9,7 +9,7 @@ param(
     [string]$WebhookUrl = "https://api.yourdomain.com/functions/v1/xendit-webhook",
     
     [Parameter(Mandatory=$false)]
-    [string]$Token = "O5BcVNSpFouYSTIjwaKAEr8fd4t9DravtWr2tA9nq50Efnsn",
+    [string]$Token = "YOUR_XENDIT_WEBHOOK_TOKEN",
     
     [Parameter(Mandatory=$false)]
     [ValidateSet("PAID", "EXPIRED", "FAILED")]

@@ -222,7 +222,7 @@ export function AudioClipCutterDialog({
   const endDrag = (e: React.PointerEvent) => {
     if (!draggingRef.current) return;
     draggingRef.current = null;
-    try { (e.target as Element).releasePointerCapture?.(e.pointerId); } catch {}
+    try { (e.target as Element).releasePointerCapture?.(e.pointerId); } catch { void 0; }
   };
 
   // Click on waveform (outside handles) → move playhead

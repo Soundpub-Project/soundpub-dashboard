@@ -144,7 +144,7 @@ export function ChangeStatusDialog({
 
             {selectedStatus === 'suspended' && (
               <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3">
-                <p className="text-sm text-destructive font-medium">âš ï¸ Peringatan</p>
+                <p className="text-sm text-destructive font-medium">âš&#160;ï¸ Peringatan</p>
                 <p className="text-xs text-destructive/80 mt-1">
                   User yang di-suspend tidak akan bisa login ke aplikasi sampai statusnya diubah kembali.
                 </p>

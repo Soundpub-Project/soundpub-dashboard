@@ -239,8 +239,8 @@ test('media custom authority Docker-free: canonical ownership, fresh revocation 
   type Principal = import('../src/auth/index.js').Principal;
   let actor: Principal = { id: 'pic', roles: ['label_custom'], status: 'active' };
   let owner: Principal = actor;
-  let unit = { id: 'unit', owner_user_id: 'pic', status: 'active' };
-  let catalog = { id: 'catalog', artist_user_id: null, label_id: 'pic', label_custom_unit_id: 'unit', management_mode: 'LABEL_CUSTOM_MANAGED', verified_at: 'now' as string | null };
+  const unit = { id: 'unit', owner_user_id: 'pic', status: 'active' };
+  const catalog = { id: 'catalog', artist_user_id: null, label_id: 'pic', label_custom_unit_id: 'unit', management_mode: 'LABEL_CUSTOM_MANAGED', verified_at: 'now' as string | null };
   let release = { artist_id: 'catalog', artist_user_id: null, status: 'draft', archived_at: null as string | null };
   let trackMatches = true;
   let lockedArtist: typeof catalog | undefined;

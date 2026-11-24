@@ -34,7 +34,7 @@ param(
     [string]$WebhookUrl = "https://api.yourdomain.com/functions/v1/xendit-webhook",
     
     [Parameter(Mandatory=$false)]
-    [string]$Token = "O5BcVNSpFouYSTIjwaKAEr8fd4t9DravtWr2tA9nq50Efnsn",
+    [string]$Token = "YOUR_XENDIT_WEBHOOK_TOKEN",
     
     [Parameter(Mandatory=$false)]
     [string]$Status = "PAID"
@@ -95,7 +95,7 @@ Simpan sebagai `trigger-webhook.sh`:
 
 INVOICE_ID="$1"
 WEBHOOK_URL="${2:-https://api.yourdomain.com/functions/v1/xendit-webhook}"
-TOKEN="${3:-O5BcVNSpFouYSTIjwaKAEr8fd4t9DravtWr2tA9nq50Efnsn}"
+TOKEN="${3:-YOUR_XENDIT_WEBHOOK_TOKEN}"
 STATUS="${4:-PAID}"
 
 if [ -z "$INVOICE_ID" ]; then

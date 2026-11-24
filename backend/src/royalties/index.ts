@@ -19,13 +19,13 @@ const reportCursor = z.strictObject({ period: z.string().regex(/^\d{4}-(0[1-9]|1
   row: z.number().int().min(2).nullable(), id: z.uuid(), scope: z.string().regex(/^[0-9a-f]{64}$/) });
 const csvCommitEnvelope = z.strictObject({
   csv: z.string().min(1).max(1_000_000),
-  source: z.string().trim().min(1).max(200).regex(/^[^\x00-\x1f\x7f]+$/),
-  filename: z.string().trim().min(1).max(200).regex(/^[^\x00-\x1f\x7f\\/]+$/),
+  source: z.string().trim().min(1).max(200).regex(new RegExp(String.raw`^[^\x00-\x1f\x7f]+$`)),
+  filename: z.string().trim().min(1).max(200).regex(new RegExp(String.raw`^[^\x00-\x1f\x7f\\/]+$`)),
   expected_checksum: z.string().regex(/^[0-9a-f]{64}$/),
 });
 const fileUploadEnvelope = z.strictObject({
-  source: z.string().trim().min(1).max(200).regex(/^[^\x00-\x1f\x7f]+$/),
-  filename: z.string().trim().min(1).max(200).regex(/^[^\x00-\x1f\x7f\\/]+$/),
+  source: z.string().trim().min(1).max(200).regex(new RegExp(String.raw`^[^\x00-\x1f\x7f]+$`)),
+  filename: z.string().trim().min(1).max(200).regex(new RegExp(String.raw`^[^\x00-\x1f\x7f\\/]+$`)),
   mime_type: z.literal('text/csv'),
   size: z.number().int().min(1).max(100 * 1024 ** 2),
   checksum: z.string().regex(/^[0-9a-fA-F]{64}$/).transform(value => value.toLowerCase()),
@@ -807,7 +807,7 @@ export function createRoyaltiesService(pool: Pool, files?: RoyaltyImportObjectSt
       if (sessionId) parse(z.uuid(), sessionId);
       const value = parse(z.strictObject({
         csv: z.string().min(1).max(1_000_000),
-        filename: z.string().trim().min(1).max(200).regex(/^[^\x00-\x1f\x7f\\/]+$/),
+        filename: z.string().trim().min(1).max(200).regex(new RegExp(String.raw`^[^\x00-\x1f\x7f\\/]+$`)),
         expected_checksum: z.string().regex(/^[0-9a-f]{64}$/),
         reason: z.string().trim().min(1).max(1000),
       }), input);
