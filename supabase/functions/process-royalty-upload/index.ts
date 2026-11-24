@@ -1,422 +1,263 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
 
-// PostgREST exposes schemas in lowercase on self-hosted Supabase.
-const DATABASE_SCHEMA = 'soundpub'
-
-const createSoundpubClient = (supabaseUrl: string, supabaseKey: string, options: any = {}) => {
-  const existingDb = options.db || {}
-  return createClient(supabaseUrl, supabaseKey, {
-    ...options,
-    db: { ...existingDb, schema: DATABASE_SCHEMA },
-  })
-}
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const PAGE_SIZE = 500
+const normalizeISRC = (value: string) => value.trim().replace(/-/g, '').toUpperCase()
+const normalizeName = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase()
+const labelNameKey = (value: string) => {
+  const name = normalizeName(value)
+  return ['soundpub', 'soundpub music', 'soundpub music ecosystem'].includes(name) ? 'soundpub music' : name
+}
+const sha256 = async (value: string) => {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
+  return [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, '0')).join('')
+}
+const respond = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
+  status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+})
 
-const normalizeISRC = (isrc: string) => isrc.replace(/-/g, '').toUpperCase()
-const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
+class InputError extends Error {}
 
-const Soundpub_LABEL_NAME = 'Soundpub MUSIC'
-const Soundpub_LABEL_ALIASES = new Set(['Soundpub', 'Soundpub music', 'Soundpub music ecosystem'])
-const MANAGED_ARTIST_DOMAIN = 'managed.Soundpub.local'
-const normalizeName = (value: string | null | undefined) => (value || '').trim().replace(/\s+/g, ' ').toLowerCase()
-const slugify = (value: string | null | undefined) => normalizeName(value).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'artist'
-const isSoundpubLabel = (labelUserId: string | null | undefined, labelName: string | null | undefined, SoundpubLabelId: string | null | undefined) => {
-  return (!!SoundpubLabelId && labelUserId === SoundpubLabelId) || Soundpub_LABEL_ALIASES.has(normalizeName(labelName))
+function object(value: unknown, fields: readonly string[], context: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new InputError(context + ' must be an object')
+  const result = value as Record<string, unknown>
+  if (Object.keys(result).some(key => !fields.includes(key))) throw new InputError(context + ' contains unsupported fields')
+  return result
+}
+
+function text(value: unknown, field: string, max = 500, optional = false): string {
+  if (optional && value === undefined) return ''
+  if (typeof value !== 'string' || value.length > max || /[\u0000-\u001f\u007f]/.test(value)) {
+    throw new InputError(field + ' must be text of at most ' + max + ' characters without control characters')
+  }
+  const result = value.trim()
+  if (!optional && !result) throw new InputError(field + ' is required')
+  return result
+}
+
+function optionalId(value: unknown, field: string): string | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'string' || !UUID.test(value)) throw new InputError(field + ' must be a UUID')
+  return value.toLowerCase()
+}
+
+async function readBody(req: Request): Promise<unknown> {
+  if (!/^application\/json(?:\s*;|$)/i.test(req.headers.get('content-type') || '')) throw new InputError('Content-Type must be application/json')
+  const reader = req.body?.getReader()
+  if (!reader) throw new InputError('JSON body is required')
+  const decoder = new TextDecoder('utf-8', { fatal: true })
+  let size = 0
+  let body = ''
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      size += value.byteLength
+      if (size > 20 * 1024 * 1024) {
+        await reader.cancel()
+        throw new InputError('Request exceeds 20 MiB')
+      }
+      body += decoder.decode(value, { stream: true })
+    }
+    return JSON.parse(body + decoder.decode())
+  } catch (error) {
+    if (error instanceof InputError) throw error
+    throw new InputError('Invalid JSON body')
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+function validateRow(value: unknown, index: number) {
+  const context = 'Row ' + (index + 1)
+  const row = object(value, ['period', 'isrc', 'upc', 'title', 'artist', 'label_name', 'platform', 'country', 'sales_type', 'sales_unit', 'net_revenue', 'artist_user_id', 'label_user_id'], context)
+  const period = text(row.period, context + ': period', 7)
+  if (!/^[1-9]\d{3}-(0[1-9]|1[0-2])$/.test(period)) throw new InputError(context + ': period must be YYYY-MM')
+  const rawISRC = text(row.isrc, context + ': isrc', 15)
+  if (!/^(?:[a-z]{2}[a-z0-9]{3}\d{7}|[a-z]{2}-[a-z0-9]{3}-\d{2}-\d{5})$/i.test(rawISRC)) throw new InputError(context + ': invalid ISRC')
+  const upc = text(row.upc, context + ': upc', 13, true)
+  if (upc && !/^\d{12,13}$/.test(upc)) throw new InputError(context + ': UPC must contain 12 or 13 digits')
+  const country = text(row.country, context + ': country', 2).toUpperCase()
+  if (!/^[A-Z]{2}$/.test(country)) throw new InputError(context + ': country must be a two-letter code')
+  if (typeof row.sales_unit !== 'number' || !Number.isSafeInteger(row.sales_unit)) throw new InputError(context + ': sales_unit must be a safe integer')
+  if (row.sales_unit < 0 || row.sales_unit > 2147483647) throw new InputError(context + ': sales_unit must be between 0 and 2147483647')
+  if (typeof row.net_revenue !== 'number' || !Number.isFinite(row.net_revenue) || Math.abs(row.net_revenue) > Number.MAX_SAFE_INTEGER / 100) {
+    throw new InputError(context + ': net_revenue must be a finite number within the supported monetary range')
+  }
+  if (Math.abs(row.net_revenue * 100 - Math.round(row.net_revenue * 100)) > 1e-8) throw new InputError(context + ': net_revenue supports at most two decimal places')
+  return {
+    period, isrc: normalizeISRC(rawISRC), rawISRC, upc, country,
+    title: text(row.title, context + ': title', 1000, true),
+    artist: text(row.artist, context + ': artist', 500, true),
+    label_name: text(row.label_name, context + ': label_name', 500, true),
+    platform: text(row.platform, context + ': platform', 200),
+    sales_type: text(row.sales_type, context + ': sales_type', 100, true),
+    sales_unit: row.sales_unit, net_revenue: row.net_revenue,
+    artist_user_id: optionalId(row.artist_user_id, context + ': artist_user_id'),
+    label_user_id: optionalId(row.label_user_id, context + ': label_user_id'),
+  }
+}
+
+type Profile = { id: string; full_name: string | null; parent_label_id: string | null }
+type Track = { id: string; isrc: string; title: string | null; artist_name: string | null; release_id: string | null; artist_user_id: string | null }
+type Release = { id: string; label_id: string | null; upc: string | null; artist_name: string | null; artist_user_id: string | null }
+const createSoundpubClient = (url: string, key: string, authorization?: string) => createClient(url, key, {
+  db: { schema: 'soundpub' },
+  auth: { persistSession: false, autoRefreshToken: false },
+  ...(authorization ? { global: { headers: { Authorization: authorization } } } : {}),
+})
+type Client = ReturnType<typeof createSoundpubClient>
+
+// Paginate every lookup so API row limits cannot hide an ambiguous recipient.
+async function lookup<T>(client: Client, table: string, columns: string, field: string, values: string[], order = 'id'): Promise<T[]> {
+  const result: T[] = []
+  const unique = [...new Set(values)]
+  for (let i = 0; i < unique.length; i += 100) {
+    for (let offset = 0; ; ) {
+      const query = client.from(table).select(columns).in(field, unique.slice(i, i + 100)).order(order)
+      if (order !== 'id') query.order('id')
+      const { data, error } = await query.range(offset, offset + PAGE_SIZE - 1)
+      if (error || !data) throw new Error('Failed to resolve ' + table)
+      if (!data.length) break
+      result.push(...data as unknown as T[])
+      offset += data.length
+    }
+  }
+  return result
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  if (req.method !== 'POST') return respond({ success: false, error: 'Method not allowed' }, 405)
 
   try {
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) return new Response(JSON.stringify({ success: false, error: 'Auth required' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    if (!authHeader || !/^Bearer [^\s]+$/i.test(authHeader)) return respond({ success: false, error: 'Auth required' }, 401)
+    const url = Deno.env.get('SUPABASE_URL')
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    if (!url || !anonKey || !serviceKey) throw new Error('Supabase configuration is missing')
+    const userClient = createSoundpubClient(url, anonKey, authHeader)
+    const { data: { user }, error: userError } = await userClient.auth.getUser()
+    if (userError || !user) return respond({ success: false, error: 'Unauthorized' }, 401)
+    const service = createSoundpubClient(url, serviceKey)
+    const { data: isAdmin, error: adminError } = await service.rpc('is_admin', { user_id: user.id })
+    if (adminError) throw new Error('Admin check failed')
+    if (isAdmin !== true) return respond({ success: false, error: 'Admin only' }, 403)
 
-    const supabaseAdmin = createSoundpubClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
-    const supabaseUser = createSoundpubClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } })
+    const body = object(await readBody(req), ['rows', 'filename', 'originalFilename', 'replaceExisting', 'replaceMode', 'idempotencyKey'], 'Request')
+    const filename = text(body.filename, 'filename', 255)
+    const originalFilename = body.originalFilename === undefined ? filename : text(body.originalFilename, 'originalFilename', 255)
+    if (/[\\/]/.test(filename) || /[\\/]/.test(originalFilename) || [filename, originalFilename].some(name => name === '.' || name === '..')) throw new InputError('Filenames must not contain paths')
+    const replaceExisting = body.replaceExisting === undefined ? false : body.replaceExisting
+    if (typeof replaceExisting !== 'boolean') throw new InputError('replaceExisting must be boolean')
+    const replaceMode = body.replaceMode === undefined ? 'filename_period' : body.replaceMode
+    if (replaceMode !== 'filename_period' && replaceMode !== 'period') throw new InputError('Invalid replaceMode')
+    const idempotencyKey = body.idempotencyKey === undefined ? null : text(body.idempotencyKey, 'idempotencyKey', 200)
+    if (idempotencyKey !== null && !/^[A-Za-z0-9._:-]+$/.test(idempotencyKey)) throw new InputError('Invalid idempotencyKey')
+    if (!Array.isArray(body.rows) || body.rows.length === 0 || body.rows.length > 50000) throw new InputError('rows must contain 1 to 50000 records')
+    const rows = body.rows.map(validateRow)
 
-    const { data: { user } } = await supabaseUser.auth.getUser()
-    if (!user) return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-
-    const { data: isAdmin, error: adminError } = await supabaseAdmin.rpc('is_admin', { user_id: user.id })
-    if (adminError) {
-      console.error('Admin check failed:', adminError)
-      throw new Error(`Admin check failed: ${adminError.message}`)
+    const isrcVariants = rows.flatMap(row => {
+      const dashed = row.isrc.slice(0, 2) + '-' + row.isrc.slice(2, 5) + '-' + row.isrc.slice(5, 7) + '-' + row.isrc.slice(7)
+      return [row.rawISRC, row.isrc, row.isrc.toLowerCase(), dashed, dashed.toLowerCase()]
+    })
+    const tracks = await lookup<Track>(service, 'tracks', 'id,isrc,title,artist_name,release_id,artist_user_id', 'isrc', isrcVariants)
+    const releases = await lookup<Release>(service, 'releases', 'id,label_id,upc,artist_name,artist_user_id', 'id', tracks.flatMap(track => track.release_id ? [track.release_id] : []))
+    const releaseById = new Map(releases.map(release => [release.id, release]))
+    const tracksByISRC = new Map<string, Track[]>()
+    for (const track of tracks) {
+      const key = normalizeISRC(track.isrc)
+      const matches = tracksByISRC.get(key) || []
+      if (!matches.some(match => match.id === track.id)) matches.push(track)
+      tracksByISRC.set(key, matches)
     }
-    if (!isAdmin) return new Response(JSON.stringify({ success: false, error: 'Admin only' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    const labelRoles = await lookup<{ user_id: string }>(service, 'user_roles', 'user_id', 'role', ['label', 'whitelabel'], 'user_id')
+    const labels = await lookup<Profile>(service, 'profiles', 'id,full_name,parent_label_id', 'id', labelRoles.map(role => role.user_id))
+    const labelById = new Map(labels.map(label => [label.id, label]))
 
-    const { rows, filename, originalFilename, replaceExisting = false, replaceMode = 'filename_period' } = await req.json()
-    if (!rows?.length) return new Response(JSON.stringify({ success: false, error: 'No data' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    const scopedRows = rows.map((row, index) => {
+      const fail = (message: string): never => { throw new InputError('Row ' + (index + 1) + ': ' + message) }
+      let labelId = row.label_user_id
+      if (labelId && !labelById.has(labelId)) fail('label_user_id is not a label')
+      if (row.label_name) {
+        const matches = labels.filter(label => label.full_name && labelNameKey(label.full_name) === labelNameKey(row.label_name))
+        if (labelId ? !matches.some(label => label.id === labelId) : matches.length !== 1) fail('Label name is unresolved, ambiguous, or conflicts with label_user_id')
+        labelId ||= matches[0].id
+      }
+      const matches = tracksByISRC.get(row.isrc) || []
+      if (matches.some(track => !track.release_id || !releaseById.get(track.release_id)?.label_id)) fail('Track label is unresolved')
+      if (!labelId) {
+        const ids = [...new Set(matches.map(track => releaseById.get(track.release_id!)!.label_id!))]
+        if (ids.length !== 1 || !labelById.has(ids[0])) fail('Label is unresolved or ambiguous; provide label_user_id')
+        labelId = ids[0]
+      }
+      const scoped = matches.filter(track => releaseById.get(track.release_id!)!.label_id === labelId)
+      if (matches.length && !scoped.length) fail('ISRC does not belong to the resolved label')
+      return { row, label: labelById.get(labelId)!, matches: scoped, fail }
+    })
 
-    // Validate - ISRC is primary key
-    const validRows = rows.filter((r: any) => r.isrc?.trim() && r.period?.trim() && r.platform?.trim() && r.country?.trim()).map((r: any) => ({
-      period: r.period.trim(),
-      isrc: normalizeISRC(r.isrc.trim()),
-      upc: r.upc?.trim() || '',
-      title: r.title?.trim() || null,
-      artist: r.artist?.trim() || null,
-      label_name: r.label_name?.trim() || null,
-      platform: r.platform.trim(),
-      country: r.country.trim().toUpperCase(),
-      sales_type: r.sales_type?.trim() || null,
-      sales_unit: Number(r.sales_unit) || 0,
-      net_revenue: roundCurrency(Number(r.net_revenue) || 0),
+    const artists = await lookup<Profile>(service, 'profiles', 'id,full_name,parent_label_id', 'parent_label_id', scopedRows.map(item => item.label.id))
+    const artistRoles = await lookup<{ user_id: string; role: string }>(service, 'user_roles', 'user_id,role', 'user_id', artists.map(artist => artist.id))
+    const artistIds = new Set(artistRoles.filter(role => role.role === 'artist').map(role => role.user_id))
+    const artistById = new Map(artists.filter(artist => artistIds.has(artist.id)).map(artist => [artist.id, artist]))
+    const resolvedRows = scopedRows.map(({ row, label, matches, fail }) => {
+      const resolveName = (name: string): string => {
+        const matches = artists.filter(artist => artistIds.has(artist.id) && artist.parent_label_id === label.id && artist.full_name && normalizeName(artist.full_name) === normalizeName(name))
+        if (!name || matches.length !== 1) fail('Artist is unresolved or ambiguous under the resolved label')
+        return matches[0].id
+      }
+      const candidates = matches.map(track => {
+        const release = releaseById.get(track.release_id!)!
+        const artistId = track.artist_user_id || release.artist_user_id || resolveName(track.artist_name || release.artist_name || row.artist)
+        if (artistById.get(artistId)?.parent_label_id !== label.id) fail('Catalog artist does not belong to the resolved label')
+        return { track, release, artistId }
+      })
+      let artistId = row.artist_user_id
+      if (artistId && artistById.get(artistId)?.parent_label_id !== label.id) fail('artist_user_id is not an artist under the resolved label')
+      const catalogIds = [...new Set(candidates.flatMap(candidate => candidate.artistId ? [candidate.artistId] : []))]
+      if (artistId && catalogIds.length && !catalogIds.includes(artistId)) fail('artist_user_id conflicts with the catalog')
+      if (!artistId && catalogIds.length === 1) artistId = catalogIds[0]
+      if (!artistId && catalogIds.length > 1) fail('ISRC artist is ambiguous; provide artist_user_id')
+      if (!artistId) artistId = resolveName(row.artist)
+      const artist = artistById.get(artistId)!
+      const selected = candidates.filter(candidate => !candidate.artistId || candidate.artistId === artistId)
+      if (row.artist && ![artist.full_name, ...selected.flatMap(candidate => [candidate.track.artist_name, candidate.release.artist_name])].some(name => name && normalizeName(name) === normalizeName(row.artist))) fail('Artist name conflicts with the resolved artist')
+      const upcs = [...new Set(selected.flatMap(candidate => candidate.release.upc ? [candidate.release.upc] : []))]
+      if (row.upc && upcs.length && !upcs.includes(row.upc)) fail('UPC conflicts with the resolved catalog')
+      const titles = [...new Set(selected.flatMap(candidate => candidate.track.title ? [candidate.track.title] : []))]
+      return {
+        period: row.period, isrc: row.isrc,
+        upc: row.upc || (upcs.length === 1 ? upcs[0] : ''),
+        title: row.title || (titles.length === 1 ? titles[0] : null),
+        artist: row.artist || artist.full_name || fail('Artist name is missing'),
+        label_name: label.full_name || fail('Label name is missing'),
+        platform: row.platform, country: row.country, sales_type: row.sales_type,
+        sales_unit: row.sales_unit, net_revenue: row.net_revenue,
+        artist_user_id: artistId, label_user_id: label.id,
+      }
+    })
+
+    const effectiveIdempotencyKey = idempotencyKey || await sha256(JSON.stringify({
+      originalFilename,
+      replaceExisting,
+      replaceMode,
+      rows: resolvedRows,
     }))
-
-    if (!validRows.length) return new Response(JSON.stringify({ success: false, error: 'No valid rows' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-
-    const uploadedPeriods = [...new Set(validRows.map((row: any) => row.period).filter(Boolean))]
-    const normalizedReplaceMode = replaceMode === 'period' ? 'period' : 'filename_period'
-    let replacedUploads = 0
-    let replacedRows = 0
-
-    if (replaceExisting && uploadedPeriods.length > 0) {
-      const affectedUploadIds = new Set<string>()
-
-      if (normalizedReplaceMode === 'filename_period') {
-        if (!originalFilename) throw new Error('Original filename is required for filename + period replace')
-
-        const { data: oldUploads, error: oldUploadError } = await supabaseAdmin
-          .from('royalty_uploads')
-          .select('id, inserted_records, original_filename')
-          .eq('original_filename', originalFilename)
-        if (oldUploadError) throw oldUploadError
-
-        for (const oldUpload of oldUploads || []) {
-          for (const period of uploadedPeriods) {
-            const { count, error: oldRoyaltiesDeleteError } = await supabaseAdmin
-              .from('royalties')
-              .delete({ count: 'exact' })
-              .eq('upload_id', oldUpload.id)
-              .eq('period', period)
-            if (oldRoyaltiesDeleteError) throw oldRoyaltiesDeleteError
-            if ((count || 0) > 0) {
-              affectedUploadIds.add(oldUpload.id)
-              replacedRows += count || 0
-            }
-          }
-        }
-      } else {
-        for (const period of uploadedPeriods) {
-          const { data: oldUploads, error: oldUploadQueryError } = await supabaseAdmin
-            .from('royalties')
-            .select('upload_id')
-            .eq('period', period)
-          if (oldUploadQueryError) throw oldUploadQueryError
-
-          const uploadIdsToDelete = new Set((oldUploads || []).map((r: any) => r.upload_id))
-          for (const uploadId of uploadIdsToDelete) {
-            affectedUploadIds.add(uploadId)
-          }
-
-          const { count, error: oldRoyaltiesDeleteError } = await supabaseAdmin
-            .from('royalties')
-            .delete({ count: 'exact' })
-            .eq('period', period)
-          if (oldRoyaltiesDeleteError) throw oldRoyaltiesDeleteError
-          replacedRows += count || 0
-        }
-      }
-
-      replacedUploads = affectedUploadIds.size
-
-      for (const uploadId of affectedUploadIds) {
-        const { count, error: remainingCheck } = await supabaseAdmin.from('royalties').select('id', { count: 'exact', head: true }).eq('upload_id', uploadId)
-        if (!remainingCheck && (count === 0 || count === null)) {
-          await supabaseAdmin.from('royalty_uploads').update({ status: 'replaced' }).eq('id', uploadId)
-        }
-      }
-    }
-
-    const { data: upload, error: uploadError } = await supabaseAdmin
-      .from('royalty_uploads')
-      .insert({ user_id: user.id, filename: filename, original_filename: originalFilename || filename, total_records: validRows.length, status: 'processing' })
-      .select()
-      .single()
-    if (uploadError || !upload) throw new Error(`Failed to create upload record: ${uploadError?.message}`)
-
-    const isrcs = [...new Set(validRows.map((r: any) => r.isrc).filter(Boolean))]
-    const { data: isrcData, error: isrcError } = await supabaseAdmin
-      .from('tracks')
-      .select('isrc, title, artist_name, release_id, artist_user_id')
-      .in('isrc', isrcs)
-    if (isrcError) console.warn('ISRC fetch failed:', isrcError)
-    const isrcMap: Record<string, any> = {}
-    ;(isrcData || []).forEach((t: any) => { isrcMap[normalizeISRC(t.isrc)] = t })
-
-    const releaseIds = [...new Set((isrcData || []).map((t: any) => t.release_id).filter(Boolean))]
-    const { data: releaseData, error: releaseError } = await supabaseAdmin
-      .from('releases')
-      .select('id, label_id, upc, artist_name, artist_user_id')
-      .in('id', releaseIds)
-    if (releaseError) console.warn('Release fetch failed:', releaseError)
-    const relMap: Record<string, any> = {}
-    ;(releaseData || []).forEach((r: any) => { relMap[r.id] = r })
-
-    const { data: labelRoleData, error: labelRoleError } = await supabaseAdmin
-      .from('user_roles')
-      .select('user_id')
-      .eq('role', 'label')
-    if (labelRoleError) throw new Error(`Failed to load label roles: ${labelRoleError.message}`)
-    const labelRoleIds = [...new Set((labelRoleData || []).map((row: any) => row.user_id).filter(Boolean))]
-    const { data: labelData, error: labelError } = await supabaseAdmin
-      .from('profiles')
-      .select('id, full_name')
-      .in('id', labelRoleIds)
-    if (labelError) throw new Error(`Failed to load label profiles: ${labelError.message}`)
-    const labelMap: Record<string, string> = {}
-    ;(labelData || []).forEach((l: any) => { labelMap[l.id] = l.full_name || '' })
-
-    const { data: SoundpubLabelData, error: SoundpubError } = await supabaseAdmin
-      .from('profiles')
-      .select('id')
-      .in('id', labelRoleIds)
-      .ilike('full_name', '%Soundpub%')
-      .limit(1)
-      .single()
-    if (SoundpubError || !SoundpubLabelData?.id) throw new Error(`Soundpub label profile not found: ${SoundpubError?.message || 'missing label profile'}`)
-    const SoundpubLabelId = SoundpubLabelData.id
-
-    const nameToLabelId: Record<string, string | null> = {}
-    const nameCounts: Record<string, number> = {}
-    ;(labelData || []).forEach((l: any) => {
-      const normalized = normalizeName(l.full_name)
-      if (!normalized) return
-      nameCounts[normalized] = (nameCounts[normalized] || 0) + 1
-      nameToLabelId[normalized] = l.id
+    const { data, error } = await service.rpc('commit_royalty_upload', {
+      p_rows: resolvedRows, p_actor_id: user.id, p_filename: filename,
+      p_original_filename: originalFilename, p_replace_existing: replaceExisting,
+      p_replace_mode: replaceMode, p_idempotency_key: effectiveIdempotencyKey,
     })
-    Object.keys(nameCounts).forEach(k => { if (nameCounts[k] > 1) nameToLabelId[k] = null })
-
-    const { data: artistRoleData, error: artistRoleError } = await supabaseAdmin
-      .from('user_roles')
-      .select('user_id')
-      .eq('role', 'artist')
-    if (artistRoleError) throw new Error(`Failed to load artist roles: ${artistRoleError.message}`)
-    const artistRoleIds = [...new Set((artistRoleData || []).map((row: any) => row.user_id).filter(Boolean))]
-    const { data: allArtistData, error: allArtistError } = await supabaseAdmin
-      .from('profiles')
-      .select('id, full_name, parent_label_id')
-      .in('id', artistRoleIds)
-    if (allArtistError) throw new Error(`Failed to load artist profiles: ${allArtistError.message}`)
-
-    const artistByLabelAndName: Record<string, string> = {}
-    const artistByName: Record<string, string | null> = {}
-    const artistNameCounts: Record<string, number> = {}
-    ;(allArtistData || []).forEach((a: any) => {
-      const normalized = normalizeName(a.full_name)
-      if (!normalized) return
-      if (a.parent_label_id) artistByLabelAndName[`${a.parent_label_id}|${normalized}`] = a.id
-      artistNameCounts[normalized] = (artistNameCounts[normalized] || 0) + 1
-      artistByName[normalized] = a.id
-    })
-    Object.keys(artistNameCounts).forEach(k => { if (artistNameCounts[k] > 1) artistByName[k] = null })
-    const resolveArtistUserId = (name: string, labelId: string | null | undefined) => {
-      const normalized = normalizeName(name)
-      if (!normalized) return null
-      if (labelId && artistByLabelAndName[`${labelId}|${normalized}`]) return artistByLabelAndName[`${labelId}|${normalized}`]
-      return artistByName[normalized] || null
-    }
-
-    const managedArtistCache: Record<string, string> = {}
-    let managedArtistsCreated = 0
-    let managedArtistsReused = 0
-
-    const registerArtistLookup = (artistId: string, name: string, labelId: string | null | undefined) => {
-      const normalized = normalizeName(name)
-      if (!normalized) return
-      if (labelId) artistByLabelAndName[`${labelId}|${normalized}`] = artistId
-      if (!artistByName[normalized]) artistByName[normalized] = artistId
-    }
-
-    const createManagedArtist = async (artistName: string, labelId: string | null | undefined) => {
-      const normalized = normalizeName(artistName)
-      if (!normalized || !labelId) return null
-      const cacheKey = `${labelId}|${normalized}`
-      if (managedArtistCache[cacheKey]) return managedArtistCache[cacheKey]
-
-      const existingArtistId = resolveArtistUserId(artistName, labelId)
-      if (existingArtistId) {
-        managedArtistCache[cacheKey] = existingArtistId
-        managedArtistsReused += 1
-        return existingArtistId
-      }
-
-      try {
-        // Create managed artist email with better uniqueness
-        const email = `${slugify(artistName).slice(0, 48)}-${labelId.replace(/-/g, '').slice(0, 10)}-${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}@${MANAGED_ARTIST_DOMAIN}`
-        const tempPassword = crypto.randomUUID() + crypto.randomUUID()
-        
-        // Try to create user via auth.admin
-        const { data: createdUser, error: authCreateError } = await supabaseAdmin.auth.admin.createUser({
-          email,
-          password: tempPassword,
-          email_confirm: true,
-          user_metadata: {
-            full_name: artistName,
-            managed_artist: true,
-            auth_user_status: 'managed_only',
-            password_set: false,
-            created_from_royalty_upload: true,
-          },
-        })
-        
-        if (authCreateError) {
-          console.error(`[Managed Artist Creation Failed] ${artistName}:`, authCreateError.message)
-          // If user creation fails, skip this managed artist
-          return null
-        }
-        
-        const artistId = createdUser?.user?.id
-        if (!artistId) {
-          console.error(`[Managed Artist ID Missing] ${artistName}`)
-          return null
-        }
-
-        // Update profile with additional fields
-        const { error: profileUpdateError } = await supabaseAdmin
-          .from('profiles')
-          .update({
-            full_name: artistName,
-            parent_label_id: labelId,
-            is_managed_artist: true,
-            auth_user_status: 'managed_only',
-          })
-          .eq('id', artistId)
-
-        if (profileUpdateError) throw new Error(`[Profile Update Failed] ${artistName}: ${profileUpdateError.message}`)
-
-        const { error: roleInsertError } = await supabaseAdmin
-          .from('user_roles')
-          .insert({ user_id: artistId, role: 'artist' })
-        if (roleInsertError) throw new Error(`[Artist Role Insert Failed] ${artistName}: ${roleInsertError.message}`)
-
-        managedArtistCache[cacheKey] = artistId
-        managedArtistsCreated += 1
-        registerArtistLookup(artistId, artistName, labelId)
-        console.log(`[Managed Artist Created] ${artistName} -> ${artistId}`)
-        return artistId
-      } catch (error: any) {
-        console.error(`[Managed Artist Exception] ${artistName}:`, error.message)
-        return null
-      }
-    }
-
-    const labelRev: Record<string, number> = {}
-    const artistRev: Record<string, number> = {}
-    const labelRevById: Record<string, number> = {}
-    let inserted = 0
-
-    for (let i = 0; i < validRows.length; i += 100) {
-      const batch: any[] = []
-      for (const r of validRows.slice(i, i + 100)) {
-        const track = isrcMap[r.isrc]
-        const rel = track ? relMap[track.release_id] : null
-        const sourceLabelName = r.label_name || (rel ? labelMap[rel.label_id] : '') || ''
-        const matchedLabelId = (rel?.label_id) || nameToLabelId[normalizeName(sourceLabelName)] || null
-        const SoundpubLabel = isSoundpubLabel(matchedLabelId, sourceLabelName, SoundpubLabelId)
-        const labelName = SoundpubLabel ? Soundpub_LABEL_NAME : sourceLabelName
-        const labelUserId = SoundpubLabel ? SoundpubLabelId : matchedLabelId
-        const artistName = r.artist || track?.artist_name || rel?.artist_name || ''
-        
-        // Priority: track.artist_user_id > release.artist_user_id > label/name lookup > managed artist fallback
-        let artistUserId = track?.artist_user_id || rel?.artist_user_id || resolveArtistUserId(artistName, labelUserId || rel?.label_id) || null
-        
-        // Try to create managed artist only if we have both artist name and label
-        if (!artistUserId && artistName && labelUserId) {
-          artistUserId = await createManagedArtist(artistName, labelUserId)
-        }
-
-        if (!labelUserId) throw new Error(`No label recipient for ${r.isrc} (${sourceLabelName || 'missing label'})`)
-
-        const adminShare = roundCurrency(r.net_revenue * 0.09)
-        const artistShare = artistUserId ? roundCurrency(r.net_revenue * 0.70) : 0
-        const labelShare = roundCurrency(r.net_revenue - adminShare - artistShare)
-
-        if (labelUserId) labelRevById[labelUserId] = (labelRevById[labelUserId] || 0) + labelShare
-        if (labelName) labelRev[labelName] = (labelRev[labelName] || 0) + labelShare
-        if (artistUserId) {
-          artistRev[artistUserId] = (artistRev[artistUserId] || 0) + artistShare
-        }
-
-        batch.push({
-          upload_id: upload.id,
-          period: r.period,
-          isrc: r.isrc,
-          upc: r.upc || rel?.upc || '',
-          title: r.title || track?.title || null,
-          artist: artistName,
-          artist_name: artistName,
-          label_name: labelName,
-          platform: r.platform,
-          country: r.country,
-          sales_type: r.sales_type || '',
-          unit_penjualan: r.sales_unit,
-          pendapatan_kotor_dsp: r.net_revenue,
-          pendapatan_label_artis: r.net_revenue,
-          pendapatan_bersih_soundpub: adminShare,
-          artist_revenue: artistShare,
-          label_revenue: labelShare,
-          soundpub_revenue: adminShare,
-          net_revenue: r.net_revenue,
-          artist_user_id: artistUserId,
-          label_user_id: labelUserId,
-        })
-      }
-
-      const { error } = await supabaseAdmin.from('royalties').insert(batch)
-      if (error) {
-        console.error('Royalty batch insert failed:', error)
-        throw new Error(`Failed to insert royalties: ${error.message}`)
-      }
-      inserted += batch.length
-    }
-
-    // Update upload record immediately after insert, BEFORE balance updates
-    await supabaseAdmin.from('royalty_uploads').update({ 
-      status: 'inserted', 
-      inserted_records: inserted 
-    }).eq('id', upload.id)
-
-    const { error: rebuildBalanceError } = await supabaseAdmin.rpc('rebuild_royalty_balances')
-    if (rebuildBalanceError) throw new Error(`Balance rebuild failed: ${rebuildBalanceError.message}`)
-    const balanceErrors: string[] = []
-
-    const uploadSummary = {
-      ...(replaceExisting ? { replace_existing: true, replace_mode: normalizedReplaceMode, replace_periods: uploadedPeriods, replaced_uploads: replacedUploads, replaced_rows: replacedRows } : {}),
-      managed_artists_created: managedArtistsCreated,
-      managed_artists_reused: managedArtistsReused,
-      balance_errors: balanceErrors,
-    }
-
-    // Final status update
-    await supabaseAdmin.from('royalty_uploads').update({ 
-      status: 'success',
-      summary: uploadSummary
-    }).eq('id', upload.id)
-
-    return new Response(JSON.stringify({ 
-      success: true, 
-      insertedCount: inserted, 
-      uploadId: upload.id, 
-      balanceErrors, 
-      managedArtistsCreated, 
-      managedArtistsReused, 
-      replacedUploads, 
-      replacedRows, 
-      replaceMode: normalizedReplaceMode, 
-      replacePeriods: uploadedPeriods 
-    }), { 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-    })
-  } catch (e: any) {
-    console.error('[Process royalty upload error]:', e)
-    const errorMessage = e instanceof Error ? e.message : 'Failed to process royalty upload'
-    return new Response(JSON.stringify({ success: false, error: errorMessage }), { 
-      status: 500, 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-    })
+    if (error) throw new Error(error.message)
+    if (!data || typeof data !== 'object' || Array.isArray(data) || typeof data.success !== 'boolean') throw new Error('Invalid commit response')
+    return respond(data)
+  } catch (error) {
+    return respond({ success: false, error: error instanceof Error ? error.message : 'Failed to process royalty upload' }, error instanceof InputError ? 400 : 500)
   }
 })

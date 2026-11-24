@@ -182,57 +182,77 @@ export default function UploadRoyalty() {
   };
 
   const parseCSV = (text: string): { data: RoyaltyRow[]; errors: ValidationError[] } => {
-    const lines = text.trim().split('\n');
     const errors: ValidationError[] = [];
     const data: RoyaltyRow[] = [];
+    const records: { values: string[]; line: number }[] = [];
+    const csv = text.replace(/\r\n?/g, '\n').replace(/^\uFEFF/, '');
+    let values: string[] = [];
+    let field = '';
+    let inQuotes = false;
+    let quoteClosed = false;
+    let line = 1;
+    let recordLine = 1;
 
-    if (lines.length < 2) {
+    for (let index = 0; index < csv.length; index++) {
+      const character = csv[index];
+      if (character === '"') {
+        if (inQuotes && csv[index + 1] === '"') {
+          field += '"';
+          index++;
+        } else if (inQuotes) {
+          inQuotes = false;
+          quoteClosed = true;
+        } else if (!field && !quoteClosed) {
+          inQuotes = true;
+        } else {
+          errors.push({ row: line, field: 'csv', message: 'Tanda kutip CSV tidak valid', severity: 'error' });
+          return { data, errors };
+        }
+      } else if (!inQuotes && (character === ',' || character === '\n')) {
+        values.push(field.trim());
+        field = '';
+        quoteClosed = false;
+        if (character === '\n') {
+          if (values.some(value => value !== '')) records.push({ values, line: recordLine });
+          values = [];
+          line++;
+          recordLine = line;
+        }
+      } else {
+        if (quoteClosed) {
+          errors.push({ row: line, field: 'csv', message: 'Karakter setelah tanda kutip CSV tidak valid', severity: 'error' });
+          return { data, errors };
+        }
+        field += character;
+        if (character === '\n') line++;
+      }
+    }
+    if (inQuotes) {
+      errors.push({ row: recordLine, field: 'csv', message: 'Tanda kutip CSV tidak ditutup', severity: 'error' });
+      return { data, errors };
+    }
+    values.push(field.trim());
+    if (values.some(value => value !== '')) records.push({ values, line: recordLine });
+
+    if (records.length < 2) {
       errors.push({ row: 0, field: 'file', message: 'File CSV kosong atau tidak memiliki data', severity: 'error' });
       return { data, errors };
     }
 
-    // Parse header
-    const headerLine = lines[0].toLowerCase().replace(/\r/g, '');
-    const headers = headerLine.split(',').map(h => h.trim().replace(/"/g, ''));
-    
-    // Check required columns
-    const missingColumns = REQUIRED_COLUMNS.filter(col => !headers.includes(col));
+    const headers = records[0].values.map(header => header.toLowerCase());
+    const missingColumns = REQUIRED_COLUMNS.filter(column => !headers.includes(column));
     if (missingColumns.length > 0) {
-      errors.push({ 
-        row: 1, 
-        field: 'header', 
-        message: `Kolom yang diperlukan tidak ditemukan: ${missingColumns.join(', ')}`, 
-        severity: 'error' 
-      });
+      errors.push({ row: 1, field: 'header', message: 'Kolom yang diperlukan tidak ditemukan: ' + missingColumns.join(', '), severity: 'error' });
       return { data, errors };
     }
-
-    // Get column indices
     const getIndex = (name: string) => headers.indexOf(name);
 
-    // Parse data rows
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].replace(/\r/g, '');
-      if (!line.trim()) continue;
-
-      // Handle CSV with quoted values
-      const values: string[] = [];
-      let current = '';
-      let inQuotes = false;
-      
-      for (let j = 0; j < line.length; j++) {
-        const char = line[j];
-        if (char === '"') {
-          inQuotes = !inQuotes;
-        } else if (char === ',' && !inQuotes) {
-          values.push(current.trim());
-          current = '';
-        } else {
-          current += char;
-        }
+    for (let i = 1; i < records.length; i++) {
+      const { values, line: rowNumber } = records[i];
+      if (values.length !== headers.length) {
+        errors.push({ row: rowNumber, field: 'csv', message: 'Jumlah kolom tidak sesuai header', severity: 'error' });
+        continue;
       }
-      values.push(current.trim());
-
       try {
         const period = values[getIndex('period')] || '';
         const isrcRaw = values[getIndex('isrc')] || '';
@@ -241,12 +261,12 @@ export default function UploadRoyalty() {
         const label_name = values[getIndex('label_name')] || '';
         const platform = values[getIndex('platform')] || '';
         const country = values[getIndex('country')] || '';
-        const salesUnitRaw = values[getIndex('sales_unit')] || '0';
-        const netRevenueRaw = values[getIndex('net_revenue')] || '0';
+        const salesUnitRaw = values[getIndex('sales_unit')] || '';
+        const netRevenueRaw = values[getIndex('net_revenue')] || '';
         
         // Validate period format (YYYY-MM or similar)
-        if (!period) {
-          errors.push({ row: i + 1, field: 'period', message: 'Period tidak boleh kosong', severity: 'error' });
+        if (!/^[1-9]\d{3}-(0[1-9]|1[0-2])$/.test(period)) {
+          errors.push({ row: rowNumber, field: 'period', message: 'Period harus berformat YYYY-MM', severity: 'error' });
           continue;
         }
         
@@ -256,17 +276,19 @@ export default function UploadRoyalty() {
         
         // Validate ISRC format (should be 12 characters after normalization)
         if (!isrc) {
-          errors.push({ row: i + 1, field: 'isrc', message: 'ISRC tidak boleh kosong', severity: 'error' });
+          errors.push({ row: rowNumber, field: 'isrc', message: 'ISRC tidak boleh kosong', severity: 'error' });
           continue;
         }
-        if (isrc.length !== 12) {
-          errors.push({ row: i + 1, field: 'isrc', message: `ISRC "${isrcRaw}" harus 12 karakter setelah normalisasi (saat ini: ${isrc.length})`, severity: 'warning' });
+        if (!/^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(isrc)) {
+          errors.push({ row: rowNumber, field: 'isrc', message: `ISRC "${isrcRaw}" tidak valid`, severity: 'error' });
+          continue;
         }
         
         // UPC is now OPTIONAL - will be auto-filled from database
         // Only validate format if provided
         if (upc && !/^\d{12,13}$/.test(upc)) {
-          errors.push({ row: i + 1, field: 'upc', message: `UPC "${upc}" harus 12-13 digit angka`, severity: 'warning' });
+          errors.push({ row: rowNumber, field: 'upc', message: `UPC "${upc}" harus 12-13 digit angka`, severity: 'error' });
+          continue;
         }
         
         // Artist and label_name are optional (will be auto-filled from ISRC match)
@@ -274,33 +296,41 @@ export default function UploadRoyalty() {
         
         // Validate platform
         if (!platform) {
-          errors.push({ row: i + 1, field: 'platform', message: 'Platform tidak boleh kosong', severity: 'error' });
+          errors.push({ row: rowNumber, field: 'platform', message: 'Platform tidak boleh kosong', severity: 'error' });
           continue;
         }
         
         // Validate country
-        if (!country) {
-          errors.push({ row: i + 1, field: 'country', message: 'Country tidak boleh kosong', severity: 'error' });
+        if (!/^[A-Za-z]{2}$/.test(country)) {
+          errors.push({ row: rowNumber, field: 'country', message: 'Country harus kode dua huruf', severity: 'error' });
           continue;
         }
         
         // Validate numeric fields
-        const salesUnit = parseInt(salesUnitRaw, 10);
-        if (isNaN(salesUnit)) {
-          errors.push({ row: i + 1, field: 'sales_unit', message: `Sales unit "${salesUnitRaw}" bukan angka valid`, severity: 'error' });
+        const salesUnit = /^-?(?:\d+|\d{1,3}(?:\.\d{3})+)$/.test(salesUnitRaw)
+          ? Number(salesUnitRaw.replaceAll('.', '')) : NaN;
+        if (!Number.isSafeInteger(salesUnit) || salesUnit > 2147483647) {
+          errors.push({ row: rowNumber, field: 'sales_unit', message: `Sales unit "${salesUnitRaw}" bukan angka valid`, severity: 'error' });
           continue;
         }
         if (salesUnit < 0) {
-          errors.push({ row: i + 1, field: 'sales_unit', message: 'Sales unit tidak boleh negatif', severity: 'warning' });
+          errors.push({ row: rowNumber, field: 'sales_unit', message: 'Sales unit tidak boleh negatif', severity: 'error' });
+          continue;
         }
         
-        const netRevenue = parseFloat(netRevenueRaw);
-        if (isNaN(netRevenue)) {
-          errors.push({ row: i + 1, field: 'net_revenue', message: `Net revenue "${netRevenueRaw}" bukan angka valid`, severity: 'error' });
+        const normalizedRevenue = /^-?\d{1,3}(?:\.\d{3})+,\d+$/.test(netRevenueRaw)
+          ? netRevenueRaw.replaceAll('.', '').replace(',', '.')
+          : /^-?\d{1,3}(?:,\d{3})+\.\d+$/.test(netRevenueRaw)
+            ? netRevenueRaw.replaceAll(',', '')
+            : /^-?\d+,\d+$/.test(netRevenueRaw)
+              ? netRevenueRaw.replace(',', '.') : netRevenueRaw;
+        const netRevenue = /^-?\d+(?:\.\d+)?$/.test(normalizedRevenue) ? Number(normalizedRevenue) : NaN;
+        if (!Number.isFinite(netRevenue) || Math.abs(netRevenue) > Number.MAX_SAFE_INTEGER / 100 || Math.abs(netRevenue * 100 - Math.round(netRevenue * 100)) > 1e-8) {
+          errors.push({ row: rowNumber, field: 'net_revenue', message: `Net revenue "${netRevenueRaw}" bukan angka valid`, severity: 'error' });
           continue;
         }
         if (netRevenue < 0) {
-          errors.push({ row: i + 1, field: 'net_revenue', message: 'Net revenue negatif terdeteksi', severity: 'warning' });
+          errors.push({ row: rowNumber, field: 'net_revenue', message: 'Net revenue negatif terdeteksi', severity: 'warning' });
         }
 
         const row: RoyaltyRow = {
@@ -319,37 +349,27 @@ export default function UploadRoyalty() {
 
         data.push(row);
       } catch (err) {
-        errors.push({ row: i + 1, field: 'parsing', message: 'Format data tidak valid', severity: 'error' });
+        errors.push({ row: rowNumber, field: 'parsing', message: 'Format data tidak valid', severity: 'error' });
       }
     }
 
     return { data, errors };
   };
 
-  // Calculate revenue split preview per label
   const calculateRevenueSplitPreview = (data: RoyaltyRow[]): RevenueSplitPreview[] => {
-    const labelTotals: Record<string, number> = {};
-    
-    data.forEach(row => {
-      labelTotals[row.label_name] = (labelTotals[row.label_name] || 0) + row.net_revenue;
-    });
-    
-    return Object.entries(labelTotals).map(([label, totalRevenue]) => {
-      // Flat split for all labels: 70% Artist, 21% Label, 9% Admin
-      const adminShare = Math.round((totalRevenue * 0.09 + Number.EPSILON) * 100) / 100;
-      const artistShare = Math.round((totalRevenue * 0.70 + Number.EPSILON) * 100) / 100;
-      const labelShare = Math.round((totalRevenue - adminShare - artistShare + Number.EPSILON) * 100) / 100;
+    const roundCurrency = (amount: number) => Math.sign(amount) * Math.round((Math.abs(amount) + Number.EPSILON) * 100) / 100;
+    const totals = data.reduce((total, row) => {
+      const artistShare = roundCurrency(row.net_revenue * 0.70);
+      const adminShare = roundCurrency(row.net_revenue * 0.09);
       return {
-        label,
-        totalRevenue,
-        labelShare,
-        artistShare,
-        adminShare,
-        labelPercentage: 21,
-        artistPercentage: 70,
-        adminPercentage: 9,
+        totalRevenue: total.totalRevenue + row.net_revenue,
+        artistShare: total.artistShare + artistShare,
+        labelShare: total.labelShare + row.net_revenue - artistShare - adminShare,
+        adminShare: total.adminShare + adminShare,
       };
-    }).sort((a, b) => b.totalRevenue - a.totalRevenue);
+    }, { totalRevenue: 0, artistShare: 0, labelShare: 0, adminShare: 0 });
+
+    return [{ label: 'Seluruh data', ...totals, labelPercentage: 21, artistPercentage: 70, adminPercentage: 9 }];
   };
 
   // Check which UPCs/ISRCs from CSV exist in the database
@@ -522,7 +542,7 @@ export default function UploadRoyalty() {
   }, []);
 
   const handleUpload = async () => {
-    if (!selectedFile || parsedData.length === 0 || !user) return;
+    if (!selectedFile || parsedData.length === 0 || !user || parseErrors.some(error => error.severity === 'error')) return;
 
     setIsUploading(true);
     setUploadProgress(0);
@@ -557,6 +577,11 @@ export default function UploadRoyalty() {
       });
 
       if (error) {
+        const response = 'context' in error ? error.context : undefined;
+        if (response instanceof Response) {
+          const details = await response.clone().json().catch(() => null);
+          if (details && typeof details.error === 'string') throw new Error(details.error);
+        }
         throw error;
       }
 
@@ -1090,7 +1115,7 @@ export default function UploadRoyalty() {
                       ))}
                     </div>
                     <p className="text-xs text-muted-foreground mt-3">
-                      * Semua label: 70% Artist, 21% Label, 9% Admin
+                      * Estimasi global 70% Artist, 21% Label, 9% Admin, dibulatkan per baris. Penerima Artist dan Label ditentukan server saat validasi; CSV bukan bukti kepemilikan.
                     </p>
                   </div>
                 )}
@@ -1201,12 +1226,17 @@ export default function UploadRoyalty() {
                 )}
 
                 {/* Upload Button */}
+                {parsedData.length > 0 && parseErrors.some(error => error.severity === 'error') && (
+                  <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm">
+                    Import diblokir karena ada baris gagal validasi. Perbaiki file dan unggah ulang; baris valid tidak akan diimpor sebagian.
+                  </div>
+                )}
                 {parsedData.length > 0 && !isUploading && (
                   <div className="flex items-center gap-4">
                     <Button
                       className="gradient-primary"
                       onClick={handleUpload}
-                      disabled={isUploading}
+                      disabled={isUploading || parseErrors.some(error => error.severity === 'error')}
                     >
                       <Upload className="h-4 w-4 mr-2" />
                       {replaceExisting ? 'Replace & Import' : 'Import'} {parsedData.length} Data
