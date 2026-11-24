@@ -253,6 +253,10 @@ export default function UploadRoyalty() {
         errors.push({ row: rowNumber, field: 'csv', message: 'Jumlah kolom tidak sesuai header', severity: 'error' });
         continue;
       }
+      if (values.some(value => /[\u0000-\u001f\u007f]/.test(value))) {
+        errors.push({ row: rowNumber, field: 'csv', message: 'Nilai mengandung baris baru atau karakter kontrol yang tidak diterima server', severity: 'error' });
+        continue;
+      }
       try {
         const period = values[getIndex('period')] || '';
         const isrcRaw = values[getIndex('isrc')] || '';
