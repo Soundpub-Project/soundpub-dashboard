@@ -221,7 +221,7 @@ Dynamic ACL/trigger generation, function bodies, RLS expressions, defaults, cons
 ## Gates after the backup key arrives
 
 1. Read-only verifier completed on 2026-11-24: `Verified 24 files`, exit code 0.
-2. Decrypt only the schema artifact to an explicit output outside the repository and OneDrive.
-3. Produce a schema-only metadata view and compare it against `CANONICAL_SCHEMA.sql`, `supabase/migrations`, and `backend/migrations`.
+2. Decrypt only the schema artifact to an explicit output outside the repository and OneDrive. Completed 2026-11-24.
+3. Produce a schema-only metadata view and compare it against `CANONICAL_SCHEMA.sql`, `supabase/migrations`, and `backend/migrations`. Preliminary backup-to-canonical statement evidence is in `docs/audit/17-definition-schema-diff.md`; final backend parity remains open.
 4. Use isolated PostgreSQL only if SQL execution is required for definition-level or data-level verification.
 5. Do not treat this static report as approval for restore, migration replay, or cutover.

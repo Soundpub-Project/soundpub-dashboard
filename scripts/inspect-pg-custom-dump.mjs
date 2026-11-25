@@ -208,6 +208,7 @@ ${[...byDesc.entries()].sort().map(([desc, count]) => `| ${desc} | ${count} |`).
 - Counts use object descriptions and \`soundpub\` namespace; overloaded functions, ACL items, comments, and extension-owned objects may affect comparisons.
 - Manifest index and constraint totals include inline and constraint-backed objects, while this report counts explicit TOC entries; those two rows are not directly comparable.
 - Definition equivalence, grants, function bodies, RLS expressions, defaults, constraints, and behavior still require a formal diff against repository migrations.
+- Owner metadata remains separate from the generated schema SQL.
 - This report does not authorize restore, migration replay, production contact, or cutover.
 `;
 writeFileSync(reportPath, report);

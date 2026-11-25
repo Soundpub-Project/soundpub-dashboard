@@ -11,6 +11,8 @@
     "test:egress": "node scripts/backend-egress-browser.mjs",
     "test:secrets": "node scripts/scan-secrets.mjs",
     "test:schema-diff": "node scripts/static-schema-diff.mjs",
+    "test:schema-snapshot-diff": "node --test scripts/schema-snapshot-diff.test.mjs",
+    "schema:snapshot-diff": "node scripts/schema-snapshot-diff.mjs",
     "backup:decrypt": "node scripts/backup-decrypt-safe.mjs",
     "lint": "eslint .",
     "preview": "vite preview"

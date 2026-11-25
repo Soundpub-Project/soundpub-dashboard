@@ -73,7 +73,7 @@ Synthetic fixture test result on 2026-11-24: valid key round-trip passed; wrong 
 ## Post-decrypt evidence
 
 1. Record schema-only metadata counts in `docs/audit/16-backup-schema-metadata.md` and compare with `docs/migration/CANONICAL_SCHEMA.sql` and `docs/migration/DATABASE_OBJECT_MANIFEST.md`.
-2. Reconcile `docs/audit/14-static-schema-diff.md` with the real decrypted schema view; the static report is non-authoritative.
+2. Reconcile `docs/audit/17-definition-schema-diff.md` with the verified schema-only backup and migration history; it is preliminary static evidence, not proof of applied state.
 3. Keep all plaintext outside the repository and delete it only when the approved retention period ends.
 4. Update `docs/audit/04-database-and-backup-audit.md` with the verification summary, not key material.
 5. Do not restore Auth sessions or refresh tokens into the new auth system; require deliberate identity migration and reauthentication.

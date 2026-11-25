@@ -37,6 +37,9 @@ Exit gate passed: all 24 artifacts pass SHA-256 and GCM authentication.
 ## Phase 2 — Schema and metadata parity
 
 - Treat `docs/audit/14-static-schema-diff.md` as preparatory context only; it is not an applied-state or definition-level proof.
+- Review `docs/audit/17-definition-schema-diff.md` as preliminary static evidence: backup `rate_limits` lacks the canonical RLS enablement, with additional policy, ACL, and function-body differences to reconcile.
+- Focused tests on 2026-11-25 replayed the backend migration chain into fresh disposable PostgreSQL 17 databases and passed 6 synthetic managed-artist/royalty tests. This is backend test evidence only; it is not backup restore, backup parity, or production migration.
+- `docs/audit/18-source-to-backend-data-mapping.md` crosswalks all 33 canonical `soundpub` tables and records explicit rejects/blockers. A pure synthetic-fixture planner now covers Auth identity, profiles, and review-only role candidates; no source rows were inspected.
 - Use `docs/audit/16-backup-schema-metadata.md` as verified provenance evidence; directly comparable counts match the inspected live manifest.
 - From the verified backup, produce schema-only/metadata views in a controlled private location outside repo/OneDrive using `scripts/backup-decrypt-safe.mjs`.
 - Diff backup schema against `supabase/migrations` and `backend/migrations/0001`–`0081`.
@@ -82,7 +85,7 @@ Exit gate: production build enables backend domains; target domain has no active
 
 ## Phase 7 — CI/CD and production packaging
 
-- `.github/workflows/ci.yml` covers root secret-scan/build/lint/contract/egress and backend typecheck/build/test; first remote run, branch protection, and Docker tests remain unverified.
+- `.github/workflows/ci.yml` covers root secret-scan/build/lint/contract/egress and backend typecheck/build/test; first remote run and branch protection remain unverified. Six focused Docker tests pass, but the full Docker suite is still unverified.
 - Add production backend packaging separate from `dashboard-sounpub-dev`.
 - Add health checks, TLS, security headers, rate limiting, resource limits, structured logging, metrics, and alerts.
 - Correct Edge Function deployment scripts or retire them.
@@ -93,6 +96,7 @@ Exit gate: required checks pass automatically; deployment runbook approved.
 
 - Run a full isolated rehearsal using verified backup data under privacy controls.
 - Exercise restore, schema migration, smoke tests, reconciliation, monitoring, and rollback.
+- On 2026-11-25, a narrower synthetic recovery rehearsal passed 5/5 tests using generated JSON fixtures and two fresh disposable PostgreSQL 17 targets. It verified identical replay, source immutability, rejection of unresolved owners and credential/session fields, and transaction rollback. It did not restore the verified backup or validate full legacy-to-backend conversion; the phase remains open.
 - Recalculate readiness score against `SUPABASE_MIGRATION_AUDIT.md:145`.
 - Require score >= 75, zero CRITICAL, and restore/reconciliation pass.
 
@@ -110,4 +114,4 @@ Exit gate: stable operation for the agreed observation window and formal closure
 
 ## Immediate next action
 
-Backup verification passed on 2026-11-24. Next: decrypt only the schema artifact to a non-repo, non-OneDrive path, produce a schema-only metadata comparison, and reconcile it with `docs/audit/14-static-schema-diff.md`. No restore, migration replay, production contact, or cutover.
+Backup verification and schema-only extraction passed. The latest non-Docker backend suite passed 351/438 (87 skipped, 0 failed); the Docker-enabled suite previously passed 475/484 (9 skipped), selected Storage tests passed 22/22, and a synthetic recovery rehearsal passed 5/5 on two disposable PostgreSQL targets. The new Soundpub identity/profile/role/artist-profile dry-run planner passed 11 generated-fixture tests; it is not validated against source rows and does not convert the remaining 30 canonical tables. These results validate code paths and schema rules, not backup restoration or data parity. Next extend the planner by domain and use source rows only after a separately approved isolated export. No backup restore, production migration, production contact, or cutover has occurred.

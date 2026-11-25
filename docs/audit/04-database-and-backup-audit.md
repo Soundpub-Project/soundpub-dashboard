@@ -1,6 +1,6 @@
 # 04 — Database and Backup Audit
 
-Status: **BACKUP COPIED TO BACKEND; SHA-256 PASS; GCM AUTH PASS (24/24); SCHEMA DIFF IN PROGRESS**
+Status: **BACKUP VERIFIED; PRELIMINARY SCHEMA DIFF RECORDED; BACKEND MIGRATIONS TESTED ON DISPOSABLE DB; RESTORE UNTESTED**
 
 ## Backup inventory
 
@@ -40,13 +40,13 @@ Expected successful output: one `OK <relative-path>` line per `.enc` artifact an
 
 The original `decrypt.cjs` must not be executed from its current location. Its output-root logic resolves to `C:\` when the backup itself is on `C:\`, which makes all `C:\` destinations invalid and any `D:\` destination acceptable without repo/OneDrive protection. A hardened replacement exists at `scripts/backup-decrypt-safe.mjs`. It requires a 32-byte key and `SPBK1` header, allowlists artifacts from `SHA256SUMS.txt`, verifies ciphertext SHA-256 before decrypt, validates the AES-256-GCM auth tag, refuses output inside the repository, OneDrive, or backup directory, refuses overwrite, and deletes partial output on failure.
 
-Synthetic fixture tests on 2026-11-24 confirmed correct-key round-trip, wrong-key rejection with no leftover output, rejection of repository/backup-directory outputs, and overwrite rejection. No real artifact was decrypted, extracted, restored, or uploaded. See `15-key-handoff-runbook.md` for the post-key procedure.
+Synthetic fixture tests on 2026-11-24 confirmed correct-key round-trip, wrong-key rejection with no leftover output, rejection of repository/backup-directory outputs, and overwrite rejection. Separately, only the real schema artifact was decrypted to a controlled path outside the repo and OneDrive; no row data or other backup artifact was decrypted, extracted, restored, or uploaded. See `15-key-handoff-runbook.md` for the post-key procedure.
 
 ## Schema evidence gap
 
-The previous audit reports 33 live tables and 14 deployed Edge Functions differing from repository state (`SUPABASE_MIGRATION_AUDIT.md:124`). Current worktree contains 33 SQL files under `supabase/migrations`, but the live schema was not inspected because production contact is forbidden. A schema-only decrypted view from the verified backup is required before claiming parity.
+The previous audit reports 33 live tables and 14 deployed Edge Functions differing from repository state (`SUPABASE_MIGRATION_AUDIT.md:124`). Current worktree contains 33 SQL files under `supabase/migrations`, but the live schema was not inspected because production contact is forbidden. A schema-only view from the verified backup now exists outside the repo and OneDrive and supports preliminary static comparison only; it does not establish live or backend parity.
 
-`docs/audit/14-static-schema-diff.md` now provides a repository-only comparison: 33 Supabase SQL files with mixed 8/14-digit prefixes and duplicate day prefixes versus 81 contiguous backend migrations. It reports name-level overlap and statement counts but explicitly does not prove definition equivalence, applied state, effective grants, RLS expressions, function bodies, or final object state. It does not replace `docs/migration/CANONICAL_SCHEMA.sql`, `docs/migration/DATABASE_OBJECT_MANIFEST.md`, or `docs/migration/SCHEMA_DRIFT_REPORT.md`.
+`docs/audit/14-static-schema-diff.md` provides a repository-only migration comparison; `docs/audit/17-definition-schema-diff.md` adds a preliminary backup-to-canonical statement comparison. The latter identifies a `rate_limits` RLS difference, policy/ACL drift, and function-body differences, but does not prove semantic equivalence, applied state, owner parity, or final backend parity. Focused tests have replayed the backend migration chain only against fresh disposable PostgreSQL 17 databases with synthetic fixtures; they did not restore or load the backup. Neither report replaces `docs/migration/CANONICAL_SCHEMA.sql`, `docs/migration/DATABASE_OBJECT_MANIFEST.md`, or `docs/migration/SCHEMA_DRIFT_REPORT.md`.
 
 `docs/audit/16-backup-schema-metadata.md` records metadata extracted from the verified schema dump: 33 tables, 56 functions, 78 policies, 47 triggers, 43 foreign keys, 4 enums, and 32 RLS entries match the inspected live manifest. Definition-level comparison remains required.
 
@@ -64,4 +64,4 @@ Do not restore this backup into a production or staging Supabase instance withou
 
 ## Gate
 
-Backup verification is now satisfied: the local copy passes SHA-256 and all 24 artifacts pass GCM authentication. Schema-only decryption may proceed to an explicit non-repo, non-OneDrive path. Restore, migration replay, and cutover still require separate approval and a rehearsal.
+Backup verification and schema-only decryption are complete. Focused backend migration tests pass on disposable synthetic databases. Backup restore, final schema parity, production migration, and cutover remain unapproved and require separate plans and rehearsal.

@@ -1,6 +1,6 @@
 # TODO — Ringkasan Pekerjaan Audit & Migrasi Soundpub
 
-Terakhir diperbarui: 2026-11-24  
+Terakhir diperbarui: 2026-11-25
 Bahasa: Bahasa Indonesia  
 Status umum: **AUDIT SELESAI, BACKUP TERVERIFIKASI, MIGRASI BELUM SIAP**
 
@@ -8,9 +8,9 @@ Status umum: **AUDIT SELESAI, BACKUP TERVERIFIKASI, MIGRASI BELUM SIAP**
 
 ## Ringkasan Singkat
 
-Pekerjaan yang sudah dilakukan sejak awal percakapan berfokus pada menyiapkan bukti audit, memverifikasi backup terenkripsi, dan memastikan tidak ada perubahan ke produksi. Kunci backup sudah diberikan dan diverifikasi. Backup lolos SHA-256 dan GCM authentication 24/24. Hanya artefak schema yang didekripsi, Itu pun ke lokasi di luar repo dan OneDrive. Tidak ada data pengguna, session, refresh token, Storage, atau data finansial yang didekripsi.
+Pekerjaan berfokus pada bukti audit, verifikasi backup terenkripsi, dan persiapan migrasi tanpa perubahan produksi. Backup lolos SHA-256 dan GCM authentication 24/24; hanya artefak schema yang didekripsi ke lokasi di luar repo dan OneDrive. Perbandingan statis menemukan perbedaan RLS pada `rate_limits`, policy, ACL, dan definisi function. Pada 2026-11-25, seluruh suite backend Docker-enabled lulus 475/484 (9 dilewati), Storage/media sintetis lulus 22/22, dan synthetic recovery rehearsal lulus 5/5 pada dua PostgreSQL disposable. Ini menguji kode dan fixture sintetis, bukan pemindahan data produksi atau restore backup. Tidak ada data pengguna, session, refresh token, Storage, atau data finansial dari backup yang didekripsi.
 
-Produksi tidak disentuh. Tidak ada restore, migration replay, container Docker, commit, push, atau cutover yang dilakukan.
+Produksi tidak disentuh. Tidak ada restore backup, migrasi produksi, deployment, commit, push, atau cutover. Container Docker hanya dipakai untuk database tes disposable dengan data sintetis.
 
 ---
 
@@ -19,7 +19,7 @@ Produksi tidak disentuh. Tidak ada restore, migration replay, container Docker, 
 | Area | Yang Sudah Dilakukan | Status / Bukti | Catatan |
 |---|---|---|---|
 | Branch & repo | Bekerja di branch `hammam-dev`, upstream `origin/codex/backend-snapshot-20261117`, HEAD `338f6dd` | Terjaga | Tidak ada switch branch, reset, rebase, force-push, commit, atau push |
-| Audit dokumentasi | Membuat/memperbarui `docs/audit/01` sampai `16` | Selesai | Termasuk ringkasan eksekutif, backup, testing, roadmap, rotasi rahasia, key handoff, static diff, metadata backup |
+| Audit dokumentasi | Membuat/memperbarui `docs/audit/01` sampai `18` | Selesai | Termasuk ringkasan eksekutif, backup, testing, roadmap, rotasi rahasia, key handoff, static diff, metadata, diff definisi, dan crosswalk data |
 | Penilaian audit | Menetapkan status audit `38/100 — NOT READY` dan backend docs `52/100` | Tercatat | Status cutover masih tidak disetujui |
 | Dependensi | Menjalankan `npm ci` di root dan `backend` | Selesai | Lockfile tidak berubah |
 | Lint root | Memperbaiki ignore `dist` agar `backend/dist` tidak ikut di-lint | Lolos | `0 error`, `57 warning` bawaan |
@@ -27,9 +27,11 @@ Produksi tidak disentuh. Tidak ada restore, migration replay, container Docker, 
 | Build frontend | Menjalankan `npm run build` | Lolos | Tidak ada perubahan produksi |
 | Backend typecheck | Menjalankan `npm run typecheck` di `backend` | Lolos | Tidak ada error tipe |
 | Backend unit test | Menjalankan unit test backend | Lolos | `47 tests`, `46 pass`, `0 fail`, `1 skipped` |
-| Backend full test | Menjalankan seluruh test backend | Lolos | `426 tests`, `340 pass`, `0 fail`, `86 skipped` |
+| Backend full test sebelumnya | Menjalankan seluruh test backend tanpa semua Docker opt-in | Lolos | `426 tests`, `340 pass`, `0 fail`, `86 skipped` |
+| Backend full suite terbaru | Menjalankan `npm test` di backend tanpa Docker opt-in | Lolos | `438 tests`, `351 pass`, `0 fail`, `87 skipped`; termasuk 11 dry-run converter tests |
+| Backend Docker-enabled suite | Menjalankan `npm run test:docker` dengan `RUN_DOCKER_TESTS=1` | Lolos | `484 tests`, `475 pass`, `0 fail`, `9 skipped`; satu recovery rehearsal dijalankan terpisah |
 | Egress test | Menjalankan pengujian batas akses jaringan/API | Lolos | Tidak ada akses produksi baru |
-| Secret scan | Menambahkan `scripts/scan-secrets.mjs` dan menjalankannya | Lolos | `1380 non-ignored files`, `0 findings` |
+| Secret scan | Menambahkan `scripts/scan-secrets.mjs` dan menjalankannya | Lolos | Pemeriksaan terbaru: `1386 non-ignored files`, `0 findings` |
 | Secret scan cakupan | Scanner diubah untuk memeriksa file terlacak dan file baru yang tidak di-ignore | Selesai | Tidak hanya `git ls-files` |
 | Diff whitespace | Menjalankan `git diff --check` | Bersih | Tidak ada whitespace error |
 | CI | Menambahkan `.github/workflows/ci.yml` dengan env dummy | Parsing YAML lolos | CI remote dan branch protection belum diverifikasi |
@@ -50,9 +52,17 @@ Produksi tidak disentuh. Tidak ada restore, migration replay, container Docker, 
 | Parser schema | Membuat `scripts/inspect-pg-custom-dump.mjs` | Selesai | Membaca custom dump PostgreSQL tanpa server/Docker |
 | Metadata backup | Membuat `docs/audit/16-backup-schema-metadata.md` | Selesai | Berisi count dan batasan perbandingan |
 | Static schema diff | Membuat `scripts/static-schema-diff.mjs` dan `docs/audit/14-static-schema-diff.md` | Selesai | Ditandai `NON-AUTHORITATIVE`, bukan bukti applied state |
-| NPM script | Menambahkan `test:schema-diff` dan `backup:decrypt` | Selesai | Dipakai untuk audit lokal |
-| Docker | Tidak menjalankan Docker atau container apa pun | Sesuai batasan | Docker daemon sedang tidak tersedia di mesin ini |
-| Produksi | Tidak ada SSH, Supabase produksi, migrasi, restore, atau cutover | Sesuai batasan | Production untouched |
+| Backup/canonical/backend diff | Membuat `scripts/schema-snapshot-diff.mjs` dan memperluas `docs/audit/17-definition-schema-diff.md` | Parsial selesai | 82 backend migrations lulus di DB disposable; diff statis mencatat perbedaan schema yang luas, bukan bukti semantic parity atau applied state |
+| Rekonsiliasi auth/role, finansial, RLS, grants | Membuat crosswalk source-level untuk model legacy dan backend | Parsial | Role labels cocok, tetapi identity/tenant dan finance data conversion belum dipetakan; model RLS berbeda |
+| Grant sequence least-privilege | Menambahkan migrasi `backend/migrations/0082_restrict_app_sequence_privileges.sql` | Lolos di DB disposable | Hak sequence dan default grant `soundpub_app` dicabut; insert identity tetap berhasil |
+| NPM script | Menambahkan `test:schema-diff`, `test:schema-snapshot-diff`, `schema:snapshot-diff`, dan `backup:decrypt` | Selesai | Dipakai untuk audit lokal |
+| Tes database sintetis | Menjalankan enam tes terpilih untuk managed artist, royalty report/import, dan staged commit | Lolos | Backend migrations direplay per tes ke PostgreSQL 17 disposable; semua fixture sintetis |
+| Tes rekonsiliasi terpilih | Menjalankan tes grants, finance reconciliation, managed artist, dan payout | Lolos | `7 tests`, `7 pass`, `0 fail`, `0 skipped`; migrasi juga diuji dengan `soundpub_owner` |
+| Tes Storage/media sintetis | Menjalankan `media-live`, `phase3d-media-security`, `storage-s3`, dan `storage` | Lolos | `22 tests`, `22 pass`, `0 fail`, `0 skipped`; PostgreSQL/RustFS disposable, data sintetis, port loopback |
+| Synthetic recovery rehearsal | Menjalankan `label-custom-recovery-rehearsal.test.ts` dengan `RUN_RECOVERY_REHEARSAL=1` | Lolos | `5 tests`, `5 pass`; dua PostgreSQL 17 disposable, 10 record sintetis, replay identik, rollback terverifikasi, input orphan/credential ditolak |
+| Source-to-backend mapping | Membuat `docs/audit/18-source-to-backend-data-mapping.md` dan dry-run identity/profile/role/artist-profile mapper | Mapping schema + uji fixture sintetis | 11 tes mapper lulus; tidak ada row data sumber yang dibaca; 30 tabel canonical masih belum dikonversi |
+| Docker | Menjalankan container test-only | Lolos | Fixture terikat loopback, data di tmpfs, container milik tes dibersihkan; tidak menjalankan stack development atau mengakses produksi |
+| Produksi | Tidak ada SSH, akses Supabase produksi, migrasi ke produksi, restore, atau cutover | Sesuai batasan | Production untouched |
 
 ---
 
@@ -72,7 +82,7 @@ Produksi tidak disentuh. Tidak ada restore, migration replay, container Docker, 
 | Non-internal triggers | `47/47 PASS` | Sama dengan manifest terinspect |
 | Foreign keys | `43/43 PASS` | Sama dengan manifest terinspect |
 | Enums | `4/4 PASS` | Sama dengan manifest terinspect |
-| ROW SECURITY entries | `32/32 PASS` | Sama dengan manifest terinspect |
+| ROW SECURITY entries | `32/32` count-only | Identitas tabel berbeda: backup tidak menunjukkan RLS pada `rate_limits`; canonical mengaktifkannya |
 | Explicit INDEX TOC | `55`, tidak langsung dibandingkan | Manifest menghitung index inline/constraint-backed |
 | Constraint TOC | `88`, tidak langsung dibandingkan | Manifest menghitung 109 constraint termasuk inline |
 
@@ -85,8 +95,8 @@ Produksi tidak disentuh. Tidak ada restore, migration replay, container Docker, 
 | Kredensial live pernah dibagikan di chat | Kritis | Rotasi password DB, Xendit secret key, dan Xendit webhook token |
 | Token lama masih di git history | Kritis | Rotasi dulu; setelah itu minta persetujuan untuk history cleanup |
 | Salinan kunci di OneDrive | Perlu ditangani | Pindahkan atau hapus; pakai salinan di folder backup source yang bukan OneDrive |
-| Definition-level diff belum selesai | Blocking | Bandingkan definisi kolom, default, check, grant, function body, RLS expression, trigger definition |
-| Docker daemon tidak tersedia | Blocking sementara | Nyalakan Docker lalu bangun DB dummy dengan project `dashboard-sounpub-dev` |
+| Definition-level diff belum selesai | Blocking | Sequence grant backend sudah ditutup pada migrasi 0082; rekonsiliasi ACL/grantee legacy, owner, tiga function body yang belum terjelaskan, dan semantic parity masih perlu |
+| Schema parity | Blocking | Perbandingan statis menunjukkan perbedaan luas yang perlu direkonsiliasi |
 | CI remote belum diverifikasi | Minor | Cek GitHub Actions run dan branch protection setelah diizinkan |
 | Restore drill belum dilakukan | Blocking | Gunakan data sintetis, jangan produksi |
 | Cutover belum disetujui | Blocking | Butuh persetujuan eksplisit sebelum apa pun ke produksi |
@@ -99,12 +109,13 @@ Produksi tidak disentuh. Tidak ada restore, migration replay, container Docker, 
 |---|---|---|---|
 | Tinggi | Rotasi kredensial | Rotasi DB password, Xendit secret key, Xendit webhook token | Belum |
 | Tinggi | Amankan kunci | Pindahkan/hapus salinan kunci di OneDrive; jangan pernah taruh kunci di repo | Belum |
-| Tinggi | Definition-level schema diff | Bandingkan backup schema SQL dengan `CANONICAL_SCHEMA.sql`, `supabase/migrations`, dan `backend/migrations` | Belum |
-| Tinggi | Bangun DB dummy | Saat Docker tersedia, replay migrasi ke database lokal terisolasi dengan data sintetis | Belum |
-| Tinggi | Uji parity auth/role | Uji login, session, refresh token, RLS, dan role superadmin/artist/label | Belum |
-| Tinggi | Uji finansial | Uji composer code, payout, withdraw, adjustment, dan Xendit callback secara lokal | Belum |
-| Menengah | Uji Storage | Uji bucket policy, upload/download, dan cleanup dengan data dummy | Belum |
-| Menengah | Restore rehearsal | Latih restore dari backup terverifikasi ke lingkungan lokal; jangan produksi | Belum |
+| Tinggi | Definition-level schema diff | Tinjau `docs/audit/17-definition-schema-diff.md`; rekonsiliasi grant legacy `ALL` ke `dashboard_user`, `buzzerhood_app`, owner strategy, provenance tiga function body, dan behavioral parity | Parsial |
+| Tinggi | Source-to-backend data mapping | Dry-run di `backend/src/recovery/soundpub-dry-run.ts` merencanakan identity/profile/settings, artist-profile metadata, dan role candidates; akun inactive, reauth wajib, image/Spotify/legacy verification diblokir, parent-label perlu approval. Perlu perluasan ke 30 tabel lain dan isolated source export yang disetujui | Parsial |
+| Tinggi | Bangun DB dummy | 82 backend migrations dan second pass diverifikasi di PostgreSQL 17 disposable, termasuk migrasi sebagai `soundpub_owner`; final schema dibandingkan statis, semantic reconciliation dan restore rehearsal sintetis masih perlu | Parsial |
+| Tinggi | Uji parity auth/role | Managed-artist guards dan role separation auditor/reconciler lolos; pemetaan Auth IDs, role/tenant matrix penuh, session dan refresh token belum diuji | Parsial |
+| Tinggi | Uji finansial | Tes royalty report/import, finance reconciliation, dan payout terpilih lolos; konversi data finansial legacy, composer code, withdraw, adjustment, dan Xendit callback end-to-end masih perlu | Parsial |
+| Menengah | Uji Storage | Upload/download, signed URL/CORS, multipart/abort, validasi MIME/checksum, authorization, delete/cleanup sudah diuji dengan fixture sintetis; migrasi policy/bucket dan kompatibilitas pemindahan objek legacy belum diuji | Parsial |
+| Menengah | Restore rehearsal | Synthetic recovery/replay sudah diuji pada dua database disposable; restore backup terverifikasi atau restore PostgreSQL penuh belum dilakukan | Parsial |
 | Menengah | Verifikasi CI remote | Cek workflow run dan branch protection bila diizinkan | Belum |
 | Menengah | History cleanup | Setelah rotasi, minta persetujuan rewrite git history | Belum |
 | Kritis | Cutover produksi | Jangan lakukan tanpa persetujuan eksplisit dan checklist lengkap | Belum |
@@ -117,7 +128,7 @@ Produksi tidak disentuh. Tidak ada restore, migration replay, container Docker, 
 |---|---|
 | Tidak menyimpan kunci, password, atau token di repo/docs/chat | Dipatuhi |
 | Tidak menghubungi produksi, SSH, Supabase Cloud, atau server | Dipatuhi |
-| Tidak menjalankan migrasi/restore/cutover | Dipatuhi |
+| Tidak menjalankan restore backup, migrasi produksi, atau cutover | Dipatuhi; migrasi backend hanya direplay ke DB tes disposable |
 | Tidak commit/push/rewrite history | Dipatuhi |
 | Tidak mengubah lockfile | Dipatuhi |
 | Semua output plaintext backup berada di luar repo dan OneDrive | Dipatuhi |
@@ -127,4 +138,4 @@ Produksi tidak disentuh. Tidak ada restore, migration replay, container Docker, 
 
 ## Kesimpulan Singkat
 
-Backup sudah terbukti valid secara kriptografi dan metadata schemanya cocok dengan manifest untuk objek yang bisa dibandingkan langsung. Namun migrasi masih **belum siap** karena definisi objek, perilaku auth/RLS, finansial, Storage, dan restore drill belum diuji secara eksplisit. Sebelum pekerjaan lanjut, kredensial yang pernah terekspos harus dirotasi dan salinan kunci di OneDrive harus dipindahkan atau dihapus.
+Backup sudah terbukti valid secara kriptografi; suite backend Docker-enabled (475 lulus), Storage/media (22 lulus), dan synthetic recovery rehearsal (5 lulus) juga berhasil. Migrasi masih **belum siap** karena schema/data parity, perilaku auth/RLS penuh, provider finansial, transfer Storage legacy, dan restore backup nyata di lingkungan terisolasi belum terbukti. Sebelum cutover, kredensial yang pernah terekspos harus dirotasi dan salinan kunci di OneDrive harus dipindahkan atau dihapus.
