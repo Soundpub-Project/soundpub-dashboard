@@ -86,3 +86,4 @@ npm-cache/
 
 /backup/
 /backend/backups/
+.env.dev

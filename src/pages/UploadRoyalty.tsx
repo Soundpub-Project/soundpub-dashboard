@@ -125,6 +125,12 @@ const REQUIRED_COLUMNS = [
 // Optional columns that can be auto-filled from database
 const OPTIONAL_COLUMNS = ['upc', 'artist', 'label_name', 'title', 'sales_type'];
 
+const containsControlCharacter = (value: string, allowLineBreaks = false) =>
+  [...value].some(character => {
+    const code = character.charCodeAt(0);
+    return code === 127 || (code <= 31 && !(allowLineBreaks && (code === 10 || code === 13)));
+  });
+
 const parseCsvDocument = (text: string): string[][] => {
   const rows: string[][] = [];
   let row: string[] = [];
@@ -277,6 +283,10 @@ function LegacyUploadRoyalty() {
   const parseCSV = (text: string): { data: RoyaltyRow[]; errors: ValidationError[] } => {
     const errors: ValidationError[] = [];
     const data: RoyaltyRow[] = [];
+    if (containsControlCharacter(text, true)) {
+      errors.push({ row: 0, field: 'file', message: 'File CSV mengandung karakter kontrol yang tidak diterima server', severity: 'error' });
+      return { data, errors };
+    }
     let rows: string[][];
 
     try {
@@ -298,26 +308,27 @@ function LegacyUploadRoyalty() {
       errors.push({ row: 1, field: 'header', message: `Header duplikat: ${[...new Set(duplicateHeaders)].join(', ')}`, severity: 'error' });
       return { data, errors };
     }
-    
+
     // Check required columns
     const missingColumns = REQUIRED_COLUMNS.filter(col => !headers.includes(col));
     if (missingColumns.length > 0) {
-      errors.push({ 
-        row: 1, 
-        field: 'header', 
-        message: `Kolom yang diperlukan tidak ditemukan: ${missingColumns.join(', ')}`, 
-        severity: 'error' 
-      });
+      errors.push({ row: 1, field: 'header', message: 'Kolom yang diperlukan tidak ditemukan: ' + missingColumns.join(', '), severity: 'error' });
       return { data, errors };
     }
-
-    // Get column indices
     const getIndex = (name: string) => headers.indexOf(name);
 
     // Parse data rows
     for (let i = 1; i < rows.length; i++) {
       const values = rows[i];
-
+      const rowNumber = i + 1;
+      if (values.length !== headers.length) {
+        errors.push({ row: rowNumber, field: 'csv', message: 'Jumlah kolom tidak sesuai header', severity: 'error' });
+        continue;
+      }
+      if (values.some(value => containsControlCharacter(value))) {
+        errors.push({ row: rowNumber, field: 'csv', message: 'Nilai mengandung baris baru atau karakter kontrol yang tidak diterima server', severity: 'error' });
+        continue;
+      }
       try {
         const period = values[getIndex('period')] || '';
         const isrcRaw = values[getIndex('isrc')] || '';
@@ -326,12 +337,12 @@ function LegacyUploadRoyalty() {
         const label_name = values[getIndex('label_name')] || '';
         const platform = values[getIndex('platform')] || '';
         const country = values[getIndex('country')] || '';
-        const salesUnitRaw = values[getIndex('sales_unit')] ?? '';
-        const netRevenueRaw = values[getIndex('net_revenue')] ?? '';
+        const salesUnitRaw = values[getIndex('sales_unit')] || '';
+        const netRevenueRaw = values[getIndex('net_revenue')] || '';
         
-        // Validate period format (YYYY-MM or similar)
-        if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
-          errors.push({ row: i + 1, field: 'period', message: 'Period wajib berformat YYYY-MM', severity: 'error' });
+        // Validate period format (YYYY-MM)
+        if (!/^[1-9]\d{3}-(0[1-9]|1[0-2])$/.test(period)) {
+          errors.push({ row: rowNumber, field: 'period', message: 'Period harus berformat YYYY-MM', severity: 'error' });
           continue;
         }
         
@@ -341,18 +352,18 @@ function LegacyUploadRoyalty() {
         
         // Validate ISRC format (should be 12 characters after normalization)
         if (!isrc) {
-          errors.push({ row: i + 1, field: 'isrc', message: 'ISRC tidak boleh kosong', severity: 'error' });
+          errors.push({ row: rowNumber, field: 'isrc', message: 'ISRC tidak boleh kosong', severity: 'error' });
           continue;
         }
-        if (isrc.length !== 12) {
-          errors.push({ row: i + 1, field: 'isrc', message: `ISRC "${isrcRaw}" harus 12 karakter setelah normalisasi (saat ini: ${isrc.length})`, severity: 'error' });
+        if (!/^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(isrc)) {
+          errors.push({ row: rowNumber, field: 'isrc', message: `ISRC "${isrcRaw}" tidak valid`, severity: 'error' });
           continue;
         }
         
         // UPC is now OPTIONAL - will be auto-filled from database
         // Only validate format if provided
         if (upc && !/^\d{12,13}$/.test(upc)) {
-          errors.push({ row: i + 1, field: 'upc', message: `UPC "${upc}" harus 12-13 digit angka`, severity: 'error' });
+          errors.push({ row: rowNumber, field: 'upc', message: `UPC "${upc}" harus 12-13 digit angka`, severity: 'error' });
           continue;
         }
         
@@ -361,42 +372,41 @@ function LegacyUploadRoyalty() {
         
         // Validate platform
         if (!platform) {
-          errors.push({ row: i + 1, field: 'platform', message: 'Platform tidak boleh kosong', severity: 'error' });
+          errors.push({ row: rowNumber, field: 'platform', message: 'Platform tidak boleh kosong', severity: 'error' });
           continue;
         }
         
         // Validate country
         if (!/^[A-Za-z]{2}$/.test(country)) {
-          errors.push({ row: i + 1, field: 'country', message: 'Country wajib berupa kode 2 huruf', severity: 'error' });
+          errors.push({ row: rowNumber, field: 'country', message: 'Country harus kode dua huruf', severity: 'error' });
           continue;
         }
         
         // Validate numeric fields
-        const salesUnit = Number(salesUnitRaw);
-        if (!/^[+-]?\d+$/.test(salesUnitRaw) || !Number.isSafeInteger(salesUnit)) {
-          errors.push({ row: i + 1, field: 'sales_unit', message: `Sales unit "${salesUnitRaw}" bukan angka valid`, severity: 'error' });
+        const salesUnit = /^(?:\d+|\d{1,3}(?:\.\d{3})+)$/.test(salesUnitRaw)
+          ? Number(salesUnitRaw.replace(/\./g, '')) : NaN;
+        if (!Number.isSafeInteger(salesUnit) || salesUnit > 2147483647) {
+          errors.push({ row: rowNumber, field: 'sales_unit', message: `Sales unit "${salesUnitRaw}" bukan angka valid`, severity: 'error' });
           continue;
         }
         if (salesUnit < 0) {
-          errors.push({ row: i + 1, field: 'sales_unit', message: 'Sales unit tidak boleh negatif', severity: 'error' });
+          errors.push({ row: rowNumber, field: 'sales_unit', message: 'Sales unit tidak boleh negatif', severity: 'error' });
           continue;
         }
-        
-        const netRevenue = Number(netRevenueRaw);
-        if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(netRevenueRaw) || !Number.isFinite(netRevenue)) {
-          errors.push({ row: i + 1, field: 'net_revenue', message: `Net revenue "${netRevenueRaw}" bukan angka valid`, severity: 'error' });
+
+        const normalizedRevenue = /^-?\d{1,3}(?:\.\d{3})+,\d+$/.test(netRevenueRaw)
+          ? netRevenueRaw.replace(/\./g, '').replace(',', '.')
+          : /^-?\d{1,3}(?:,\d{3})+\.\d+$/.test(netRevenueRaw)
+            ? netRevenueRaw.replace(/,/g, '')
+            : /^-?\d+,\d+$/.test(netRevenueRaw)
+              ? netRevenueRaw.replace(',', '.') : netRevenueRaw;
+        const netRevenue = /^-?\d+(?:\.\d+)?$/.test(normalizedRevenue) ? Number(normalizedRevenue) : NaN;
+        if (!Number.isFinite(netRevenue) || Math.abs(netRevenue) > Number.MAX_SAFE_INTEGER / 100 || Math.abs(netRevenue * 100 - Math.round(netRevenue * 100)) > 1e-8) {
+          errors.push({ row: rowNumber, field: 'net_revenue', message: `Net revenue "${netRevenueRaw}" bukan angka valid`, severity: 'error' });
           continue;
         }
         if (netRevenue < 0) {
-          errors.push({ row: i + 1, field: 'net_revenue', message: 'Net revenue tidak boleh negatif', severity: 'error' });
-          continue;
-        }
-        if (netRevenue > Number.MAX_SAFE_INTEGER / 100) {
-          errors.push({ row: i + 1, field: 'net_revenue', message: 'Net revenue melebihi rentang nilai yang didukung', severity: 'error' });
-          continue;
-        }
-        if (Math.abs(netRevenue * 100 - Math.round(netRevenue * 100)) > 1e-8) {
-          errors.push({ row: i + 1, field: 'net_revenue', message: 'Net revenue maksimal 2 angka desimal', severity: 'error' });
+          errors.push({ row: rowNumber, field: 'net_revenue', message: 'Net revenue tidak boleh negatif', severity: 'error' });
           continue;
         }
 
@@ -416,14 +426,13 @@ function LegacyUploadRoyalty() {
 
         data.push(row);
       } catch (err) {
-        errors.push({ row: i + 1, field: 'parsing', message: 'Format data tidak valid', severity: 'error' });
+        errors.push({ row: rowNumber, field: 'parsing', message: 'Format data tidak valid', severity: 'error' });
       }
     }
 
     return { data, errors };
   };
 
-  // Calculate revenue split preview per label
   const calculateRevenueSplitPreview = (data: RoyaltyRow[]): RevenueSplitPreview[] => {
     const labelTotals: Record<string, RevenueSplitPreview> = {};
     
@@ -696,6 +705,11 @@ function LegacyUploadRoyalty() {
       });
 
       if (error) {
+        const response = 'context' in error ? error.context : undefined;
+        if (response instanceof Response) {
+          const details = await response.clone().json().catch(() => null);
+          if (details && typeof details.error === 'string') throw new Error(details.error);
+        }
         throw error;
       }
 
@@ -1294,7 +1308,7 @@ function LegacyUploadRoyalty() {
                       ))}
                     </div>
                     <p className="text-xs text-muted-foreground mt-3">
-                      * Semua label: 70% Artist, 21% Label, 9% Admin. Pembulatan dilakukan per baris, sama seperti SQL server.
+                      * Estimasi per label: 70% Artist, 21% Label, 9% Admin. Pembulatan dilakukan per baris; penerima akhir ditentukan server, bukan CSV.
                     </p>
                   </div>
                 )}
@@ -1406,6 +1420,11 @@ function LegacyUploadRoyalty() {
                 )}
 
                 {/* Upload Button */}
+                {parsedData.length > 0 && parseErrors.some(error => error.severity === 'error') && (
+                  <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm">
+                    Import diblokir karena ada baris gagal validasi. Perbaiki file dan unggah ulang; baris valid tidak akan diimpor sebagian.
+                  </div>
+                )}
                 {parsedData.length > 0 && !isUploading && (
                   <div className="flex items-center gap-4">
                     <Button

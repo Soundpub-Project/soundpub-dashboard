@@ -1,6 +1,8 @@
 import { usesBackendFinance } from '@/components/finance/mode';
 import { usesBackendDomain } from '@/api/routing';
+import { labelsApi } from '@/api/labels';
 import { useMediaUrl } from '@/hooks/useMediaUrl';
+import { artistLabelApiReady, usesBackendArtistLabels } from '@/services/labels';
 import { brandingUpdatedEvent, getPublicSettingsRows } from '@/services/settings';
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -311,22 +313,40 @@ export function AppSidebar() {
   }, [user]);
 
   useEffect(() => {
+    let cancelled = false;
     const fetchLogo = async () => {
       try {
+        let labelProfile: { logo_url: string | null; logo_url_light: string | null; logo_url_dark: string | null } | null =
+          isLabel || isWhitelabel ? authProfile : null;
+        if (isArtist && authProfile?.parent_label_id) {
+          if (artistLabelApiReady()) {
+            try {
+              labelProfile = await labelsApi.detail(authProfile.parent_label_id);
+            } catch (error) {
+              console.error('Error fetching label logo:', error);
+            }
+          } else if (!usesBackendArtistLabels()) {
+            const { data: parentProfile, error: parentError } = await supabase
+              .from('profiles')
+              .select('logo_url, logo_url_light, logo_url_dark')
+              .eq('id', authProfile.parent_label_id)
+              .maybeSingle();
+            if (parentError) console.error('Error fetching label logo:', parentError);
+            else labelProfile = parentProfile;
+          }
+        }
+
         const data = await getPublicSettingsRows(['dashboard_logo_light', 'dashboard_logo_dark', 'dashboard_logo']);
 
-        if (data) {
-          const settingsMap: Record<string, string | null> = {};
-          data.forEach(row => {
-            settingsMap[row.key] = row.value;
-          });
-          
-          const themeLogo = resolvedTheme === 'dark'
-            ? settingsMap.dashboard_logo_dark || settingsMap.dashboard_logo_light || settingsMap.dashboard_logo
-            : settingsMap.dashboard_logo_light || settingsMap.dashboard_logo;
-          
-          setLogoUrl(themeLogo ? `${themeLogo}?v=${Date.now()}` : null);
-        }
+        const settingsMap: Record<string, string | null> = {};
+        data?.forEach(row => { settingsMap[row.key] = row.value; });
+        const labelLogo = resolvedTheme === 'dark'
+          ? labelProfile?.logo_url_dark || labelProfile?.logo_url_light || labelProfile?.logo_url
+          : labelProfile?.logo_url_light || labelProfile?.logo_url;
+        const dashboardLogo = resolvedTheme === 'dark'
+          ? settingsMap.dashboard_logo_dark || settingsMap.dashboard_logo_light || settingsMap.dashboard_logo
+          : settingsMap.dashboard_logo_light || settingsMap.dashboard_logo;
+        if (!cancelled) setLogoUrl(labelLogo || (dashboardLogo ? `${dashboardLogo}?v=${Date.now()}` : null));
       } catch (error) {
         console.error('Error fetching dashboard logo:', error);
       }
@@ -334,8 +354,11 @@ export function AppSidebar() {
 
     void fetchLogo();
     window.addEventListener(brandingUpdatedEvent, fetchLogo);
-    return () => window.removeEventListener(brandingUpdatedEvent, fetchLogo);
-  }, [resolvedTheme]);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(brandingUpdatedEvent, fetchLogo);
+    };
+  }, [authProfile, isArtist, isLabel, isWhitelabel, resolvedTheme]);
 
   const fetchProfile = async () => {
     if (usesBackendDomain('users')) return;
@@ -372,7 +395,7 @@ export function AppSidebar() {
             <img 
               src={logoUrl} 
               alt="Dashboard Logo" 
-              className="h-8 w-auto object-contain"
+              className={isCollapsed ? "h-8 max-w-8 w-auto object-contain" : "h-10 max-w-40 w-auto object-contain"}
             />
           ) : (
             <div className="flex items-center gap-2">
