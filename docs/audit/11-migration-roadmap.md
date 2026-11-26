@@ -30,7 +30,7 @@ node "backend\backups\soundpub-20.20.20.173-20261030-212240\verify.cjs" "<local-
 
 - Require `Verified 24 files` and exit code 0.
 - Result on 2026-11-24: 24 `OK` lines, `Verified 24 files`, exit code 0. GCM verification passed.
-- Only schema-only decryption is allowed next; do not extract all artifacts or restore yet.
+- At the time this roadmap was first prepared, only schema decryption was allowed. On 2026-11-26, separate limited approval authorized an isolated restore of the `soundpub` dump and an in-memory projection of four Auth identity fields; no other Auth or Storage artifacts were processed. See `18-source-to-backend-data-mapping.md`.
 
 Exit gate passed: all 24 artifacts pass SHA-256 and GCM authentication.
 
@@ -39,10 +39,10 @@ Exit gate passed: all 24 artifacts pass SHA-256 and GCM authentication.
 - Treat `docs/audit/14-static-schema-diff.md` as preparatory context only; it is not an applied-state or definition-level proof.
 - Review `docs/audit/17-definition-schema-diff.md` as preliminary static evidence: backup `rate_limits` lacks the canonical RLS enablement, with additional policy, ACL, and function-body differences to reconcile.
 - Focused tests on 2026-11-25 replayed the backend migration chain into fresh disposable PostgreSQL 17 databases and passed 6 synthetic managed-artist/royalty tests. This is backend test evidence only; it is not backup restore, backup parity, or production migration.
-- `docs/audit/18-source-to-backend-data-mapping.md` crosswalks all 33 canonical `soundpub` tables and records explicit rejects/blockers. A pure synthetic-fixture planner now covers Auth identity, profiles, and review-only role candidates; no source rows were inspected.
+- `docs/audit/18-source-to-backend-data-mapping.md` crosswalks all 33 canonical `soundpub` tables and records explicit rejects/blockers. After limited approval, the 2026-10-30 `soundpub` dump was restored locally in an isolated disposable PostgreSQL 15 container; only four Auth identity fields were selected in memory, and actual-source dry-run results are documented there. This is not a full Auth/Storage restore or target migration.
 - Use `docs/audit/16-backup-schema-metadata.md` as verified provenance evidence; directly comparable counts match the inspected live manifest.
-- From the verified backup, produce schema-only/metadata views in a controlled private location outside repo/OneDrive using `scripts/backup-decrypt-safe.mjs`.
-- Diff backup schema against `supabase/migrations` and `backend/migrations/0001`–`0081`.
+- Schema-only metadata was already produced outside the repository and OneDrive. Do not decrypt additional artifacts without separately approved scope.
+- Diff backup schema against `supabase/migrations` and `backend/migrations/0001`–`0082`.
 - Include tables, columns, types, defaults, nullability, constraints, indexes, foreign keys, triggers, functions, policies, grants, Auth shape, and Storage metadata shape.
 - Resolve mismatch between audit-era drift claims and current worktree counts.
 
@@ -114,4 +114,4 @@ Exit gate: stable operation for the agreed observation window and formal closure
 
 ## Immediate next action
 
-Backup verification and schema-only extraction passed. The latest non-Docker backend suite passed 351/438 (87 skipped, 0 failed); the Docker-enabled suite previously passed 475/484 (9 skipped), selected Storage tests passed 22/22, and a synthetic recovery rehearsal passed 5/5 on two disposable PostgreSQL targets. The new Soundpub identity/profile/role/artist-profile dry-run planner passed 11 generated-fixture tests; it is not validated against source rows and does not convert the remaining 30 canonical tables. These results validate code paths and schema rules, not backup restoration or data parity. Next extend the planner by domain and use source rows only after a separately approved isolated export. No backup restore, production migration, production contact, or cutover has occurred.
+Backup verification and an isolated restore of the `soundpub` database dump passed; 33 tables/26,204 rows and 43 foreign keys were validated with a minimal local Auth-ID stub. A private dry-run produced 198 inactive Auth identity candidates but no profile, application-settings, or notification candidates; 197 source roles remain review-only. A separately approved aggregate-only release/track projection counted 291 releases and 427 tracks, but produced no candidates without Auth/profile rows and explicit track-order approvals. The latest full non-Docker backend suite passed 370/457 (87 skipped, 0 failed), and the focused mapper suite passed 30/30. The Docker-enabled suite previously passed 475/484 (9 skipped), selected Storage tests passed 22/22, and a synthetic recovery rehearsal passed 5/5 on two disposable PostgreSQL targets. These results do not prove cross-service snapshot consistency or backend parity. Auth credentials, sessions/MFA, Storage objects, target writes, production migration, and cutover remain unperformed.
